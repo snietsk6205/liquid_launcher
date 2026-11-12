@@ -88,7 +88,7 @@ class MainActivity : ComponentActivity() {
         val exclude = (application as LauncherApp).settings.get(LauncherSettings.ExcludeFromRecents)
         try {
             getSystemService(ActivityManager::class.java).appTasks
-                .filter { it.taskInfo.taskId == taskId }
+                .filter { it.taskInfo?.taskId == taskId }
                 .forEach { it.setExcludeFromRecents(exclude) }
         } catch (e: Exception) {
             DebugLog.error("App", "setExcludeFromRecents failed: $e")
