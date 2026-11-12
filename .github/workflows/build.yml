@@ -37,9 +37,13 @@ jobs:
 
       - name: Unit tests and release APK
         run: >
-          ./gradlew --stacktrace
+          ./gradlew --quiet --console=plain
           testDebugUnitTest :app:assembleRelease
           -PversionCode=${{ github.run_number }}
+
+      - name: Summarise failed unit tests
+        if: failure()
+        run: python3 ci/test_failures.py
 
       - name: Collect APK
         run: |
