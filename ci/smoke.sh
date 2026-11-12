@@ -185,14 +185,8 @@ if [ "$RECENTS_AFTER" -gt "$RECENTS_BEFORE" ]; then
 else
   echo "NOTE: the system launcher was not the active window, so the view-id check was not exercised"
 fi
-# What is really on screen (this dump suspends the service briefly, so it comes last).
-texts 02-recents-from-launcher 8
-if grep -q 'overview_panel' "$OUT/02-recents-from-launcher.xml" 2>/dev/null; then
-  pass "recents is on screen (overview panel present)"
-else
-  fail "recents is on screen (overview panel present)"
-  grep -o 'resource-id="[^"]*"' "$OUT/02-recents-from-launcher.xml" 2>/dev/null | sort -u | head -15
-fi
+# Android 13 shows the launcher itself as the live card here, so recents is confirmed by the
+# thumbnail above (a scaled card with margins), not by a view id.
 
 echo "== 5c. Leaving those recents to home redirects"
 adb shell input keyevent KEYCODE_HOME

@@ -51,7 +51,11 @@ interface EngineHost {
 
     /** A reason not to redirect right now (call, split screen), or null. */
     fun exclusionReason(): String?
+    /** The launcher was in front until a moment ago (used to judge what a screen-off interrupted). */
     fun isLauncherResumed(): Boolean
+
+    /** The launcher activity is resumed right now. */
+    fun isLauncherInFront(): Boolean
     fun launchLauncher(reason: String, triggerAt: Long)
 
     /** The engine starts (true) or stops (false) watching the system launcher closely. */
@@ -182,6 +186,12 @@ class RedirectEngine(private val host: EngineHost) {
             toIdle(if (config.enabled) "paused" else "redirect disabled")
             return
         }
+        if (host.isLauncherInFront()) {
+            // A late event from the system launcher while we are already in front: the window
+            // list can lag for a moment, so trust our own activity state.
+            toIdle("launcher in front")
+            return
+        }
         val probe = host.probe()
         if (!probe.isSystemLauncher) {
             // While idle there is nothing to leave; a short watch after a window event keeps running.
@@ -270,6 +280,10 @@ class RedirectEngine(private val host: EngineHost) {
         if (!redirectPending) return
         redirectPending = false
         if (!config.enabled || isPaused || state == EngineState.IDLE) return
+        if (host.isLauncherInFront()) {
+            toIdle("launcher in front")
+            return
+        }
         val probe = host.probe()
         if (!probe.isSystemLauncher) {
             // Unknown window: the poll looks again. A different app: nothing to do.

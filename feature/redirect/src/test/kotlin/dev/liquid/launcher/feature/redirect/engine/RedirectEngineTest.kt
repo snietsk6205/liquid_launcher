@@ -33,6 +33,8 @@ private class FakeHost : EngineHost {
     override fun probe() = probe
     override fun exclusionReason() = exclusion
     override fun isLauncherResumed() = launcherResumed
+    var launcherInFront = false
+    override fun isLauncherInFront() = launcherInFront
     override fun launchLauncher(reason: String, triggerAt: Long) { launches += reason }
     override fun setTracking(on: Boolean) { trackingOn = on }
     override fun onRecentsConfirmed() { recentsConfirmed++ }
@@ -54,14 +56,20 @@ private class FakeHost : EngineHost {
         time = end
     }
 
-    fun showHome() { probe = Probe(SYSTEM, isSystemLauncher = true, recents = false) }
-    fun showRecents() { probe = Probe(SYSTEM, isSystemLauncher = true, recents = true, detail = "id") }
-    fun showOtherApp() { probe = Probe(OTHER, isSystemLauncher = false, recents = false) }
-    fun showUnknown() { probe = Probe(null, isSystemLauncher = false, recents = false) }
+    fun showHome() { show(Probe(SYSTEM, isSystemLauncher = true, recents = false)) }
+    fun showRecents() { show(Probe(SYSTEM, isSystemLauncher = true, recents = true, detail = "id")) }
+    fun showOtherApp() { show(Probe(OTHER, isSystemLauncher = false, recents = false)) }
+    fun showUnknown() { show(Probe(null, isSystemLauncher = false, recents = false)) }
+
+    private fun show(newProbe: Probe) {
+        probe = newProbe
+        launcherInFront = false
+    }
 
     /** What the real launcher activity does when it reaches the front. */
     fun confirmLaunch() {
         probe = Probe("dev.liquid.launcher", isSystemLauncher = false, recents = false)
+        launcherInFront = true
         engine.onLauncherResumed()
     }
 }
@@ -90,6 +98,22 @@ class RedirectEngineTest {
         assertFalse(host.trackingOn)
         host.advance(5000)
         assertEquals(1, host.launches.size)
+    }
+
+    @Test
+    fun lateSystemLauncherEvent_afterTheLauncherIsInFront_isIgnored() {
+        val host = setup()
+        host.showHome()
+        host.engine.onSystemLauncherWindow()
+        host.advance(50)
+        assertEquals(1, host.launches.size)
+        host.confirmLaunch()
+        // The window list still reports the system launcher for a moment.
+        host.probe = Probe(SYSTEM, isSystemLauncher = true, recents = false)
+        host.engine.onSystemLauncherWindow()
+        host.advance(5000)
+        assertEquals(1, host.launches.size)
+        assertEquals(EngineState.IDLE, host.engine.state)
     }
 
     @Test

@@ -402,6 +402,8 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
 
     override fun isLauncherResumed(): Boolean = RedirectStatus.isLauncherResumed(graceMs = 2000)
 
+    override fun isLauncherInFront(): Boolean = RedirectStatus.isLauncherResumed()
+
     override fun launchLauncher(reason: String, triggerAt: Long) {
         val component = RedirectHooks.homeComponent
         if (component == null) {
