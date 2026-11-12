@@ -61,10 +61,10 @@ peek() {
   python3 -W ignore ci/ascii_shot.py "$OUT/$1.png"
 }
 
-# look <name> [lines] : peek, plus the texts on screen. Dumping the screen makes Android
-# suspend every accessibility service for a moment, so wait until ours is back.
-look() {
-  peek "$1"
+# texts <name> [lines] : the texts on screen. Dumping the screen makes Android suspend every
+# accessibility service for a moment, so wait until ours is back.
+texts() {
+  adb shell rm -f /sdcard/ui.xml >/dev/null 2>&1
   adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
   adb exec-out cat /sdcard/ui.xml > "$OUT/$1.xml" 2>/dev/null || true
   python3 ci/describe_ui.py "$OUT/$1.xml" "${2:-40}"
@@ -72,6 +72,14 @@ look() {
   for i in $(seq 1 40); do service_up && return 0; sleep 0.5; done
   echo "NOTE: accessibility service did not come back after the screen dump"
 }
+
+# look <name> [lines] : thumbnail and texts.
+look() {
+  peek "$1"
+  texts "$1" "${2:-40}"
+}
+
+focus() { adb shell dumpsys window 2>/dev/null | grep -E 'mCurrentFocus' | head -1 | sed 's/^ *//'; }
 
 echo "== Default launcher"
 adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME | tail -1
@@ -136,29 +144,57 @@ else
   pass "recents stayed open"
 fi
 
-echo "== 4b. Recents shown by the system launcher itself is recognised"
-# Scroll to the previous card. The app that was shown live is replaced by a snapshot and the
-# system launcher becomes the active window while recents is still open. This is the case
-# the view-id check exists for: a redirect here would throw the user out of recents.
+echo "== 4b. Scrolling inside recents"
+# Scroll to the previous card: the app that was shown live is replaced by a snapshot.
 adb shell input swipe 250 1200 850 1200 400
 sleep 5
-peek 02-recents
 AFTER=$(redirect_count)
-echo "      top: $(top_activity)"
+echo "      top:   $(top_activity)"
+echo "      focus: $(focus)"
 if top_activity | grep -q "$HOME_ACTIVITY"; then
   fail "recents stayed open after scrolling (launcher came to the front)"
 elif [ "$AFTER" -ne "$BEFORE" ]; then
-  fail "no redirect while recents is open ($BEFORE -> $AFTER)"
+  fail "no redirect while scrolling recents ($BEFORE -> $AFTER)"
 else
   pass "recents stayed open after scrolling"
 fi
-if grep -q 'recents open' "$LOG"; then
-  pass "recents was recognised by view id"
-else
-  echo "NOTE: the system launcher never became the active window during recents, so the view-id check was not exercised"
-fi
 
 echo "== 5. Leaving recents to home redirects"
+adb shell input keyevent KEYCODE_HOME
+if wait_top "$HOME_ACTIVITY" 8; then pass "recents -> home redirected"; else fail "recents -> home redirected"; fi
+sleep 2
+
+echo "== 5b. Recents opened from the launcher's own home screen"
+# The everyday case. If recents were not recognised here, the redirect would close it at once.
+BEFORE=$(redirect_count)
+RECENTS_BEFORE=$(grep -c 'recents open' "$LOG" || true)
+adb shell input keyevent KEYCODE_APP_SWITCH
+sleep 6
+AFTER=$(redirect_count)
+RECENTS_AFTER=$(grep -c 'recents open' "$LOG" || true)
+echo "      top:   $(top_activity)"
+echo "      focus: $(focus)"
+peek 02-recents-from-launcher
+if [ "$AFTER" -ne "$BEFORE" ]; then
+  fail "no redirect while recents is open ($BEFORE -> $AFTER)"
+else
+  pass "no redirect while recents is open"
+fi
+if [ "$RECENTS_AFTER" -gt "$RECENTS_BEFORE" ]; then
+  pass "recents was recognised by view id"
+else
+  echo "NOTE: the system launcher was not the active window, so the view-id check was not exercised"
+fi
+# What is really on screen (this dump suspends the service briefly, so it comes last).
+texts 02-recents-from-launcher 8
+if grep -q 'overview_panel' "$OUT/02-recents-from-launcher.xml" 2>/dev/null; then
+  pass "recents is on screen (overview panel present)"
+else
+  fail "recents is on screen (overview panel present)"
+  grep -o 'resource-id="[^"]*"' "$OUT/02-recents-from-launcher.xml" 2>/dev/null | sort -u | head -15
+fi
+
+echo "== 5c. Leaving those recents to home redirects"
 adb shell input keyevent KEYCODE_HOME
 if wait_top "$HOME_ACTIVITY" 8; then pass "recents -> home redirected"; else fail "recents -> home redirected"; fi
 sleep 1
@@ -184,10 +220,10 @@ for screen in "" setup diagnostics log; do
   fi
   if wait_top "SettingsActivity" 8; then pass "settings screen '${screen:-main}'"; else fail "settings screen '${screen:-main}'"; fi
   sleep 3
+  adb exec-out screencap -p > "$OUT/04-settings-${screen:-main}.png" 2>/dev/null || true
   case "$screen" in
-    "") look 04-settings-main 30 ;;
-    diagnostics) look 04-settings-diagnostics 60 ;;
-    *) adb exec-out screencap -p > "$OUT/04-settings-$screen.png" 2>/dev/null || true ;;
+    "") texts 04-settings-main 12 ;;
+    diagnostics) texts 04-settings-diagnostics 40 ;;
   esac
 done
 
@@ -196,8 +232,8 @@ adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen gla
 wait_top "SettingsActivity" 8 || fail "glass benchmark opens"
 sleep 6
 peek 05-glass-running
-sleep 14
-look 05-glass-finished 12
+sleep 12
+texts 05-glass-finished 12
 if top_activity | grep -q "SettingsActivity"; then pass "glass benchmark finished without leaving the screen"; else fail "glass benchmark finished without leaving the screen"; fi
 
 echo "== 8. No crashes"

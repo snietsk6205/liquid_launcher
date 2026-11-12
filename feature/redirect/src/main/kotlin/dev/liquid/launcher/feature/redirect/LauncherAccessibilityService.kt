@@ -39,8 +39,7 @@ import java.util.EnumMap
  * when the system launcher's home screen would be shown.
  *
  * Battery: events are filtered to the system launcher's package, so the service is not woken
- * while any other app is in use. Content-change events are requested only while the system
- * launcher is in front.
+ * by any other app. While the engine is idle, the launcher's content events are dropped at once.
  */
 class LauncherAccessibilityService : AccessibilityService(), EngineHost {
 
@@ -54,9 +53,7 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
     private var autoHomeClasses: Set<String> = emptySet()
     private var userHomeClasses: List<String> = emptyList()
     private var detectConfig = DetectConfig("", emptyList(), emptyList())
-    private var tracking = false
     private var appliedPackage: String? = null
-    private var appliedTracking: Boolean? = null
     private var receiversRegistered = false
     private var calibrator: Calibrator? = null
     private var wakeLock: PowerManager.WakeLock? = null
@@ -255,11 +252,16 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         }
     }
 
+    /**
+     * Subscribes to the system launcher's window and content events, and to nothing else.
+     * The subscription is fixed: changing it while a redirect is being decided would put a
+     * system call in the way.
+     */
     private fun updateServiceInfo() {
-        if (appliedPackage == systemLauncher && appliedTracking == tracking) return
+        if (appliedPackage == systemLauncher) return
         val info = serviceInfo ?: return
         info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
-            (if (tracking) AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED else 0)
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
         info.packageNames = arrayOf(systemLauncher)
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
         info.flags = AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
@@ -269,7 +271,6 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         serviceInfo = info
         noteIfSlow("event subscription update", start)
         appliedPackage = systemLauncher
-        appliedTracking = tracking
     }
 
     // ---- events ----
@@ -420,10 +421,7 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         }
     }
 
-    override fun setTracking(on: Boolean) {
-        tracking = on
-        updateServiceInfo()
-    }
+    override fun setTracking(on: Boolean) = Unit
 
     override fun onRecentsConfirmed() {
         if (!store.get(LauncherSettings.DetectorVerified)) {

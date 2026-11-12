@@ -54,7 +54,7 @@ interface EngineHost {
     fun isLauncherResumed(): Boolean
     fun launchLauncher(reason: String, triggerAt: Long)
 
-    /** Subscribe to (or drop) content-change events of the system launcher. */
+    /** The engine starts (true) or stops (false) watching the system launcher closely. */
     fun setTracking(on: Boolean)
     fun onRecentsConfirmed()
     fun onStateChanged(state: EngineState)

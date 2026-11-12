@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -112,12 +113,13 @@ internal fun GlassBenchScreen(window: Window, wallpaper: WallpaperStore, onBack:
     }
 
     val transition = rememberInfiniteTransition(label = "bench")
-    val scroll by transition.animateFloat(
+    // Read only inside draw and layout lambdas, so the animation does not recompose the screen.
+    val scroll = transition.animateFloat(
         initialValue = 0f, targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(2600, easing = LinearEasing), RepeatMode.Reverse),
         label = "scroll",
     )
-    val slide by transition.animateFloat(
+    val slide = transition.animateFloat(
         initialValue = -1f, targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(1900), RepeatMode.Reverse),
         label = "slide",
@@ -154,7 +156,7 @@ internal fun GlassBenchScreen(window: Window, wallpaper: WallpaperStore, onBack:
             Column(
                 Modifier
                     .fillMaxSize()
-                    .graphicsLayer { translationY = -scroll * 600f }
+                    .graphicsLayer { translationY = if (running) -scroll.value * 600f else 0f }
                     .padding(top = 80.dp),
             ) {
                 repeat(14) { row ->
@@ -180,7 +182,7 @@ internal fun GlassBenchScreen(window: Window, wallpaper: WallpaperStore, onBack:
             Box(
                 Modifier
                     .align(Alignment.Center)
-                    .offset(x = (slide * 90).dp)
+                    .offset { IntOffset((slide.value * 90.dp.toPx()).toInt(), 0) }
                     .size(width = 200.dp, height = 130.dp)
                     .liquidGlass(backdrop, RoundedCornerShape(32.dp), quality, tint)
             )
@@ -189,7 +191,7 @@ internal fun GlassBenchScreen(window: Window, wallpaper: WallpaperStore, onBack:
                     .align(Alignment.TopCenter)
                     .systemBarsPadding()
                     .padding(top = 90.dp)
-                    .offset(x = (-slide * 70).dp)
+                    .offset { IntOffset((-slide.value * 70.dp.toPx()).toInt(), 0) }
                     .size(96.dp)
                     .liquidGlass(backdrop, RoundedCornerShape(48.dp), quality, tint)
             )
