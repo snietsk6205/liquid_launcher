@@ -16,7 +16,7 @@ private class FakeHost : EngineHost {
     var exclusion: String? = null
     var launcherResumed = false
     val launches = mutableListOf<String>()
-    var tracking = false
+    var trackingOn = false
     var recentsConfirmed = 0
     var unconfirmed = 0
     var pausedForMs = 0L
@@ -34,7 +34,7 @@ private class FakeHost : EngineHost {
     override fun exclusionReason() = exclusion
     override fun isLauncherResumed() = launcherResumed
     override fun launchLauncher(reason: String, triggerAt: Long) { launches += reason }
-    override fun setTracking(on: Boolean) { tracking = on }
+    override fun setTracking(on: Boolean) { trackingOn = on }
     override fun onRecentsConfirmed() { recentsConfirmed++ }
     override fun onStateChanged(state: EngineState) = Unit
     override fun onLaunchUnconfirmed() { unconfirmed++ }
@@ -80,14 +80,14 @@ class RedirectEngineTest {
         host.showHome()
         host.engine.onSystemLauncherWindow()
         assertEquals(EngineState.HOME, host.engine.state)
-        assertTrue(host.tracking)
+        assertTrue(host.trackingOn)
         host.advance(49)
         assertTrue(host.launches.isEmpty())
         host.advance(1)
         assertEquals(listOf("system launcher appeared"), host.launches)
         host.confirmLaunch()
         assertEquals(EngineState.IDLE, host.engine.state)
-        assertFalse(host.tracking)
+        assertFalse(host.trackingOn)
         host.advance(5000)
         assertEquals(1, host.launches.size)
     }
@@ -153,7 +153,7 @@ class RedirectEngineTest {
         host.advance(500)
         assertEquals(EngineState.IDLE, host.engine.state)
         assertTrue(host.launches.isEmpty())
-        assertFalse(host.tracking)
+        assertFalse(host.trackingOn)
         assertTrue(host.timers.isEmpty())
     }
 

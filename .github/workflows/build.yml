@@ -37,7 +37,7 @@ jobs:
 
       - name: Unit tests and release APK
         run: >
-          ./gradlew --quiet --console=plain
+          ./gradlew --quiet --console=plain --continue
           testDebugUnitTest :app:assembleRelease
           -PversionCode=${{ github.run_number }}
 
