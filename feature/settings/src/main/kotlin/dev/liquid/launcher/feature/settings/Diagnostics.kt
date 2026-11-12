@@ -32,17 +32,19 @@ internal data class GlassResult(
     val quality: GlassQuality,
     val frames: Int,
     val seconds: Float,
-    val averageMs: Float,
-    val p95Ms: Float,
-    val slowPercent: Float,
-    val budgetMs: Float,
+    /** Display refresh rate while this tier ran. */
+    val refreshHz: Float,
+    /** Share of frames that missed their deadline, in percent. */
+    val latePercent: Float,
 ) {
     val fps: Float get() = if (seconds > 0f) frames / seconds else 0f
 
+    /** Smooth enough to use: at least four fifths of the display's frames were delivered. */
+    val holdsFrameRate: Boolean get() = refreshHz > 0f && fps >= refreshHz * 0.8f
+
     fun line(): String =
-        "${quality.name}: ${"%.0f".format(Locale.US, fps)} fps, " +
-            "avg ${"%.1f".format(Locale.US, averageMs)} ms, p95 ${"%.1f".format(Locale.US, p95Ms)} ms, " +
-            "${"%.0f".format(Locale.US, slowPercent)}% over ${"%.1f".format(Locale.US, budgetMs)} ms"
+        "${quality.name}: ${"%.0f".format(Locale.US, fps)} fps at ${"%.0f".format(Locale.US, refreshHz)} Hz, " +
+            "${"%.0f".format(Locale.US, latePercent)}% of frames late"
 }
 
 /** Results kept for the lifetime of the process so the report can include the benchmark. */
@@ -140,6 +142,31 @@ internal object Diagnostics {
                 "trigger to first frame: ${RedirectStatus.totalLatency.summary()}$note"
         }
 
+        check("Home screen check") {
+            val seen = store.get(LauncherSettings.StatsHomeSeen)
+            val unseen = store.get(LauncherSettings.StatsHomeUnseen)
+            val recentsSeen = store.get(LauncherSettings.StatsRecentsSeen)
+            val recentsUnseen = store.get(LauncherSettings.StatsRecentsUnseen)
+            val interrupted = store.get(LauncherSettings.StatsInterrupted)
+            val fallbacks = store.get(LauncherSettings.StatsFallbacks)
+            val reliable = RedirectStatus.signatureReliable.value
+            val status = when {
+                !store.get(LauncherSettings.RequireHomeScreen) -> DiagStatus.INFO
+                fallbacks > seen && fallbacks >= 3 -> DiagStatus.WARN
+                else -> DiagStatus.OK
+            }
+            status to "ids: ${store.get(LauncherSettings.HomeIds).joinToString()}\n" +
+                "redirects: $seen with the home screen visible, $unseen without\n" +
+                "recents openings: $recentsUnseen with it not visible, $recentsSeen although it was visible\n" +
+                "recents interrupted by a redirect: $interrupted, fallbacks: $fallbacks\n" +
+                "proven reliable: ${yesNo(reliable)}" +
+                (if (reliable && store.get(LauncherSettings.FastWhenProven)) {
+                    " (short delay of ${store.get(LauncherSettings.FastDelay)} ms in use)"
+                } else {
+                    " (needs 10 redirects and 5 recents openings)"
+                })
+        }
+
         check("Recents detection") {
             val verified = store.get(LauncherSettings.DetectorVerified)
             val learned = store.get(LauncherSettings.LearnedIds)
@@ -223,8 +250,9 @@ internal object Diagnostics {
                 DiagStatus.WARN to "benchmark not run yet"
             } else {
                 val full = results.firstOrNull { it.quality == GlassQuality.Full }
-                val status = if (full != null && full.slowPercent > 10f) DiagStatus.WARN else DiagStatus.OK
-                status to results.joinToString("\n") { it.line() }
+                val status = if (full != null && !full.holdsFrameRate) DiagStatus.WARN else DiagStatus.OK
+                status to results.joinToString("\n") { it.line() } +
+                    "\nbest tier that holds the frame rate: ${store.get(LauncherSettings.GlassCap)}"
             }
         }
 

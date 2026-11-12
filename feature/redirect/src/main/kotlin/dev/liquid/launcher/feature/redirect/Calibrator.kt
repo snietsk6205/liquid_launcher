@@ -1,7 +1,6 @@
 package dev.liquid.launcher.feature.redirect
 
 import android.os.Handler
-import android.os.Looper
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import dev.liquid.launcher.core.common.DebugLog
@@ -11,12 +10,12 @@ import dev.liquid.launcher.core.common.DebugLog
  * screen, wait for the user to open recents, and keep the ids that appeared.
  */
 internal class Calibrator(
+    private val handler: Handler,
     private val systemLauncher: String,
     private val root: () -> AccessibilityNodeInfo?,
     private val announce: (String) -> Unit,
     private val onFinished: (ids: List<String>?, failure: String?) -> Unit,
 ) {
-    private val handler = Handler(Looper.getMainLooper())
     private var running = false
     private var phase = Phase.WAIT_HOME
     private var startedAt = 0L

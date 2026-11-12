@@ -86,7 +86,7 @@ private fun SettingsApp(
         Screen.Setup -> SetupScreen(store, wallpaper, open, back)
         Screen.Calibration -> CalibrationScreen(store, back)
         Screen.Diagnostics -> DiagnosticsScreen(store, open, back)
-        Screen.GlassBench -> GlassBenchScreen(window, wallpaper, back)
+        Screen.GlassBench -> GlassBenchScreen(store, window, wallpaper, back)
         Screen.Log -> LogScreen(back)
         Screen.About -> AboutScreen(back)
     }

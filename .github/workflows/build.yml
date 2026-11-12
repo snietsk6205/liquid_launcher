@@ -88,10 +88,10 @@ jobs:
       - name: Install screenshot helper
         run: python3 -m pip install --quiet --user pillow || true
 
-      - name: Run on emulator (Android 13)
+      - name: Run on emulator (Android 15, like the phone)
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 33
+          api-level: 35
           arch: x86_64
           target: google_apis
           profile: pixel_6

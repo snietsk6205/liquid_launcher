@@ -10,6 +10,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
@@ -43,16 +44,25 @@ import java.util.EnumMap
  */
 class LauncherAccessibilityService : AccessibilityService(), EngineHost {
 
-    private val handler = Handler(Looper.getMainLooper())
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    /**
+     * The engine and every look at the system launcher's window run on this thread, never on
+     * the UI thread: such a look waits for the system launcher's own UI thread and can take
+     * tens of milliseconds while it animates.
+     */
+    private var engineThread: HandlerThread? = null
+    private lateinit var engineHandler: Handler
     private val timers = EnumMap<EngineTimer, Runnable>(EngineTimer::class.java)
     private val engine = RedirectEngine(this)
     private var scope: CoroutineScope? = null
     private lateinit var store: SettingsStore
 
-    private var systemLauncher = ""
+    @Volatile private var systemLauncher = ""
+    private var launcherOverride: String? = null
     private var autoHomeClasses: Set<String> = emptySet()
     private var userHomeClasses: List<String> = emptyList()
-    private var detectConfig = DetectConfig("", emptyList(), emptyList())
+    private var detectConfig = DetectConfig("", emptyList(), emptyList(), emptyList())
     private var appliedPackage: String? = null
     private var receiversRegistered = false
     private var calibrator: Calibrator? = null
@@ -87,7 +97,10 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
 
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.data?.schemeSpecificPart == systemLauncher) applySettings()
+            if (intent.data?.schemeSpecificPart == systemLauncher) {
+                resolveSystemLauncher()
+                applySettings()
+            }
         }
     }
 
@@ -100,13 +113,18 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "LiquidLauncher:screenOff")
             .apply { setReferenceCounted(false) }
 
+        val thread = HandlerThread("redirect-engine").apply { start() }
+        engineThread = thread
+        engineHandler = Handler(thread.looper)
+
+        // Broadcasts are delivered on the engine thread.
         registerReceiver(
             screenReceiver,
             IntentFilter().apply {
                 addAction(Intent.ACTION_SCREEN_OFF)
                 addAction(Intent.ACTION_USER_PRESENT)
             },
-            Context.RECEIVER_NOT_EXPORTED,
+            null, engineHandler, Context.RECEIVER_NOT_EXPORTED,
         )
         registerReceiver(
             packageReceiver,
@@ -115,18 +133,19 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
                 addAction(Intent.ACTION_PACKAGE_CHANGED)
                 addDataScheme("package")
             },
-            Context.RECEIVER_NOT_EXPORTED,
+            null, engineHandler, Context.RECEIVER_NOT_EXPORTED,
         )
         receiversRegistered = true
 
         RedirectStatus.attach(this)
         DebugLog.event(TAG, "service connected")
 
+        val handler = engineHandler
         val newScope = MainScope()
         scope = newScope
         newScope.launch {
             // Emits the current values at once, then again on every change.
-            store.values.collect { applySettings() }
+            store.values.collect { handler.post { applySettings() } }
         }
     }
 
@@ -151,17 +170,28 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
             }
             DebugLog.event(TAG, "service disconnected")
         }
-        calibrator?.cancel()
-        calibrator = null
-        handler.removeCallbacksAndMessages(null)
         scope?.cancel()
         scope = null
+        engineThread?.let { thread ->
+            engineHandler.removeCallbacksAndMessages(null)
+            engineHandler.post {
+                calibrator?.cancel()
+                calibrator = null
+            }
+            thread.quitSafely()
+        }
+        engineThread = null
         RedirectStatus.detach(this)
     }
 
     override fun onInterrupt() = Unit
 
-    // ---- configuration ----
+    /** Runs [block] on the engine thread, if the service is still connected. */
+    private fun onEngine(block: () -> Unit) {
+        if (engineThread != null) engineHandler.post(block)
+    }
+
+    // ---- configuration (engine thread) ----
 
     private fun applySettings() {
         DebugLog.enabled = store.get(LauncherSettings.LogEnabled)
@@ -173,28 +203,31 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         }
 
         val override = store.get(LauncherSettings.SystemLauncherPackage)
-        val detected = if (override.isBlank()) SystemLauncher.detectDefault(this) else null
-        if (detected != null && detected != store.get(LauncherSettings.LastSystemLauncher)) {
-            store.set(LauncherSettings.LastSystemLauncher, detected)
+        if (override != launcherOverride || systemLauncher.isEmpty()) {
+            launcherOverride = override
+            resolveSystemLauncher()
         }
-        if (override.isBlank() && detected == null) scheduleLauncherRecheck()
-        val resolved = SystemLauncher.resolve(this, override, store.get(LauncherSettings.LastSystemLauncher))
-        if (resolved != systemLauncher) {
-            systemLauncher = resolved
-            DebugLog.decision(TAG, "system launcher: $resolved")
-        }
-        autoHomeClasses = SystemLauncher.homeClasses(this, systemLauncher)
         userHomeClasses = store.get(LauncherSettings.HomeClasses)
-        RedirectStatus.systemLauncher.value = systemLauncher
         RedirectStatus.homeClasses.value = if (userHomeClasses.isNotEmpty()) userHomeClasses.toSet() else autoHomeClasses
-        checkSystemLauncherVersion()
 
-        val ids = store.get(LauncherSettings.RecentsIds) + store.get(LauncherSettings.LearnedIds)
+        fun full(id: String) = if (":id/" in id) id else "$systemLauncher:id/$id"
+        val recentsIds = store.get(LauncherSettings.RecentsIds) + store.get(LauncherSettings.LearnedIds)
+        val homeIds = store.get(LauncherSettings.HomeIds)
         detectConfig = DetectConfig(
             systemLauncher = systemLauncher,
-            exactIds = ids.map { if (":id/" in it) it else "$systemLauncher:id/$it" }.distinct(),
+            exactIds = recentsIds.map(::full).distinct(),
             substrings = store.get(LauncherSettings.RecentsIdSubstrings),
+            homeIds = homeIds.map(::full).distinct(),
         )
+
+        // The learned counts only mean something for one launcher version and one set of ids.
+        val statsKey = "${RedirectStatus.systemLauncherVersion.value}|${homeIds.joinToString(",")}"
+        if (store.get(LauncherSettings.StatsKey) != statsKey) {
+            STATS.forEach { store.reset(it) }
+            store.set(LauncherSettings.StatsKey, statsKey)
+        }
+        val reliable = signatureReliable()
+        RedirectStatus.signatureReliable.value = reliable
 
         engine.config = EngineConfig(
             enabled = store.get(LauncherSettings.RedirectEnabled),
@@ -213,8 +246,40 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
             guardCount = store.get(LauncherSettings.GuardCount),
             guardWindowMs = store.get(LauncherSettings.GuardWindow) * 1000L,
             guardPauseMs = store.get(LauncherSettings.GuardPause) * 1000L,
+            requireHomeSignature = store.get(LauncherSettings.RequireHomeScreen) && homeIds.isNotEmpty(),
+            signatureFallbackMs = store.get(LauncherSettings.HomeScreenFallback).toLong(),
+            fastMode = store.get(LauncherSettings.FastWhenProven) && reliable,
+            fastDelayMs = store.get(LauncherSettings.FastDelay).toLong(),
         )
         updateServiceInfo()
+    }
+
+    /**
+     * True once this phone has shown, often enough, that recents never opens while the home
+     * screen views are visible. Only then is the short delay used.
+     */
+    private fun signatureReliable(): Boolean {
+        val homeSeen = store.get(LauncherSettings.StatsHomeSeen)
+        val recentsSeen = store.get(LauncherSettings.StatsRecentsSeen)
+        val recentsUnseen = store.get(LauncherSettings.StatsRecentsUnseen)
+        return homeSeen >= 10 && recentsUnseen >= 5 && recentsSeen * 20 <= recentsUnseen
+    }
+
+    private fun resolveSystemLauncher() {
+        val override = store.get(LauncherSettings.SystemLauncherPackage)
+        val detected = if (override.isBlank()) SystemLauncher.detectDefault(this) else null
+        if (detected != null && detected != store.get(LauncherSettings.LastSystemLauncher)) {
+            store.set(LauncherSettings.LastSystemLauncher, detected)
+        }
+        if (override.isBlank() && detected == null) scheduleLauncherRecheck()
+        val resolved = SystemLauncher.resolve(this, override, store.get(LauncherSettings.LastSystemLauncher))
+        if (resolved != systemLauncher) {
+            systemLauncher = resolved
+            DebugLog.decision(TAG, "system launcher: $resolved")
+        }
+        autoHomeClasses = SystemLauncher.homeClasses(this, systemLauncher)
+        RedirectStatus.systemLauncher.value = systemLauncher
+        checkSystemLauncherVersion()
     }
 
     /** A new version of the system launcher may have renamed the ids recents is recognised by. */
@@ -238,8 +303,8 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
     private fun scheduleLauncherRecheck() {
         if (recheckAttempts >= MAX_RECHECKS) return
         recheckAttempts++
-        handler.removeCallbacks(launcherRecheck)
-        handler.postDelayed(launcherRecheck, RECHECK_MS)
+        engineHandler.removeCallbacks(launcherRecheck)
+        engineHandler.postDelayed(launcherRecheck, RECHECK_MS)
     }
 
     private fun refreshSystemLauncher() {
@@ -248,6 +313,7 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         if (detected == null) {
             scheduleLauncherRecheck()
         } else if (detected != systemLauncher) {
+            resolveSystemLauncher()
             applySettings()
         }
     }
@@ -256,6 +322,10 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
      * Subscribes to the system launcher's window and content events, and to nothing else.
      * The subscription is fixed: changing it while a redirect is being decided would put a
      * system call in the way.
+     *
+     * Views that are "not important for accessibility" are deliberately left out: the system
+     * launcher marks its home screen that way while a recents gesture is in progress, which
+     * is exactly what the home screen check relies on.
      */
     private fun updateServiceInfo() {
         if (appliedPackage == systemLauncher) return
@@ -273,7 +343,7 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         appliedPackage = systemLauncher
     }
 
-    // ---- events ----
+    // ---- events (delivered on the UI thread, handled on the engine thread) ----
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.packageName?.toString() != systemLauncher) return
@@ -281,12 +351,19 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 val className = event.className?.toString().orEmpty()
-                val home = isHomeClass(className)
-                DebugLog.event(TAG, "window: ${className.substringAfterLast('.')}${if (home) " (home)" else ""}")
-                if (home) engine.onSystemLauncherWindow() else engine.onContentChanged()
+                onEngine {
+                    val home = isHomeClass(className)
+                    DebugLog.event(TAG, "window: ${className.substringAfterLast('.')}${if (home) " (home)" else ""}")
+                    if (home) engine.onSystemLauncherWindow() else engine.onContentChanged()
+                }
             }
 
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> engine.onContentChanged()
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                // Dropped here while idle, so animations in the system launcher cost nothing.
+                if (RedirectStatus.engineState.value != EngineState.IDLE) {
+                    onEngine { engine.onContentChanged() }
+                }
+            }
         }
     }
 
@@ -302,24 +379,29 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         null
     }
 
-    // ---- commands from the app ----
+    private fun toast(text: String) {
+        mainHandler.post { Toast.makeText(this, text, Toast.LENGTH_LONG).show() }
+    }
 
-    internal fun onLauncherResumed() {
+    // ---- commands from the app (any thread) ----
+
+    internal fun onLauncherResumed() = onEngine {
         engine.onLauncherResumed()
         refreshSystemLauncher()
     }
 
-    internal fun pauseEngine(durationMs: Long, reason: String) = engine.pause(durationMs, reason)
+    internal fun pauseEngine(durationMs: Long, reason: String) = onEngine { engine.pause(durationMs, reason) }
 
-    internal fun resumeEngine() = engine.resume()
+    internal fun resumeEngine() = onEngine { engine.resume() }
 
-    internal fun startCalibration() {
+    internal fun startCalibration() = onEngine {
         calibrator?.cancel()
         engine.pause(60_000, "calibration")
         val c = Calibrator(
+            handler = engineHandler,
             systemLauncher = systemLauncher,
             root = ::activeRoot,
-            announce = { Toast.makeText(this, it, Toast.LENGTH_LONG).show() },
+            announce = ::toast,
             onFinished = { ids, failure ->
                 calibrator = null
                 if (ids != null) {
@@ -327,11 +409,11 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
                     store.set(LauncherSettings.DetectorVerified, true)
                     RedirectStatus.calibration.value = CalibrationState.Done(ids)
                     DebugLog.decision(TAG, "calibration learned: ${ids.joinToString { it.substringAfter(":id/") }}")
-                    Toast.makeText(this, "Calibration done: ${ids.size} ids learned", Toast.LENGTH_LONG).show()
+                    toast("Calibration done: ${ids.size} ids learned")
                 } else {
                     RedirectStatus.calibration.value = CalibrationState.Failed(failure ?: "Failed")
                     DebugLog.error(TAG, "calibration failed: $failure")
-                    Toast.makeText(this, "Calibration failed", Toast.LENGTH_LONG).show()
+                    toast("Calibration failed")
                 }
                 // Leave a moment to get out of recents before redirecting again.
                 engine.pause(3000, "calibration finished")
@@ -341,25 +423,25 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         c.start()
     }
 
-    internal fun cancelCalibration() {
+    internal fun cancelCalibration() = onEngine {
         calibrator?.cancel()
         calibrator = null
         RedirectStatus.calibration.value = CalibrationState.Idle
         engine.resume()
     }
 
-    // ---- EngineHost ----
+    // ---- EngineHost (engine thread) ----
 
     override fun now(): Long = SystemClock.uptimeMillis()
 
     override fun schedule(timer: EngineTimer, delayMs: Long) {
         val runnable = timers.getOrPut(timer) { Runnable { engine.onTimer(timer) } }
-        handler.removeCallbacks(runnable)
-        handler.postDelayed(runnable, delayMs)
+        engineHandler.removeCallbacks(runnable)
+        engineHandler.postDelayed(runnable, delayMs)
     }
 
     override fun cancel(timer: EngineTimer) {
-        timers[timer]?.let { handler.removeCallbacks(it) }
+        timers[timer]?.let { engineHandler.removeCallbacks(it) }
     }
 
     override fun probe(): Probe {
@@ -369,7 +451,7 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         return result
     }
 
-    /** Anything slow on the main thread delays the redirect, so it is worth seeing in the log. */
+    /** A slow look at the system launcher delays the redirect, so it is worth seeing in the log. */
     private fun noteIfSlow(what: String, startedAt: Long) {
         val now = SystemClock.uptimeMillis()
         val took = now - startedAt
@@ -448,6 +530,24 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
             if (pausedForMs > 0) System.currentTimeMillis() + pausedForMs else 0L
     }
 
+    override fun onEpisode(recentsFollowed: Boolean, signatureSeen: Boolean, afterLaunch: Boolean) {
+        if (detectConfig.homeIds.isEmpty()) return
+        val counter = when {
+            recentsFollowed && signatureSeen -> LauncherSettings.StatsRecentsSeen
+            recentsFollowed -> LauncherSettings.StatsRecentsUnseen
+            signatureSeen -> LauncherSettings.StatsHomeSeen
+            else -> LauncherSettings.StatsHomeUnseen
+        }
+        store.set(counter, store.get(counter) + 1)
+        if (recentsFollowed && afterLaunch) {
+            store.set(LauncherSettings.StatsInterrupted, store.get(LauncherSettings.StatsInterrupted) + 1)
+        }
+    }
+
+    override fun onSignatureFallback() {
+        store.set(LauncherSettings.StatsFallbacks, store.get(LauncherSettings.StatsFallbacks) + 1)
+    }
+
     override fun log(level: LogLevel, message: String) = DebugLog.log(level, TAG, message)
 
     private companion object {
@@ -455,6 +555,11 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         const val SLOW_MS = 40L
         const val RECHECK_MS = 5000L
         const val MAX_RECHECKS = 24
+        val STATS = listOf(
+            LauncherSettings.StatsHomeSeen, LauncherSettings.StatsHomeUnseen,
+            LauncherSettings.StatsRecentsSeen, LauncherSettings.StatsRecentsUnseen,
+            LauncherSettings.StatsInterrupted, LauncherSettings.StatsFallbacks,
+        )
     }
 }
 

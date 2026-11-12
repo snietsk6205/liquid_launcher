@@ -9,6 +9,8 @@ internal data class DetectConfig(
     val exactIds: List<String>,
     /** Fragments matched against the part after ":id/". Needs a tree walk, so it is a fallback. */
     val substrings: List<String>,
+    /** Full resource names that are all visible when the home screen itself is showing. */
+    val homeIds: List<String>,
 )
 
 /** Tells the system launcher's home screen from recents by looking for known view ids. */
@@ -41,7 +43,14 @@ internal object RecentsDetector {
                 return Probe(pkg, isSystemLauncher = true, recents = true, detail = "~" + hit.substringAfter(":id/"))
             }
         }
-        return Probe(pkg, isSystemLauncher = true, recents = false)
+        val home = config.homeIds.isNotEmpty() && config.homeIds.all { id ->
+            try {
+                !root.findAccessibilityNodeInfosByViewId(id).isNullOrEmpty()
+            } catch (e: Exception) {
+                false
+            }
+        }
+        return Probe(pkg, isSystemLauncher = true, recents = false, homeSignature = home)
     }
 
     /** All view ids in the window, for calibration and the most detailed log level. */

@@ -42,6 +42,9 @@ object RedirectStatus {
     val launchBlocked = MutableStateFlow(false)
     val calibration = MutableStateFlow<CalibrationState>(CalibrationState.Idle)
 
+    /** The home screen check has proven reliable on this phone, so the short delay is in use. */
+    val signatureReliable = MutableStateFlow(false)
+
     val launchesRequested = AtomicInteger()
     val launchesConfirmed = AtomicInteger()
 

@@ -41,6 +41,16 @@ private class FakeHost : EngineHost {
     override fun onStateChanged(state: EngineState) = Unit
     override fun onLaunchUnconfirmed() { unconfirmed++ }
     override fun onPausedChanged(pausedForMs: Long) { this.pausedForMs = pausedForMs }
+
+    /** "recents"/"home", then "+sig" when the home screen was seen, then "+late" for recents after a launch. */
+    val episodes = mutableListOf<String>()
+    var fallbacks = 0
+    override fun onEpisode(recentsFollowed: Boolean, signatureSeen: Boolean, afterLaunch: Boolean) {
+        episodes += (if (recentsFollowed) "recents" else "home") +
+            (if (signatureSeen) "+sig" else "") +
+            (if (recentsFollowed && afterLaunch) "+late" else "")
+    }
+    override fun onSignatureFallback() { fallbacks++ }
     override fun log(level: LogLevel, message: String) { logs += message }
 
     /** Moves the clock forward, running timers in order as they come due. */
@@ -56,7 +66,9 @@ private class FakeHost : EngineHost {
         time = end
     }
 
-    fun showHome() { show(Probe(SYSTEM, isSystemLauncher = true, recents = false)) }
+    fun showHome(signature: Boolean = false) {
+        show(Probe(SYSTEM, isSystemLauncher = true, recents = false, homeSignature = signature))
+    }
     fun showRecents() { show(Probe(SYSTEM, isSystemLauncher = true, recents = true, detail = "id")) }
     fun showOtherApp() { show(Probe(OTHER, isSystemLauncher = false, recents = false)) }
     fun showUnknown() { show(Probe(null, isSystemLauncher = false, recents = false)) }
@@ -74,7 +86,10 @@ private class FakeHost : EngineHost {
     }
 }
 
-private fun setup(config: EngineConfig = EngineConfig()): FakeHost {
+/** The delays the older tests were written against; the signature tests set their own. */
+private val LEGACY = EngineConfig(onHomeDelayMs = 50)
+
+private fun setup(config: EngineConfig = LEGACY): FakeHost {
     val host = FakeHost()
     host.engine = RedirectEngine(host).also { it.config = config }
     return host
@@ -244,7 +259,7 @@ class RedirectEngineTest {
 
     @Test
     fun disabled_doesNothing() {
-        val host = setup(EngineConfig(enabled = false))
+        val host = setup(LEGACY.copy(enabled = false))
         host.showHome()
         host.engine.onSystemLauncherWindow()
         host.advance(5000)
@@ -255,7 +270,7 @@ class RedirectEngineTest {
 
     @Test
     fun homeTriggerOff_staysOnSystemLauncher_butRecentsExitStillWorks() {
-        val host = setup(EngineConfig(onHome = false))
+        val host = setup(LEGACY.copy(onHome = false))
         host.showHome()
         host.engine.onSystemLauncherWindow()
         host.advance(3000)
@@ -363,7 +378,7 @@ class RedirectEngineTest {
 
     @Test
     fun screenOff_homeOnly_skipsWhenAnAppWasInFront() {
-        val host = setup(EngineConfig(screenOffMode = ScreenOffMode.HOME))
+        val host = setup(LEGACY.copy(screenOffMode = ScreenOffMode.HOME))
         host.showOtherApp()
         host.engine.onScreenOff()
         host.advance(5000)
@@ -377,7 +392,7 @@ class RedirectEngineTest {
 
     @Test
     fun screenOff_never() {
-        val host = setup(EngineConfig(screenOffMode = ScreenOffMode.NEVER))
+        val host = setup(LEGACY.copy(screenOffMode = ScreenOffMode.NEVER))
         host.engine.onScreenOff()
         host.advance(5000)
         assertTrue(host.launches.isEmpty())
@@ -420,5 +435,127 @@ class RedirectEngineTest {
         host.advance(1000)
         assertTrue(host.launches.isEmpty())
         assertTrue(host.timers.isEmpty())
+    }
+
+    // ---- home screen signature ----
+
+    private val signatureConfig = EngineConfig(onHomeDelayMs = 160, requireHomeSignature = true)
+
+    @Test
+    fun signatureVisibleAtOnce_redirectsAfterTheNormalDelay() {
+        val host = setup(signatureConfig)
+        host.showHome(signature = true)
+        host.engine.onSystemLauncherWindow()
+        host.advance(159)
+        assertTrue(host.launches.isEmpty())
+        host.advance(1)
+        assertEquals(1, host.launches.size)
+        host.confirmLaunch()
+        assertEquals(listOf("home+sig"), host.episodes)
+        assertEquals(0, host.fallbacks)
+    }
+
+    @Test
+    fun signatureMissing_waitsPastTheDelay_thenRedirectsAsSoonAsItShows() {
+        val host = setup(signatureConfig)
+        host.showHome(signature = false)
+        host.engine.onSystemLauncherWindow()
+        host.advance(400)
+        assertTrue(host.launches.isEmpty())
+        host.showHome(signature = true)
+        host.engine.onContentChanged()
+        host.advance(RedirectEngine.COALESCE_MS)
+        assertEquals(1, host.launches.size)
+        assertEquals(0, host.fallbacks)
+    }
+
+    @Test
+    fun signatureMissing_thenRecents_neverRedirects() {
+        val host = setup(signatureConfig)
+        host.showHome(signature = false)
+        host.engine.onSystemLauncherWindow()
+        host.advance(230)
+        host.showRecents()
+        host.advance(5000)
+        assertTrue(host.launches.isEmpty())
+        assertEquals(EngineState.RECENTS, host.engine.state)
+        assertEquals(listOf("recents"), host.episodes)
+    }
+
+    @Test
+    fun signatureNeverShows_fallsBackAfterAWhile() {
+        val host = setup(signatureConfig)
+        host.showHome(signature = false)
+        host.engine.onSystemLauncherWindow()
+        host.advance(699)
+        assertTrue(host.launches.isEmpty())
+        host.advance(1)
+        assertEquals(1, host.launches.size)
+        assertEquals(1, host.fallbacks)
+        host.confirmLaunch()
+        assertEquals(listOf("home"), host.episodes)
+    }
+
+    @Test
+    fun fastMode_redirectsQuicklyWhenTheHomeScreenIsVisible() {
+        val host = setup(signatureConfig.copy(fastMode = true, fastDelayMs = 30))
+        host.showHome(signature = true)
+        host.engine.onSystemLauncherWindow()
+        host.advance(29)
+        assertTrue(host.launches.isEmpty())
+        host.advance(1)
+        assertEquals(1, host.launches.size)
+    }
+
+    @Test
+    fun fastMode_stillWaitsWhileTheHomeScreenIsNotVisible() {
+        val host = setup(signatureConfig.copy(fastMode = true, fastDelayMs = 30))
+        host.showHome(signature = false)
+        host.engine.onSystemLauncherWindow()
+        host.advance(300)
+        assertTrue(host.launches.isEmpty())
+        host.showRecents()
+        host.advance(1000)
+        assertTrue(host.launches.isEmpty())
+    }
+
+    @Test
+    fun recentsRightAfterARedirect_isReportedAsInterrupted() {
+        val host = setup(signatureConfig)
+        host.showHome(signature = true)
+        host.engine.onSystemLauncherWindow()
+        host.advance(160)
+        assertEquals(1, host.launches.size)
+        host.showRecents()
+        host.advance(100)
+        assertEquals(listOf("recents+sig+late"), host.episodes)
+        host.confirmLaunch()
+        assertEquals(listOf("recents+sig+late"), host.episodes)
+    }
+
+    @Test
+    fun leavingRecents_doesNotWaitForTheSignature() {
+        val host = setup(signatureConfig)
+        host.showRecents()
+        host.engine.onSystemLauncherWindow()
+        host.advance(1000)
+        host.showHome(signature = false)
+        host.engine.onContentChanged()
+        host.advance(RedirectEngine.COALESCE_MS + 80)
+        assertEquals(listOf("left recents"), host.launches)
+        host.confirmLaunch()
+        assertTrue(host.episodes.isEmpty())
+    }
+
+    @Test
+    fun signatureDisappearingAgain_goesBackToWaiting() {
+        val host = setup(signatureConfig)
+        host.showHome(signature = true)
+        host.engine.onSystemLauncherWindow()
+        host.advance(100)
+        host.showHome(signature = false)
+        host.engine.onContentChanged()
+        host.advance(300)
+        assertTrue(host.launches.isEmpty())
     }
 }

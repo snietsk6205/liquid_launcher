@@ -2,6 +2,7 @@ package dev.liquid.launcher.feature.settings
 
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.SystemClock
 import android.view.FrameMetrics
 import android.view.Window
 import androidx.compose.animation.core.LinearEasing
@@ -50,25 +51,31 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import dev.liquid.launcher.core.designsystem.GlassQuality
 import dev.liquid.launcher.core.designsystem.WallpaperStore
 import dev.liquid.launcher.core.designsystem.liquidGlass
+import dev.liquid.launcher.core.settings.LauncherSettings
+import dev.liquid.launcher.core.settings.SettingsStore
 import kotlinx.coroutines.delay
 
-/** Collects per-frame render times of a window. */
+/** Counts the frames a window draws and how many of them missed their deadline. */
 private class FrameCollector {
-    private val durationsMs = ArrayList<Float>()
+    private var frames = 0
+    private var late = 0
 
     val listener = Window.OnFrameMetricsAvailableListener { _, metrics, _ ->
-        val ms = metrics.getMetric(FrameMetrics.TOTAL_DURATION) / 1_000_000f
-        synchronized(durationsMs) { durationsMs += ms }
+        val total = metrics.getMetric(FrameMetrics.TOTAL_DURATION)
+        val deadline = metrics.getMetric(FrameMetrics.DEADLINE)
+        synchronized(this) {
+            frames++
+            if (deadline > 0 && total > deadline) late++
+        }
     }
 
-    fun reset() = synchronized(durationsMs) { durationsMs.clear() }
+    fun reset() = synchronized(this) {
+        frames = 0
+        late = 0
+    }
 
-    fun result(quality: GlassQuality, seconds: Float, budgetMs: Float): GlassResult {
-        val sorted = synchronized(durationsMs) { durationsMs.sorted() }
-        if (sorted.isEmpty()) return GlassResult(quality, 0, seconds, 0f, 0f, 0f, budgetMs)
-        val p95 = sorted[((sorted.size - 1) * 0.95f).toInt()]
-        val slow = sorted.count { it > budgetMs } * 100f / sorted.size
-        return GlassResult(quality, sorted.size, seconds, sorted.average().toFloat(), p95, slow, budgetMs)
+    fun result(quality: GlassQuality, seconds: Float, refreshHz: Float): GlassResult = synchronized(this) {
+        GlassResult(quality, frames, seconds, refreshHz, if (frames == 0) 0f else late * 100f / frames)
     }
 }
 
@@ -80,7 +87,7 @@ private const val MEASURE_MS = 4000L
  * tier. The content changes every frame, which is the worst case for glass.
  */
 @Composable
-internal fun GlassBenchScreen(window: Window, wallpaper: WallpaperStore, onBack: () -> Unit) {
+internal fun GlassBenchScreen(store: SettingsStore, window: Window, wallpaper: WallpaperStore, onBack: () -> Unit) {
     val image by wallpaper.image.collectAsStateCompat()
     var quality by remember { mutableStateOf(GlassQuality.Full) }
     var running by remember { mutableStateOf(true) }
@@ -96,19 +103,40 @@ internal fun GlassBenchScreen(window: Window, wallpaper: WallpaperStore, onBack:
         }
     }
 
+    // Ask for the display's fastest mode for the whole run; otherwise the phone may drop to
+    // 60 Hz part-way through and the tiers are not comparable.
+    DisposableEffect(window) {
+        val display = window.decorView.display
+        val current = display?.mode
+        val fastest = display?.supportedModes
+            ?.filter { current == null || (it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight) }
+            ?.maxByOrNull { it.refreshRate }
+        val before = window.attributes.preferredDisplayModeId
+        if (fastest != null) {
+            window.attributes = window.attributes.apply { preferredDisplayModeId = fastest.modeId }
+        }
+        onDispose {
+            window.attributes = window.attributes.apply { preferredDisplayModeId = before }
+        }
+    }
+
     LaunchedEffect(Unit) {
-        val refresh = window.decorView.display?.refreshRate?.takeIf { it > 1f } ?: 60f
-        val budgetMs = 1000f / refresh
         val collected = ArrayList<GlassResult>()
         for (tier in listOf(GlassQuality.Full, GlassQuality.Frosted, GlassQuality.Tint)) {
             quality = tier
             delay(WARM_UP_MS)
             collector.reset()
+            val started = SystemClock.uptimeMillis()
             delay(MEASURE_MS)
-            collected += collector.result(tier, MEASURE_MS / 1000f, budgetMs)
+            val seconds = (SystemClock.uptimeMillis() - started) / 1000f
+            val refresh = window.decorView.display?.refreshRate?.takeIf { it > 1f } ?: 60f
+            collected += collector.result(tier, seconds, refresh)
             results = collected.toList()
         }
         DiagnosticsState.glass.value = collected
+        // Remember the best tier that held the frame rate, for the automatic fallback.
+        val cap = collected.firstOrNull { it.holdsFrameRate }?.quality ?: GlassQuality.Tint
+        store.set(LauncherSettings.GlassCap, cap.name.lowercase())
         running = false
     }
 

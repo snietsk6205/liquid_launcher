@@ -33,10 +33,35 @@ object LauncherSettings {
         section = "redirect", keywords = "trigger home honor",
     )
     val OnHomeDelay = IntSetting(
-        key = "redirect.onHomeDelay", default = 50, min = 0, max = 1000, step = 10, unit = "ms",
+        key = "redirect.onHomeDelay", default = 160, min = 0, max = 1000, step = 10, unit = "ms",
         title = "Delay after the system launcher appears",
         summary = "Recents is checked again when the delay ends. Lower is faster; too low can interrupt opening recents",
         section = "redirect", keywords = "delay latency flash",
+    )
+    val RequireHomeScreen = BoolSetting(
+        key = "redirect.requireHomeScreen", default = true,
+        title = "Wait until the home screen is visible",
+        summary = "While you are opening recents the system launcher's home screen is not shown yet, " +
+            "so waiting for it keeps the redirect from interrupting recents",
+        section = "redirect", keywords = "home screen signature workspace recents interrupt",
+    )
+    val FastWhenProven = BoolSetting(
+        key = "redirect.fastWhenProven", default = true,
+        title = "Shorten the delay once proven safe",
+        summary = "After enough redirects and recents openings have shown that the home screen check is " +
+            "reliable on this phone, the short delay below is used instead. Diagnostics shows the counts",
+        section = "redirect", keywords = "fast adaptive learn delay",
+    )
+    val FastDelay = IntSetting(
+        key = "redirect.fastDelay", default = 30, min = 0, max = 200, step = 10, unit = "ms",
+        title = "Short delay",
+        section = "redirect", keywords = "fast delay",
+    )
+    val HomeScreenFallback = IntSetting(
+        key = "redirect.homeScreenFallback", default = 700, min = 300, max = 3000, step = 100, unit = "ms",
+        title = "Redirect anyway after",
+        summary = "If the home screen never becomes visible (for example after an update renamed it)",
+        section = "redirect", keywords = "fallback timeout home screen",
     )
     val OnRecentsExit = BoolSetting(
         key = "redirect.onRecentsExit", default = true,
@@ -98,6 +123,12 @@ object LauncherSettings {
         title = "Recents id fragments",
         summary = "Slower fallback: any view id containing one of these texts counts as recents",
         section = "detection", keywords = "substring fuzzy rename update",
+    )
+    val HomeIds = StringListSetting(
+        key = "detect.homeIds", default = listOf("workspace", "hotseat"),
+        title = "Home screen view ids",
+        summary = "All of these are visible when the system launcher shows its home screen. Leave empty to switch the check off",
+        section = "detection", keywords = "home workspace hotseat view id signature",
     )
     val LearnedIds = StringListSetting(
         key = "detect.learnedIds", default = emptyList(),
@@ -198,6 +229,18 @@ object LauncherSettings {
         section = "glass", keywords = "liquid glass blur refraction performance",
     )
 
+    val GlassAuto = BoolSetting(
+        key = "glass.auto", default = true,
+        title = "Lower quality automatically",
+        summary = "Never use a tier the glass benchmark showed this phone cannot hold at full frame rate",
+        section = "glass", keywords = "performance fallback benchmark automatic",
+    )
+    val GlassCap = ChoiceSetting(
+        key = "state.glassCap", default = "full",
+        options = listOf("full" to "Full", "frosted" to "Frosted", "tint" to "Tint"),
+        title = "Best tier the benchmark allows", section = "state", hidden = true,
+    )
+
     // ---- Debug log ----
 
     val LogEnabled = BoolSetting(
@@ -231,6 +274,16 @@ object LauncherSettings {
         key = "state.lastSystemLauncher", default = "",
         title = "Last detected system launcher", section = "state", hidden = true,
     )
+    val StatsKey = TextSetting(
+        key = "stats.key", default = "", title = "What the counts below were collected for",
+        section = "state", hidden = true,
+    )
+    val StatsHomeSeen = counter("stats.homeSeen", "Redirects with the home screen visible")
+    val StatsHomeUnseen = counter("stats.homeUnseen", "Redirects without the home screen visible")
+    val StatsRecentsSeen = counter("stats.recentsSeen", "Recents openings although the home screen was visible")
+    val StatsRecentsUnseen = counter("stats.recentsUnseen", "Recents openings with the home screen not visible")
+    val StatsInterrupted = counter("stats.interrupted", "Recents openings that a redirect interrupted")
+    val StatsFallbacks = counter("stats.fallbacks", "Redirects sent without the home screen becoming visible")
     val DetectorVerified = BoolSetting(
         key = "state.detectorVerified", default = false,
         title = "Recents detection confirmed", section = "state", hidden = true,
@@ -248,16 +301,22 @@ object LauncherSettings {
         title = "MacroDroid macros disabled", section = "state", hidden = true,
     )
 
+    private fun counter(key: String, title: String) = IntSetting(
+        key = key, default = 0, min = 0, max = Int.MAX_VALUE, title = title, section = "state", hidden = true,
+    )
+
     val all: List<Setting<*>> = listOf(
-        RedirectEnabled, OnHome, OnHomeDelay, OnRecentsExit, OnRecentsExitDelay,
+        RedirectEnabled, OnHome, OnHomeDelay, RequireHomeScreen, FastWhenProven, FastDelay, HomeScreenFallback,
+        OnRecentsExit, OnRecentsExitDelay,
         ScreenOffMode, ScreenOffDelay, UnlockCheck,
-        SystemLauncherPackage, HomeClasses, RecentsIds, RecentsIdSubstrings, LearnedIds, PollInterval,
+        SystemLauncherPackage, HomeClasses, RecentsIds, RecentsIdSubstrings, HomeIds, LearnedIds, PollInterval,
         ExcludeInCall, ExcludeSplitScreen, SystemHomePause, GuardCount, GuardWindow, GuardPause,
         SettleStyle, SettleDuration, ExcludeFromRecents,
         HomeColumns, HomeLabels, Clock24h,
-        GlassQuality,
+        GlassQuality, GlassAuto, GlassCap,
         LogEnabled, LogVerbosity, LogSize,
-        LastSystemLauncherVersion, LastSystemLauncher, DetectorVerified, SetupAppLaunchDone, SetupEmptyHomeDone, SetupMacrosDone,
+        LastSystemLauncherVersion, LastSystemLauncher, DetectorVerified,
+        StatsKey, StatsHomeSeen, StatsHomeUnseen, StatsRecentsSeen, StatsRecentsUnseen, StatsInterrupted, StatsFallbacks, SetupAppLaunchDone, SetupEmptyHomeDone, SetupMacrosDone,
     )
 
     fun inSection(sectionId: String): List<Setting<*>> = all.filter { it.section == sectionId && !it.hidden }

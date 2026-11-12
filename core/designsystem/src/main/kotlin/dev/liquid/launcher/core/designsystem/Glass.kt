@@ -23,6 +23,9 @@ enum class GlassQuality {
     /** Translucent tint only. No shader work at all. */
     Tint;
 
+    /** This tier, or [cap] if the cap is the cheaper of the two. */
+    fun cappedAt(cap: GlassQuality): GlassQuality = if (cap.ordinal > ordinal) cap else this
+
     companion object {
         fun fromSetting(value: String): GlassQuality = when (value) {
             "frosted" -> Frosted
