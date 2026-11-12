@@ -95,7 +95,11 @@ internal object Diagnostics {
         }
 
         check("System launcher") {
-            val resolved = SystemLauncher.resolve(context, store.get(LauncherSettings.SystemLauncherPackage))
+            val resolved = SystemLauncher.resolve(
+                context,
+                store.get(LauncherSettings.SystemLauncherPackage),
+                store.get(LauncherSettings.LastSystemLauncher),
+            )
             val version = SystemLauncher.version(context, resolved)
             val classes = SystemLauncher.homeClasses(context, resolved)
             val status = when {

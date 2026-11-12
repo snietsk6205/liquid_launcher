@@ -227,6 +227,10 @@ object LauncherSettings {
         key = "state.systemLauncherVersion", default = "",
         title = "Last seen system launcher version", section = "state", hidden = true,
     )
+    val LastSystemLauncher = TextSetting(
+        key = "state.lastSystemLauncher", default = "",
+        title = "Last detected system launcher", section = "state", hidden = true,
+    )
     val DetectorVerified = BoolSetting(
         key = "state.detectorVerified", default = false,
         title = "Recents detection confirmed", section = "state", hidden = true,
@@ -253,7 +257,7 @@ object LauncherSettings {
         HomeColumns, HomeLabels, Clock24h,
         GlassQuality,
         LogEnabled, LogVerbosity, LogSize,
-        LastSystemLauncherVersion, DetectorVerified, SetupAppLaunchDone, SetupEmptyHomeDone, SetupMacrosDone,
+        LastSystemLauncherVersion, LastSystemLauncher, DetectorVerified, SetupAppLaunchDone, SetupEmptyHomeDone, SetupMacrosDone,
     )
 
     fun inSection(sectionId: String): List<Setting<*>> = all.filter { it.section == sectionId && !it.hidden }

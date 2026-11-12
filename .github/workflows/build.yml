@@ -85,6 +85,9 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      - name: Install screenshot helper
+        run: python3 -m pip install --quiet --user pillow || true
+
       - name: Run on emulator (Android 13)
         uses: reactivecircus/android-emulator-runner@v2
         with:

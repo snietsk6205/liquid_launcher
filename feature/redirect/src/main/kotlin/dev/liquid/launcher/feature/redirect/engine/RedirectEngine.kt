@@ -345,7 +345,7 @@ class RedirectEngine(private val host: EngineHost) {
         const val COALESCE_MS = 16L
 
         /** Wait this long for a launch to be confirmed before trying again. */
-        const val RETRY_MS = 700L
+        const val RETRY_MS = 1000L
         const val MAX_ATTEMPTS = 3
 
         /** After a window event that could not be matched to the active window yet. */

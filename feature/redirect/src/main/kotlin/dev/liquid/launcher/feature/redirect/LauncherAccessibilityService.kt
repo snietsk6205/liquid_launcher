@@ -60,6 +60,9 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
     private var receiversRegistered = false
     private var calibrator: Calibrator? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var recheckAttempts = 0
+    private var lastSlowLogAt = 0L
+    private val launcherRecheck = Runnable { refreshSystemLauncher() }
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -78,6 +81,7 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
 
                 Intent.ACTION_USER_PRESENT -> {
                     DebugLog.event(TAG, "unlocked")
+                    refreshSystemLauncher()
                     engine.onUserPresent()
                 }
             }
@@ -171,7 +175,13 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
             else -> LogLevel.DECISION
         }
 
-        val resolved = SystemLauncher.resolve(this, store.get(LauncherSettings.SystemLauncherPackage))
+        val override = store.get(LauncherSettings.SystemLauncherPackage)
+        val detected = if (override.isBlank()) SystemLauncher.detectDefault(this) else null
+        if (detected != null && detected != store.get(LauncherSettings.LastSystemLauncher)) {
+            store.set(LauncherSettings.LastSystemLauncher, detected)
+        }
+        if (override.isBlank() && detected == null) scheduleLauncherRecheck()
+        val resolved = SystemLauncher.resolve(this, override, store.get(LauncherSettings.LastSystemLauncher))
         if (resolved != systemLauncher) {
             systemLauncher = resolved
             DebugLog.decision(TAG, "system launcher: $resolved")
@@ -224,6 +234,27 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         store.set(LauncherSettings.LastSystemLauncherVersion, version)
     }
 
+    /**
+     * Right after boot the default launcher can be a placeholder. Look again a little later,
+     * and whenever the phone is unlocked or the launcher comes to the front.
+     */
+    private fun scheduleLauncherRecheck() {
+        if (recheckAttempts >= MAX_RECHECKS) return
+        recheckAttempts++
+        handler.removeCallbacks(launcherRecheck)
+        handler.postDelayed(launcherRecheck, RECHECK_MS)
+    }
+
+    private fun refreshSystemLauncher() {
+        if (store.get(LauncherSettings.SystemLauncherPackage).isNotBlank()) return
+        val detected = SystemLauncher.detectDefault(this)
+        if (detected == null) {
+            scheduleLauncherRecheck()
+        } else if (detected != systemLauncher) {
+            applySettings()
+        }
+    }
+
     private fun updateServiceInfo() {
         if (appliedPackage == systemLauncher && appliedTracking == tracking) return
         val info = serviceInfo ?: return
@@ -234,7 +265,9 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         info.flags = AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
             AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         info.notificationTimeout = 0
+        val start = SystemClock.uptimeMillis()
         serviceInfo = info
+        noteIfSlow("event subscription update", start)
         appliedPackage = systemLauncher
         appliedTracking = tracking
     }
@@ -270,7 +303,10 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
 
     // ---- commands from the app ----
 
-    internal fun onLauncherResumed() = engine.onLauncherResumed()
+    internal fun onLauncherResumed() {
+        engine.onLauncherResumed()
+        refreshSystemLauncher()
+    }
 
     internal fun pauseEngine(durationMs: Long, reason: String) = engine.pause(durationMs, reason)
 
@@ -325,7 +361,22 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         timers[timer]?.let { handler.removeCallbacks(it) }
     }
 
-    override fun probe(): Probe = RecentsDetector.probe(activeRoot(), detectConfig)
+    override fun probe(): Probe {
+        val start = SystemClock.uptimeMillis()
+        val result = RecentsDetector.probe(activeRoot(), detectConfig)
+        noteIfSlow("window check", start)
+        return result
+    }
+
+    /** Anything slow on the main thread delays the redirect, so it is worth seeing in the log. */
+    private fun noteIfSlow(what: String, startedAt: Long) {
+        val now = SystemClock.uptimeMillis()
+        val took = now - startedAt
+        if (took >= SLOW_MS && now - lastSlowLogAt >= 1000) {
+            lastSlowLogAt = now
+            DebugLog.decision(TAG, "slow $what: $took ms")
+        }
+    }
 
     override fun exclusionReason(): String? {
         if (store.get(LauncherSettings.ExcludeInCall)) {
@@ -401,6 +452,9 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
 
     private companion object {
         const val TAG = "Redirect"
+        const val SLOW_MS = 40L
+        const val RECHECK_MS = 5000L
+        const val MAX_RECHECKS = 24
     }
 }
 
@@ -408,18 +462,26 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
 object SystemLauncher {
     const val HONOR_HOME = "com.hihonor.android.launcher"
 
-    /** [override] if set, otherwise the phone's current default launcher. */
-    fun resolve(context: Context, override: String): String {
-        if (override.isNotBlank()) return override.trim()
+    /**
+     * The phone's default launcher, or null while that cannot be told: no default chosen,
+     * this app itself, or the placeholder the system shows before the first unlock.
+     */
+    fun detectDefault(context: Context): String? {
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
         val pkg = try {
             context.packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
         } catch (e: Exception) {
             null
         }
-        // "android" is the chooser, shown when no default is set.
-        return if (pkg == null || pkg == "android" || pkg == context.packageName) HONOR_HOME else pkg
+        return when (pkg) {
+            null, "android", "com.android.settings", context.packageName -> null
+            else -> pkg
+        }
     }
+
+    /** [override] if set, otherwise the default launcher, the last one seen, or HONOR Home. */
+    fun resolve(context: Context, override: String, lastKnown: String): String =
+        override.trim().ifEmpty { detectDefault(context) ?: lastKnown.ifEmpty { HONOR_HOME } }
 
     /** Class names of the launcher's home activities, including alias targets. */
     fun homeClasses(context: Context, pkg: String): Set<String> {
