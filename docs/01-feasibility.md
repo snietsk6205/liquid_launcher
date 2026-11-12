@@ -29,7 +29,7 @@ A small state machine in the service:
 ```
 OTHER_APP ──HONOR Home window appears──► HOME_SEEN
 HOME_SEEN ──recents signature found────► RECENTS
-HOME_SEEN ──no signature───────────────► REDIRECT (delay A, default 0 ms)
+HOME_SEEN ──no signature───────────────► REDIRECT (delay A, default 50 ms, recents re-checked when it ends)
 RECENTS   ──signature gone, HONOR Home still in front──► REDIRECT (delay B, default 80 ms)
 RECENTS   ──another app comes to front─► OTHER_APP
 screen off ──delay C (default 1000 ms)─► REDIRECT (pre-positions the launcher behind the lock screen)

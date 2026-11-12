@@ -46,6 +46,7 @@ class SettingsActivity : ComponentActivity() {
         const val SCREEN_SETUP = "setup"
         const val SCREEN_DIAGNOSTICS = "diagnostics"
         const val SCREEN_LOG = "log"
+        const val SCREEN_GLASS = "glass"
 
         fun intent(context: Context, screen: String? = null): Intent =
             Intent(context, SettingsActivity::class.java)
@@ -68,6 +69,10 @@ private fun SettingsApp(
                 SettingsActivity.SCREEN_SETUP -> add(Screen.Setup)
                 SettingsActivity.SCREEN_DIAGNOSTICS -> add(Screen.Diagnostics)
                 SettingsActivity.SCREEN_LOG -> add(Screen.Log)
+                SettingsActivity.SCREEN_GLASS -> {
+                    add(Screen.Diagnostics)
+                    add(Screen.GlassBench)
+                }
             }
         }
     }

@@ -21,13 +21,13 @@ Notation: `[type · default]`. Types: toggle, slider (range), choice, color, fon
 - Enabled `[toggle · on]`
 - Service status (connected / last event / HONOR Home version) `[read-only]`
 - Triggers
-  - HONOR Home appears → show launcher `[toggle · on]`, delay `[0–1000 ms · 0]`
+  - HONOR Home appears → show launcher `[toggle · on]`, delay `[0–1000 ms · 50]`
   - Leaving recents → show launcher `[toggle · on]`, delay `[0–1000 ms · 80]`
   - Screen off → show launcher `[choice: always / only if home was in front / never · always]`, delay `[0–5000 ms · 1000]`
   - After unlock check (re-assert if HONOR Home is in front) `[toggle · on]`
 - Detection
-  - System launcher package `[text · com.hihonor.android.launcher]`
-  - Home activity classes `[list · …drawer.DrawerLauncher]`
+  - System launcher package `[text · automatic: the phone's default launcher]`
+  - Home activity classes `[list · automatic: the system launcher's home activities]`
   - Recents signatures: view ids `[list]`, id substrings `[list]`, class names `[list]`
   - Calibration wizard `[action]`
   - Re-verify after system launcher update `[toggle · on]`

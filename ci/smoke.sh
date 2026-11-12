@@ -191,6 +191,15 @@ for screen in "" setup diagnostics log; do
   esac
 done
 
+echo "== 7b. Glass benchmark runs through all three quality tiers"
+adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen glass >/dev/null
+wait_top "SettingsActivity" 8 || fail "glass benchmark opens"
+sleep 6
+peek 05-glass-running
+sleep 14
+look 05-glass-finished 12
+if top_activity | grep -q "SettingsActivity"; then pass "glass benchmark finished without leaving the screen"; else fail "glass benchmark finished without leaving the screen"; fi
+
 echo "== 8. No crashes"
 adb logcat -d > "$OUT/logcat.txt" 2>/dev/null
 if grep -A3 "FATAL EXCEPTION" "$OUT/logcat.txt" | grep -q "$PKG"; then

@@ -8,7 +8,28 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
-Design phase. No code yet.
+Phase 1A: the redirect engine, a temporary home screen, the settings app, device diagnostics and the glass benchmark. The real home grid, drawer, icon packs and search come in Phase 1B.
+
+## Install
+
+Download the APK from the [latest release](https://github.com/snietsk6205/liquid_launcher/releases/latest) on the phone and open it. Then open Liquid Launcher and follow **Settings → Setup checklist**. New builds install over the old one.
+
+## Build
+
+GitHub Actions builds every push: unit tests, a signed release APK, then a test on an Android 13 emulator that checks the redirect against the emulator's launcher, and finally a release. Locally: `./gradlew testDebugUnitTest :app:assembleRelease` (needs the Android SDK).
+
+## Project layout
+
+| Module | Content |
+|---|---|
+| `app` | Application class, home activity, manifest |
+| `core/common` | Debug log, latency statistics |
+| `core/settings` | The settings registry (every option declared once) and its store |
+| `core/designsystem` | Theme, liquid glass surfaces, launcher-managed wallpaper, icons |
+| `feature/redirect` | Accessibility service, redirect state machine, recents detection, calibration, Quick Settings tile |
+| `feature/home` | Temporary home screen |
+| `feature/settings` | Settings screens, setup checklist, diagnostics, glass benchmark, debug log |
+| `ci` | Emulator test script and helpers |
 
 ## Design documents
 
