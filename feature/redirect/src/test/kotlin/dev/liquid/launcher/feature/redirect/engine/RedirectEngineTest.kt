@@ -170,11 +170,35 @@ class RedirectEngineTest {
     }
 
     @Test
+    fun homeAppearingLongAfterTheEvent_isStillCaughtBySlowWatch() {
+        val host = setup()
+        host.showOtherApp()
+        host.engine.onSystemLauncherWindow()
+        host.advance(10_000)
+        assertTrue(host.launches.isEmpty())
+        host.showHome()
+        host.advance(400)
+        assertEquals(1, host.launches.size)
+    }
+
+    @Test
+    fun recentsAppearingLongAfterTheEvent_isRecognisedAndNotRedirected() {
+        val host = setup()
+        host.showOtherApp()
+        host.engine.onSystemLauncherWindow()
+        host.advance(5_000)
+        host.showRecents()
+        host.advance(5_000)
+        assertEquals(EngineState.RECENTS, host.engine.state)
+        assertTrue(host.launches.isEmpty())
+    }
+
+    @Test
     fun watchStopsAfterAWhile() {
         val host = setup()
         host.showOtherApp()
         host.engine.onSystemLauncherWindow()
-        host.advance(RedirectEngine.WATCH_MS + 500)
+        host.advance(RedirectEngine.WATCH_TOTAL_MS + 1000)
         assertTrue(host.timers.isEmpty())
         host.showHome()
         host.advance(5000)

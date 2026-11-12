@@ -92,6 +92,7 @@ class RedirectEngine(private val host: EngineHost) {
     private var launchAttempts = 0
     private var declined = false
     private var lastExclusion: String? = null
+    private var watchFastUntil = 0L
     private var watchUntil = 0L
     private val recentLaunches = ArrayDeque<Long>()
 
@@ -115,8 +116,11 @@ class RedirectEngine(private val host: EngineHost) {
     fun onSystemLauncherWindow() {
         evaluate()
         if (state == EngineState.IDLE && config.enabled && !isPaused) {
-            // The event can arrive before the active window has switched. Look again for a moment.
-            watchUntil = host.now() + WATCH_MS
+            // The event can arrive before the active window has switched (or while an app is
+            // still shown live inside recents). Keep looking: often at first, then slowly.
+            val now = host.now()
+            watchFastUntil = now + WATCH_FAST_MS
+            watchUntil = now + WATCH_TOTAL_MS
             host.schedule(EngineTimer.POLL, WATCH_POLL_MS)
         }
     }
@@ -161,8 +165,10 @@ class RedirectEngine(private val host: EngineHost) {
                 evaluate()
                 if (state != EngineState.IDLE) {
                     host.schedule(EngineTimer.POLL, config.pollIntervalMs)
-                } else if (host.now() < watchUntil) {
+                } else if (host.now() < watchFastUntil) {
                     host.schedule(EngineTimer.POLL, WATCH_POLL_MS)
+                } else if (host.now() < watchUntil) {
+                    host.schedule(EngineTimer.POLL, config.pollIntervalMs)
                 }
             }
 
@@ -231,6 +237,7 @@ class RedirectEngine(private val host: EngineHost) {
         launchAttempts = 0
         lastLaunchAt = 0L
         lastExclusion = null
+        watchFastUntil = 0L
         watchUntil = 0L
         if (wasIdle) {
             host.setTracking(true)
@@ -329,6 +336,7 @@ class RedirectEngine(private val host: EngineHost) {
         launchAttempts = 0
         lastLaunchAt = 0L
         lastExclusion = null
+        watchFastUntil = 0L
         watchUntil = 0L
         host.cancel(EngineTimer.EVALUATE)
         host.cancel(EngineTimer.POLL)
@@ -349,7 +357,8 @@ class RedirectEngine(private val host: EngineHost) {
         const val MAX_ATTEMPTS = 3
 
         /** After a window event that could not be matched to the active window yet. */
-        const val WATCH_MS = 1500L
+        const val WATCH_FAST_MS = 1500L
+        const val WATCH_TOTAL_MS = 30_000L
         const val WATCH_POLL_MS = 80L
     }
 }

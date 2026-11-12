@@ -117,6 +117,17 @@ jobs:
           name: apk
           path: out
 
+      # One APK per release: remove the previous build's file before adding the new one.
+      - name: Remove older APKs from this release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ needs.build.outputs.version }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null \
+            | while read -r name; do
+                gh release delete-asset "$TAG" "$name" --repo "$GITHUB_REPOSITORY" --yes || true
+              done
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.build.outputs.version }}

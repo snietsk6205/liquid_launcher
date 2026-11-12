@@ -50,14 +50,27 @@ pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; echo "      top: $(top_activity)"; FAILS=$((FAILS + 1)); }
 redirect_count() { grep -c 'REDIRECT (' "$LOG" || true; }
 
-# look <name> : screenshot, rough character thumbnail and the texts on screen.
-look() {
+service_up() {
+  [ "$(grep -c 'service connected' "$LOG")" -gt "$(grep -c 'service disconnected' "$LOG")" ]
+}
+
+# peek <name> : screenshot and a rough character thumbnail.
+peek() {
   adb exec-out screencap -p > "$OUT/$1.png" 2>/dev/null || true
   echo "-- screen: $1"
-  python3 ci/ascii_shot.py "$OUT/$1.png"
+  python3 -W ignore ci/ascii_shot.py "$OUT/$1.png"
+}
+
+# look <name> [lines] : peek, plus the texts on screen. Dumping the screen makes Android
+# suspend every accessibility service for a moment, so wait until ours is back.
+look() {
+  peek "$1"
   adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
   adb exec-out cat /sdcard/ui.xml > "$OUT/$1.xml" 2>/dev/null || true
   python3 ci/describe_ui.py "$OUT/$1.xml" "${2:-40}"
+  local i
+  for i in $(seq 1 40); do service_up && return 0; sleep 0.5; done
+  echo "NOTE: accessibility service did not come back after the screen dump"
 }
 
 echo "== Default launcher"
@@ -124,19 +137,20 @@ else
 fi
 
 echo "== 4b. Recents shown by the system launcher itself is recognised"
-# Swipe the front card away: another card remains, and the system launcher is now the
-# active window while recents is still open. This is the case the view-id check exists for.
-adb shell input swipe 540 1300 540 150 200
+# Scroll to the previous card. The app that was shown live is replaced by a snapshot and the
+# system launcher becomes the active window while recents is still open. This is the case
+# the view-id check exists for: a redirect here would throw the user out of recents.
+adb shell input swipe 250 1200 850 1200 400
 sleep 5
-look 02-recents 12
+peek 02-recents
 AFTER=$(redirect_count)
 echo "      top: $(top_activity)"
 if top_activity | grep -q "$HOME_ACTIVITY"; then
-  fail "recents stayed open after dismissing a card (launcher came to the front)"
+  fail "recents stayed open after scrolling (launcher came to the front)"
 elif [ "$AFTER" -ne "$BEFORE" ]; then
   fail "no redirect while recents is open ($BEFORE -> $AFTER)"
 else
-  pass "recents stayed open after dismissing a card"
+  pass "recents stayed open after scrolling"
 fi
 if grep -q 'recents open' "$LOG"; then
   pass "recents was recognised by view id"
