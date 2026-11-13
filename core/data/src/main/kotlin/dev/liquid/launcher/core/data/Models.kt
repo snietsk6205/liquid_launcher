@@ -67,6 +67,13 @@ data class HomeItem(
 data class HomePage(
     val id: String,
     val items: List<HomeItem> = emptyList(),
+    /** This page's own grid, or null for the home screen's. */
+    val columns: Int? = null,
+    val rows: Int? = null,
+    /** This page's own label setting, or null for the home screen's. */
+    val labels: Boolean? = null,
+    /** A name for the page overview, or null. */
+    val name: String? = null,
 )
 
 @Serializable

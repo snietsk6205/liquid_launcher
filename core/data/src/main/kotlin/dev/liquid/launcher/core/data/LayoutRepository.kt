@@ -167,6 +167,27 @@ object LayoutOps {
     }
 
     /** Sets (or clears, with null or "none") the swipe-up or swipe-down action of an item. */
+    /**
+     * Sets a page's own grid, labels and name (null = like the other pages). Returns null when
+     * an item on the page would not fit the new grid.
+     */
+    fun setPageSettings(
+        layout: HomeLayout,
+        index: Int,
+        columns: Int?,
+        rows: Int?,
+        labels: Boolean?,
+        name: String?,
+        defaultColumns: Int,
+        defaultRows: Int,
+    ): HomeLayout? {
+        val page = layout.pages.getOrNull(index) ?: return null
+        val c = columns ?: defaultColumns
+        val r = rows ?: defaultRows
+        if (page.items.any { it.x + it.w > c || it.y + it.h > r }) return null
+        return layout.replacePage(index, page.copy(columns = columns, rows = rows, labels = labels, name = name?.trim()?.ifEmpty { null }))
+    }
+
     fun setSwipe(layout: HomeLayout, itemId: String, up: Boolean, action: String?): HomeLayout? {
         val (pageIndex, item) = layout.find(itemId) ?: return null
         val value = action?.takeIf { it != "none" }

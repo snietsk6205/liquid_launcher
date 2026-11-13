@@ -263,6 +263,7 @@ class HomeController(
             openFolder != null -> openFolder = null
             searchOpen -> searchOpen = false
             drawerOpen -> closeDrawer()
+            pageSettings != null -> pageSettings = null
             pagesSheet -> pagesSheet = false
             selectedItem != null -> selectedItem = null
             editMode -> exitEdit()
@@ -286,7 +287,7 @@ class HomeController(
     }
 
     fun commitResize(preview: ResizePreview) {
-        val (columns, rows) = gridSize()
+        val (columns, rows) = gridFor(data.layout.layout.value.find(preview.itemId)?.first ?: 0)
         val resized = LayoutOps.resizeItem(
             data.layout.layout.value, preview.itemId, preview.x, preview.y, preview.w, preview.h, columns, rows,
         )
@@ -297,7 +298,7 @@ class HomeController(
         data.layout.layout.value.find(itemId)?.second?.let { ResizePreview(it.id, it.x, it.y, it.w, it.h) }
 
     fun takeFromFolder(folderId: String, ref: AppRef) {
-        val (columns, rows) = gridSize()
+        val (columns, rows) = gridFor(data.layout.layout.value.find(folderId)?.first ?: 0)
         LayoutOps.takeFromFolder(data.layout.layout.value, folderId, ref, columns, rows)?.let {
             data.layout.commit(it)
             if (it.find(folderId)?.second?.kind != ItemKind.FOLDER) openFolder = null
@@ -366,7 +367,8 @@ class HomeController(
         val start = if (::pager.isInitialized) pager.currentPage else 0
         val order = (start until layout.pages.size) + (0 until start)
         for (page in order) {
-            val added = LayoutOps.addApp(layout, page, ref, columns, rows)
+            val (pc, pr) = gridFor(page)
+            val added = LayoutOps.addApp(layout, page, ref, pc, pr)
             if (added != null) {
                 data.layout.commit(added)
                 toast("Added to page ${page + 1}")
@@ -384,9 +386,9 @@ class HomeController(
     }
 
     fun addClock() {
-        val (columns, rows) = gridSize()
-        val layout = data.layout.layout.value
         val pageIndex = if (::pager.isInitialized) pager.currentPage else 0
+        val (columns, rows) = gridFor(pageIndex)
+        val layout = data.layout.layout.value
         val page = layout.pages.getOrNull(pageIndex) ?: return
         val h = minOf(3, rows)
         val spot = LayoutOps.firstFree(page, columns, h, columns, rows)
@@ -405,6 +407,27 @@ class HomeController(
 
     private fun gridSize(): Pair<Int, Int> =
         data.settings.get(LauncherSettings.HomeColumns) to data.settings.get(LauncherSettings.HomeRows)
+
+    /** Grid of page [index]: its own if it has one (page settings), otherwise the home screen's. */
+    fun gridFor(index: Int): Pair<Int, Int> {
+        val (columns, rows) = gridSize()
+        val page = data.layout.layout.value.pages.getOrNull(index) ?: return columns to rows
+        return (page.columns ?: columns) to (page.rows ?: rows)
+    }
+
+    /** Page settings dialog for this page index, or null. */
+    var pageSettings by mutableStateOf<Int?>(null)
+
+    fun savePageSettings(index: Int, columns: Int?, rows: Int?, labels: Boolean?, name: String?): Boolean {
+        val (c, r) = gridSize()
+        val updated = LayoutOps.setPageSettings(data.layout.layout.value, index, columns, rows, labels, name, c, r)
+        if (updated == null) {
+            toast("Some items on this page would not fit that grid")
+            return false
+        }
+        data.layout.commit(updated)
+        return true
+    }
 
     // ---- drag and drop ----
 
@@ -432,7 +455,7 @@ class HomeController(
         }
         val target = cellUnder(d) ?: return
         val (page, x, y) = target
-        val (columns, rows) = gridSize()
+        val (columns, rows) = gridFor(page)
         val layout = data.layout.layout.value
         // On a free cell the item lands there; an app on an app or a folder makes or joins a folder.
         val updated = when (val source = d.source) {
@@ -457,7 +480,7 @@ class HomeController(
         // Corners on screen: the page is scaled down while editing, so the layout size alone is wrong.
         val origin = coords.localToRoot(Offset.Zero)
         val corner = coords.localToRoot(Offset(coords.size.width.toFloat(), coords.size.height.toFloat()))
-        val (columns, rows) = gridSize()
+        val (columns, rows) = gridFor(page)
         val cellW = (corner.x - origin.x) / columns
         val cellH = (corner.y - origin.y) / rows
         if (cellW <= 0f || cellH <= 0f) return null

@@ -187,4 +187,17 @@ class LayoutOpsTest {
         assertEquals(app1, items.first { it.id == id }.app)
         assertEquals(app2, items.first { it.id != id }.app)
     }
+
+    @Test
+    fun pageGridOnlyWhenItemsFit() {
+        val base = LayoutOps.defaultLayout(5, 9)
+        val withApp = LayoutOps.addApp(base, 0, AppRef("a", "A", 0), 5, 9)!!
+        val item = withApp.pages[0].items.last()
+        val tooSmall = LayoutOps.setPageSettings(withApp, 0, item.x, null, null, null, 5, 9)
+        org.junit.Assert.assertNull(tooSmall)
+        val ok = LayoutOps.setPageSettings(withApp, 0, null, 9, false, " Study ", 5, 9)!!
+        org.junit.Assert.assertEquals(9, ok.pages[0].rows)
+        org.junit.Assert.assertEquals(false, ok.pages[0].labels)
+        org.junit.Assert.assertEquals("Study", ok.pages[0].name)
+    }
 }

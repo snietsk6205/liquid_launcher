@@ -125,6 +125,63 @@ class HomeReturnState {
     var request by mutableStateOf<String?>(null)
 }
 
+/**
+ * Page transitions on top of the pager's own slide. [offset] is the page's distance from the
+ * centre in pages: negative to the left. Pages on the left stay put in depth / stack / fade,
+ * so the page on the right moves over them in both directions.
+ */
+private fun androidx.compose.ui.graphics.GraphicsLayerScope.pageTransition(style: String, offset: Float) {
+    val o = offset.coerceIn(-1f, 1f)
+    val a = kotlin.math.abs(o)
+    when (style) {
+        "depth" -> if (o < 0f) {
+            translationX = -o * size.width
+            val scale = 1f - 0.18f * a
+            scaleX = scale
+            scaleY = scale
+            alpha = 1f - a
+        }
+        "stack" -> if (o < 0f) {
+            translationX = -o * size.width
+            val scale = 1f - 0.05f * a
+            scaleX = scale
+            scaleY = scale
+            alpha = 1f - 0.5f * a
+        }
+        "fade" -> {
+            translationX = -o * size.width
+            alpha = 1f - a
+        }
+        "cube" -> {
+            cameraDistance = 14f * density
+            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (o < 0f) 1f else 0f, 0.5f)
+            rotationY = 80f * o
+            alpha = (1f - a * 0.3f)
+        }
+        "carousel" -> {
+            cameraDistance = 14f * density
+            rotationY = -35f * o
+            val scale = 1f - 0.14f * a
+            scaleX = scale
+            scaleY = scale
+        }
+    }
+}
+
+/** The page's own grid and labels, if it has them. */
+private fun pageEnv(env: PageEnv, page: dev.liquid.launcher.core.data.HomePage): PageEnv {
+    if (page.columns == null && page.rows == null && page.labels == null) return env
+    val grid = env.grid.copy(
+        columns = page.columns ?: env.grid.columns,
+        rows = page.rows ?: env.grid.rows,
+        labels = page.labels ?: env.grid.labels,
+    )
+    return PageEnv(
+        grid, env.clock, env.gestures, env.glass, env.lightBackground, env.contentColor, env.shadow, env.apps,
+        env.wallpaperBackdrop, env.editMode, env.interactive,
+    )
+}
+
 /** Changes with the wallpaper image, so the automatic accent follows a new wallpaper. */
 @Composable
 private fun savedImageKey(wallpaper: WallpaperStore): Any? = wallpaper.image.collectAsState().value
@@ -159,6 +216,7 @@ fun HomeScreen(
     val look by store.derive { wallpaperLook() }
     val homeMenuConfig by store.derive { homeMenuConfig() }
     val theme by store.derive { themeConfig() }
+    val pageTransition by store.derive { get(LauncherSettings.HomePageTransition) }
     LaunchedEffect(theme, savedImageKey(wallpaper)) { HomeTheme.apply(context, theme) }
     val glass by store.derive { glassConfig() }
     val search by store.derive { searchConfig() }
@@ -351,7 +409,19 @@ fun HomeScreen(
                     userScrollEnabled = live,
                 ) { index ->
                     val page = layout.pages.getOrNull(index)
-                    if (page != null) HomePageView(index, page, env, controller)
+                    if (page != null) {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .then(
+                                    if (pageTransition == "slide") Modifier else Modifier.graphicsLayer {
+                                        pageTransition(pageTransition, controller.pager.getOffsetDistanceInPages(index))
+                                    }
+                                )
+                        ) {
+                            HomePageView(index, page, pageEnv(env, page), controller)
+                        }
+                    }
                 }
                 PageDots(
                     count = layout.pages.size,
@@ -458,6 +528,7 @@ fun HomeScreen(
             WallpaperStudio(studio, glass, lightBackground, overlayBackdrop, controller)
         }
         if (controller.savingLayout) SaveLayoutDialog(controller)
+        controller.pageSettings?.let { PageSettingsDialog(it, controller) }
         controller.drag?.let { drag ->
             RemoveZone(drag, controller, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 12.dp))
             DragGhost(drag)

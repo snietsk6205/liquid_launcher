@@ -1,5 +1,7 @@
 package dev.liquid.launcher.feature.home
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -194,7 +196,9 @@ internal fun PagesSheet(
             itemsIndexed(layout.pages, key = { _, page -> page.id }) { index, page ->
                 PageCard(
                     items = page.items,
-                    grid = grid,
+                    grid = grid.copy(columns = page.columns ?: grid.columns, rows = page.rows ?: grid.rows),
+                    name = page.name,
+                    onSettings = { controller.pageSettings = index },
                     color = color,
                     current = index == current,
                     isDefault = index == layout.defaultIndex,
@@ -230,6 +234,8 @@ private val MiniWidth = 78.dp
 private fun PageCard(
     items: List<HomeItem>,
     grid: GridConfig,
+    name: String?,
+    onSettings: () -> Unit,
     color: Color,
     current: Boolean,
     isDefault: Boolean,
@@ -270,8 +276,12 @@ private fun PageCard(
             MiniButton(LauncherIcons.Home, "Home page", color.copy(alpha = if (isDefault) 1f else 0.45f), enabled = !isDefault, filled = isDefault, onClick = onDefault)
             MiniButton(LauncherIcons.ArrowUp, "Move right", color, enabled = canRight, rotation = 90f, onClick = onRight)
         }
-        if (canRemove) {
-            MiniButton(LauncherIcons.Delete, "Remove page", color.copy(alpha = 0.7f), enabled = true, onClick = onRemove)
+        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            MiniButton(LauncherIcons.Tune, "Page settings", color.copy(alpha = 0.8f), enabled = true, onClick = onSettings)
+            if (canRemove) MiniButton(LauncherIcons.Delete, "Remove page", color.copy(alpha = 0.7f), enabled = true, onClick = onRemove)
+        }
+        if (name != null) {
+            Text(name, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 11.sp), maxLines = 1)
         }
     }
 }
@@ -298,5 +308,65 @@ private fun MiniButton(
         Box(Modifier.graphicsLayer { rotationZ = rotation }) {
             LauncherIcon(icon, contentDescription = label, tint = color.copy(alpha = if (enabled || filled) color.alpha else 0.25f), size = 16.dp)
         }
+    }
+}
+
+/** One page's own grid, labels and name. */
+@Composable
+internal fun PageSettingsDialog(index: Int, controller: HomeController) {
+    val page = controller.data.layout.layout.value.pages.getOrNull(index)
+    if (page == null) {
+        androidx.compose.runtime.SideEffect { controller.pageSettings = null }
+        return
+    }
+    val defaultColumns = controller.data.settings.get(LauncherSettings.HomeColumns)
+    val defaultRows = controller.data.settings.get(LauncherSettings.HomeRows)
+    var name by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(page.name.orEmpty()) }
+    var ownGrid by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(page.columns != null || page.rows != null) }
+    var columns by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(page.columns ?: defaultColumns) }
+    var rows by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(page.rows ?: defaultRows) }
+    var labels by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(page.labels) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { controller.pageSettings = null },
+        title = { Text("Page ${index + 1}") },
+        text = {
+            Column {
+                androidx.compose.material3.OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, label = { Text("Name (optional)") })
+                Row(Modifier.fillMaxWidth().clickable { ownGrid = !ownGrid }.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.Checkbox(checked = ownGrid, onCheckedChange = { ownGrid = it })
+                    Text("Own grid for this page")
+                }
+                if (ownGrid) {
+                    Stepper("Columns", columns, 2, 12) { columns = it }
+                    Stepper("Rows", rows, 2, 16) { rows = it }
+                }
+                Text("Labels", modifier = Modifier.padding(top = 8.dp))
+                Row {
+                    for ((value, label) in listOf<Pair<Boolean?, String>>(null to "Like other pages", true to "On", false to "Off")) {
+                        Row(Modifier.clickable { labels = value }.padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.RadioButton(selected = labels == value, onClick = { labels = value })
+                            Text(label)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = {
+                val ok = controller.savePageSettings(index, if (ownGrid) columns else null, if (ownGrid) rows else null, labels, name)
+                if (ok) controller.pageSettings = null
+            }) { Text("Save") }
+        },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = { controller.pageSettings = null }) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun Stepper(label: String, value: Int, min: Int, max: Int, onChange: (Int) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Text(label, modifier = Modifier.weight(1f))
+        androidx.compose.material3.TextButton(onClick = { onChange((value - 1).coerceAtLeast(min)) }, enabled = value > min) { Text("−") }
+        Text("$value")
+        androidx.compose.material3.TextButton(onClick = { onChange((value + 1).coerceAtMost(max)) }, enabled = value < max) { Text("+") }
     }
 }
