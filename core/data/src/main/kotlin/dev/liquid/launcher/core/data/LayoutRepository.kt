@@ -65,6 +65,82 @@ object LayoutOps {
     fun removeApp(layout: HomeLayout, ref: AppRef): HomeLayout =
         layout.copy(pages = layout.pages.map { page -> page.copy(items = page.items.filter { it.app != ref }) })
 
+    // ---- folders ----
+
+    /** The 1 × 1 app or folder at a cell, which a dropped app can be combined with. */
+    private fun combinable(page: HomePage, x: Int, y: Int, ignoreId: String? = null): HomeItem? =
+        page.items.firstOrNull { it.id != ignoreId && it.covers(x, y) && it.w == 1 && it.h == 1 && (it.kind == ItemKind.APP || it.kind == ItemKind.FOLDER) }
+
+    /** [ref] added to the app or folder [target]: a folder either way. Null when it is already there. */
+    private fun combine(target: HomeItem, ref: AppRef): HomeItem? = when (target.kind) {
+        ItemKind.APP -> {
+            val first = target.app ?: return null
+            if (first == ref) null else target.copy(kind = ItemKind.FOLDER, app = null, folder = listOf(first, ref), name = "Folder", swipeUp = null, swipeDown = null)
+        }
+        ItemKind.FOLDER -> {
+            val list = target.folder.orEmpty()
+            if (ref in list) null else target.copy(folder = list + ref)
+        }
+        ItemKind.WIDGET -> null
+    }
+
+    /**
+     * Drops a new app (from the drawer) on a cell: placed when free, put into a folder when the
+     * cell holds an app or a folder. Null when nothing can happen there.
+     */
+    fun dropApp(layout: HomeLayout, pageIndex: Int, x: Int, y: Int, ref: AppRef, columns: Int, rows: Int): HomeLayout? {
+        val page = layout.pages.getOrNull(pageIndex) ?: return null
+        if (isFree(page, x, y, 1, 1, columns, rows)) {
+            val item = HomeItem(id = newId(), kind = ItemKind.APP, x = x, y = y, app = ref)
+            return layout.replacePage(pageIndex, page.copy(items = page.items + item))
+        }
+        val target = combinable(page, x, y) ?: return null
+        val combined = combine(target, ref) ?: return null
+        return layout.replacePage(pageIndex, page.copy(items = page.items.map { if (it.id == target.id) combined else it }))
+    }
+
+    /** Moves an item; an app dropped on an app or a folder joins it in a folder. */
+    fun dropItem(layout: HomeLayout, itemId: String, toPage: Int, x: Int, y: Int, columns: Int, rows: Int): HomeLayout? {
+        moveItem(layout, itemId, toPage, x, y, columns, rows)?.let { return it }
+        val (_, item) = layout.find(itemId) ?: return null
+        val ref = item.app ?: return null
+        if (item.kind != ItemKind.APP) return null
+        val page = layout.pages.getOrNull(toPage) ?: return null
+        val target = combinable(page, x, y, ignoreId = itemId) ?: return null
+        val combined = combine(target, ref) ?: return null
+        val removed = removeItem(layout, itemId) ?: return null
+        val targetPage = removed.pages[toPage]
+        return removed.replacePage(toPage, targetPage.copy(items = targetPage.items.map { if (it.id == target.id) combined else it }))
+    }
+
+    /**
+     * Takes [ref] out of a folder and places it in the first free cell of the folder's page
+     * (or only removes it when [place] is false). A folder left with one app becomes that app.
+     */
+    fun takeFromFolder(layout: HomeLayout, folderId: String, ref: AppRef, columns: Int, rows: Int, place: Boolean = true): HomeLayout? {
+        val (pageIndex, folder) = layout.find(folderId) ?: return null
+        val list = folder.folder ?: return null
+        if (ref !in list) return null
+        val rest = list - ref
+        val page = layout.pages[pageIndex]
+        val replaced = when (rest.size) {
+            0 -> page.items.filter { it.id != folderId }
+            1 -> page.items.map { if (it.id == folderId) it.copy(kind = ItemKind.APP, app = rest[0], folder = null, name = null) else it }
+            else -> page.items.map { if (it.id == folderId) it.copy(folder = rest) else it }
+        }
+        var result = layout.replacePage(pageIndex, page.copy(items = replaced))
+        if (place) result = addApp(result, pageIndex, ref, columns, rows) ?: result
+        return result
+    }
+
+    fun renameFolder(layout: HomeLayout, folderId: String, name: String): HomeLayout? {
+        val (pageIndex, folder) = layout.find(folderId) ?: return null
+        val clean = name.trim().ifEmpty { return null }
+        if (folder.name == clean) return null
+        val page = layout.pages[pageIndex]
+        return layout.replacePage(pageIndex, page.copy(items = page.items.map { if (it.id == folderId) it.copy(name = clean) else it }))
+    }
+
     fun addPage(layout: HomeLayout): HomeLayout = layout.copy(pages = layout.pages + HomePage(id = newId()))
 
     fun removePage(layout: HomeLayout, index: Int): HomeLayout? {

@@ -199,6 +199,12 @@ private fun ItemView(item: HomeItem, pageIndex: Int, env: PageEnv, controller: H
             )
         }
 
+        ItemKind.FOLDER -> FolderIcon(
+            item = item,
+            env = env,
+            modifier = base.iconGestures({ holder.value }, folderHandler(item, holder, controller), env.interactive),
+        )
+
         ItemKind.WIDGET -> {
             Box(base.iconGestures({ holder.value }, widgetHandler(item, holder, controller), env.interactive)) {
                 if (item.widget == "clock") {
@@ -290,6 +296,28 @@ private fun appHandler(item: HomeItem, app: AppEntry, holder: CoordinatesHolder,
         }
     }
 }
+
+/** Folders: tap opens, hold enters edit mode, hold and move carries the folder. */
+@Composable
+private fun folderHandler(item: HomeItem, holder: CoordinatesHolder, controller: HomeController): IconGestureHandler =
+    remember(item, controller) {
+        object : IconGestureHandler {
+            override fun onTap() {
+                controller.openFolder = item.id
+            }
+
+            override fun onLongPress() {
+                if (!controller.editMode) controller.run(LauncherAction.EditHome)
+            }
+
+            override fun onDragStart(grab: Offset, finger: Offset) = startHomeDrag(item, null, grab, finger, holder, controller)
+            override fun onDrag(finger: Offset) = controller.moveDrag(finger)
+            override fun onDragEnd() = controller.endDrag()
+            override fun onDragCancel() = controller.cancelDrag()
+
+            override fun hasSwipe(up: Boolean): Boolean = false
+        }
+    }
 
 /** Widgets: hold to edit with this widget selected; tap while editing selects it; drag moves it. */
 @Composable

@@ -43,6 +43,8 @@ data class MenuTarget(
     val itemId: String?,
     /** Bounds of the pressed icon in root coordinates. */
     val anchor: Rect,
+    /** The folder the app was opened from. */
+    val folderId: String? = null,
 )
 
 sealed interface DragSource {
@@ -88,6 +90,9 @@ class HomeController(
     var tagging by mutableStateOf<AppEntry?>(null)
     var iconPicking by mutableStateOf<AppEntry?>(null)
 
+    /** Folder shown open. */
+    var openFolder by mutableStateOf<String?>(null)
+
     /** Home item whose swipe actions are being edited. */
     var swipeEditing by mutableStateOf<String?>(null)
 
@@ -112,7 +117,7 @@ class HomeController(
     var removeZone: Rect = Rect.Zero
 
     val drawerOpen: Boolean get() = drawer.targetValue > 0.5f || drawer.value > 0.01f
-    val anyOverlay: Boolean get() = drawerOpen || searchOpen || menu != null || editMode || renaming != null || tagging != null || iconPicking != null || swipeEditing != null
+    val anyOverlay: Boolean get() = drawerOpen || searchOpen || menu != null || editMode || renaming != null || tagging != null || iconPicking != null || swipeEditing != null || openFolder != null
 
     // ---- drawer ----
 
@@ -174,6 +179,7 @@ class HomeController(
 
     fun closeAll(immediately: Boolean = false) {
         menu = null
+        openFolder = null
         renaming = null
         searchOpen = false
         drag = null
@@ -188,6 +194,7 @@ class HomeController(
             iconPicking != null -> iconPicking = null
             swipeEditing != null -> swipeEditing = null
             menu != null -> menu = null
+            openFolder != null -> openFolder = null
             searchOpen -> searchOpen = false
             drawerOpen -> closeDrawer()
             pagesSheet -> pagesSheet = false
@@ -222,6 +229,18 @@ class HomeController(
 
     private fun currentArea(itemId: String): ResizePreview? =
         data.layout.layout.value.find(itemId)?.second?.let { ResizePreview(it.id, it.x, it.y, it.w, it.h) }
+
+    fun takeFromFolder(folderId: String, ref: AppRef) {
+        val (columns, rows) = gridSize()
+        LayoutOps.takeFromFolder(data.layout.layout.value, folderId, ref, columns, rows)?.let {
+            data.layout.commit(it)
+            if (it.find(folderId)?.second?.kind != ItemKind.FOLDER) openFolder = null
+        }
+    }
+
+    fun renameFolder(folderId: String, name: String) {
+        LayoutOps.renameFolder(data.layout.layout.value, folderId, name)?.let { data.layout.commit(it) }
+    }
 
     fun setSwipe(itemId: String, up: Boolean, action: LauncherAction) {
         LayoutOps.setSwipe(data.layout.layout.value, itemId, up, action.encode())?.let { data.layout.commit(it) }
@@ -349,18 +368,14 @@ class HomeController(
         val (page, x, y) = target
         val (columns, rows) = gridSize()
         val layout = data.layout.layout.value
+        // On a free cell the item lands there; an app on an app or a folder makes or joins a folder.
         val updated = when (val source = d.source) {
-            is DragSource.Home -> LayoutOps.moveItem(layout, source.itemId, page, x, y, columns, rows)
-            is DragSource.NewApp -> {
-                val p = layout.pages.getOrNull(page) ?: return
-                if (!LayoutOps.isFree(p, x, y, 1, 1, columns, rows)) {
+            is DragSource.Home -> LayoutOps.dropItem(layout, source.itemId, page, x, y, columns, rows)
+            is DragSource.NewApp -> LayoutOps.dropApp(layout, page, x, y, source.ref, columns, rows)
+                ?: run {
                     toast("That cell is taken")
                     null
-                } else {
-                    val item = HomeItem(LayoutOps.newId(), ItemKind.APP, x, y, app = source.ref)
-                    layout.copy(pages = layout.pages.mapIndexed { i, old -> if (i == page) old.copy(items = old.items + item) else old })
                 }
-            }
         }
         if (updated != null) data.layout.commit(updated)
     }

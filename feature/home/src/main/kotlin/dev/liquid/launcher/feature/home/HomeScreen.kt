@@ -75,6 +75,7 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import dev.liquid.launcher.core.common.DebugLog
+import dev.liquid.launcher.core.data.ItemKind
 import dev.liquid.launcher.core.data.LauncherAction
 import dev.liquid.launcher.core.data.LauncherData
 import dev.liquid.launcher.core.data.MenuEntry
@@ -370,6 +371,11 @@ fun HomeScreen(
 
         if (live && controller.searchOpen) {
             SearchOverlay(controller, search, glass, lightBackground, overlayBackdrop, apps)
+        }
+        controller.openFolder?.let { id ->
+            layout.find(id)?.second?.takeIf { it.kind == ItemKind.FOLDER }?.let { folder ->
+                FolderOverlay(folder, appIndex, controller, glass, lightBackground, overlayBackdrop, grid)
+            }
         }
         controller.menu?.let { target ->
             AppMenu(target, menuEntries, controller, glass, lightBackground, overlayBackdrop)

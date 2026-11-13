@@ -56,7 +56,9 @@ private fun rowsFor(target: MenuTarget, entries: List<MenuEntry>, controller: Ho
     return entries.mapNotNull { entry ->
         when (entry) {
             MenuEntry.Info -> MenuRow(LauncherIcons.Info, "App info") { apps.showAppInfo(app) }
-            MenuEntry.Home -> if (target.itemId != null) {
+            MenuEntry.Home -> if (target.folderId != null) {
+                MenuRow(LauncherIcons.RemoveCircle, "Take out of the folder") { controller.takeFromFolder(target.folderId, app.ref) }
+            } else if (target.itemId != null) {
                 MenuRow(LauncherIcons.RemoveCircle, "Remove from home") { controller.removeFromHome(target.itemId) }
             } else {
                 MenuRow(LauncherIcons.AddCircle, "Add to home") { controller.addToHome(app.ref) }

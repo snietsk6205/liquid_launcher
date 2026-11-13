@@ -35,7 +35,7 @@ data class AppMeta(
 )
 
 @Serializable
-enum class ItemKind { APP, WIDGET }
+enum class ItemKind { APP, WIDGET, FOLDER }
 
 /** One thing placed on a home page. Positions and sizes are in grid cells. */
 @Serializable
@@ -49,6 +49,10 @@ data class HomeItem(
     val app: AppRef? = null,
     /** Built-in widget type, for example "clock". */
     val widget: String? = null,
+    /** Apps in a folder, in order. */
+    val folder: List<AppRef>? = null,
+    /** Folder name. */
+    val name: String? = null,
     /** Encoded [LauncherAction]s run by swiping up or down on the item. */
     val swipeUp: String? = null,
     val swipeDown: String? = null,
@@ -81,7 +85,8 @@ data class HomeLayout(
         return null
     }
 
-    fun containsApp(ref: AppRef): Boolean = pages.any { page -> page.items.any { it.app == ref } }
+    fun containsApp(ref: AppRef): Boolean =
+        pages.any { page -> page.items.any { it.app == ref || it.folder?.contains(ref) == true } }
 }
 
 /** Launch statistics for one app, used for "most used" sorting and search ranking. */

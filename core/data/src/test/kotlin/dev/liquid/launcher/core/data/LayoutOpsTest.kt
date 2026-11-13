@@ -156,4 +156,35 @@ class LayoutOpsTest {
         layout = LayoutOps.setSwipe(layout, id, up = true, action = "none")!!
         assertNull(layout.find(id)!!.second.swipeUp)
     }
+
+    @Test
+    fun droppingAnAppOnAnAppMakesAFolderAndMoreJoinIt() {
+        val app3 = AppRef("c", "c.Main", 0)
+        var layout = HomeLayout(pages = listOf(HomePage("p")))
+        layout = LayoutOps.dropApp(layout, 0, 0, 0, app1, 4, 4)!!
+        layout = LayoutOps.dropApp(layout, 0, 0, 0, app2, 4, 4)!!
+        val folder = layout.pages[0].items.single()
+        assertEquals(ItemKind.FOLDER, folder.kind)
+        assertEquals(listOf(app1, app2), folder.folder)
+        assertNull(LayoutOps.dropApp(layout, 0, 0, 0, app2, 4, 4))
+        layout = LayoutOps.dropApp(layout, 0, 1, 0, app3, 4, 4)!!
+        val moved = layout.pages[0].items.first { it.app == app3 }.id
+        layout = LayoutOps.dropItem(layout, moved, 0, 0, 0, 4, 4)!!
+        assertEquals(listOf(app1, app2, app3), layout.pages[0].items.single().folder)
+        assertTrue(layout.containsApp(app3))
+    }
+
+    @Test
+    fun takingAppsOutOfAFolderUnwrapsItAtOne() {
+        var layout = HomeLayout(pages = listOf(HomePage("p")))
+        layout = LayoutOps.dropApp(layout, 0, 0, 0, app1, 4, 4)!!
+        layout = LayoutOps.dropApp(layout, 0, 0, 0, app2, 4, 4)!!
+        val id = layout.pages[0].items.single().id
+        layout = LayoutOps.takeFromFolder(layout, id, app2, 4, 4)!!
+        val items = layout.pages[0].items
+        assertEquals(2, items.size)
+        assertEquals(ItemKind.APP, items.first { it.id == id }.kind)
+        assertEquals(app1, items.first { it.id == id }.app)
+        assertEquals(app2, items.first { it.id != id }.app)
+    }
 }
