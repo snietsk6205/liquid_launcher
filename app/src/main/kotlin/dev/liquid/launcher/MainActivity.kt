@@ -46,6 +46,7 @@ class MainActivity : ComponentActivity() {
         val callbacks = HomeCallbacks(
             openSettings = { startActivity(SettingsActivity.intent(this)) },
             openSetup = { startActivity(SettingsActivity.intent(this, SettingsActivity.SCREEN_SETUP)) },
+            openSection = { startActivity(SettingsActivity.intent(this, SettingsActivity.SECTION_PREFIX + it)) },
         )
         setContent {
             LauncherTheme {

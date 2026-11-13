@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -49,7 +50,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -112,7 +115,7 @@ class HomeReturnState {
 }
 
 /** How the home screen is shown: the real thing, or a miniature inside the settings app. */
-enum class HomeMode { Live, Preview, PreviewDrawer, PreviewMenu }
+enum class HomeMode { Live, Preview, PreviewDrawer, PreviewDrawerMotion, PreviewMenu }
 
 @Composable
 fun HomeScreen(
@@ -136,6 +139,7 @@ fun HomeScreen(
     val gestures by store.derive { gestureConfig() }
     val pill by store.derive { pillConfig() }
     val drawerConfig by store.derive { drawerConfig() }
+    val motion by store.derive { drawerMotion() }
     val glass by store.derive { glassConfig() }
     val search by store.derive { searchConfig() }
     val menuEntries by store.derive { MenuEntry.fromIds(get(LauncherSettings.MenuEntries)) }
@@ -180,8 +184,21 @@ fun HomeScreen(
             if (dragging) controller.edgeScrollWhileDragging(with(density0) { 28.dp.toPx() })
         }
     }
+    SideEffect { controller.motion = motion }
     if (mode == HomeMode.PreviewDrawer) {
         LaunchedEffect(Unit) { controller.drawer.snapTo(1f) }
+    }
+    if (mode == HomeMode.PreviewDrawerMotion) {
+        // Opens and closes the drawer in a loop, so the transition settings can be seen.
+        LaunchedEffect(motion) {
+            while (true) {
+                delay(700)
+                controller.openDrawer()
+                delay(1700)
+                controller.closeDrawer()
+                delay(1300)
+            }
+        }
     }
     if (mode == HomeMode.PreviewMenu) {
         val sample = apps.firstOrNull { !it.hidden }
@@ -195,7 +212,11 @@ fun HomeScreen(
 
     val homeBackdrop = rememberLayerBackdrop()
     val wallpaperBackdrop = rememberLayerBackdrop()
-    val overlayBackdrop = rememberCombinedBackdrop(homeBackdrop)
+    val drawerLayer = rememberLayerBackdrop()
+    // Overlays refract the drawer too when they open over it (long-press menu in the drawer).
+    val overlayBackdrop = rememberCombinedBackdrop(homeBackdrop, drawerLayer)
+    val drawerLight = lightBackground && drawerConfig.dim < 0.35f
+    val morph = pill.enabled && !pill.top && motion.pillMorph && !controller.editMode
     val density = LocalDensity.current
     val settle = handover.first
 
@@ -209,6 +230,16 @@ fun HomeScreen(
     ) {
         // ---- Home: wallpaper and pages, recorded so glass surfaces can refract them ----
         Box(Modifier.fillMaxSize().layerBackdrop(homeBackdrop)) {
+          // Blurs wallpaper and pages together while the drawer is open.
+          Box(
+              Modifier
+                  .fillMaxSize()
+                  .graphicsLayer {
+                      val p = controller.drawer.value.coerceIn(0f, 1f)
+                      val radius = motion.homeBlurDp.dp.toPx() * p
+                      renderEffect = if (radius >= 0.5f) BlurEffect(radius, radius, TileMode.Clamp) else null
+                  }
+          ) {
             image?.let {
                 Image(
                     bitmap = it,
@@ -226,8 +257,8 @@ fun HomeScreen(
                     .graphicsLayer {
                         val p = controller.drawer.value
                         val back = returnState.progress.floatValue
-                        alpha = (1f - p * 1.6f).coerceIn(0f, 1f) * back
-                        var scale = 1f - 0.06f * p
+                        alpha = (1f - p.coerceIn(0f, 1f) * 1.6f).coerceIn(0f, 1f) * back
+                        var scale = 1f - motion.homeScale * p
                         if (settle == "scale") scale *= 0.94f + 0.06f * back
                         if (controller.editMode) scale *= 0.9f
                         scaleX = scale
@@ -266,6 +297,7 @@ fun HomeScreen(
                         .graphicsLayer { translationY = with(density) { (if (pill.top) -10 else 12).dp.toPx() } },
                 )
             }
+          }
         }
 
         // ---- Pill, or the edit toolbar in its place ----
@@ -280,7 +312,7 @@ fun HomeScreen(
             }
         if (controller.editMode && live) {
             EditToolbar(controller, glass, lightBackground, homeBackdrop, pill, barModifier)
-        } else if (pill.enabled) {
+        } else if (pill.enabled && !morph) {
             Pill(pill, glass, lightBackground, homeBackdrop, appIndex, controller, live, barModifier)
         }
 
@@ -289,7 +321,36 @@ fun HomeScreen(
         }
 
         // ---- Overlays ----
-        AppDrawer(controller, drawerConfig, glass, lightBackground, apps, homeBackdrop, live)
+        AppDrawer(
+            controller = controller,
+            config = drawerConfig,
+            motion = motion,
+            glass = glass,
+            lightBackground = lightBackground,
+            apps = apps,
+            homeBackdrop = homeBackdrop,
+            drawerLayer = drawerLayer,
+            ownSearchPill = !morph,
+            interactive = live,
+        )
+        if (morph) {
+            MorphingPill(
+                config = pill,
+                drawer = drawerConfig,
+                glass = glass,
+                lightBackground = lightBackground,
+                drawerLight = drawerLight,
+                backdrop = overlayBackdrop,
+                apps = appIndex,
+                controller = controller,
+                interactive = live,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .graphicsLayer { alpha = returnState.progress.floatValue },
+            )
+        }
 
         if (live && controller.searchOpen) {
             SearchOverlay(controller, search, glass, lightBackground, overlayBackdrop, apps)

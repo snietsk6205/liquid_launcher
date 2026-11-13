@@ -47,6 +47,7 @@ class SettingsActivity : ComponentActivity() {
         const val SCREEN_DIAGNOSTICS = "diagnostics"
         const val SCREEN_LOG = "log"
         const val SCREEN_GLASS = "glass"
+        const val SECTION_PREFIX = "section:"
 
         fun intent(context: Context, screen: String? = null): Intent =
             Intent(context, SettingsActivity::class.java)
@@ -72,6 +73,9 @@ private fun SettingsApp(
                 SettingsActivity.SCREEN_GLASS -> {
                     add(Screen.Diagnostics)
                     add(Screen.GlassBench)
+                }
+                else -> if (start != null && start.startsWith(SettingsActivity.SECTION_PREFIX)) {
+                    add(Screen.Section(start.removePrefix(SettingsActivity.SECTION_PREFIX)))
                 }
             }
         }

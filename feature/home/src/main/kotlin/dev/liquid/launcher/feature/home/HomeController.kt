@@ -84,6 +84,9 @@ class HomeController(
     var renaming by mutableStateOf<AppEntry?>(null)
     var drawerQuery by mutableStateOf("")
 
+    /** Best match for the drawer query, launched by the keyboard's Go key. */
+    var drawerFirstResult: AppEntry? = null
+
     /** Bumped to ask the drawer to drop keyboard focus. */
     var drawerFocusReset by mutableIntStateOf(0)
     var screenHeight by mutableFloatStateOf(1f)
@@ -100,19 +103,35 @@ class HomeController(
 
     // ---- drawer ----
 
-    fun openDrawer() {
+    /** Set by the home screen from the settings; read when the drawer starts moving. */
+    var motion: DrawerMotion? = null
+
+    private fun drawerSpring(): androidx.compose.animation.core.SpringSpec<Float> {
+        val m = motion
+        return spring(
+            dampingRatio = m?.damping ?: 0.9f,
+            stiffness = m?.stiffness ?: Spring.StiffnessMediumLow,
+            visibilityThreshold = 0.001f,
+        )
+    }
+
+    /**
+     * Opens the drawer. [velocity] is the finger's speed in drawer heights per second, so a
+     * flick hands its momentum to the spring instead of restarting from rest.
+     */
+    fun openDrawer(velocity: Float = 0f) {
         menu = null
         searchOpen = false
         DebugLog.event("Home", "drawer: open from " + "%.2f".format(drawer.value))
-        scope.launch { drawer.animateTo(1f, spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)) }
+        scope.launch { drawer.animateTo(1f, drawerSpring(), initialVelocity = velocity) }
     }
 
-    fun closeDrawer(immediately: Boolean = false) {
+    fun closeDrawer(immediately: Boolean = false, velocity: Float = 0f) {
         DebugLog.event("Home", "drawer: close from " + "%.2f".format(drawer.value))
         drawerFocusReset++
         drawerQuery = ""
         scope.launch {
-            if (immediately) drawer.snapTo(0f) else drawer.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
+            if (immediately) drawer.snapTo(0f) else drawer.animateTo(0f, drawerSpring(), initialVelocity = velocity)
         }
     }
 
@@ -128,7 +147,9 @@ class HomeController(
             velocityPxPerSec > 800f -> false
             else -> drawer.value > 0.4f
         }
-        if (open) openDrawer() else closeDrawer()
+        // Upward finger speed is negative on screen and positive for the drawer.
+        val velocity = (-velocityPxPerSec / screenHeight).coerceIn(-8f, 8f)
+        if (open) openDrawer(velocity) else closeDrawer(velocity = velocity)
     }
 
     // ---- other overlays ----
@@ -383,6 +404,8 @@ class HomeController(
         if (!RedirectStatus.performGlobalAction(action)) toast("Needs the redirect service (Settings → Setup checklist)")
     }
 
+    fun openSection(id: String) = callbacks.openSection(id)
+
     fun openUrl(url: String) = start(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
 
     fun start(intent: Intent) {
@@ -404,4 +427,6 @@ private const val EDGE_DWELL_MS = 650L
 class HomeCallbacks(
     val openSettings: () -> Unit,
     val openSetup: () -> Unit,
+    /** Opens one settings section by its id. */
+    val openSection: (String) -> Unit = { openSettings() },
 )

@@ -60,7 +60,31 @@ data class DrawerConfig(
     val work: String,
     val closeOnLaunch: Boolean,
     val dim: Float,
+    val tabsTop: Boolean,
 )
+
+/** How the drawer opens and scrolls. */
+data class DrawerMotion(
+    /** "depth", "slide" or "fade". */
+    val transition: String,
+    val pillMorph: Boolean,
+    val stiffness: Float,
+    val damping: Float,
+    /** Fraction of the screen height the drawer rises by (depth). */
+    val rise: Float,
+    /** Fraction the home screen shrinks by. */
+    val homeScale: Float,
+    val homeBlurDp: Int,
+    /** "glass", "line" or "off". */
+    val scrollbar: String,
+    val bubble: Boolean,
+    /** "elastic", "curve" or "none". */
+    val scrollEffect: String,
+    val strength: Float,
+    val stretch: Boolean,
+) {
+    val slide: Boolean get() = transition == "slide"
+}
 
 data class SurfaceValues(val blurDp: Int, val refraction: Int, val tint: Int)
 
@@ -145,7 +169,27 @@ fun SettingsStore.drawerConfig() = DrawerConfig(
     work = get(S.DrawerWork),
     closeOnLaunch = get(S.DrawerCloseOnLaunch),
     dim = get(S.DrawerDim) / 100f,
+    tabsTop = get(S.DrawerTabsPosition) != "bottom",
 )
+
+fun SettingsStore.drawerMotion(): DrawerMotion {
+    val speed = get(S.DrawerSpeed) / 100f
+    return DrawerMotion(
+        transition = get(S.DrawerTransition),
+        pillMorph = get(S.DrawerPillMorph),
+        // 100 % is a little softer than Spring.StiffnessMediumLow; the scale is quadratic so both ends feel different.
+        stiffness = 380f * speed * speed,
+        damping = 1f - get(S.DrawerBounce) / 100f,
+        rise = get(S.DrawerRise) / 100f,
+        homeScale = get(S.DrawerHomeScale) / 100f,
+        homeBlurDp = get(S.DrawerHomeBlur),
+        scrollbar = get(S.DrawerScrollbar),
+        bubble = get(S.DrawerScrollBubble),
+        scrollEffect = get(S.DrawerScrollEffect),
+        strength = get(S.DrawerScrollStrength) / 100f,
+        stretch = get(S.DrawerOverscroll) != "none",
+    )
+}
 
 fun SettingsStore.glassConfig(): GlassConfig {
     val requested = GlassQuality.fromSetting(get(S.GlassQuality))

@@ -134,7 +134,7 @@ private fun Modifier.pillGestures(config: PillConfig, controller: HomeController
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RowScope.PillSlotView(
+internal fun RowScope.PillSlotView(
     slot: PillSlot,
     config: PillConfig,
     color: Color,

@@ -10,7 +10,8 @@ object LauncherSettings {
         val Home = SettingsSection("home", "Home screen", "Grid, icons, labels and the clock")
         val Gestures = SettingsSection("gestures", "Gestures", "What swipes, taps and presses on the home screen do")
         val Pill = SettingsSection("pill", "Pill", "The glass bar: its items, size, position and gestures")
-        val Drawer = SettingsSection("drawer", "App drawer", "Layout, sorting, search and the work profile")
+        val Drawer = SettingsSection("drawer", "App drawer", "Layout, sorting, search, tabs and the work profile")
+        val DrawerMotion = SettingsSection("drawerMotion", "Drawer motion", "Opening transition, scroll bar and scroll effects")
         val Menu = SettingsSection("menu", "Long-press menu", "Which entries appear and in what order")
         val Search = SettingsSection("search", "Search", "Swipe-down search and web search")
         val Glass = SettingsSection("glass", "Liquid glass", "Quality, blur, refraction and tint, overall and per surface")
@@ -21,7 +22,7 @@ object LauncherSettings {
         val Handover = SettingsSection("handover", "Hand-over", "How the launcher appears after a redirect", "Redirect")
         val Log = SettingsSection("log", "Debug log", "What is recorded", "Redirect")
 
-        val all = listOf(Home, Gestures, Pill, Drawer, Menu, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
+        val all = listOf(Home, Gestures, Pill, Drawer, DrawerMotion, Menu, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
     }
 
     // ---- Redirect engine ----
@@ -419,6 +420,93 @@ object LauncherSettings {
         title = "Wallpaper dimming",
         section = "drawer", keywords = "dim background wallpaper",
     )
+    val DrawerTabsPosition = ChoiceSetting(
+        key = "drawer.tabsPosition", default = "top",
+        options = listOf("top" to "Top", "bottom" to "Bottom, above the search field"),
+        title = "Tabs position",
+        summary = "The glass pill with Apps and Work. Tap a tab to switch, tap it again to jump to the start, hold it for quick options",
+        section = "drawer", keywords = "tabs pill work apps position top bottom",
+    )
+
+    // ---- Drawer motion ----
+
+    val DrawerTransition = ChoiceSetting(
+        key = "drawer.transition", default = "depth",
+        options = listOf(
+            "depth" to "Depth: the home screen sinks back, the drawer rises a little",
+            "slide" to "Slide: the drawer is a sheet that follows the finger",
+            "fade" to "Fade",
+        ),
+        title = "Transition",
+        section = "drawerMotion", keywords = "transition animation open drawer style",
+    )
+    val DrawerPillMorph = BoolSetting(
+        key = "drawer.pillMorph", default = true,
+        title = "The pill becomes the search field",
+        summary = "When the pill is at the bottom, it changes shape into the drawer's search field as the drawer opens",
+        section = "drawerMotion", keywords = "pill morph search shape continuous",
+    )
+    val DrawerSpeed = IntSetting(
+        key = "drawer.speed", default = 100, min = 50, max = 200, step = 10, unit = "%",
+        title = "Speed",
+        summary = "How quickly the drawer settles after you let go",
+        section = "drawerMotion", keywords = "speed stiffness spring animation",
+    )
+    val DrawerBounce = IntSetting(
+        key = "drawer.bounce", default = 15, min = 0, max = 60, step = 5, unit = "%",
+        title = "Bounce",
+        section = "drawerMotion", keywords = "bounce spring damping overshoot",
+    )
+    val DrawerRise = IntSetting(
+        key = "drawer.rise", default = 12, min = 0, max = 50, step = 2, unit = "%",
+        title = "How far the drawer rises",
+        summary = "Depth transition only",
+        section = "drawerMotion", keywords = "distance rise translate",
+    )
+    val DrawerHomeScale = IntSetting(
+        key = "drawer.homeScale", default = 8, min = 0, max = 20, unit = "%",
+        title = "Home screen shrinks by",
+        section = "drawerMotion", keywords = "scale home depth",
+    )
+    val DrawerHomeBlur = IntSetting(
+        key = "drawer.homeBlur", default = 14, min = 0, max = 40, step = 2, unit = "dp",
+        title = "Blur behind the drawer",
+        summary = "Blurs the wallpaper and home screen while the drawer is open. 0 is the lightest on the battery",
+        section = "drawerMotion", keywords = "blur background wallpaper depth",
+    )
+    val DrawerScrollbar = ChoiceSetting(
+        key = "drawer.scrollbar", default = "glass",
+        options = listOf("glass" to "Glass handle", "line" to "Thin line", "off" to "Off"),
+        title = "Scroll bar",
+        summary = "Floats over the apps while you scroll. Drag the handle to move through the list quickly",
+        section = "drawerMotion", keywords = "scroll bar fast scroller handle thumb",
+    )
+    val DrawerScrollBubble = BoolSetting(
+        key = "drawer.scrollBubble", default = true,
+        title = "Letter bubble while dragging the scroll bar",
+        section = "drawerMotion", keywords = "letter bubble index fast scroll",
+    )
+    val DrawerScrollEffect = ChoiceSetting(
+        key = "drawer.scrollEffect", default = "elastic",
+        options = listOf(
+            "elastic" to "Elastic: rows spread apart with speed and spring back",
+            "curve" to "Curved: rows shrink towards the top and bottom edge",
+            "none" to "None",
+        ),
+        title = "Scroll effect",
+        section = "drawerMotion", keywords = "scroll effect animation elastic curve wheel",
+    )
+    val DrawerScrollStrength = IntSetting(
+        key = "drawer.scrollStrength", default = 50, min = 10, max = 100, step = 10, unit = "%",
+        title = "Scroll effect strength",
+        section = "drawerMotion", keywords = "scroll effect strength",
+    )
+    val DrawerOverscroll = ChoiceSetting(
+        key = "drawer.overscroll", default = "stretch",
+        options = listOf("stretch" to "Stretch", "none" to "None"),
+        title = "At the end of the list",
+        section = "drawerMotion", keywords = "overscroll stretch bounce edge",
+    )
 
     // ---- Long-press menu ----
 
@@ -489,7 +577,7 @@ object LauncherSettings {
 
     val GlassDefault = GlassSurface("all", "Overall", hasCustomSwitch = false)
     val GlassPill = GlassSurface("pill", "Pill", hasCustomSwitch = true)
-    val GlassDrawer = GlassSurface("drawer", "Drawer search pill", hasCustomSwitch = true)
+    val GlassDrawer = GlassSurface("drawer", "Drawer: search field, tabs and scroll bar", hasCustomSwitch = true)
     val GlassMenu = GlassSurface("menu", "Long-press menu", hasCustomSwitch = true)
     val GlassClock = GlassSurface("clock", "Clock", hasCustomSwitch = true)
     val glassSurfaces = listOf(GlassPill, GlassDrawer, GlassMenu, GlassClock)
@@ -597,7 +685,9 @@ object LauncherSettings {
         PillEnabled, PillSlots, PillPosition, PillOffset, PillWidth, PillHeight, PillCorner, PillIconSize,
         PillHint, PillTap, PillLongPress, PillSwipeUp, PillSwipeDown,
         DrawerColumns, DrawerIconSize, DrawerLabels, DrawerFromBottom, DrawerAutoKeyboard, DrawerSort,
-        DrawerWork, DrawerCloseOnLaunch, DrawerDim,
+        DrawerWork, DrawerCloseOnLaunch, DrawerDim, DrawerTabsPosition,
+        DrawerTransition, DrawerPillMorph, DrawerSpeed, DrawerBounce, DrawerRise, DrawerHomeScale, DrawerHomeBlur,
+        DrawerScrollbar, DrawerScrollBubble, DrawerScrollEffect, DrawerScrollStrength, DrawerOverscroll,
         MenuEntries,
         SearchEngine, SearchOpenKeyboard,
         GlassQuality, GlassAuto, GlassCap, GlassTintMode,
