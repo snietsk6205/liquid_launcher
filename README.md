@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.4.0 (Phase 2, part 2 of 3): theme with colours, fonts (or your own font file), clock font and weight, icon shapes, presets and theme files; folder styles, tap-to-open-first-app and dragging apps out of folders; a dock; per-page grid, labels and name; page transitions.
+
 0.3.0 (Phase 2, part 1 of 3): hold empty space for the home menu (two glass pills you fill yourself; press and slide); wallpaper screen with photo picker, recent wallpapers, and blur and dim for home, drawer and search, previewed live; saved layouts you can switch between in one tap; backup and restore to one file.
 
 0.2.2 (Phase 1B polish): curved letter index in the drawer with a bubble and continuous scrolling; icons that follow the wallpaper colours (themed icons, colour-following icon packs); floating drawer tabs (top, bottom, inside the search pill or hidden) with a per-tab menu and search filtering.

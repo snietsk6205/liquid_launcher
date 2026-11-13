@@ -249,13 +249,40 @@ Not done / limits: "Widgets" joins the home menu in Phase 3; no passphrase on ba
 
 ---
 
-## Session summary (2026-11-13, Opus, updated for 0.3.0)
+## Entry 8: 0.4.0, Phase 2 part 2: look (2026-11-13, Opus 5.5)
 
-**State:** 0.2.2 (1B polish: letter index, themed icons, floating tabs) released as build 25 after a green emulator run. 0.3.0 (Phase 2 part 1: home menu, wallpaper screen, saved layouts, backup) released as build 26 after a green emulator run (including the new checks: home menu, wallpaper screen, edit mode through the menu); 94 unit tests pass. Neither is tested on the phone yet; the user asked for both releases without a test in between.
+**Goal:** the next roadmap step after 0.3.0, on the user's "continue" (no phone test of 0.2.2 / 0.3.0 yet).
 
-**Next step:** the user tests 0.2.2 and 0.3.0; then Phase 2 part 2 (0.4: theme editor, folders, dock, page transitions).
+| File | Change | Why |
+|---|---|---|
+| `core/settings/Setting.kt`, `SettingRows.kt` | `ColorSetting` ("" = automatic) and a colour row: swatches, hue / saturation / brightness, hex, automatic | Theme colours |
+| `core/settings/LauncherSettings.kt` | Sections Theme, Folders, Dock; page transition; `themeKeys`; layouts now include folders and dock settings | |
+| `feature/home/HomeTheme.kt` (new), all home files | `HomeTheme` font / clock font and weight / accent; every home `TextStyle` takes the theme font; accent on tab highlight, index bubble, home menu | D51 |
+| `HomeConfig.kt` | Glass tint colour from the theme; text colour override | |
+| `core/data/IconShapes.kt` (new), `AppsRepository.kt`, `ThemedColors.kt` | Shapes (circle, squircle, rounded, square, teardrop, pebble) applied at render; themed icons follow the shape | D52 |
+| `core/data/Themes.kt` (new) + test, `HomeSetupEditors.kt` | Six presets, `.lltheme` export / import, font import with a check that it loads | D51 |
+| `HomeScreen.kt` | Page transitions (depth, stack, cube, carousel, fade) on the pager's own movement; per-page environment | |
+| `Models.kt`, `LayoutRepository.kt` + tests, `EditTools.kt`, `HomeController.kt` | Page settings (grid, labels, name) with a dialog from the page overview; per-page grid used for drops, resizing, adding | D53 |
+| `Folders.kt`, `HomeGrid.kt`, `HomeController.kt` | Folder preview (grid, stack, first app), background (tint, glass, accent, none), shape, tap opens the first app (swipe up opens), columns, grows from the tile, apps dragged out onto a page, the dock or Remove | 1B known gap closed; Phase 2 folder options |
+| `Dock.kt` (new), `LayoutRepository.kt` + test | Dock row above the pill: drop from drawer / page / folder, move and swap slots, drag back to a page, usual app menu | D54 |
+| `LauncherData.kt` | Imported fonts go into backups | |
+
+Not done / limits: large folders; per-folder styles (all folders share one style); the colour row has no eyedropper; cube and carousel transitions were checked on the emulator only for crashes, not looks.
+
+### For Fable to review
+1. `HomeTheme` as global snapshot state versus a CompositionLocal.
+2. Icon reload on shape change (full reload of the app list).
+3. Dock drop detection by screen bounds while the page under it is also a drop target (dock wins).
+
+---
+
+## Session summary (2026-11-13, Opus, updated for 0.4.0)
+
+**State:** 0.2.2 (build 25) and 0.3.0 (build 26) released after green emulator runs. 0.4.0 (Phase 2 part 2: theme, folders, dock, page settings, page transitions) built; unit tests pass. None of 0.2.2–0.4.0 is tested on the phone yet; the user asked to continue without a test in between.
+
+**Next step:** the user tests 0.4.0 (which contains 0.2.2 and 0.3.0); then Phase 2 part 3 (0.5: gestures, double tap per icon, motion and haptics settings, in-app updater).
 
 ### For Fable to review (overall)
-1. Entries 6 and 7 and decisions D43–D50.
-2. The roadmap changes (plan as of 0.3.0): tags and tabs moved to 1B, wallpaper per-surface values moved from Phase 6, Phase 2 split into three builds.
+1. Entries 6–8 and decisions D43–D54.
+2. The roadmap changes (plan as of 0.4.0): tags and tabs moved to 1B, wallpaper per-surface values moved from Phase 6, Phase 2 split into three builds.
 3. Earlier items still open: D37–D39 redirect changes, the drawer rewrite, `IconThemer` with real packs, the home-press heuristic, emulator on API 34.
