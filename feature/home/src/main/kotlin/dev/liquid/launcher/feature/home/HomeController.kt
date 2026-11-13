@@ -115,6 +115,11 @@ class HomeController(
     /** The full list of tags (with its own search), over the drawer. */
     var tagSheet by mutableStateOf(false)
 
+    /** Set by the drawer: the filter's name, the chip order sideways swipes step through, and whether they may. */
+    var tagFilterLabel by mutableStateOf("")
+    var tagSwipeOrder: List<String> = emptyList()
+    var tagSwipeEnabled = false
+
     /** Filters the drawer by [tags], remembering the use so often-used tags come first. */
     fun filterByTags(tags: Set<String>) {
         val added = tags - tagFilter
@@ -303,6 +308,8 @@ class HomeController(
         DebugLog.event("Home", "drawer: close from " + "%.2f".format(drawer.value))
         drawerFocusReset++
         drawerQuery = ""
+        tagSheet = false
+        if (!data.settings.get(LauncherSettings.TagFilterKeep)) tagFilter = emptySet()
         scope.launch {
             if (immediately) drawer.snapTo(0f) else drawer.animateTo(0f, drawerSpring(), initialVelocity = velocity)
         }

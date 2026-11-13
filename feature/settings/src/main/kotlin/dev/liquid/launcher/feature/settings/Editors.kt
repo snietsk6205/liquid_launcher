@@ -221,9 +221,34 @@ internal fun TabsAndTagsEditor() {
         }
     }
 
+    val pinned by store.observe(LauncherSettings.TagPinned)
+    InfoCard {
+        Text("Pinned tag chips", style = MaterialTheme.typography.titleMedium)
+        BodyText(
+            "In the drawer, a row of tag chips filters the apps in one tap (hold a chip to add more tags; \"All apps\" clears). " +
+                "Pinned tags come first, in this order; the rest follow by use. Swipe the search field sideways to step through them."
+        )
+        val pinnedTags = pinned.mapNotNull { org.tag(it) }
+        if (pinnedTags.isEmpty()) BodyText("Nothing pinned yet: tap the star next to a tag below, or in the drawer's full tag list.", Modifier.padding(top = 8.dp))
+        pinnedTags.forEachIndexed { index, tag ->
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(tag.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                IconButton(onClick = { store.set(LauncherSettings.TagPinned, pinned.toMutableList().apply { add(index - 1, removeAt(index)) }) }, enabled = index > 0) {
+                    LauncherIcon(LauncherIcons.ArrowUp, contentDescription = "Move up", size = 20.dp)
+                }
+                IconButton(onClick = { store.set(LauncherSettings.TagPinned, pinned.toMutableList().apply { add(index + 1, removeAt(index)) }) }, enabled = index < pinnedTags.lastIndex) {
+                    LauncherIcon(LauncherIcons.ArrowDown, contentDescription = "Move down", size = 20.dp)
+                }
+                IconButton(onClick = { store.set(LauncherSettings.TagPinned, pinned - tag.id) }) {
+                    LauncherIcon(LauncherIcons.Close, contentDescription = "Unpin", size = 20.dp)
+                }
+            }
+        }
+    }
+
     InfoCard {
         Text("Tags", style = MaterialTheme.typography.titleMedium)
-        BodyText("Give apps tags from their long-press menu (Tags). Search the drawer with #name to list a tag's apps.")
+        BodyText("Give apps tags from their long-press menu (Tags). The star pins a tag to the front of the drawer's tag chips.")
         if (org.tags.isEmpty()) BodyText("No tags yet.", Modifier.padding(top = 8.dp))
         for (tag in org.tags) {
             val count = apps.count { tag.id in it.tags }
@@ -232,7 +257,16 @@ internal fun TabsAndTagsEditor() {
                     Text(tag.name, style = MaterialTheme.typography.bodyLarge)
                     Text(if (count == 1) "1 app" else "$count apps", style = MaterialTheme.typography.bodySmall)
                 }
-                IconButton(onClick = { data.organisation.update { OrganisationOps.deleteTag(it, tag.id) } }) {
+                IconButton(onClick = { store.set(LauncherSettings.TagPinned, if (tag.id in pinned) pinned - tag.id else pinned + tag.id) }) {
+                    LauncherIcon(
+                        LauncherIcons.Star, contentDescription = if (tag.id in pinned) "Unpin" else "Pin", size = 20.dp,
+                        tint = if (tag.id in pinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                    )
+                }
+                IconButton(onClick = {
+                    data.organisation.update { OrganisationOps.deleteTag(it, tag.id) }
+                    store.set(LauncherSettings.TagPinned, pinned - tag.id)
+                }) {
                     LauncherIcon(LauncherIcons.Delete, contentDescription = "Delete tag", size = 20.dp)
                 }
             }

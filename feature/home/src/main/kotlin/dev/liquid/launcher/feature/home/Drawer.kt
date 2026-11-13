@@ -114,6 +114,7 @@ import dev.liquid.launcher.core.data.Usage
 import dev.liquid.launcher.core.designsystem.LauncherIcon
 import dev.liquid.launcher.core.designsystem.LauncherIcons
 import dev.liquid.launcher.core.designsystem.liquidGlass
+import dev.liquid.launcher.core.settings.derive
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.math.ln
@@ -288,16 +289,44 @@ fun AppDrawer(
         built.ifEmpty { listOf(makeTab(null, "apps", "Apps", LauncherIcons.Apps, sortApps(visible, config.sort, usage), config.sort, sections, config.columns)) }
     }
 
-    // Search: optionally limited to one tab; "#name" lists a tag's apps and highlights its tab.
+    // Filtering by tag: the chips, the full tag list and the search field's tag chip all set controller.tagFilter.
+    val tagConfig by controller.data.settings.derive { tagFilterConfig() }
+    val tagFilter = controller.tagFilter
+    val counts = remember(visible) { tagCounts(visible) }
+    val chipTags = remember(org, tagConfig.pinned, tagConfig.order, usage, counts) {
+        TagFilterOps.ordered(org.tags, tagConfig.pinned, tagConfig.order, usage, counts, System.currentTimeMillis())
+    }
+    val filteredTab = remember(visible, tagFilter, tagConfig.match, config.sort, config.work, usage, config.columns, org) {
+        if (tagFilter.isEmpty()) {
+            null
+        } else {
+            val list = visible.filter { app ->
+                TagFilterOps.matches(app.tags, tagFilter, tagConfig.match) && !(app.isWorkProfile && config.work == "hidden")
+            }
+            makeTab(null, "filter", TagFilterOps.label(tagFilter, org), LauncherIcons.Label, sortApps(list, config.sort, usage), config.sort, emptyList(), config.columns)
+        }
+    }
+    SideEffect {
+        controller.tagFilterLabel = TagFilterOps.label(tagFilter, org)
+        controller.tagSwipeOrder = (if (tagConfig.count > 0) chipTags.take(tagConfig.count) else chipTags).map { it.id }
+        controller.tagSwipeEnabled = tagConfig.swipe && org.tags.isNotEmpty()
+    }
+    // A tag that was deleted drops out of the filter.
+    LaunchedEffect(org, tagFilter) {
+        val known = org.tags.map { it.id }.toSet()
+        if (tagFilter.any { it !in known }) controller.tagFilter = tagFilter.filter { it in known }.toSet()
+    }
+
+    // Search: optionally limited to one tab (or to the tag filter); "#name" lists a tag's apps and highlights its tab.
     var searchScope by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(searching) { if (!searching) searchScope = null }
     val tagIds = remember(query, org) { tagQuery(query, org) }
-    val results = remember(query, visible, usage, org, searchScope, tabs) {
+    val results = remember(query, visible, usage, org, searchScope, tabs, filteredTab) {
         when {
             !searching -> emptyList()
             tagIds != null -> visible.filter { app -> app.tags.any { it in tagIds } }
             else -> {
-                val pool = searchScope?.let { id -> tabs.firstOrNull { it.id == id }?.apps } ?: visible
+                val pool = searchScope?.let { id -> tabs.firstOrNull { it.id == id }?.apps } ?: filteredTab?.apps ?: visible
                 Fuzzy.rank(query, pool, { it.label }, { usageBoost(it, usage) })
             }
         }
@@ -317,20 +346,38 @@ fun AppDrawer(
     val tabStates = remember { HashMap<String, LazyGridState>() }
     fun stateFor(id: String) = tabStates.getOrPut(id) { LazyGridState() }
     val resultsState = rememberLazyGridState()
-    val currentTab = tabs[pager.currentPage.coerceIn(0, tabs.lastIndex)]
-    val active: LazyGridState = if (searching) resultsState else stateFor(currentTab.id)
+    val pagerTab = tabs[pager.currentPage.coerceIn(0, tabs.lastIndex)]
+    // While filtering by tag, the filtered list stands in for the tabs (with its own letter index).
+    val currentTab = filteredTab ?: pagerTab
+    val filterState = remember(tagFilter) { LazyGridState() }
+    val active: LazyGridState = when {
+        searching -> resultsState
+        filteredTab != null -> filterState
+        else -> stateFor(currentTab.id)
+    }
     val activeApps = if (searching) results else currentTab.apps
 
     var tabMenu by remember { mutableStateOf<Int?>(null) }
     var tabDialog by remember { mutableStateOf<TabDialog?>(null) }
     val bar = TabsBar(
         labels = tabs.map { TabLabel(it.label, it.icon) },
-        selected = { if (searching) searchHighlight.toFloat() else pager.currentPage + pager.currentPageOffsetFraction },
+        selected = {
+            when {
+                searching -> searchHighlight.toFloat()
+                controller.tagFilter.isNotEmpty() -> -1f
+                else -> pager.currentPage + pager.currentPageOffsetFraction
+            }
+        },
         onTap = { i ->
             val tab = tabs.getOrNull(i)
             when {
                 tab == null -> Unit
                 searching -> searchScope = if (searchScope == tab.id) null else tab.id
+                controller.tagFilter.isNotEmpty() -> {
+                    // A tab leaves the tag filter.
+                    controller.filterByTags(emptySet())
+                    controller.scope.launch { pager.scrollToPage(i) }
+                }
                 pager.currentPage == i -> controller.scope.launchScrollToStart(stateFor(tab.id))
                 else -> controller.scope.launch { pager.animateScrollToPage(i) }
             }
@@ -357,12 +404,17 @@ fun AppDrawer(
     val tabsTop = showTabs && config.tabsTop
     val tabsBottom = showTabs && config.tabsBottom
     val tabsH = tabsHeight(config.tabsSize)
-    val headerHeight = if (tabsTop) maxOf(HandleHeight, tabsH + 16.dp) else HandleHeight
-    val bottomExtra = SearchZone + when {
+    val stripShown = tagConfig.position != "hidden" && org.tags.isNotEmpty() && (tagConfig.order != "pinned" || tagConfig.pinned.isNotEmpty())
+    val stripTop = stripShown && tagConfig.position == "top"
+    val stripAbove = stripShown && !stripTop
+    val baseHeader = if (tabsTop) maxOf(HandleHeight, tabsH + 16.dp) else HandleHeight
+    val headerHeight = baseHeader + if (stripTop) TagStripHeight else 0.dp
+    val belowStrip = when {
         tabsBottom -> tabsH + 10.dp
         inPill -> tabsRowHeight(config.tabsSize)
         else -> 0.dp
     }
+    val bottomExtra = SearchZone + belowStrip + if (stripAbove) TagStripHeight else 0.dp
     val statusInsets = WindowInsets.statusBars
     val padding = remember(keyboardOrNav, statusInsets, density, bottomExtra, headerHeight, config.sideMarginDp) {
         DrawerPadding(
@@ -413,6 +465,7 @@ fun AppDrawer(
                 ) {
                     when {
                         searching -> AppGrid(resultCells, resultsState, padding, config, motion, fx, null, color, controller, interactive)
+                        filteredTab != null -> AppGrid(filteredTab.cells, filterState, padding, config, motion, fx, wave, color, controller, interactive)
                         tabs.size == 1 -> AppGrid(tabs[0].cells, stateFor(tabs[0].id), padding, config, motion, fx, wave, color, controller, interactive)
                         else -> HorizontalPager(pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { tabs.getOrNull(it)?.id ?: it }) { page ->
                             val tab = tabs.getOrNull(page) ?: return@HorizontalPager
@@ -425,7 +478,7 @@ fun AppDrawer(
                     Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .height(headerHeight)
+                        .height(baseHeader)
                         .then(if (interactive) remember(controller) { Modifier.closeOnDrag(controller) } else Modifier),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -489,7 +542,7 @@ fun AppDrawer(
                     controller = controller,
                     interactive = interactive,
                     modifier = if (tabsTop) {
-                        Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = (headerHeight - tabsH) / 2)
+                        Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = (baseHeader - tabsH) / 2)
                     } else {
                         Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = SearchZone)
                     },
@@ -508,6 +561,25 @@ fun AppDrawer(
                         .navigationBarsPadding()
                         .imePadding()
                         .padding(horizontal = 20.dp, vertical = 14.dp),
+                )
+            }
+            if (stripShown) {
+                TagStrip(
+                    tags = chipTags,
+                    counts = counts,
+                    config = tagConfig,
+                    controller = controller,
+                    glass = glass,
+                    lightBackground = light,
+                    backdrop = glassBackdrop,
+                    interactive = interactive,
+                    modifier = if (stripTop) {
+                        Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = baseHeader - 4.dp)
+                    } else {
+                        // Just above the search field (and above the tabs when they sit at the bottom).
+                        Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding()
+                            .padding(bottom = if (tabsBottom) SearchZone + tabsH + 2.dp else SearchZone - 18.dp + belowStrip)
+                    },
                 )
             }
             val menuFor = tabMenu
@@ -529,6 +601,9 @@ fun AppDrawer(
         }
     }
     tabDialog?.let { dialog -> TabDialogView(dialog, controller) { tabDialog = null } }
+    if (controller.tagSheet && interactive) {
+        TagSheet(org, counts, usage, tagConfig, controller, glass, light, glassBackdrop)
+    }
 }
 
 /** Section headers bend with the list too. */
@@ -786,12 +861,36 @@ internal fun DrawerSearchField(
         }
     }
 
-    Row(modifier.padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-        LauncherIcon(LauncherIcons.Search, contentDescription = null, tint = color, size = 22.dp)
-        Spacer(Modifier.width(12.dp))
+    val view = LocalView.current
+    val filtering = controller.tagFilter.isNotEmpty()
+    Row(
+        modifier
+            .then(
+                if (interactive) {
+                    Modifier.tagSwipe({ controller.tagSwipeEnabled && controller.drawerQuery.isEmpty() }) { direction ->
+                        view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                        controller.filterByTags(TagFilterOps.step(controller.tagSwipeOrder, controller.tagFilter, direction))
+                    }
+                } else Modifier
+            )
+            .padding(start = if (filtering) 10.dp else 18.dp, end = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (filtering) {
+            // The active tag filter, with one tap to clear it.
+            ActiveTagChip(controller, controller.tagFilterLabel, interactive)
+        } else {
+            LauncherIcon(LauncherIcons.Search, contentDescription = null, tint = color, size = 22.dp)
+        }
+        Spacer(Modifier.width(if (filtering) 10.dp else 12.dp))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (controller.drawerQuery.isEmpty()) {
-                Text("Search apps", style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.65f), fontSize = 16.sp))
+                Text(
+                    if (filtering) "Search in ${controller.tagFilterLabel}" else "Search apps",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.65f), fontSize = 16.sp),
+                )
             }
             BasicTextField(
                 value = controller.drawerQuery,

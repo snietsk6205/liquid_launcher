@@ -347,10 +347,27 @@ dump 11-menu
 if on_screen 11-menu "Wallpaper" exact && on_screen 11-menu "Layouts" exact; then pass "long press on empty space opens the home menu"; else fail "long press on empty space opens the home menu"; fi
 if tap_text 11-menu "Wallpaper" exact; then
   sleep 1.5
-  peek 11-wallpaper
-  dump 11-wallpaper
-  if on_screen 11-wallpaper "Apply" exact && on_screen 11-wallpaper "Drawer" exact; then pass "home menu opens the wallpaper screen"; else fail "home menu opens the wallpaper screen"; fi
-  tap_text 11-wallpaper "Cancel" exact || adb shell input keyevent KEYCODE_BACK
+  peek 11-strip
+  dump 11-strip
+  if on_screen 11-strip "Library and more" exact && on_screen 11-strip "Shuffle" exact; then pass "home menu opens the wallpaper strip"; else fail "home menu opens the wallpaper strip"; fi
+  if tap_text 11-strip "Library and more" exact; then
+    sleep 1.5
+    peek 11-wallpaper
+    dump 11-wallpaper
+    if on_screen 11-wallpaper "Apply" exact && on_screen 11-wallpaper "Recent" exact; then pass "the strip opens the wallpaper screen"; else fail "the strip opens the wallpaper screen"; fi
+    if tap_text 11-wallpaper "Blur and dim" exact; then
+      sleep 1
+      dump 11-look
+      if on_screen 11-look "Drawer" exact; then pass "wallpaper screen has blur and dim per screen"; else fail "wallpaper screen has blur and dim per screen"; fi
+      tap_text 11-look "Cancel" exact || adb shell input keyevent KEYCODE_BACK
+    else
+      fail "wallpaper screen has a Blur and dim page"
+      tap_text 11-wallpaper "Cancel" exact || adb shell input keyevent KEYCODE_BACK
+    fi
+  else
+    fail "wallpaper strip has a way to the wallpaper screen"
+    adb shell input keyevent KEYCODE_BACK
+  fi
   sleep 1
 else
   fail "home menu has a Wallpaper item"

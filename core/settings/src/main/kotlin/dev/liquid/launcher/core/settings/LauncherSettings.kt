@@ -29,7 +29,7 @@ object LauncherSettings {
         val Gestures = SettingsSection("gestures", "Gestures", "What swipes, taps and presses on the home screen do")
         val Pill = SettingsSection("pill", "Pill", "The glass bar: its items, size, position and gestures")
         val Drawer = SettingsSection("drawer", "App drawer", "Layout, sorting, search, tabs and the work profile")
-        val Tags = SettingsSection("tags", "Drawer tabs and tags", "Your own drawer pages built from tags; rename, reorder, remove")
+        val Tags = SettingsSection("tags", "Drawer tabs and tags", "Your own drawer pages built from tags, and filtering the drawer by tag in one tap")
         val DrawerMotion = SettingsSection("drawerMotion", "Drawer motion", "Opening transition, scroll bar and scroll effects")
         val DrawerIndex = SettingsSection("drawerIndex", "Scroll index", "Letters at the edge of the drawer: curve, side, size, bubble, haptics, sections at the top")
         val Menu = SettingsSection("menu", "Long-press menu", "Which entries appear and in what order")
@@ -688,6 +688,68 @@ object LauncherSettings {
         section = "tags", keywords = "tabs search filter scope tag hash",
     )
 
+    // ---- Filtering by tag ----
+
+    val TagStripPosition = ChoiceSetting(
+        key = "tags.stripPosition", default = "above",
+        options = listOf(
+            "above" to "Above the search field",
+            "top" to "At the top, under the tabs",
+            "hidden" to "Hidden (use the pill's tag button or swipe)",
+        ),
+        title = "Tag chips in the drawer",
+        summary = "A row of your tags: tap one to show only its apps, hold to add more tags. \"All apps\" at the start clears the filter",
+        section = "tags", keywords = "tag filter chips strip row position quick",
+    )
+    val TagStripOrder = ChoiceSetting(
+        key = "tags.stripOrder", default = "used",
+        options = listOf("used" to "Pinned first, then most used", "az" to "Pinned first, then A to Z", "pinned" to "Only pinned tags"),
+        title = "Order of the chips",
+        summary = "Pin tags in the full tag list (the last chip, or hold the tag on the search field)",
+        section = "tags", keywords = "tag filter order pinned favourite most used alphabetical",
+    )
+    val TagStripCount = IntSetting(
+        key = "tags.stripCount", default = 10, min = 0, max = 40,
+        title = "Chips shown",
+        summary = "The rest are one tap away in the full list. 0 shows every tag",
+        section = "tags", keywords = "tag filter count number chips",
+    )
+    val TagStripCounts = BoolSetting(
+        key = "tags.stripCounts", default = false,
+        title = "Show how many apps each tag has",
+        section = "tags", keywords = "tag filter count apps number badge",
+    )
+    val TagTap = ChoiceSetting(
+        key = "tags.tap", default = "single",
+        options = listOf("single" to "Shows only that tag (hold to add more)", "multi" to "Adds or removes it (several tags at once)"),
+        title = "Tapping a tag chip",
+        section = "tags", keywords = "tag filter tap multi select several",
+    )
+    val TagMatch = ChoiceSetting(
+        key = "tags.match", default = "any",
+        options = listOf("any" to "Apps with any of the tags", "all" to "Only apps with all of the tags"),
+        title = "With several tags, show",
+        section = "tags", keywords = "tag filter match any all and or",
+    )
+    val TagSwipe = BoolSetting(
+        key = "tags.swipe", default = true,
+        title = "Swipe the search field sideways to change tag",
+        summary = "Left for the next tag in the chip order, right for the one before; past the ends shows all apps",
+        section = "tags", keywords = "tag filter swipe gesture pill cycle next",
+    )
+    val TagFilterKeep = BoolSetting(
+        key = "tags.keep", default = false,
+        title = "Keep the filter when the drawer closes",
+        summary = "Off: the drawer always opens with all apps",
+        section = "tags", keywords = "tag filter remember keep persist",
+    )
+
+    /** Tag ids pinned to the front of the tag chips, in order. Edited in the tag list. */
+    val TagPinned = StringListSetting(
+        key = "tags.pinned", default = emptyList(),
+        title = "Pinned tags", section = "tags", hidden = true,
+    )
+
     // ---- Drawer motion ----
 
     val DrawerTransition = ChoiceSetting(
@@ -1157,6 +1219,7 @@ object LauncherSettings {
         DrawerScrollbar, DrawerScrollBubble, DrawerScrollEffect, DrawerScrollStrength, DrawerOverscroll,
         IndexVisibility, IndexSide, IndexCurve, IndexLetterSize, IndexSpacing, IndexBubble, IndexHaptics, IndexFollow, IndexWave, IndexFocus, DrawerTopSections,
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
+        TagStripPosition, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
         MenuEntries,
         SearchEngine, SearchOpenKeyboard, SearchDim, SearchBlur,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
