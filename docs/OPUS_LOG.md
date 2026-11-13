@@ -198,9 +198,9 @@ Not done: dragging an app out of an open folder (use the menu's "Take out of the
 
 ---
 
-## Session summary (2026-11-13, Opus, updated 15:50 UTC)
+## Session summary (2026-11-13, Opus, updated 17:35 UTC)
 
-**State:** Phase 1B is complete as 0.2.1: the fixes from the 0.2.0 phone test (redirect, drawer, pages, clock) plus everything that was left in 1B (tags and own drawer tabs, icon packs and icon change, folders, per-icon swipe actions, app shortcuts). 85 unit tests pass locally. CI run 21 (without folders / swipe / shortcuts) passed every emulator check and published `v0.2.1`; run 22 carries the rest.
+**State:** Phase 1B is complete as 0.2.1: the fixes from the 0.2.0 phone test (redirect, drawer, pages, clock) plus everything that was left in 1B (tags and own drawer tabs, icon packs and icon change, folders, per-icon swipe actions, app shortcuts). 85 unit tests pass. CI run 24 passed every emulator check (redirect and UI) and published `v0.2.1` build 24 (`LiquidLauncher-0.2.1-build24.apk`). Runs 22–23 failed on emulator timing; the fixes (drag position, velocity samples, blur fallback, test waits) are in Entry 5.
 
 **Builds:** `./gradlew testDebugUnitTest :app:assembleRelease` locally (see Entry 1). CI publishes `v0.2.1` when the emulator test passes; newer builds replace the APK in that release.
 
