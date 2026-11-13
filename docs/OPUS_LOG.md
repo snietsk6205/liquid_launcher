@@ -99,3 +99,39 @@ Every Opus commit starts with `[opus]`: `git log --grep="\[opus\]"`.
 - First UI run (build 14): search + calculator, edit mode, settings screens, glass benchmark pass; **swipe up did not open the drawer** although swipe down opened search through the same detector. Cause not found by reading; added `DebugLog` lines for swipe/drawer and a second slower swipe in the test to diagnose.
 - Fixed after review: grid layout mis-placed items when an app was not loaded (one node per item now); dragging between pages (edge page-turn); drawer preview could open the keyboard; closed drawer hidden from accessibility.
 - **Likely cause of the drawer swipe failure (13:00 UTC):** gesture modifiers were created in composition with fresh lambdas. When the drawer starts moving, the home screen recomposes (the "overlay open" flag flips) and the new `pointerInput` lambda restarts the detector, cancelling the swipe; `onDragCancel` then settles the drawer shut. Swipe down never recomposes mid-gesture, so search worked. Same failure would cancel icon drag-and-drop (drag start sets edit mode → recomposition). Fix: every gesture modifier is now `remember`ed (`Gestures.kt`, `HomeScreen.homeSwipes`, page taps in `HomeGrid`, `Pill`, drawer `closeOnDrag`). To confirm in the next CI log.
+
+---
+
+## Entry 3: CI fixes (2026-11-13 13:00 → 13:25 UTC)
+
+**Model:** Opus 5.5 Extra
+**Goal:** get the 0.2.0 build through the emulator test.
+
+| File | Change | Why |
+|---|---|---|
+| `feature/home/Gestures.kt`, `HomeScreen.kt`, `HomeGrid.kt`, `Pill.kt`, `Drawer.kt` | Gesture modifiers `remember`ed | Confirmed by CI: swipe-up now opens the drawer (log "released at 0.05 … open") |
+| `feature/home/Drawer.kt` | Grid bottom padding includes the navigation bar; search field has an accessibility label | First row was under the search pill |
+| `feature/redirect/engine/RedirectEngine.kt` | No "waiting for the home screen" log after a redirect was sent | Misleading log line |
+| `ci/smoke.sh`, `ci/describe_ui.py`, `ci/ascii_shot.py` | Drawer bottom dump; close system dialogs and retry the first Home press | Emulator's own launcher showed an ANR dialog after boot |
+
+---
+
+## Session summary (2026-11-13, Opus)
+
+**State:** Phase 1B first part (0.2.0) is built. Local build and all 63 unit tests pass (redirect engine 35, layout 10, search 8, settings 7, latency 3). On the API 34 emulator every UI check passed in run 17 (drawer, app list, long-press menu, add to home, back, search + calculator, edit mode) and all redirect checks except the first Home press, which hit an emulator ANR dialog; run 18 retries that.
+
+**Builds:** `./gradlew testDebugUnitTest :app:assembleRelease` locally (SDK in `/root/android-sdk`, see Entry 1). CI publishes release `v0.2.0` when the emulator test passes.
+
+**Does not exist yet:** icon packs, folders, tags and custom drawer tabs, per-icon swipe actions, icon change, app shortcuts (all Phase 1B rest, see roadmap).
+
+**Untested on the phone:** everything in 0.2.0, including the home-screen check in the redirect (Fable's `cc5e6e7`), which on the emulator worked ("home screen visible, redirect in 160 ms") but has no phone data yet.
+
+**Next step:** user tests 0.2.0 on the phone (checklist in the hand-over message); then icon packs and folders.
+
+### For Fable to review (overall)
+
+1. `HomeController` + `Gestures.kt`: drag and drop and the remembered gesture modifiers.
+2. The home-press heuristic in `MainActivity.onNewIntent`.
+3. Emulator API 34 vs 35 (D35).
+4. Defaults chosen in D31 (5 × 9 grid etc.) — check against the user's next feedback.
+5. Glass on the long-press menu opened from the drawer samples the home layer, not the drawer.
