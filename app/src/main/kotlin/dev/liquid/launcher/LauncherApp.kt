@@ -62,6 +62,16 @@ class LauncherApp : Application() {
         }
         data.apps.start()
         watchScreen()
+        // A wallpaper set in another app should show: the launcher stops drawing its own copy
+        // (it stays in the library), so picture and colours match again.
+        appScope.launch {
+            dev.liquid.launcher.core.common.WallpaperTones.outsideChanges.collect { count ->
+                if (count > 0) {
+                    wallpaper.clear()
+                    data.wallpapers.clearCurrent()
+                }
+            }
+        }
     }
 
     /** Automatic wallpaper changes happen while the screen is off, ready for the next unlock. */

@@ -33,6 +33,11 @@ object WallpaperTones {
     /** The launcher-set wallpaper's colours, or null when the system wallpaper is not the launcher's. */
     val tone: StateFlow<WallpaperTone?> = _tone
 
+    private val _outsideChanges = MutableStateFlow(0)
+
+    /** Counts wallpapers set outside the launcher (another app, the system settings) since start. */
+    val outsideChanges: StateFlow<Int> = _outsideChanges
+
     /** Reads the saved colours once per process. */
     fun load(context: Context) {
         if (loaded) return
@@ -93,8 +98,9 @@ object WallpaperTones {
         if (tone.systemId <= 0) return tone
         val now = systemId(context)
         if (now <= 0 || now == tone.systemId) return tone
-        DebugLog.event("Wallpaper", "wallpaper changed outside the launcher (id ${tone.systemId} -> $now), using the system's colours")
+        DebugLog.event("Wallpaper", "wallpaper changed outside the launcher (id ${tone.systemId} -> $now), showing the system's")
         clear(context)
+        _outsideChanges.value++
         return null
     }
 
