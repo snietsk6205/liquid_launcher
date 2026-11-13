@@ -1,27 +1,50 @@
 # 6. Roadmap
 
-## Plan as of 0.4.0 (2026-11-13, Opus)
+## Plan as of 0.4.1 (2026-11-13, Opus)
 
 | Phase | Content | Release | State |
 |---|---|---|---|
 | 1A | Redirect engine, diagnostics, glass benchmark | 0.1.0 | Done |
 | 1B | Home grid, pill, drawer, long-press menu, search v1, settings editors and previews | 0.2.0 | Tested on the phone |
 | 1B | Redirect fixes, drawer transition / tabs / scroll bar, pages, clock resize, tags and own tabs, icon packs, folders, swipe actions, shortcuts | 0.2.1 | Tested on the phone |
-| 1B polish | Curved letter index (A), icons following the wallpaper (B), floating tabs pill with positions, styles and a per-tab menu (D) | 0.2.2 | Released (build 25) |
-| 2, part 1: home setup | Home menu (two glass pills on long press), wallpaper studio (picker, history, blur and dim per surface, live preview), saved layouts, backup / restore | 0.3.0 | Released (build 26) |
-| 2, part 2: look | Theme (text, accent and glass colours, fonts incl. an imported file, clock font and weight, icon shapes), presets and `.lltheme` files; folder preview / background / shape / tap-first / columns / drag out; dock; per-page grid, labels and name; page transitions | 0.4.0 | Released (build 27) |
+| 1B polish | Curved letter index (A), icons following the wallpaper (B), floating tabs pill with positions, styles and a per-tab menu (D) | 0.2.2 | Tested on the phone (in 0.4.0) |
+| 2, part 1: home setup | Home menu (two glass pills on long press), wallpaper studio (picker, history, blur and dim per surface, live preview), saved layouts, backup / restore | 0.3.0 | Tested on the phone (in 0.4.0) |
+| 2, part 2: look | Theme (text, accent and glass colours, fonts incl. an imported file, clock font and weight, icon shapes), presets and `.lltheme` files; folder preview / background / shape / tap-first / columns / drag out; dock; per-page grid, labels and name; page transitions | 0.4.0 | Tested on the phone |
+| 2, fixes after the 0.4.0 test | Index floats with equal margins and bends the list; filtering by tag (moved from Phase 4); themed icons recolour at once; wallpaper library, placing, parallax, strip, shuffle, automatic changes; layout and wallpaper switches with a transition | 0.4.1 | Released (see the log) |
 | 2, part 3: touch and motion (next) | Two-finger / pinch / edge gestures, double tap per icon, activity picker, motion and haptics settings (drawer tick, depth transition for search, launch animation), in-app updater | 0.5 | |
 | 3 | Widgets: other apps' widgets, clock gallery, built-in widgets, panels; "Widgets" joins the home menu | 2–3 builds | |
-| 4 | Search sources (contacts, calendar, files, settings pages), suggested apps, notification badges, drawer folders and rule-based tabs | 2 builds | |
+| 4 | Search sources (contacts, calendar, files, settings pages), suggested apps, notification badges, drawer folders and rule-based tabs; the rest of tag organisation (see below) | 2 builds | |
 | 5 | Study companion: GitHub task sync, calendar blocks, Now card, study widgets | 2–3 builds | |
-| 6 | Profiles (Study / Free / Night), study mode, friction; automatic layout switching; wallpaper per profile | 2 builds | |
+| 6 | Profiles (Study / Free / Night), study mode, friction; automatic layout switching; wallpaper per profile and per page | 2 builds | |
 | 7 | Performance and polish | 1–2 builds | |
 
 Changes to Fable's plan, and why:
+- Filtering the drawer by tag moved from Phase 4 to 0.4.1: the user called it the main feature of that round (many apps, organised by tags).
+- Wallpaper library, placing, parallax and automatic changes added in 0.4.1 (not in the original plan): the user switches wallpapers all the time.
 - Tags and own drawer tabs moved from Phase 4 to 1B (done in 0.2.1, the user asked for them with the tabs pill).
 - Per-icon swipe actions and app shortcuts moved from Phase 2 to 1B (done in 0.2.1).
 - Wallpaper blur and dim **per surface** moved from Phase 6 to 0.3: the user changes wallpapers often and needs it now, and it belongs with the wallpaper picker. Blur and dim **per profile** stay in Phase 6.
 - Saved layouts core in 0.3 (proposal below); automatic switching in Phase 6, where profiles pick a layout.
+
+## Feedback on 0.4.0: where each point went (2026-11-13, Opus)
+
+| Point | Where | Notes |
+|---|---|---|
+| 1. Index breaks the drawer's symmetry | Fixed in 0.4.1 | Equal side margins (setting), letters float over the list; default visibility now "while scrolling or touching". D55. |
+| 1. List moves with the finger like Niagara | Done in 0.4.1 | Rows near the finger bend away from the edge and gather towards it, the held letter's apps stay bright, spring back on release; intensity 0–100 %. D55. |
+| 2. Fast tag filtering | Done in 0.4.1 | Chips above the search field (pinned, then by use or A–Z; count, order and position are settings), full tag list with search, filter on the search field with one-tap clear, hold for several tags, any / all, sideways swipe, back clears first, "Filter apps by tag" action. D60. |
+| 2. Tag shortcuts at the top of the letter index | Partly | Tags can already be sections at the top of the list with their own index entries (jump, not filter). Index entries that filter: Phase 4, with the rest of drawer organisation. |
+| 3. Themed icons late or stale | Fixed in 0.4.1 | Colours from the launcher's own image at once, system callback as fallback for wallpapers set elsewhere, icons cached per colour set. D56. |
+| 4. Abrupt wallpaper on layout switch | Fixed in 0.4.1 | Next wallpaper loaded first, whole screen changes together under a melting snapshot; transition and length are settings. D59. |
+| 5. Crop, pan, zoom, live preview, parallax | Done in 0.4.1 | "Place" in the wallpaper screen; parallax still / light / strong per picture, default in settings. D58. |
+| 5. History duplicates | Fixed in 0.4.1 | It was a history; layout switches added copies. Now the library's recent list holds each picture once. D57. |
+| 5. Library, quick switch, per layout, rotation | Done in 0.4.1 | Recent / favourites / all / linked phone folders; strip from the home menu; "Only for the layout …"; automatic change on unlock or daily. D57, D61, D62. |
+
+Your thoughts for later, so they are built your way:
+- **Wallpaper albums you make yourself** (beyond linked phone folders), sorting the library, and a separate lock-screen wallpaper choice: Phase 7 (polish), unless you want them sooner.
+- **Wallpaper per page** and **rotation by time of day / per profile**: Phase 6, with profiles (they decide which layout and wallpaper set is active).
+- **Tags**: colours or icons on tag chips, smart tags (installed this week, most used), and filtering from the letter index: Phase 4.
+- **Index**: a horizontal "wave" setting for the bubble path and per-letter app previews in the bubble: Phase 7.
 
 ## Feedback on 0.2.1: where each point went (2026-11-13, Opus)
 

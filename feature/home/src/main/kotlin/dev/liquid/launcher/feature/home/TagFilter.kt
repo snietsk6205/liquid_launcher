@@ -301,7 +301,8 @@ internal fun Modifier.tagSwipe(enabled: () -> Boolean, onSwipe: (Int) -> Unit): 
             if (!change.pressed) break
             dx += change.position.x - change.previousPosition.x
             dy += change.position.y - change.previousPosition.y
-            if (abs(dy) > threshold && abs(dy) > abs(dx)) break
+            // Clearly vertical (closing the drawer, scrolling): not a tag swipe.
+            if (abs(dy) > viewConfiguration.touchSlop && abs(dy) > abs(dx)) break
             if (abs(dx) > threshold && abs(dx) > abs(dy) * 1.5f) {
                 change.consume()
                 onSwipe(if (dx < 0) 1 else -1)

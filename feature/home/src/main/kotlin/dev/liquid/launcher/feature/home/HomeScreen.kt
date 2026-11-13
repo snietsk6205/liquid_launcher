@@ -596,6 +596,7 @@ fun HomeScreen(
         controller.iconPicking?.let { IconPickerDialog(it, controller) }
         controller.swipeEditing?.let { id -> layout.find(id)?.let { (_, item) -> SwipeActionsDialog(item, apps, controller) } }
         if (live) TransitionOverlay(controller, transitionStyle)
+        if (live) FlashLabel(controller, glass, lightBackground, overlayBackdrop, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 14.dp))
     }
 }
 

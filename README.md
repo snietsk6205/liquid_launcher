@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.4.1 (fixes after the first phone test of 0.4.0): filter the drawer by tag in one tap (tag chips, a searchable tag list, the filter shown on the search field, sideways swipes); a wallpaper library (recent without duplicates, favourites, linked phone folders) with placing by pinch and drag, parallax, a one-tap wallpaper strip in the home menu, shuffle and automatic changes; layout and wallpaper switches change the whole screen together with a transition; themed icons recolour at once when the launcher sets a wallpaper; the letter index floats over the list with equal margins and the list bends with your finger.
+
 0.4.0 (Phase 2, part 2 of 3): theme with colours, fonts (or your own font file), clock font and weight, icon shapes, presets and theme files; folder styles, tap-to-open-first-app and dragging apps out of folders; a dock; per-page grid, labels and name; page transitions.
 
 0.3.0 (Phase 2, part 1 of 3): hold empty space for the home menu (two glass pills you fill yourself; press and slide); wallpaper screen with photo picker, recent wallpapers, and blur and dim for home, drawer and search, previewed live; saved layouts you can switch between in one tap; backup and restore to one file.

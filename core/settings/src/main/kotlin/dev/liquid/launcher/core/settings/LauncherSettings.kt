@@ -839,7 +839,7 @@ object LauncherSettings {
     // ---- Scroll index ----
 
     val IndexVisibility = ChoiceSetting(
-        key = "index.visibility", default = "always",
+        key = "index.visibility", default = "scroll",
         options = listOf(
             "always" to "Always",
             "scroll" to "While scrolling or touching",

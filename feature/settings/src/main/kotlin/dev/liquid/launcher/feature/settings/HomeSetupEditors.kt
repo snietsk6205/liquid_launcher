@@ -134,11 +134,16 @@ internal fun WallpaperEditor() {
     InfoCard {
         Text("Wallpaper screen", style = MaterialTheme.typography.titleMedium)
         BodyText(
-            "Pick a photo or a recent wallpaper and set blur and dim for the home screen, the drawer and search, " +
-                "seen live on the real screens before you apply. Also in the home menu (hold empty space)."
+            "Your wallpaper library: recent wallpapers (each once), favourites, everything you added, and phone folders you link. " +
+                "Place a picture with pinch and drag, give it parallax, and set blur and dim for the home screen, the drawer and " +
+                "search, all seen live on the real screens before you apply."
         )
         Button(onClick = { openOnHome(context, "wallpaper") }, modifier = Modifier.padding(top = 8.dp)) { Text("Open the wallpaper screen") }
-        BodyText("Blur and dim of the drawer are in Drawer motion and App drawer.", Modifier.padding(top = 8.dp))
+        BodyText(
+            "Quick switch: hold empty space on the home screen → Wallpaper shows your favourites and recent wallpapers in one row, with Shuffle. " +
+                "A saved layout can bring its own wallpaper (\"Only for the layout\" in the wallpaper screen).",
+            Modifier.padding(top = 8.dp),
+        )
     }
 }
 

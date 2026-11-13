@@ -276,13 +276,44 @@ Not done / limits: large folders; per-folder styles (all folders share one style
 
 ---
 
-## Session summary (2026-11-13, Opus, updated for 0.4.0)
+## Entry 9: 0.4.1, fixes after the first phone test of 0.4.0 (2026-11-13, Opus 5.5)
 
-**State:** 0.2.2 (build 25) and 0.3.0 (build 26) released after green emulator runs. 0.4.0 (Phase 2 part 2: theme, folders, dock, page settings, page transitions) released as build 27 after a green emulator run; unit tests pass. None of 0.2.2–0.4.0 is tested on the phone yet; the user asked to continue without a test in between.
+**Goal:** the user's five points on 0.4.0 (which held 0.2.2 and 0.3.0), then a final pass over the whole launcher.
 
-**Next step:** the user tests 0.4.0 (which contains 0.2.2 and 0.3.0); then Phase 2 part 3 (0.5: gestures, double tap per icon, motion and haptics settings, in-app updater).
+| File | Change | Why |
+|---|---|---|
+| `Drawer.kt`, `ScrollIndex.kt`, `DrawerParts.kt` | Index takes no space: equal side margins (`DrawerSideMargin`), letters float, lighter at rest, touch strip 24 dp, edge inset 12 dp; `IndexWave` bends list rows near the finger (away from the edge, towards the finger's height), fades other letters' apps, springs back; applied in the item's existing graphics layer | D55, point 1 |
+| `core/common/WallpaperTones.kt` (new), `ThemedColors.kt`, `LauncherData.kt`, `IconThemer.kt` | Colours from the launcher's own image when it sets a wallpaper, with the system wallpaper id to detect outside changes; `colourTick` for accent and text colour; themed icon cache keeps 4 colour sets; system palette rechecks only for the "system" colour source | D56, point 3 |
+| `core/common/CropSpec.kt` (new) + test, `core/data/WallpaperLibrary.kt` (new) + test | Placement maths; library with content ids, recent / favourites / all, linked folders, thumbnails (disk and memory cache), migration of the old history | D57, D58, point 5 |
+| `core/designsystem/WallpaperStore.kt` | Show at once, persist afterwards (JPEG, copy for layout files), render with crop and parallax, decode upright and capped at 3600 px | D57 |
+| `feature/home/Wallpapers.kt` (new), `WallpaperViews.kt` (new), `WallpaperStudio.kt` (rewrite) | Prepare / persist / pool / next / automatic change; wallpaper drawn with parallax in the draw phase; transition overlay; wallpaper strip; layout name flash; wallpaper screen with Pictures / Blur and dim / Automatic pages, library tabs, folders, place mode (pinch, drag, parallax sweep), favourites, "Only for the layout" | D58, D61, D62, points 4–5 |
+| `HomeController.kt`, `HomeScreen.kt` | `changeScreen` (prepare, snapshot, commit, melt, then write); layout switch loads its wallpaper first; home recorded into a graphics layer; system wallpaper offsets on page settle | D59, point 4 |
+| `TagFilter.kt` (new) + test, `Drawer.kt`, `Editors.kt` | Tag chips, full tag list with search, filter chip on the search field, sideways swipe, pinned tags (settings card with order), filter replaces the tabs list with its own index, back clears the filter first | D60, point 2 |
+| `LauncherAction.kt`, `Pill.kt`, `HomeMenu.kt` | Actions: wallpaper strip (the old "Wallpaper"), wallpaper screen, shuffle, filter by tag; icons shuffle, heart outline, filter, crop | |
+| `LauncherApp.kt`, `MainActivity.kt` | Library migration at start; automatic changes on screen off; several-photo picker and folder picker | |
+| `MainScreen.kt`, `HomeSetupEditors.kt` | The settings "Wallpaper" row opens the wallpaper screen on the home screen instead of a bare photo picker | Final pass: one place for wallpapers |
+| `core/settings` | Side margins, index wave and highlight, tag filter options, parallax, transition and length, automatic change (mode, pool, shuffle); index visibility default "scroll" | |
+| `ci/smoke.sh` | Home menu → wallpaper strip → wallpaper screen → Blur and dim page | |
+
+Final pass (as a user): the layout switch toast became a glass label at the top; the wallpaper screen's sheet rises in like the other sheets; the settings wallpaper row now leads to the real wallpaper screen; texts of the wallpaper and tags sections describe what is there now.
+
+Not done / limits: albums you make yourself (folders on the phone stand in); no eyedropper; the wave was tuned on paper, not on the phone; automatic changes need the process alive when the screen turns off (the accessibility service keeps it alive); a linked folder's sub-folders are not read.
+
+### For Fable to review
+1. Recording the whole home screen into a `GraphicsLayer` every frame (`HomeScreen.kt`) for the transition snapshot: cost on the phone.
+2. `WallpaperTones.current` comparing system wallpaper ids (`getWallpaperId`) to tell launcher-set from outside wallpapers.
+3. `TagFilter.tagSwipe` watching the initial pass before the text field.
+4. The index default visibility change (D55) and the home menu "Wallpaper" item now opening the strip (D62).
+
+---
+
+## Session summary (2026-11-13, Opus, updated for 0.4.1)
+
+**State:** the user tested 0.4.0 (with 0.2.2 and 0.3.0) and sent five points. 0.4.1 fixes them (index symmetry and list wave, tag filtering, themed icon recolouring, layout wallpaper transition, wallpaper library with placing and parallax) plus a final pass. Unit tests pass; see the release line below for the CI run.
+
+**Next step:** the user tests 0.4.1; then Phase 2 part 3 (0.5: gestures, double tap per icon, motion and haptics settings, in-app updater).
 
 ### For Fable to review (overall)
-1. Entries 6–8 and decisions D43–D54.
-2. The roadmap changes (plan as of 0.4.0): tags and tabs moved to 1B, wallpaper per-surface values moved from Phase 6, Phase 2 split into three builds.
+1. Entries 6–9 and decisions D43–D62.
+2. The roadmap changes (plan as of 0.4.1): tag filtering moved from Phase 4 into 0.4.1, wallpaper library added; the user's later wallpaper and tag ideas are placed in Phases 4, 6 and 7.
 3. Earlier items still open: D37–D39 redirect changes, the drawer rewrite, `IconThemer` with real packs, the home-press heuristic, emulator on API 34.

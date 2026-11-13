@@ -74,7 +74,7 @@ internal val IndexStrip = 24.dp
 
 private val MaxBulge = 64.dp
 private val BubbleSize = 62.dp
-private val EdgeInset = 15.dp
+private val EdgeInset = 12.dp
 
 /** Names that turn a section's index mark into a star. */
 private val FavouriteNames = setOf("favourites", "favorites", "favourite", "favorite", "fav", "★")

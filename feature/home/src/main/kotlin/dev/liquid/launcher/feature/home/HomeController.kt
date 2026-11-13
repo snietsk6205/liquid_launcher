@@ -198,6 +198,19 @@ class HomeController(
     /** The wallpaper strip from the home menu. */
     var wallpaperStrip by mutableStateOf(false)
 
+    /** A short glass label at the top (the layout just switched to), or null. */
+    var flashText by mutableStateOf<String?>(null)
+    private var flashJob: kotlinx.coroutines.Job? = null
+
+    fun flash(text: String) {
+        flashJob?.cancel()
+        flashText = text
+        flashJob = scope.launch {
+            kotlinx.coroutines.delay(1500)
+            flashText = null
+        }
+    }
+
     /**
      * Changes the screen in one go: [prepare] does the slow work first (loading and placing the
      * next wallpaper) while the old screen stays, then a picture of the old screen is laid over,
@@ -245,6 +258,7 @@ class HomeController(
             },
             commit = { switch ->
                 data.layouts.switchTo(id, data.settings.get(LauncherSettings.LayoutsAutoSave))
+                data.layouts.find(id)?.let { flash(it.name) }
                 switch.wallpaper?.let { store.show(it) }
                 val home = data.layout.layout.value.defaultIndex
                 runCatching { scope.launch { pager.scrollToPage(home) } }
