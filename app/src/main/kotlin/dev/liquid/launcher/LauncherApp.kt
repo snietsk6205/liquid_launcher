@@ -8,7 +8,11 @@ import dev.liquid.launcher.core.common.LogLevel
 import dev.liquid.launcher.core.designsystem.WallpaperStore
 import dev.liquid.launcher.core.settings.LauncherSettings
 import dev.liquid.launcher.core.settings.SettingsStore
-import dev.liquid.launcher.feature.home.AppsRepository
+import dev.liquid.launcher.core.data.LauncherData
+import dev.liquid.launcher.core.data.RedirectTarget
+import dev.liquid.launcher.feature.home.HomePreviews
+import dev.liquid.launcher.feature.home.HomeSectionPreview
+import dev.liquid.launcher.feature.settings.SettingsPreviews
 import dev.liquid.launcher.feature.redirect.RedirectHooks
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +26,7 @@ class LauncherApp : Application() {
         private set
     lateinit var wallpaper: WallpaperStore
         private set
-    lateinit var apps: AppsRepository
+    lateinit var data: LauncherData
         private set
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -45,11 +49,14 @@ class LauncherApp : Application() {
         }
 
         RedirectHooks.homeComponent = ComponentName(this, MainActivity::class.java)
+        RedirectTarget.homeClassName = MainActivity::class.java.name
+        SettingsPreviews.sections = HomePreviews.sections
+        SettingsPreviews.provider = { sectionId -> HomeSectionPreview(sectionId) }
 
         wallpaper = WallpaperStore.get(this)
-        apps = AppsRepository(this)
+        data = LauncherData.get(this)
         appScope.launch { wallpaper.load() }
-        apps.start()
+        data.apps.start()
     }
 
     /** No crash reporting service: the last crash is written to a file the debug log can show. */

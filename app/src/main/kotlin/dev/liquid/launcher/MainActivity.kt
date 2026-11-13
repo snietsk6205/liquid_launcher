@@ -3,14 +3,17 @@ package dev.liquid.launcher
 import android.app.ActivityManager
 import android.content.Intent
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.Choreographer
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.core.view.WindowCompat
 import dev.liquid.launcher.core.common.DebugLog
+import dev.liquid.launcher.core.data.LaunchClock
 import dev.liquid.launcher.core.designsystem.LauncherTheme
 import dev.liquid.launcher.core.settings.LauncherSettings
+import dev.liquid.launcher.feature.home.HomeCallbacks
 import dev.liquid.launcher.feature.home.HomeReturnState
 import dev.liquid.launcher.feature.home.HomeScreen
 import dev.liquid.launcher.feature.redirect.RedirectStatus
@@ -24,6 +27,8 @@ class MainActivity : ComponentActivity() {
 
     private val returnState = HomeReturnState()
     private var firstStart = true
+    private var resumed = false
+    private var pausedAt = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,21 +36,24 @@ class MainActivity : ComponentActivity() {
         @Suppress("DEPRECATION")
         overridePendingTransition(0, 0)
 
-        // Home is the end of the back stack: back does nothing here.
+        // Home is the end of the back stack: back does nothing here unless an overlay is open
+        // (the home screen registers its own handler for that, which takes precedence).
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = Unit
         })
 
         val app = application as LauncherApp
+        val callbacks = HomeCallbacks(
+            openSettings = { startActivity(SettingsActivity.intent(this)) },
+            openSetup = { startActivity(SettingsActivity.intent(this, SettingsActivity.SCREEN_SETUP)) },
+        )
         setContent {
             LauncherTheme {
                 HomeScreen(
-                    store = app.settings,
+                    data = app.data,
                     wallpaper = app.wallpaper,
-                    apps = app.apps,
                     returnState = returnState,
-                    onOpenSettings = { startActivity(SettingsActivity.intent(this)) },
-                    onOpenSetup = { startActivity(SettingsActivity.intent(this, SettingsActivity.SCREEN_SETUP)) },
+                    callbacks = callbacks,
                 )
             }
         }
@@ -61,6 +69,11 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         @Suppress("DEPRECATION")
         overridePendingTransition(0, 0)
+        // Home on the launcher passes through the system launcher and the redirect brings us
+        // straight back. A quick return without having started an app counts as a Home press.
+        val now = SystemClock.uptimeMillis()
+        val quickReturn = now - pausedAt < HOME_PRESS_WINDOW_MS && LaunchClock.last < pausedAt - 300
+        if (resumed || quickReturn) returnState.onHomePressed()
     }
 
     override fun onStart() {
@@ -73,6 +86,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        resumed = true
         RedirectStatus.onLauncherResumed()
         window.decorView.post {
             Choreographer.getInstance().postFrameCallback { RedirectStatus.onLauncherFrame() }
@@ -80,8 +94,14 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
+        resumed = false
+        pausedAt = SystemClock.uptimeMillis()
         RedirectStatus.onLauncherPaused()
         super.onPause()
+    }
+
+    private companion object {
+        const val HOME_PRESS_WINDOW_MS = 1500L
     }
 
     private fun applyExcludeFromRecents() {

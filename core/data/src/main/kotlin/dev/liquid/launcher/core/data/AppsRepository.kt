@@ -137,6 +137,7 @@ class AppsRepository(
     fun find(ref: AppRef): AppEntry? = apps.value.firstOrNull { it.ref == ref }
 
     fun launch(entry: AppEntry, sourceBounds: Rect? = null, options: Bundle? = null): Boolean = try {
+        LaunchClock.mark()
         launcherApps.startMainActivity(entry.component, entry.user, sourceBounds, options)
         usage.record(entry.key)
         true
@@ -178,6 +179,17 @@ class AppsRepository(
 
     private companion object {
         const val ICON_DP = 56
+    }
+}
+
+/** When the launcher last started another app, to tell "Home pressed" from "came back from an app". */
+object LaunchClock {
+    @Volatile
+    var last: Long = 0L
+        private set
+
+    fun mark() {
+        last = android.os.SystemClock.uptimeMillis()
     }
 }
 

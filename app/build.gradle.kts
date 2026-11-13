@@ -65,6 +65,7 @@ dependencies {
     implementation(project(":core:common"))
     implementation(project(":core:settings"))
     implementation(project(":core:designsystem"))
+    implementation(project(":core:data"))
     implementation(project(":feature:redirect"))
     implementation(project(":feature:home"))
     implementation(project(":feature:settings"))

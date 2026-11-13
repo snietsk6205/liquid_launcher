@@ -155,3 +155,14 @@ fun <T> SettingsStore.observe(setting: Setting<T>): State<T> {
     val flow = remember(this, setting) { flow(setting) }
     return flow.collectAsState(initial = get(setting))
 }
+
+/**
+ * Builds a value from several settings and recomposes only when that value changes. Use a
+ * data class so unrelated settings (for example the redirect counters, which change on every
+ * redirect) never recompose the caller. [build] must not capture changing state.
+ */
+@Composable
+fun <T> SettingsStore.derive(build: SettingsStore.() -> T): State<T> {
+    val flow = remember(this) { values.map { build() }.distinctUntilChanged() }
+    return flow.collectAsState(initial = build())
+}

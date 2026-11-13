@@ -4,6 +4,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Surface
+import androidx.compose.ui.draw.clip
+import dev.liquid.launcher.core.settings.SettingDependencies
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -79,11 +89,13 @@ internal fun MainScreen(
         NavRow("Setup checklist", "Permissions and phone settings the redirect needs") { open(Screen.Setup) }
         NavRow("Diagnostics", "Device checks and the glass benchmark") { open(Screen.Diagnostics) }
 
-        SectionHeader("Settings")
-        LauncherSettings.Sections.all.forEach { section ->
-            NavRow(section.title, section.summary) { open(Screen.Section(section.id)) }
+        LauncherSettings.Sections.all.groupBy { it.group }.forEach { (group, sections) ->
+            SectionHeader(group)
+            sections.forEach { section ->
+                NavRow(section.title, section.summary) { open(Screen.Section(section.id)) }
+            }
+            if (group == "Launcher") WallpaperRow(wallpaper)
         }
-        WallpaperRow(wallpaper)
 
         SectionHeader("Tools")
         NavRow("Calibrate recents detection", "Only needed if recents is not recognised") { open(Screen.Calibration) }
@@ -200,18 +212,46 @@ internal fun SectionScreen(store: SettingsStore, sectionId: String, onBack: () -
     val settings = remember(sectionId) { LauncherSettings.inSection(sectionId) }
     val values by store.values.collectAsStateCompat()
     val anyChanged = settings.any { values.containsKey(it.key) }
+    val preview = SettingsPreviews.provider?.takeIf { sectionId in SettingsPreviews.sections }
 
-    ScreenScaffold(title = section.title, onBack = onBack) {
-        BodyText(
-            section.summary + ". Long-press an option to reset it. A dot marks options you changed.",
-            Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-        )
-        settings.forEach { SettingRow(it, store) }
-        if (anyChanged) {
-            OutlinedButton(
-                onClick = { settings.forEach { store.reset(it) } },
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-            ) { Text("Reset this section") }
+    ScreenScaffold(title = section.title, onBack = onBack, scroll = false) {
+        // The preview stays in view while the options below scroll, so every change shows at once.
+        if (preview != null) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp)
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+            ) {
+                Box(Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp))) { preview(sectionId) }
+            }
+        }
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 24.dp)
+        ) {
+            BodyText(
+                section.summary + ". Long-press an option to reset it. A dot marks options you changed.",
+                Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+            when (sectionId) {
+                "pill" -> PillItemsEditor(store)
+                "menu" -> MenuEntriesEditor(store)
+            }
+            settings.forEach { setting ->
+                if (SettingDependencies.isVisible(setting, store)) SettingRow(setting, store)
+            }
+            if (anyChanged) {
+                OutlinedButton(
+                    onClick = { settings.forEach { store.reset(it) } },
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                ) { Text("Reset this section") }
+            }
         }
     }
 }

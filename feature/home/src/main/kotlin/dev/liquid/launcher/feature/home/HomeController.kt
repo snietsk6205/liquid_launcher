@@ -1,0 +1,368 @@
+package dev.liquid.launcher.feature.home
+
+import android.accessibilityservice.AccessibilityService
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.unit.IntSize
+import dev.liquid.launcher.core.common.DebugLog
+import dev.liquid.launcher.core.data.AppEntry
+import dev.liquid.launcher.core.data.AppRef
+import dev.liquid.launcher.core.data.HomeItem
+import dev.liquid.launcher.core.data.ItemKind
+import dev.liquid.launcher.core.data.LauncherAction
+import dev.liquid.launcher.core.data.LauncherData
+import dev.liquid.launcher.core.data.LaunchClock
+import dev.liquid.launcher.core.data.LayoutOps
+import dev.liquid.launcher.core.settings.LauncherSettings
+import dev.liquid.launcher.feature.redirect.RedirectStatus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import kotlin.math.floor
+
+/** Where a long-press menu was opened from. */
+data class MenuTarget(
+    val app: AppEntry,
+    /** The home item, when opened on the home screen. */
+    val itemId: String?,
+    /** Bounds of the pressed icon in root coordinates. */
+    val anchor: Rect,
+)
+
+sealed interface DragSource {
+    data class Home(val itemId: String) : DragSource
+    data class NewApp(val ref: AppRef) : DragSource
+}
+
+/** An item being dragged by the finger. */
+@Stable
+class DragState(
+    val source: DragSource,
+    val icon: ImageBitmap?,
+    val widget: String?,
+    val cells: IntSize,
+    /** Where in the item the finger holds it, in pixels. */
+    val grab: Offset,
+    /** On-screen size of the item when it was picked up. */
+    val size: Size,
+    start: Offset,
+) {
+    var finger by mutableStateOf(start)
+    var overRemove by mutableStateOf(false)
+}
+
+/** Everything the home screen needs to remember between frames. */
+@Stable
+class HomeController(
+    val data: LauncherData,
+    val scope: CoroutineScope,
+    val context: Context,
+    private val callbacks: HomeCallbacks,
+) {
+    /** 0 = closed, 1 = open. Follows the finger while dragging. */
+    val drawer = Animatable(0f)
+    var searchOpen by mutableStateOf(false)
+    var editMode by mutableStateOf(false)
+    var menu by mutableStateOf<MenuTarget?>(null)
+    var drag by mutableStateOf<DragState?>(null)
+    var renaming by mutableStateOf<AppEntry?>(null)
+    var drawerQuery by mutableStateOf("")
+
+    /** Bumped to ask the drawer to drop keyboard focus. */
+    var drawerFocusReset by mutableIntStateOf(0)
+    var screenHeight by mutableFloatStateOf(1f)
+
+    lateinit var pager: PagerState
+
+    /** Grid area of each page, for turning a finger position into a cell. */
+    val pageGrids = HashMap<Int, LayoutCoordinates>()
+    var removeZone: Rect = Rect.Zero
+
+    val drawerOpen: Boolean get() = drawer.targetValue > 0.5f || drawer.value > 0.01f
+    val anyOverlay: Boolean get() = drawerOpen || searchOpen || menu != null || editMode || renaming != null
+
+    // ---- drawer ----
+
+    fun openDrawer() {
+        menu = null
+        searchOpen = false
+        scope.launch { drawer.animateTo(1f, spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)) }
+    }
+
+    fun closeDrawer(immediately: Boolean = false) {
+        drawerFocusReset++
+        drawerQuery = ""
+        scope.launch {
+            if (immediately) drawer.snapTo(0f) else drawer.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
+        }
+    }
+
+    fun dragDrawerBy(deltaFraction: Float) {
+        scope.launch { drawer.snapTo((drawer.value + deltaFraction).coerceIn(0f, 1f)) }
+    }
+
+    /** Finger released while moving the drawer: open or close depending on position and speed. */
+    fun settleDrawer(velocityPxPerSec: Float) {
+        val open = when {
+            velocityPxPerSec < -800f -> true
+            velocityPxPerSec > 800f -> false
+            else -> drawer.value > 0.4f
+        }
+        if (open) openDrawer() else closeDrawer()
+    }
+
+    // ---- other overlays ----
+
+    fun openSearch() {
+        menu = null
+        searchOpen = true
+    }
+
+    fun closeAll(immediately: Boolean = false) {
+        menu = null
+        renaming = null
+        searchOpen = false
+        drag = null
+        if (drawerOpen) closeDrawer(immediately)
+    }
+
+    /** Back gesture: close the top-most thing. Returns false when nothing was open. */
+    fun back(): Boolean {
+        when {
+            renaming != null -> renaming = null
+            menu != null -> menu = null
+            searchOpen -> searchOpen = false
+            drawerOpen -> closeDrawer()
+            editMode -> exitEdit()
+            else -> return false
+        }
+        return true
+    }
+
+    fun exitEdit() {
+        editMode = false
+        tidyPages()
+    }
+
+    // ---- apps ----
+
+    fun launch(app: AppEntry, bounds: android.graphics.Rect? = null, options: android.os.Bundle? = null, fromDrawer: Boolean = false) {
+        val started = data.apps.launch(app, bounds, options)
+        if (!started) {
+            toast(if (app.isWorkProfile) "Could not open: is the work profile paused?" else "Could not open ${app.label}")
+            return
+        }
+        if (fromDrawer && data.settings.get(LauncherSettings.DrawerCloseOnLaunch)) {
+            scope.launch {
+                kotlinx.coroutines.delay(250)
+                closeDrawer(immediately = true)
+            }
+        }
+    }
+
+    fun addToHome(ref: AppRef) {
+        val (columns, rows) = gridSize()
+        val layout = data.layout.layout.value
+        val start = if (::pager.isInitialized) pager.currentPage else 0
+        val order = (start until layout.pages.size) + (0 until start)
+        for (page in order) {
+            val added = LayoutOps.addApp(layout, page, ref, columns, rows)
+            if (added != null) {
+                data.layout.commit(added)
+                toast("Added to page ${page + 1}")
+                return
+            }
+        }
+        // Every page is full: add one.
+        val withPage = LayoutOps.addPage(layout)
+        data.layout.commit(LayoutOps.addApp(withPage, withPage.pages.size - 1, ref, columns, rows))
+        toast("Added to a new page")
+    }
+
+    fun removeFromHome(itemId: String) {
+        data.layout.commit(LayoutOps.removeItem(data.layout.layout.value, itemId))
+    }
+
+    fun addClock() {
+        val (columns, rows) = gridSize()
+        val layout = data.layout.layout.value
+        val pageIndex = if (::pager.isInitialized) pager.currentPage else 0
+        val page = layout.pages.getOrNull(pageIndex) ?: return
+        val h = minOf(3, rows)
+        val spot = LayoutOps.firstFree(page, columns, h, columns, rows)
+        if (spot == null) {
+            toast("No room for a clock on this page")
+            return
+        }
+        val clock = HomeItem(LayoutOps.newId(), ItemKind.WIDGET, spot.first, spot.second, columns, h, widget = "clock")
+        data.layout.commit(layout.copy(pages = layout.pages.mapIndexed { i, p -> if (i == pageIndex) p.copy(items = p.items + clock) else p }))
+    }
+
+    fun addPage() {
+        data.layout.commit(LayoutOps.addPage(data.layout.layout.value))
+        scope.launch { pager.animateScrollToPage(data.layout.layout.value.pages.size - 1) }
+    }
+
+    fun removeCurrentPage() {
+        val index = pager.currentPage
+        val removed = LayoutOps.removePage(data.layout.layout.value, index)
+        if (removed == null) {
+            toast("The last page cannot be removed")
+            return
+        }
+        data.layout.commit(removed)
+        toast("Page removed. Undo brings it back")
+    }
+
+    private fun gridSize(): Pair<Int, Int> =
+        data.settings.get(LauncherSettings.HomeColumns) to data.settings.get(LauncherSettings.HomeRows)
+
+    // ---- drag and drop ----
+
+    fun startDrag(state: DragState) {
+        menu = null
+        drag = state
+        editMode = true
+        if (state.source is DragSource.NewApp) closeDrawer(immediately = false)
+    }
+
+    fun moveDrag(finger: Offset) {
+        val d = drag ?: return
+        d.finger = finger
+        d.overRemove = removeZone.contains(finger)
+    }
+
+    fun endDrag() {
+        val d = drag ?: return
+        drag = null
+        if (d.overRemove) {
+            if (d.source is DragSource.Home) removeFromHome(d.source.itemId)
+            return
+        }
+        val target = cellUnder(d) ?: return
+        val (page, x, y) = target
+        val (columns, rows) = gridSize()
+        val layout = data.layout.layout.value
+        val updated = when (val source = d.source) {
+            is DragSource.Home -> LayoutOps.moveItem(layout, source.itemId, page, x, y, columns, rows)
+            is DragSource.NewApp -> {
+                val p = layout.pages.getOrNull(page) ?: return
+                if (!LayoutOps.isFree(p, x, y, 1, 1, columns, rows)) {
+                    toast("That cell is taken")
+                    null
+                } else {
+                    val item = HomeItem(LayoutOps.newId(), ItemKind.APP, x, y, app = source.ref)
+                    layout.copy(pages = layout.pages.mapIndexed { i, old -> if (i == page) old.copy(items = old.items + item) else old })
+                }
+            }
+        }
+        if (updated != null) data.layout.commit(updated)
+    }
+
+    fun cancelDrag() {
+        drag = null
+    }
+
+    /** Page and top-left cell the dragged item would land on, or null if outside the grid. */
+    private fun cellUnder(d: DragState): Triple<Int, Int, Int>? {
+        val page = pager.currentPage
+        val coords = pageGrids[page]?.takeIf { it.isAttached } ?: return null
+        // Corners on screen: the page is scaled down while editing, so the layout size alone is wrong.
+        val origin = coords.localToRoot(Offset.Zero)
+        val corner = coords.localToRoot(Offset(coords.size.width.toFloat(), coords.size.height.toFloat()))
+        val (columns, rows) = gridSize()
+        val cellW = (corner.x - origin.x) / columns
+        val cellH = (corner.y - origin.y) / rows
+        if (cellW <= 0f || cellH <= 0f) return null
+        val scale = (corner.x - origin.x) / coords.size.width.coerceAtLeast(1)
+        // Use the centre of the item's top-left cell, so the item lands where it is drawn.
+        val topLeft = d.finger - d.grab * scale - origin
+        val x = floor((topLeft.x + cellW / 2) / cellW).toInt()
+        val y = floor((topLeft.y + cellH / 2) / cellH).toInt()
+        if (x < 0 || y < 0 || x + d.cells.width > columns || y + d.cells.height > rows) return null
+        return Triple(page, x, y)
+    }
+
+    /** Cell the drag would land on right now, for the drop highlight. */
+    fun previewCell(): Triple<Int, Int, Int>? = drag?.let { cellUnder(it) }
+
+    /** Removes empty pages at the end (never the first page). */
+    fun tidyPages() {
+        var layout = data.layout.layout.value
+        var changed = false
+        while (layout.pages.size > 1 && layout.pages.last().items.isEmpty()) {
+            layout = layout.copy(pages = layout.pages.dropLast(1))
+            changed = true
+        }
+        if (changed) data.layout.commit(layout)
+    }
+
+    // ---- actions ----
+
+    fun run(action: LauncherAction) {
+        when (action) {
+            LauncherAction.None -> Unit
+            LauncherAction.OpenDrawer -> openDrawer()
+            LauncherAction.OpenSearch -> openSearch()
+            LauncherAction.OpenSettings -> callbacks.openSettings()
+            LauncherAction.EditHome -> {
+                closeAll()
+                editMode = true
+            }
+            LauncherAction.Notifications -> global(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
+            LauncherAction.QuickSettings -> global(AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS)
+            LauncherAction.LockScreen -> global(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)
+            LauncherAction.Recents -> global(AccessibilityService.GLOBAL_ACTION_RECENTS)
+            LauncherAction.SystemLauncher -> RedirectStatus.openSystemLauncher(
+                context, data.settings.get(LauncherSettings.SystemHomePause) * 1000L,
+            )
+            LauncherAction.OpenCalendar -> start(
+                Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALENDAR),
+            )
+            is LauncherAction.LaunchApp -> {
+                val app = data.apps.find(action.ref)
+                if (app != null) launch(app) else toast("That app is not installed")
+            }
+        }
+    }
+
+    private fun global(action: Int) {
+        if (!RedirectStatus.performGlobalAction(action)) toast("Needs the redirect service (Settings → Setup checklist)")
+    }
+
+    fun openUrl(url: String) = start(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+
+    fun start(intent: Intent) {
+        try {
+            LaunchClock.mark()
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: Exception) {
+            DebugLog.error("Home", "could not open: $e")
+            toast("No app can open this")
+        }
+    }
+
+    fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+}
+
+/** What the home screen asks the activity to do. */
+class HomeCallbacks(
+    val openSettings: () -> Unit,
+    val openSetup: () -> Unit,
+)

@@ -30,6 +30,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.liquid.launcher.core.data.LauncherAction
+import dev.liquid.launcher.core.settings.ActionSetting
 import dev.liquid.launcher.core.settings.BoolSetting
 import dev.liquid.launcher.core.settings.ChoiceSetting
 import dev.liquid.launcher.core.settings.IntSetting
@@ -49,6 +51,21 @@ internal fun SettingRow(setting: Setting<*>, store: SettingsStore) {
         is ChoiceSetting -> ChoiceRow(setting, store)
         is TextSetting -> TextRow(setting, store)
         is StringListSetting -> ListRow(setting, store)
+        is ActionSetting -> ActionRow(setting, store)
+    }
+}
+
+@Composable
+private fun ActionRow(setting: ActionSetting, store: SettingsStore) {
+    val value by store.observe(setting)
+    val action = LauncherAction.decode(value)
+    var open by remember { mutableStateOf(false) }
+    RowFrame(setting, store, valueText = actionLabel(action), onClick = { open = true })
+    if (open) {
+        ActionPickerDialog(setting.title, current = action, onDismiss = { open = false }) {
+            store.set(setting, it.encode())
+            open = false
+        }
     }
 }
 

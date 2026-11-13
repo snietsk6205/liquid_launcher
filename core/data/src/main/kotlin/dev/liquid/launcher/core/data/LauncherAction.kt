@@ -15,6 +15,7 @@ sealed interface LauncherAction {
     data object LockScreen : LauncherAction
     data object Recents : LauncherAction
     data object SystemLauncher : LauncherAction
+    data object OpenCalendar : LauncherAction
     data class LaunchApp(val ref: AppRef) : LauncherAction
 
     fun encode(): String = when (this) {
@@ -28,6 +29,7 @@ sealed interface LauncherAction {
         LockScreen -> "lock"
         Recents -> "recents"
         SystemLauncher -> "system_launcher"
+        OpenCalendar -> "calendar"
         is LaunchApp -> "app:${ref.key}"
     }
 
@@ -41,6 +43,7 @@ sealed interface LauncherAction {
             QuickSettings to "Quick settings",
             LockScreen to "Lock the screen",
             Recents to "Recent apps",
+            OpenCalendar to "Open the calendar",
             EditHome to "Edit the home screen",
             OpenSettings to "Launcher settings",
             SystemLauncher to "Open the system launcher",

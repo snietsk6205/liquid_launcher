@@ -1,0 +1,175 @@
+package dev.liquid.launcher.feature.home
+
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import dev.liquid.launcher.core.data.LauncherAction
+import dev.liquid.launcher.core.data.PillSlot
+import dev.liquid.launcher.core.designsystem.GlassQuality
+import dev.liquid.launcher.core.designsystem.GlassStyle
+import dev.liquid.launcher.core.settings.LauncherSettings as S
+import dev.liquid.launcher.core.settings.SettingsStore
+
+/*
+ * Plain snapshots of the settings each part of the home screen uses. Composables read them
+ * through SettingsStore.derive, so a change elsewhere in the settings never recomposes them.
+ */
+
+data class GridConfig(
+    val columns: Int,
+    val rows: Int,
+    val iconFraction: Float,
+    val labels: Boolean,
+    val labelSizeSp: Int,
+    val marginSideDp: Int,
+    val marginTopDp: Int,
+    val marginBottomDp: Int,
+)
+
+data class ClockConfig(val h24: Boolean, val scale: Float, val showDate: Boolean, val glass: Boolean)
+
+data class GestureConfig(
+    val swipeUp: LauncherAction,
+    val swipeDown: LauncherAction,
+    val doubleTap: LauncherAction,
+    val longPress: LauncherAction,
+)
+
+data class PillConfig(
+    val enabled: Boolean,
+    val slots: List<PillSlot>,
+    val top: Boolean,
+    val offsetDp: Int,
+    val widthFraction: Float,
+    val heightDp: Int,
+    val cornerPercent: Int,
+    val iconSizeDp: Int,
+    val hint: String,
+    val tap: LauncherAction,
+    val longPress: LauncherAction,
+    val swipeUp: LauncherAction,
+    val swipeDown: LauncherAction,
+)
+
+data class DrawerConfig(
+    val columns: Int,
+    val iconSizeDp: Int,
+    val labels: Boolean,
+    val fromBottom: Boolean,
+    val autoKeyboard: Boolean,
+    val sort: String,
+    val work: String,
+    val closeOnLaunch: Boolean,
+    val dim: Float,
+)
+
+data class SurfaceValues(val blurDp: Int, val refraction: Int, val tint: Int)
+
+/** Everything needed to draw any glass surface. */
+data class GlassConfig(
+    val quality: GlassQuality,
+    val tintMode: String,
+    val surfaces: Map<String, SurfaceValues>,
+) {
+    private fun values(surface: String) = surfaces[surface] ?: surfaces.getValue(S.GlassDefault.id)
+
+    /** True when the surface's tint is light, so its content should be dark. */
+    fun lightGlass(surface: String, lightBackground: Boolean): Boolean {
+        val strong = values(surface).tint >= 45
+        return when (tintMode) {
+            "light" -> strong || lightBackground
+            "dark" -> !strong && lightBackground
+            else -> lightBackground
+        }
+    }
+
+    fun style(surface: String, lightBackground: Boolean): GlassStyle {
+        val v = values(surface)
+        val light = when (tintMode) {
+            "light" -> true
+            "dark" -> false
+            else -> lightBackground
+        }
+        val base = if (light) Color.White else Color.Black
+        return GlassStyle(quality, v.blurDp.dp, v.refraction / 100f, base.copy(alpha = v.tint / 100f))
+    }
+}
+
+fun SettingsStore.gridConfig() = GridConfig(
+    columns = get(S.HomeColumns),
+    rows = get(S.HomeRows),
+    iconFraction = get(S.HomeIconSize) / 100f,
+    labels = get(S.HomeLabels),
+    labelSizeSp = get(S.HomeLabelSize),
+    marginSideDp = get(S.HomeMarginSide),
+    marginTopDp = get(S.HomeMarginTop),
+    marginBottomDp = get(S.HomeMarginBottom),
+)
+
+fun SettingsStore.clockConfig() = ClockConfig(
+    h24 = get(S.Clock24h),
+    scale = get(S.ClockSize) / 100f,
+    showDate = get(S.ClockDate),
+    glass = get(S.ClockGlass),
+)
+
+fun SettingsStore.gestureConfig() = GestureConfig(
+    swipeUp = LauncherAction.decode(get(S.GestureSwipeUp)),
+    swipeDown = LauncherAction.decode(get(S.GestureSwipeDown)),
+    doubleTap = LauncherAction.decode(get(S.GestureDoubleTap)),
+    longPress = LauncherAction.decode(get(S.GestureLongPress)),
+)
+
+fun SettingsStore.pillConfig() = PillConfig(
+    enabled = get(S.PillEnabled),
+    slots = PillSlot.decodeAll(get(S.PillSlots)),
+    top = get(S.PillPosition) == "top",
+    offsetDp = get(S.PillOffset),
+    widthFraction = get(S.PillWidth) / 100f,
+    heightDp = get(S.PillHeight),
+    cornerPercent = get(S.PillCorner),
+    iconSizeDp = get(S.PillIconSize),
+    hint = get(S.PillHint),
+    tap = LauncherAction.decode(get(S.PillTap)),
+    longPress = LauncherAction.decode(get(S.PillLongPress)),
+    swipeUp = LauncherAction.decode(get(S.PillSwipeUp)),
+    swipeDown = LauncherAction.decode(get(S.PillSwipeDown)),
+)
+
+fun SettingsStore.drawerConfig() = DrawerConfig(
+    columns = get(S.DrawerColumns),
+    iconSizeDp = get(S.DrawerIconSize),
+    labels = get(S.DrawerLabels),
+    fromBottom = get(S.DrawerFromBottom),
+    autoKeyboard = get(S.DrawerAutoKeyboard),
+    sort = get(S.DrawerSort),
+    work = get(S.DrawerWork),
+    closeOnLaunch = get(S.DrawerCloseOnLaunch),
+    dim = get(S.DrawerDim) / 100f,
+)
+
+fun SettingsStore.glassConfig(): GlassConfig {
+    val requested = GlassQuality.fromSetting(get(S.GlassQuality))
+    val quality = if (get(S.GlassAuto)) requested.cappedAt(GlassQuality.fromSetting(get(S.GlassCap))) else requested
+    fun values(surface: S.GlassSurface) = SurfaceValues(get(surface.blur), get(surface.refraction), get(surface.tint))
+    val default = values(S.GlassDefault)
+    val surfaces = HashMap<String, SurfaceValues>()
+    surfaces[S.GlassDefault.id] = default
+    for (surface in S.glassSurfaces) {
+        val custom = surface.custom
+        surfaces[surface.id] = if (custom != null && get(custom)) values(surface) else default
+    }
+    return GlassConfig(quality, get(S.GlassTintMode), surfaces)
+}
+
+data class SearchConfig(val engine: String, val keyboard: Boolean)
+
+fun SettingsStore.searchConfig() = SearchConfig(get(S.SearchEngine), get(S.SearchOpenKeyboard))
+
+/** Glass surface ids, matching LauncherSettings.GlassSurface.id. */
+object Surfaces {
+    val Pill = S.GlassPill.id
+    val Drawer = S.GlassDrawer.id
+    val Menu = S.GlassMenu.id
+    val Clock = S.GlassClock.id
+    val Default = S.GlassDefault.id
+}

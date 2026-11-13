@@ -8,7 +8,7 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
-Phase 1A: the redirect engine, a temporary home screen, the settings app, device diagnostics and the glass benchmark. The real home grid, drawer, icon packs and search come in Phase 1B.
+0.2.0 (Phase 1B, first part): real home screen with pages, free grid and drag and drop with undo; customizable liquid-glass pill; app drawer with floating glass search, bottom-first option and work page; glass long-press menu; swipe-down search with calculator and bangs; per-surface glass settings and live previews in settings. Icon packs, folders, tags and drawer tabs come in the next build.
 
 ## Install
 
@@ -25,9 +25,10 @@ GitHub Actions builds every push: unit tests, a signed release APK, then a test 
 | `app` | Application class, home activity, manifest |
 | `core/common` | Debug log, latency statistics |
 | `core/settings` | The settings registry (every option declared once) and its store |
+| `core/data` | Apps, home layout with undo, launch counts, actions, pill items, search (fuzzy, calculator, bangs) |
 | `core/designsystem` | Theme, liquid glass surfaces, launcher-managed wallpaper, icons |
 | `feature/redirect` | Accessibility service, redirect state machine, recents detection, calibration, Quick Settings tile |
-| `feature/home` | Temporary home screen |
+| `feature/home` | Home screen, pill, drawer, long-press menu, search, settings previews |
 | `feature/settings` | Settings screens, setup checklist, diagnostics, glass benchmark, debug log |
 | `ci` | Emulator test script and helpers |
 

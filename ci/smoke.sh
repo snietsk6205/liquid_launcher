@@ -235,6 +235,84 @@ sleep 12
 texts 05-glass-finished 12
 if top_activity | grep -q "SettingsActivity"; then pass "glass benchmark finished without leaving the screen"; else fail "glass benchmark finished without leaving the screen"; fi
 
+echo "== 9. Launcher UI: drawer, search, long-press menu, edit mode"
+adb shell am start -n "$HOME_ACTIVITY" >/dev/null
+wait_top "$HOME_ACTIVITY" 8 || true
+sleep 2
+# dump <name>: save the screen tree (quietly) so find_text can look things up.
+dump() {
+  adb shell rm -f /sdcard/ui.xml >/dev/null 2>&1
+  adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
+  adb exec-out cat /sdcard/ui.xml > "$OUT/$1.xml" 2>/dev/null || true
+}
+on_screen() { python3 ci/find_text.py "$OUT/$1.xml" "$2" ${3:-} >/dev/null; }
+tap_text() {
+  local pos
+  pos=$(python3 ci/find_text.py "$OUT/$1.xml" "$2" ${3:-}) || return 1
+  adb shell input tap $pos
+}
+
+# Drawer: swipe up on the home screen.
+adb shell input swipe 540 1500 540 400 250
+sleep 2
+peek 06-drawer
+dump 06-drawer
+if on_screen 06-drawer "Search apps"; then pass "swipe up opens the drawer"; else fail "swipe up opens the drawer"; fi
+if on_screen 06-drawer "Settings" exact || on_screen 06-drawer "Chrome" exact; then pass "drawer lists apps"; else fail "drawer lists apps"; fi
+
+# Long-press an app in the drawer: the glass menu, then add it to the home screen.
+APP_LABEL=""
+for candidate in Chrome Settings Clock Contacts; do
+  if on_screen 06-drawer "$candidate" exact; then APP_LABEL=$candidate; break; fi
+done
+if [ -n "$APP_LABEL" ]; then
+  POS=$(python3 ci/find_text.py "$OUT/06-drawer.xml" "$APP_LABEL" exact)
+  adb shell input swipe $POS $POS 900
+  sleep 1.5
+  peek 07-menu
+  dump 07-menu
+  if on_screen 07-menu "App info" && on_screen 07-menu "Add to home"; then pass "long press opens the app menu"; else fail "long press opens the app menu"; fi
+  tap_text 07-menu "Add to home" || true
+  sleep 1
+  adb shell input keyevent KEYCODE_BACK
+  sleep 1.5
+  dump 08-home-with-app
+  if on_screen 08-home-with-app "$APP_LABEL" exact; then pass "Add to home places the app on the home screen"; else fail "Add to home places the app on the home screen"; fi
+else
+  fail "found an app to long-press in the drawer"
+fi
+
+# Back closes the drawer.
+adb shell input keyevent KEYCODE_BACK
+sleep 1
+dump 09-after-back
+if on_screen 09-after-back "Search apps"; then fail "back closes the drawer"; else pass "back closes the drawer"; fi
+wait_top "$HOME_ACTIVITY" 3 || fail "launcher still in front after back"
+
+# Search: swipe down, type a calculation.
+adb shell input swipe 540 900 540 1700 250
+sleep 1.5
+adb shell input text "12+30"
+sleep 1.5
+peek 10-search
+dump 10-search
+if on_screen 10-search "= 42"; then pass "swipe down opens search and the calculator answers"; else fail "swipe down opens search and the calculator answers"; fi
+adb shell input keyevent KEYCODE_BACK
+sleep 0.5
+adb shell input keyevent KEYCODE_BACK
+sleep 1
+
+# Edit mode: long press on empty space shows the edit toolbar.
+adb shell input swipe 540 1250 540 1250 1000
+sleep 1.5
+peek 11-edit
+dump 11-edit
+if on_screen 11-edit "Done" exact; then pass "long press on empty space opens edit mode"; else fail "long press on empty space opens edit mode"; fi
+tap_text 11-edit "Done" exact || adb shell input keyevent KEYCODE_BACK
+sleep 1
+# Wait for the service to be back after the screen dumps before the crash check.
+for i in $(seq 1 40); do service_up && break; sleep 0.5; done
+
 echo "== 8. No crashes"
 adb logcat -d > "$OUT/logcat.txt" 2>/dev/null
 if grep -A3 "FATAL EXCEPTION" "$OUT/logcat.txt" | grep -q "$PKG"; then

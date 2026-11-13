@@ -12,6 +12,7 @@ object LauncherSettings {
         val Pill = SettingsSection("pill", "Pill", "The glass bar: its items, size, position and gestures")
         val Drawer = SettingsSection("drawer", "App drawer", "Layout, sorting, search and the work profile")
         val Menu = SettingsSection("menu", "Long-press menu", "Which entries appear and in what order")
+        val Search = SettingsSection("search", "Search", "Swipe-down search and web search")
         val Glass = SettingsSection("glass", "Liquid glass", "Quality, blur, refraction and tint, overall and per surface")
 
         val Redirect = SettingsSection("redirect", "Redirect engine", "When and how the launcher is brought to the front", "Redirect")
@@ -20,7 +21,7 @@ object LauncherSettings {
         val Handover = SettingsSection("handover", "Hand-over", "How the launcher appears after a redirect", "Redirect")
         val Log = SettingsSection("log", "Debug log", "What is recorded", "Redirect")
 
-        val all = listOf(Home, Gestures, Pill, Drawer, Menu, Glass, Redirect, Detection, Exclusions, Handover, Log)
+        val all = listOf(Home, Gestures, Pill, Drawer, Menu, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
     }
 
     // ---- Redirect engine ----
@@ -480,6 +481,25 @@ object LauncherSettings {
         section = "home", keywords = "clock glass background plate",
     )
 
+    // ---- Search ----
+
+    val SearchEngine = ChoiceSetting(
+        key = "search.engine", default = "ddg",
+        options = listOf(
+            "ddg" to "DuckDuckGo",
+            "google" to "Google",
+            "brave" to "Brave Search",
+            "startpage" to "Startpage",
+        ),
+        title = "Web search engine",
+        section = "search", keywords = "web search engine google duckduckgo",
+    )
+    val SearchOpenKeyboard = BoolSetting(
+        key = "search.keyboard", default = true,
+        title = "Open the keyboard",
+        section = "search", keywords = "keyboard focus",
+    )
+
     // ---- Debug log ----
 
     val LogEnabled = BoolSetting(
@@ -559,6 +579,7 @@ object LauncherSettings {
         DrawerColumns, DrawerIconSize, DrawerLabels, DrawerFromBottom, DrawerAutoKeyboard, DrawerSort,
         DrawerWork, DrawerCloseOnLaunch, DrawerDim,
         MenuEntries,
+        SearchEngine, SearchOpenKeyboard,
         GlassQuality, GlassAuto, GlassCap, GlassTintMode,
     ) + GlassDefault.settings + glassSurfaces.flatMap { it.settings } + listOf(
         LogEnabled, LogVerbosity, LogSize,

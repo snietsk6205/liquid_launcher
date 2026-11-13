@@ -48,3 +48,47 @@ Every Opus commit starts with `[opus]`: `git log --grep="\[opus\]"`.
 ### For Fable to review
 
 - Nothing of mine yet; this entry is a snapshot.
+
+---
+
+## Entry 2: Phase 1B, build 0.2.0 (2026-11-13 12:15 → 12:50 UTC)
+
+**Model:** Opus 5.5 Extra
+**Goal:** replace the Phase 1A placeholder home with the real home, pill, drawer, menu, search and settings editors; act on the user's 5 feedback points.
+
+### Files changed
+
+| File | Change | Why |
+|---|---|---|
+| `ci/smoke.sh` | Install with `-i com.android.vending`, allow restricted settings, print why the service did not bind; new UI checks (drawer, menu, add to home, search + calculator, edit mode) | Android 15 emulator refused the service for adb installs; UI needed device coverage I cannot get locally |
+| `ci/find_text.py` | New: centre of an on-screen node by text | Lets the smoke test tap UI it found |
+| `core/settings/LauncherSettings.kt` | Sections Home, Gestures, Pill, Drawer, Menu, Search, Glass (+ redirect sections grouped "Redirect"); all their options; per-surface glass (`GlassSurface`) | Fable's edit had not been applied |
+| `core/settings/SettingsStore.kt` | `derive {}` helper | Redirect counters live in settings and change on every redirect; home must not recompose on them |
+| `core/settings/SettingDependencies.kt` | New: hides options whose switch is off | Per-surface glass values only when "own values" is on |
+| `core/data/PillSlot.kt`, `MenuEntry.kt`, `Search.kt` (+ tests) | Pill item model; menu entry ids; fuzzy matching, calculator, bangs, web URLs | Pure code, unit-tested (8 tests) |
+| `core/data/LauncherAction.kt` | `OpenCalendar` | Date slot / pill panel request |
+| `core/data/AppsRepository.kt` | `LaunchClock` | Home-press detection (below) |
+| `core/designsystem/Glass.kt` | `GlassStyle` (quality, blur, refraction, tint) overload | Per-surface glass |
+| `core/designsystem/Components.kt` + 24 drawables | Icons for actions, menu, editor | — |
+| `feature/home/*` | Rewritten: `HomeScreen`, `HomeController`, `HomeGrid`, `Clock`, `Pill`, `Drawer`, `AppMenu`, `SearchOverlay`, `Gestures`, `HomeConfig`, `Previews`; old `AppsRepository` removed | Phase 1B |
+| `feature/settings/*` | Action picker, app picker, pill items editor, menu entries editor, live preview card on section screens, grouped main list | User feedback 1, 3, 5 |
+| `app/MainActivity.kt`, `LauncherApp.kt` | Uses `LauncherData`; Home press detection; preview wiring | — |
+| `gradle.properties` | 0.2.0 | New release tag |
+
+### Notes / shortcuts
+
+- Home press on the launcher always passes through HONOR Home, so `onNewIntent` while resumed never happens. Detected instead as "returned within 1.5 s of pausing without having started an app" (`LaunchClock`). Heuristic.
+- The drawer stays composed while closed (translated off screen) so opening has no first-frame stall and a drag that starts in it survives the drawer closing.
+- Drawer "start from the bottom" uses `reverseLayout`; closing by swipe-down only works on the header strip, the search pill, or once the list cannot scroll further.
+- The long-press menu opened from the drawer refracts the home layer, not the drawer grid (drawer layer is private to `AppDrawer`).
+- The clock's glass plate samples a wallpaper-only backdrop (a surface cannot sample a layer it is part of); misaligned while the page is scaled in edit mode.
+- Not done in this build: icon packs, folders, tags, custom drawer tabs, app shortcuts, swipe actions on icons, icon change. Listed in the menu editor as "coming next".
+- Defaults I chose: home grid 5 × 9 (user's Nova shows 5 icons per row), clock 3 rows tall at the top, pill = Search + Date, long press on empty space = edit mode, double tap = lock, pill long press = settings.
+
+### For Fable to review
+
+- `HomeController.cellUnder()`: grab offset scaling while the page is scaled 0.9 in edit mode.
+- `Gestures.kt` `iconGestures`: one detector for tap / long press / drag; relies on parents consuming swipes before the long-press timeout.
+- `MainActivity.onNewIntent` home-press heuristic.
+- `Drawer.kt` nested-scroll close connection with `reverseLayout`.
+- `HomeScreen` reads `controller.drawer.value` only inside graphicsLayer lambdas; any read in composition would recompose every frame.
