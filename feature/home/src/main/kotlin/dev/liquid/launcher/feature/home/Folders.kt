@@ -82,7 +82,7 @@ internal fun FolderIcon(item: HomeItem, env: PageEnv, modifier: Modifier) {
             Text(
                 text = item.name ?: "Folder",
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp),
-                style = TextStyle(color = env.contentColor, fontSize = env.grid.labelSizeSp.sp, textAlign = TextAlign.Center, shadow = env.shadow),
+                style = TextStyle(fontFamily = HomeTheme.font, color = env.contentColor, fontSize = env.grid.labelSizeSp.sp, textAlign = TextAlign.Center, shadow = env.shadow),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -148,7 +148,7 @@ internal fun FolderOverlay(
                 value = name,
                 onValueChange = { name = it },
                 singleLine = true,
-                textStyle = TextStyle(color = color, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center),
+                textStyle = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center),
                 cursorBrush = SolidColor(color),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { controller.renameFolder(folder.id, name) }),
@@ -200,7 +200,7 @@ private fun FolderApp(app: AppEntry, folderId: String, color: Color, grid: GridC
         Text(
             app.label,
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            style = TextStyle(color = color, fontSize = grid.labelSizeSp.sp, textAlign = TextAlign.Center),
+            style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = grid.labelSizeSp.sp, textAlign = TextAlign.Center),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

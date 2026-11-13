@@ -50,6 +50,9 @@ class LauncherData private constructor(private val context: Context) {
     init {
         layout.ensureDefault(settings.get(LauncherSettings.HomeColumns), settings.get(LauncherSettings.HomeRows))
         scope.launch {
+            settings.values.map { settings.get(LauncherSettings.ThemeIconShape) }.distinctUntilChanged().collect { apps.iconShape = it }
+        }
+        scope.launch {
             combine(settings.values, themeTick) { _, tick -> iconConfig(tick) }
                 .distinctUntilChanged()
                 .collect { apps.iconConfig.value = it }
@@ -113,6 +116,7 @@ class LauncherData private constructor(private val context: Context) {
             mask = settings.get(LauncherSettings.IconMask),
             themed = themed,
             packEpoch = if (themed != null) tick else 0,
+            shape = settings.get(LauncherSettings.ThemeIconShape),
         )
     }
 

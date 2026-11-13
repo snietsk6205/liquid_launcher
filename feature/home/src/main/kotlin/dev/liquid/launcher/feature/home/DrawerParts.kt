@@ -219,7 +219,7 @@ internal fun DrawerScrollbar(
                     .clip(CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(letter, style = TextStyle(color = color, fontSize = 24.sp, fontWeight = FontWeight.SemiBold))
+                Text(letter, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 24.sp, fontWeight = FontWeight.SemiBold))
             }
         }
 
@@ -353,7 +353,7 @@ internal fun DrawerTabs(
                         .clip(shape)
                         .drawBehind {
                             val closeness = (1f - kotlin.math.abs(bar.selected() - i)).coerceIn(0f, 1f)
-                            if (bar.selected() >= 0f && closeness > 0f) drawRect(color.copy(alpha = 0.18f * closeness))
+                            if (bar.selected() >= 0f && closeness > 0f) drawRect(HomeTheme.accent.copy(alpha = 0.32f * closeness))
                         }
                         .tabGestures(bar, i, interactive),
                     contentAlignment = Alignment.Center,
@@ -430,7 +430,7 @@ internal fun TabsRow(
                             )
                         }
                     } else {
-                        Modifier.background(color.copy(alpha = 0.16f), shape)
+                        Modifier.background(HomeTheme.accent.copy(alpha = 0.32f), shape)
                     }
                 )
         )
@@ -472,7 +472,7 @@ private fun TabContent(label: TabLabel, m: TabMetrics, color: Color, icon: Boole
         if (text) {
             Text(
                 label.name,
-                style = TextStyle(color = color, fontSize = m.font, fontWeight = FontWeight.Medium),
+                style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = m.font, fontWeight = FontWeight.Medium),
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
@@ -527,7 +527,7 @@ internal fun TabMenu(
                 Text(
                     tab.name,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
-                    style = TextStyle(color = color.copy(alpha = 0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium),
+                    style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium),
                 )
             }
             for (entry in config.tabMenu) {
@@ -581,6 +581,6 @@ private fun MenuRow(label: String, icon: Int?, color: Color, indent: Boolean = f
             if (icon != null) LauncherIcon(icon, contentDescription = null, tint = color, size = 20.dp)
         }
         Spacer(Modifier.width(14.dp))
-        Text(label, style = TextStyle(color = color, fontSize = 15.sp))
+        Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp))
     }
 }

@@ -148,13 +148,13 @@ fun SearchOverlay(
                 Spacer(Modifier.width(12.dp))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (query.isEmpty()) {
-                        Text("Apps, calculations, web, !yt …", style = TextStyle(color = fieldColor.copy(alpha = 0.6f), fontSize = 16.sp))
+                        Text("Apps, calculations, web, !yt …", style = TextStyle(fontFamily = HomeTheme.font, color = fieldColor.copy(alpha = 0.6f), fontSize = 16.sp))
                     }
                     BasicTextField(
                         value = query,
                         onValueChange = { query = it },
                         singleLine = true,
-                        textStyle = TextStyle(color = fieldColor, fontSize = 16.sp),
+                        textStyle = TextStyle(fontFamily = HomeTheme.font, color = fieldColor, fontSize = 16.sp),
                         cursorBrush = SolidColor(fieldColor),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                         keyboardActions = KeyboardActions(onGo = { results.firstOrNull()?.let { open(it) } }),
@@ -179,7 +179,7 @@ fun SearchOverlay(
                                 AppIconImage(app.icon, Modifier.size(48.dp), app.label)
                                 Text(
                                     app.label,
-                                    style = TextStyle(color = Color.White, fontSize = 11.sp, textAlign = TextAlign.Center),
+                                    style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 11.sp, textAlign = TextAlign.Center),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
@@ -220,7 +220,7 @@ private fun buildResults(query: String, apps: List<AppEntry>, usage: Map<String,
 
 @Composable
 private fun ResultRow(result: SearchResult, onClick: () -> Unit) {
-    val style = TextStyle(color = Color.White, fontSize = 16.sp)
+    val style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 16.sp)
     Row(
         Modifier
             .fillMaxWidth()

@@ -90,12 +90,17 @@ object ThemedColors {
     }
 
     /** The system icon shape filled with the background and the monochrome glyph in the foreground colour. */
-    fun themed(mask: Bitmap, sizePx: Int, background: Int, foreground: Int): Bitmap {
+    fun themed(mask: Bitmap, sizePx: Int, background: Int, foreground: Int, shape: String = "system"): Bitmap {
         val out = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
-        AdaptiveIconDrawable(ColorDrawable(background), ColorDrawable(0)).apply {
-            setBounds(0, 0, sizePx, sizePx)
-            draw(canvas)
+        val outline = IconShapes.path(shape, sizePx.toFloat())
+        if (outline != null) {
+            canvas.drawPath(outline, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = background })
+        } else {
+            AdaptiveIconDrawable(ColorDrawable(background), ColorDrawable(0)).apply {
+                setBounds(0, 0, sizePx, sizePx)
+                draw(canvas)
+            }
         }
         canvas.drawBitmap(mask, null, android.graphics.Rect(0, 0, sizePx, sizePx), Paint(Paint.FILTER_BITMAP_FLAG).apply { color = foreground })
         return out

@@ -77,9 +77,10 @@ fun ClockWidget(
             Text(
                 text = time,
                 style = TextStyle(
+                    fontFamily = HomeTheme.clockFont,
                     color = textColor,
                     fontSize = fontSize,
-                    fontWeight = FontWeight.Light,
+                    fontWeight = HomeTheme.clockWeight,
                     shadow = if (config.glass) null else shadow,
                 ),
                 maxLines = 1,
@@ -87,7 +88,7 @@ fun ClockWidget(
             if (config.showDate) {
                 Text(
                     text = date,
-                    style = TextStyle(color = textColor.copy(alpha = 0.85f), fontSize = fontSize * 0.2f, shadow = if (config.glass) null else shadow),
+                    style = TextStyle(fontFamily = HomeTheme.font, color = textColor.copy(alpha = 0.85f), fontSize = fontSize * 0.2f, shadow = if (config.glass) null else shadow),
                     maxLines = 1,
                 )
             }

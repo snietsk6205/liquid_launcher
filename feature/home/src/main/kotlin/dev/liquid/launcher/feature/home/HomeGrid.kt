@@ -243,7 +243,7 @@ fun AppIconView(
             Text(
                 text = label,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp),
-                style = TextStyle(color = color, fontSize = labelSizeSp.sp, textAlign = TextAlign.Center, shadow = shadow),
+                style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = labelSizeSp.sp, textAlign = TextAlign.Center, shadow = shadow),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

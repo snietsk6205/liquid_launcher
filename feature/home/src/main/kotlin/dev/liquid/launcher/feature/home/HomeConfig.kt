@@ -125,6 +125,8 @@ data class GlassConfig(
     val quality: GlassQuality,
     val tintMode: String,
     val surfaces: Map<String, SurfaceValues>,
+    /** Theme glass colour; null tints with white or black. */
+    val tintColor: Color? = null,
 ) {
     private fun values(surface: String) = surfaces[surface] ?: surfaces.getValue(S.GlassDefault.id)
 
@@ -145,7 +147,7 @@ data class GlassConfig(
             "dark" -> false
             else -> lightBackground
         }
-        val base = if (light) Color.White else Color.Black
+        val base = tintColor ?: if (light) Color.White else Color.Black
         return GlassStyle(quality, v.blurDp.dp, v.refraction / 100f, base.copy(alpha = v.tint / 100f))
     }
 }
@@ -252,7 +254,7 @@ fun SettingsStore.glassConfig(): GlassConfig {
         val custom = surface.custom
         surfaces[surface.id] = if (custom != null && get(custom)) values(surface) else default
     }
-    return GlassConfig(quality, get(S.GlassTintMode), surfaces)
+    return GlassConfig(quality, get(S.GlassTintMode), surfaces, dev.liquid.launcher.core.settings.ColorSetting.parse(get(S.ThemeGlassColor))?.let { Color(it) })
 }
 
 data class SearchConfig(val engine: String, val keyboard: Boolean, val dim: Float, val blurDp: Int)

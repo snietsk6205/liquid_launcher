@@ -18,6 +18,8 @@ data class IconConfig(
     val themed: ThemedIcons? = null,
     /** Changes when the wallpaper does, so packs that use system colours are loaded again. */
     val packEpoch: Int = 0,
+    /** Icon shape for themed icons ([IconShapes] id). */
+    val shape: String = "system",
 )
 
 /**
@@ -71,7 +73,7 @@ internal class IconThemer(private val context: Context) {
                 return@cached if (fit && pack!!.hasBack) {
                     badge(pack.masked(ThemedColors.glyph(mono, sizePx, theme.foreground), app.key, sizePx), app)
                 } else {
-                    val shaped = ThemedColors.themed(mono, sizePx, theme.background, theme.foreground)
+                    val shaped = ThemedColors.themed(mono, sizePx, theme.background, theme.foreground, lastConfig?.shape ?: "system")
                     badge(if (fit) pack!!.masked(shaped, app.key, sizePx) else shaped, app)
                 }
             }

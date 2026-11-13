@@ -245,6 +245,7 @@ internal fun SectionScreen(store: SettingsStore, sectionId: String, onBack: () -
                 "tags" -> TabsAndTagsEditor()
                 "icons" -> IconPacksEditor(store)
                 "homeMenu" -> HomeMenuEditor(store)
+                "theme" -> ThemeEditor(store)
                 "wallpaper" -> WallpaperEditor()
                 "layouts" -> LayoutsAndBackupEditor()
             }

@@ -178,7 +178,7 @@ internal fun HomeMenu(
             if (pills.all { it.isEmpty() }) {
                 Text(
                     "The home menu is empty. Add items in Settings → Home menu.",
-                    style = TextStyle(color = color, fontSize = 14.sp),
+                    style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 14.sp),
                     modifier = Modifier
                         .liquidGlass(backdrop, RoundedCornerShape(20.dp), glass.style(Surfaces.Menu, lightBackground))
                         .padding(16.dp),
@@ -204,9 +204,9 @@ private fun MenuItem(
         modifier
             .widthIn(min = if (labels) 66.dp else 48.dp)
             .clip(shape)
-            .background(color.copy(alpha = if (hovered) 0.22f else 0f), shape)
+            .background(HomeTheme.accent.copy(alpha = if (hovered) 0.35f else 0f), shape)
             .drawBehind {
-                if (current) drawRoundRect(color.copy(alpha = 0.7f), style = Stroke(1.5.dp.toPx()), cornerRadius = CornerRadius(22.dp.toPx()))
+                if (current) drawRoundRect(HomeTheme.accent, style = Stroke(1.5.dp.toPx()), cornerRadius = CornerRadius(22.dp.toPx()))
             }
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = if (labels) 8.dp else 12.dp),
@@ -219,7 +219,7 @@ private fun MenuItem(
             Text(
                 label,
                 modifier = Modifier.width(72.dp).padding(top = 4.dp),
-                style = TextStyle(color = color, fontSize = 11.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center),
+                style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 11.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

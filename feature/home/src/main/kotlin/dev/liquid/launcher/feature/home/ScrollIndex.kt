@@ -208,12 +208,12 @@ internal fun ScrollIndex(
         }
 
         val measurer = rememberTextMeasurer(cacheSize = 96)
-        val normal = remember(entries, config.letterSp, color) {
-            val style = TextStyle(color = color, fontSize = config.letterSp.sp, fontWeight = FontWeight.Medium)
+        val normal = remember(entries, config.letterSp, color, HomeTheme.font) {
+            val style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = config.letterSp.sp, fontWeight = FontWeight.Medium)
             entries.map { measurer.measure(glyph(it.label, it.section), style) }
         }
-        val bold = remember(entries, config.letterSp, color) {
-            val style = TextStyle(color = color, fontSize = config.letterSp.sp, fontWeight = FontWeight.Bold)
+        val bold = remember(entries, config.letterSp, color, HomeTheme.font) {
+            val style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = config.letterSp.sp, fontWeight = FontWeight.Bold)
             entries.map { measurer.measure(glyph(it.label, it.section), style) }
         }
 
@@ -267,8 +267,8 @@ internal fun ScrollIndex(
         // ---- bubble ----
         if (config.bubble != "none") {
             val label = entries.getOrNull(touch.active)?.label.orEmpty()
-            val bubbleColor = if (config.bubble == "solid") (if (color == Color.White) Color(0xFFF2F3F7) else Color(0xFF1E2230)) else color
-            val textColor = if (config.bubble == "solid") (if (color == Color.White) Color(0xFF16181C) else Color.White) else color
+            val bubbleColor = HomeTheme.accent
+            val textColor = if (config.bubble == "solid") (if (androidx.core.graphics.ColorUtils.calculateLuminance(android.graphics.Color.valueOf(bubbleColor.red, bubbleColor.green, bubbleColor.blue).toArgb()) > 0.5) Color(0xFF16181C) else Color.White) else color
             val shape = RoundedCornerShape(50)
             Box(
                 Modifier
@@ -300,7 +300,7 @@ internal fun ScrollIndex(
                     .padding(horizontal = 18.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(label, style = TextStyle(color = textColor, fontSize = if (label.length <= 2) 28.sp else 17.sp, fontWeight = FontWeight.SemiBold), maxLines = 1)
+                Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = textColor, fontSize = if (label.length <= 2) 28.sp else 17.sp, fontWeight = FontWeight.SemiBold), maxLines = 1)
             }
         }
 

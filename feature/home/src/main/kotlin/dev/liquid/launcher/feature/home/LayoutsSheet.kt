@@ -104,7 +104,7 @@ internal fun LayoutsSheet(
             Text(
                 "Layouts",
                 modifier = Modifier.padding(horizontal = 20.dp),
-                style = TextStyle(color = color, fontSize = 17.sp, fontWeight = FontWeight.SemiBold),
+                style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 17.sp, fontWeight = FontWeight.SemiBold),
             )
             Spacer(Modifier.height(12.dp))
             if (state.layouts.isEmpty()) {
@@ -112,7 +112,7 @@ internal fun LayoutsSheet(
                     "Save this home screen as a layout (pages, pill, icons, gestures and optionally the wallpaper), " +
                         "then set up another one and switch between them here or from the home menu.",
                     modifier = Modifier.padding(horizontal = 20.dp),
-                    style = TextStyle(color = color.copy(alpha = 0.8f), fontSize = 14.sp),
+                    style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.8f), fontSize = 14.sp),
                 )
             } else {
                 Row(
@@ -139,7 +139,7 @@ internal fun LayoutsSheet(
                             Text(
                                 layout.name,
                                 modifier = Modifier.width(78.dp),
-                                style = TextStyle(color = color, fontSize = 13.sp, fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal),
+                                style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 13.sp, fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -212,7 +212,7 @@ internal fun LayoutsSheet(
 
 @Composable
 private fun DialogRow(label: String, onClick: () -> Unit) {
-    Text(label, modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp), style = TextStyle(fontSize = 16.sp))
+    Text(label, modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp), style = TextStyle(fontFamily = HomeTheme.font, fontSize = 16.sp))
 }
 
 @Composable
@@ -227,7 +227,7 @@ private fun SheetChip(label: String, icon: Int, color: Color, onClick: () -> Uni
     ) {
         LauncherIcon(icon, contentDescription = null, tint = color, size = 16.dp)
         Spacer(Modifier.width(6.dp))
-        Text(label, style = TextStyle(color = color, fontSize = 13.sp, fontWeight = FontWeight.Medium))
+        Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 13.sp, fontWeight = FontWeight.Medium))
     }
 }
 
@@ -279,7 +279,7 @@ internal fun SaveLayoutDialog(controller: HomeController) {
                 }
                 Text(
                     "Saved: pages and their items, the pill, icons, gestures, the clock and the home menu. Drawer, tags and redirect settings stay shared.",
-                    style = TextStyle(fontSize = 12.sp),
+                    style = TextStyle(fontFamily = HomeTheme.font, fontSize = 12.sp),
                 )
             }
         },

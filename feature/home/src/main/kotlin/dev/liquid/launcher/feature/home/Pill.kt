@@ -164,7 +164,7 @@ internal fun RowScope.PillSlotView(
             onLongClick = { controller.run(config.longPress) },
         )
 
-    val textStyle = TextStyle(color = color, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+    val textStyle = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp, fontWeight = FontWeight.Medium)
     when (slot) {
         PillSlot.Search -> Row(
             Modifier

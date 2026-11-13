@@ -258,3 +258,84 @@ internal fun LayoutsAndBackupEditor() {
         )
     }
 }
+
+/** Presets, font import and theme files. The theme's options are listed below this card. */
+@Composable
+internal fun ThemeEditor(store: SettingsStore) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val fontsDir = remember { java.io.File(context.filesDir, "fonts") }
+    var message by remember { mutableStateOf<String?>(null) }
+    val fontFile by store.observe(LauncherSettings.ThemeFontFile)
+
+    val pickFont = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val name = withContext(Dispatchers.IO) {
+                runCatching {
+                    val display = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                        ?.use { c -> if (c.moveToFirst()) c.getString(0) else null } ?: "font.ttf"
+                    val clean = display.replace(Regex("[^A-Za-z0-9._-]"), "_")
+                    fontsDir.mkdirs()
+                    context.contentResolver.openInputStream(uri)?.use { input -> java.io.File(fontsDir, clean).outputStream().use { input.copyTo(it) } }
+                    // Fails here, not later on the home screen, if the file is not a font.
+                    android.graphics.Typeface.createFromFile(java.io.File(fontsDir, clean))
+                    clean
+                }.getOrNull()
+            }
+            if (name == null) {
+                message = "That file could not be used as a font (TTF or OTF)"
+            } else {
+                store.set(LauncherSettings.ThemeFontFile, name)
+                store.set(LauncherSettings.ThemeFont, "file")
+                message = "Font imported and in use"
+            }
+        }
+    }
+    val exportTheme = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching { context.contentResolver.openOutputStream(uri)?.use { dev.liquid.launcher.core.data.Themes.export(store, fontsDir, it) } != null }.getOrDefault(false)
+            }
+            message = if (ok) "Theme exported" else "Export failed"
+        }
+    }
+    val importTheme = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching { context.contentResolver.openInputStream(uri)?.use { dev.liquid.launcher.core.data.Themes.import(store, fontsDir, it) } ?: false }.getOrDefault(false)
+            }
+            message = if (ok) "Theme applied" else "That file is not a theme"
+        }
+    }
+
+    InfoCard {
+        Text("Presets", style = MaterialTheme.typography.titleMedium)
+        BodyText("A starting point: colours, fonts, icon shape and the glass look. Glass quality is not changed.")
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(top = 8.dp),
+        ) {
+            for (preset in dev.liquid.launcher.core.data.Themes.presets) {
+                OutlinedButton(onClick = { dev.liquid.launcher.core.data.Themes.apply(store, preset) }) { Text(preset.name) }
+            }
+        }
+    }
+    InfoCard {
+        Text("Font file and theme files", style = MaterialTheme.typography.titleMedium)
+        BodyText(if (fontFile.isBlank()) "No font imported." else "Imported font: $fontFile")
+        Row(Modifier.padding(top = 8.dp)) {
+            OutlinedButton(onClick = { pickFont.launch(arrayOf("font/*", "application/octet-stream", "application/x-font-ttf", "*/*")) }) { Text("Import a font") }
+        }
+        Row(Modifier.padding(top = 8.dp)) {
+            Button(onClick = { exportTheme.launch("my-theme.lltheme") }) { Text("Export theme") }
+            Spacer(Modifier.width(8.dp))
+            OutlinedButton(onClick = { importTheme.launch(arrayOf("*/*")) }) { Text("Import theme") }
+        }
+    }
+    message?.let { text ->
+        AlertDialog(onDismissRequest = { message = null }, text = { Text(text) }, confirmButton = { TextButton(onClick = { message = null }) { Text("OK") } })
+    }
+}

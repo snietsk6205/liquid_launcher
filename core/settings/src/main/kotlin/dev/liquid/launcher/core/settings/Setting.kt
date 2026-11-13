@@ -78,6 +78,29 @@ class ActionSetting(
     hidden: Boolean = false,
 ) : Setting<String>(key, default, title, summary, section, keywords, hidden)
 
+/** A colour as "#RRGGBB" text; an empty value means "automatic" (chosen by the launcher). */
+class ColorSetting(
+    key: String,
+    default: String = "",
+    val autoLabel: String = "Automatic",
+    title: String,
+    summary: String = "",
+    section: String,
+    keywords: String = "",
+    hidden: Boolean = false,
+) : Setting<String>(key, default, title, summary, section, keywords, hidden) {
+    companion object {
+        /** ARGB of "#RRGGBB", or null for empty or broken text. */
+        fun parse(value: String): Int? {
+            val hex = value.trim().removePrefix("#")
+            if (hex.length != 6) return null
+            return hex.toLongOrNull(16)?.let { (0xFF000000 or it).toInt() }
+        }
+
+        fun format(argb: Int): String = "#%06X".format(argb and 0xFFFFFF)
+    }
+}
+
 class StringListSetting(
     key: String,
     default: List<String>,

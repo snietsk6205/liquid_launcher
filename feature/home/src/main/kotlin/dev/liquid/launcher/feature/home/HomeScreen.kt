@@ -125,6 +125,10 @@ class HomeReturnState {
     var request by mutableStateOf<String?>(null)
 }
 
+/** Changes with the wallpaper image, so the automatic accent follows a new wallpaper. */
+@Composable
+private fun savedImageKey(wallpaper: WallpaperStore): Any? = wallpaper.image.collectAsState().value
+
 /** How the home screen is shown: the real thing, or a miniature inside the settings app. */
 enum class HomeMode { Live, Preview, PreviewDrawer, PreviewDrawerMotion, PreviewDrawerIndex, PreviewMenu, PreviewHomeMenu }
 
@@ -154,6 +158,8 @@ fun HomeScreen(
     val indexConfig by store.derive { indexConfig() }
     val look by store.derive { wallpaperLook() }
     val homeMenuConfig by store.derive { homeMenuConfig() }
+    val theme by store.derive { themeConfig() }
+    LaunchedEffect(theme, savedImageKey(wallpaper)) { HomeTheme.apply(context, theme) }
     val glass by store.derive { glassConfig() }
     val search by store.derive { searchConfig() }
     val menuEntries by store.derive { MenuEntry.fromIds(get(LauncherSettings.MenuEntries)) }
@@ -189,7 +195,7 @@ fun HomeScreen(
     )
 
     val lightBackground = remember(savedImage) { wallpaperIsLight(context) }
-    val contentColor = if (lightBackground) Color(0xFF16181C) else Color.White
+    val contentColor = theme.textColor ?: if (lightBackground) Color(0xFF16181C) else Color.White
     val shadow = if (lightBackground) null else Shadow(Color.Black.copy(alpha = 0.45f), Offset(0f, 1f), 4f)
 
     val density0 = LocalDensity.current
@@ -570,7 +576,7 @@ private fun RemoveZone(drag: DragState, controller: HomeController, modifier: Mo
     ) {
         LauncherIcon(if (drag.source is DragSource.Home) LauncherIcons.Delete else LauncherIcons.Close, contentDescription = null, tint = Color.White, size = 20.dp)
         Spacer(Modifier.width(8.dp))
-        Text(label, style = TextStyle(color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium))
+        Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium))
     }
 }
 
@@ -636,7 +642,7 @@ private fun StatusChips(color: Color, callbacks: HomeCallbacks, modifier: Modifi
             .background(Color.Black.copy(alpha = 0.45f))
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        style = TextStyle(color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium),
+        style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium),
     )
 }
 

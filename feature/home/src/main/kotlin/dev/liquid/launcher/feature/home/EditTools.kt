@@ -84,7 +84,7 @@ internal fun BoxScope.ResizeFrame(item: HomeItem, pageIndex: Int, env: PageEnv, 
         ) {
             LauncherIcon(LauncherIcons.Tune, contentDescription = null, tint = Color.White, size = 16.dp)
             Spacer(Modifier.width(6.dp))
-            Text("Clock settings", style = TextStyle(color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium))
+            Text("Clock settings", style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium))
         }
     }
 }
@@ -180,10 +180,10 @@ internal fun PagesSheet(
             .padding(vertical = 14.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Pages", style = TextStyle(color = color, fontSize = 16.sp, fontWeight = FontWeight.SemiBold), modifier = Modifier.weight(1f))
+            Text("Pages", style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 16.sp, fontWeight = FontWeight.SemiBold), modifier = Modifier.weight(1f))
             Text(
                 "Home goes to the page with the house",
-                style = TextStyle(color = color.copy(alpha = 0.6f), fontSize = 12.sp),
+                style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.6f), fontSize = 12.sp),
             )
         }
         Spacer(Modifier.height(12.dp))

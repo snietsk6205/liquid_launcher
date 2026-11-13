@@ -131,7 +131,7 @@ fun AppMenu(
                         Spacer(Modifier.width(12.dp))
                         Text(
                             target.app.label,
-                            style = TextStyle(color = color, fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
+                            style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -150,7 +150,7 @@ fun AppMenu(
                         ) {
                             AppIconImage(shortcut.icon ?: target.app.icon, Modifier.size(22.dp), null)
                             Spacer(Modifier.width(14.dp))
-                            Text(shortcut.label, style = TextStyle(color = color, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(shortcut.label, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                     if (shortcuts.isNotEmpty()) {
@@ -169,7 +169,7 @@ fun AppMenu(
                         ) {
                             LauncherIcon(row.icon, contentDescription = null, tint = color, size = 20.dp)
                             Spacer(Modifier.width(14.dp))
-                            Text(row.label, style = TextStyle(color = color, fontSize = 15.sp))
+                            Text(row.label, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp))
                         }
                     }
                 }

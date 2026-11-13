@@ -637,7 +637,7 @@ private fun AppGrid(
                 is HeaderCell -> Text(
                     cell.title,
                     modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 2.dp),
-                    style = TextStyle(color = color.copy(alpha = 0.7f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                    style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.7f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -706,7 +706,7 @@ private fun DrawerItem(
             Text(
                 text = app.label,
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp, start = 2.dp, end = 2.dp),
-                style = TextStyle(color = color, fontSize = 11.sp, textAlign = TextAlign.Center),
+                style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 11.sp, textAlign = TextAlign.Center),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -776,14 +776,14 @@ internal fun DrawerSearchField(
         Spacer(Modifier.width(12.dp))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (controller.drawerQuery.isEmpty()) {
-                Text("Search apps", style = TextStyle(color = color.copy(alpha = 0.65f), fontSize = 16.sp))
+                Text("Search apps", style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.65f), fontSize = 16.sp))
             }
             BasicTextField(
                 value = controller.drawerQuery,
                 onValueChange = { controller.drawerQuery = it },
                 enabled = interactive,
                 singleLine = true,
-                textStyle = TextStyle(color = color, fontSize = 16.sp),
+                textStyle = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 16.sp),
                 cursorBrush = SolidColor(color),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = { controller.drawerFirstResult?.let { controller.launch(it, fromDrawer = true) } }),

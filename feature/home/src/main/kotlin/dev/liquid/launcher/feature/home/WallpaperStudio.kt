@@ -172,7 +172,7 @@ internal fun WallpaperStudio(
                             .background(color.copy(alpha = if (on) 0.2f else 0.06f))
                             .clickable { state.surface = id },
                         contentAlignment = Alignment.Center,
-                    ) { Text(label, style = TextStyle(color = color, fontSize = 14.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal)) }
+                    ) { Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 14.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal)) }
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -216,11 +216,11 @@ internal fun WallpaperStudio(
             if (glass.quality == GlassQuality.Tint && state.surface != "home") {
                 Text(
                     "Blur here is off on this phone (the glass benchmark capped glass to tint).",
-                    style = TextStyle(color = color.copy(alpha = 0.7f), fontSize = 12.sp),
+                    style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.7f), fontSize = 12.sp),
                 )
             }
             Row(Modifier.fillMaxWidth().clickable { state.lockToo = !state.lockToo }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Also on the lock screen", modifier = Modifier.weight(1f), style = TextStyle(color = color, fontSize = 14.sp))
+                Text("Also on the lock screen", modifier = Modifier.weight(1f), style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 14.sp))
                 Switch(
                     checked = state.lockToo,
                     onCheckedChange = { state.lockToo = it },
@@ -243,7 +243,7 @@ internal fun WallpaperStudio(
                     .clip(RoundedCornerShape(50))
                     .clickable { state.peek = false }
                     .padding(horizontal = 20.dp, vertical = 10.dp),
-            ) { Text("Show controls", style = TextStyle(color = color, fontSize = 14.sp, fontWeight = FontWeight.Medium)) }
+            ) { Text("Show controls", style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 14.sp, fontWeight = FontWeight.Medium)) }
         }
     }
 }
@@ -264,7 +264,7 @@ private fun Thumb(image: ImageBitmap?, selected: Boolean, color: Color, label: S
         if (label != null) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 if (image == null && label == "Photos") LauncherIcon(LauncherIcons.Add, contentDescription = null, tint = color, size = 22.dp)
-                Text(label, style = TextStyle(color = color, fontSize = 11.sp))
+                Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 11.sp))
             }
         }
     }
@@ -279,7 +279,7 @@ private fun HistoryThumb(file: File, store: WallpaperStore, color: Color, onClic
 @Composable
 private fun ValueSlider(label: String, value: Int, min: Int, max: Int, unit: String, color: Color, onChange: (Int) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, modifier = Modifier.width(44.dp), style = TextStyle(color = color, fontSize = 14.sp))
+        Text(label, modifier = Modifier.width(44.dp), style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 14.sp))
         Slider(
             value = value.toFloat(),
             onValueChange = { onChange(it.toInt()) },
@@ -287,7 +287,7 @@ private fun ValueSlider(label: String, value: Int, min: Int, max: Int, unit: Str
             modifier = Modifier.weight(1f),
             colors = SliderDefaults.colors(thumbColor = color, activeTrackColor = color.copy(alpha = 0.8f), inactiveTrackColor = color.copy(alpha = 0.2f)),
         )
-        Text("$value $unit", modifier = Modifier.width(52.dp).padding(start = 8.dp), style = TextStyle(color = color, fontSize = 13.sp))
+        Text("$value $unit", modifier = Modifier.width(52.dp).padding(start = 8.dp), style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 13.sp))
     }
 }
 
@@ -301,5 +301,5 @@ private fun SheetButton(label: String, color: Color, filled: Boolean, modifier: 
             .background(if (filled) color else color.copy(alpha = 0.1f))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Text(label, style = TextStyle(color = if (filled) inverse else color, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) }
+    ) { Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = if (filled) inverse else color, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) }
 }

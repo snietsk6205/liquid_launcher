@@ -1,5 +1,17 @@
 package dev.liquid.launcher.feature.settings
 
+import androidx.compose.foundation.layout.Arrangement
+
+import androidx.compose.ui.draw.clip
+
+import androidx.compose.foundation.shape.RoundedCornerShape
+
+import androidx.compose.foundation.layout.height
+
+import androidx.compose.foundation.border
+
+import dev.liquid.launcher.core.settings.ColorSetting
+
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -52,6 +64,76 @@ internal fun SettingRow(setting: Setting<*>, store: SettingsStore) {
         is TextSetting -> TextRow(setting, store)
         is StringListSetting -> ListRow(setting, store)
         is ActionSetting -> ActionRow(setting, store)
+        is ColorSetting -> ColorRow(setting, store)
+    }
+}
+
+/** Colour: automatic, a swatch, or hue / saturation / brightness sliders and hex. */
+@Composable
+private fun ColorRow(setting: ColorSetting, store: SettingsStore) {
+    val value by store.observe(setting)
+    var open by remember { mutableStateOf(false) }
+    val parsed = ColorSetting.parse(value)
+    RowFrame(setting, store, valueText = if (parsed == null) setting.autoLabel else value.uppercase(), onClick = { open = true })
+    if (open) {
+        val start = parsed ?: 0xFF6A7BA8.toInt()
+        val hsv = remember { FloatArray(3).also { android.graphics.Color.colorToHSV(start, it) } }
+        var hue by remember { mutableStateOf(hsv[0]) }
+        var sat by remember { mutableStateOf(hsv[1]) }
+        var bright by remember { mutableStateOf(hsv[2]) }
+        val current = android.graphics.Color.HSVToColor(floatArrayOf(hue, sat, bright))
+        val swatches = listOf(
+            0xFFFFFFFF, 0xFF16181C, 0xFF8AB4F8, 0xFF7C4DFF, 0xFFFF8A65, 0xFFFFD54F,
+            0xFF81C784, 0xFF4DD0E1, 0xFFF06292, 0xFFB0BEC5, 0xFF5C6BC0, 0xFFA1887F,
+        ).map { it.toInt() }
+        AlertDialog(
+            onDismissRequest = { open = false },
+            title = { Text(setting.title) },
+            text = {
+                Column {
+                    Box(
+                        Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(12.dp))
+                            .background(androidx.compose.ui.graphics.Color(current))
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    for (row in swatches.chunked(6)) {
+                        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                            for (swatch in row) {
+                                Box(
+                                    Modifier.size(34.dp).clip(RoundedCornerShape(50))
+                                        .background(androidx.compose.ui.graphics.Color(swatch))
+                                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(50))
+                                        .clickable {
+                                            val out = FloatArray(3)
+                                            android.graphics.Color.colorToHSV(swatch, out)
+                                            hue = out[0]; sat = out[1]; bright = out[2]
+                                        }
+                                )
+                            }
+                        }
+                    }
+                    Text("Hue", style = MaterialTheme.typography.labelMedium)
+                    Slider(value = hue, onValueChange = { hue = it }, valueRange = 0f..360f)
+                    Text("Saturation", style = MaterialTheme.typography.labelMedium)
+                    Slider(value = sat, onValueChange = { sat = it }, valueRange = 0f..1f)
+                    Text("Brightness", style = MaterialTheme.typography.labelMedium)
+                    Slider(value = bright, onValueChange = { bright = it }, valueRange = 0f..1f)
+                    Text(ColorSetting.format(current), style = MaterialTheme.typography.bodyMedium)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    store.set(setting, ColorSetting.format(current))
+                    open = false
+                }) { Text("Use") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    store.reset(setting)
+                    open = false
+                }) { Text("Automatic") }
+            },
+        )
     }
 }
 

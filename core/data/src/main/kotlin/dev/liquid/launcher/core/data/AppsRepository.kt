@@ -74,6 +74,15 @@ class AppsRepository(
     /** True once the first load has finished. */
     val loaded: StateFlow<Boolean> = _loaded
 
+    /** Shape of adaptive icons ([IconShapes] id); set from the settings by [LauncherData]. Changing it reloads the icons. */
+    @Volatile
+    var iconShape: String = "system"
+        set(value) {
+            if (field == value) return
+            field = value
+            if (started) reload()
+        }
+
     /** Icon packs in use; set from the settings by [LauncherData]. */
     val iconConfig = MutableStateFlow(IconConfig())
     private val icons = IconThemer(context)
@@ -119,13 +128,23 @@ class AppsRepository(
                         val component = info.componentName
                         // The launcher's own home screen is not something to launch from itself.
                         if (component.packageName == context.packageName && component.className == homeActivity) continue
+                        val shape = iconShape
+                        val raw = try {
+                            info.getIcon(0)
+                        } catch (e: Throwable) {
+                            null
+                        }
                         val icon = try {
-                            info.getBadgedIcon(0).toBitmap(iconPx, iconPx).asImageBitmap()
+                            if (shape == "system" || raw == null) {
+                                info.getBadgedIcon(0).toBitmap(iconPx, iconPx).asImageBitmap()
+                            } else {
+                                IconShapes.render(context, raw, shape, iconPx, user, user != myUser).asImageBitmap()
+                            }
                         } catch (e: Throwable) {
                             null
                         }
                         val mono = try {
-                            ThemedColors.monochromeMask(info.getIcon(0), iconPx)
+                            ThemedColors.monochromeMask(raw, iconPx)
                         } catch (e: Throwable) {
                             null
                         }

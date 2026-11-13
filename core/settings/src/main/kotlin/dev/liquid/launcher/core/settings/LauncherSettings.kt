@@ -6,8 +6,24 @@ package dev.liquid.launcher.core.settings
  */
 object LauncherSettings {
 
+    /** Font choices: system families every Android phone has, and an imported file. */
+    val FONT_OPTIONS = listOf(
+        "default" to "System default",
+        "light" to "Sans light",
+        "medium" to "Sans medium",
+        "condensed" to "Sans condensed",
+        "serif" to "Serif",
+        "mono" to "Monospace",
+        "casual" to "Casual",
+        "cursive" to "Cursive",
+        "file" to "Imported font file",
+    )
+
     object Sections {
         val Home = SettingsSection("home", "Home screen", "Grid, icons, labels and the clock")
+        val Theme = SettingsSection("theme", "Theme", "Colours, fonts and icon shape; presets, export and import")
+        val Folders = SettingsSection("folders", "Folders", "Preview, background, shape, columns and what a tap does")
+        val Dock = SettingsSection("dock", "Dock", "A row of apps above the pill that stays on every page")
         val Icons = SettingsSection("icons", "Icons", "Icon packs for home and drawer, and icons the pack does not cover")
         val Clock = SettingsSection("clock", "Clock", "Time format, size, date line and glass plate. Resize it in edit mode; more styles come with widgets")
         val Gestures = SettingsSection("gestures", "Gestures", "What swipes, taps and presses on the home screen do")
@@ -29,7 +45,7 @@ object LauncherSettings {
         val Handover = SettingsSection("handover", "Hand-over", "How the launcher appears after a redirect", "Redirect")
         val Log = SettingsSection("log", "Debug log", "What is recorded", "Redirect")
 
-        val all = listOf(Home, Icons, Clock, Gestures, Pill, Drawer, Tags, DrawerMotion, DrawerIndex, Menu, HomeMenu, Wallpaper, Layouts, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
+        val all = listOf(Home, Theme, Icons, Folders, Dock, Clock, Gestures, Pill, Drawer, Tags, DrawerMotion, DrawerIndex, Menu, HomeMenu, Wallpaper, Layouts, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
     }
 
     // ---- Redirect engine ----
@@ -290,6 +306,122 @@ object LauncherSettings {
         section = "clock", keywords = "clock date",
     )
 
+    // ---- Theme ----
+
+    val ThemeTextColor = ColorSetting(
+        key = "theme.textColor", autoLabel = "Automatic (light or dark from the wallpaper)",
+        title = "Text and icon colour on the home screen",
+        section = "theme", keywords = "theme colour text label clock content",
+    )
+    val ThemeAccent = ColorSetting(
+        key = "theme.accent", autoLabel = "Automatic (from the wallpaper)",
+        title = "Accent colour",
+        summary = "Highlights: the selected tab, the scroll index bubble, the current layout, folder tiles set to accent",
+        section = "theme", keywords = "theme accent colour highlight",
+    )
+    val ThemeGlassColor = ColorSetting(
+        key = "theme.glassColor", autoLabel = "Neutral (white or black)",
+        title = "Glass tint colour",
+        summary = "The colour glass surfaces are tinted with; how strongly is set per surface in Liquid glass",
+        section = "theme", keywords = "theme glass tint colour",
+    )
+    val ThemeFont = ChoiceSetting(
+        key = "theme.font", default = "default",
+        options = FONT_OPTIONS,
+        title = "Font",
+        summary = "Labels, pill, menus, drawer and search. Import your own font file below",
+        section = "theme", keywords = "theme font typeface family",
+    )
+    val ThemeClockFont = ChoiceSetting(
+        key = "theme.clockFont", default = "same",
+        options = listOf("same" to "Same as the font above") + FONT_OPTIONS,
+        title = "Clock font",
+        section = "theme", keywords = "theme clock font typeface",
+    )
+    val ThemeClockWeight = ChoiceSetting(
+        key = "theme.clockWeight", default = "light",
+        options = listOf("thin" to "Thin", "light" to "Light", "normal" to "Regular", "medium" to "Medium", "bold" to "Bold"),
+        title = "Clock weight",
+        section = "theme", keywords = "theme clock weight bold thin",
+    )
+    val ThemeIconShape = ChoiceSetting(
+        key = "theme.iconShape", default = "system",
+        options = listOf(
+            "system" to "Like the system",
+            "circle" to "Circle",
+            "squircle" to "Squircle",
+            "rounded" to "Rounded square",
+            "square" to "Square",
+            "teardrop" to "Teardrop",
+            "pebble" to "Pebble",
+        ),
+        title = "Icon shape",
+        summary = "For apps with adaptive icons; icon pack icons keep the pack's own shape",
+        section = "theme", keywords = "theme icon shape mask circle squircle square teardrop",
+    )
+    /** File name of an imported font in files/fonts, used when a font setting is "file". */
+    val ThemeFontFile = TextSetting(
+        key = "theme.fontFile", default = "",
+        title = "Imported font", section = "theme", hidden = true,
+    )
+
+    // ---- Folders ----
+
+    val FolderPreview = ChoiceSetting(
+        key = "folder.preview", default = "grid",
+        options = listOf("grid" to "Grid of four", "stack" to "Fanned stack", "first" to "First app large"),
+        title = "Preview on the home screen",
+        section = "folders", keywords = "folder preview style grid stack",
+    )
+    val FolderBackground = ChoiceSetting(
+        key = "folder.background", default = "tint",
+        options = listOf("tint" to "Soft tint", "glass" to "Liquid glass", "accent" to "Accent colour", "none" to "None"),
+        title = "Tile background",
+        section = "folders", keywords = "folder background glass tint",
+    )
+    val FolderShape = ChoiceSetting(
+        key = "folder.shape", default = "icons",
+        options = listOf("icons" to "Like the app icons", "rounded" to "Rounded square", "circle" to "Circle", "squircle" to "Squircle"),
+        title = "Tile shape",
+        section = "folders", keywords = "folder shape",
+    )
+    val FolderTapFirst = BoolSetting(
+        key = "folder.tapFirst", default = false,
+        title = "Tap opens the first app",
+        summary = "Swipe up on the folder (or hold it) to open it instead",
+        section = "folders", keywords = "folder tap first app swipe open",
+    )
+    val FolderColumns = IntSetting(
+        key = "folder.columns", default = 4, min = 3, max = 6,
+        title = "Columns in an open folder",
+        section = "folders", keywords = "folder columns grid open",
+    )
+
+    // ---- Dock ----
+
+    val DockEnabled = BoolSetting(
+        key = "dock.enabled", default = false,
+        title = "Show the dock",
+        summary = "Drag apps onto it from the drawer or the home screen; hold an app in it for its menu",
+        section = "dock", keywords = "dock hotseat favourites row bottom",
+    )
+    val DockSlots = IntSetting(
+        key = "dock.slots", default = 5, min = 3, max = 7,
+        title = "Apps in the dock",
+        section = "dock", keywords = "dock slots count",
+    )
+    val DockBackground = ChoiceSetting(
+        key = "dock.background", default = "glass",
+        options = listOf("glass" to "Liquid glass", "none" to "None"),
+        title = "Background",
+        section = "dock", keywords = "dock background glass",
+    )
+    val DockLabels = BoolSetting(
+        key = "dock.labels", default = false,
+        title = "Labels under dock icons",
+        section = "dock", keywords = "dock labels",
+    )
+
     // ---- Icons ----
 
     val IconPack = TextSetting(
@@ -345,6 +477,20 @@ object LauncherSettings {
         options = listOf("auto" to "Follow dark theme", "light" to "Light", "dark" to "Dark"),
         title = "Themed icon style",
         section = "icons", keywords = "themed icons light dark",
+    )
+
+    val HomePageTransition = ChoiceSetting(
+        key = "home.pageTransition", default = "slide",
+        options = listOf(
+            "slide" to "Slide",
+            "depth" to "Depth: the page you leave sinks back",
+            "stack" to "Stack: the next page slides over",
+            "cube" to "Cube",
+            "carousel" to "Carousel",
+            "fade" to "Fade",
+        ),
+        title = "Page transition",
+        section = "home", keywords = "page transition swipe effect cube depth stack fade",
     )
 
     /** Value of the home and drawer pack settings that means "use the main pack". */
@@ -924,6 +1070,10 @@ object LauncherSettings {
         ExcludeInCall, ExcludeSplitScreen, SystemHomePause, GuardCount, GuardWindow, GuardPause,
         SettleStyle, SettleDuration, ExcludeFromRecents,
         HomeColumns, HomeRows, HomeIconSize, HomeLabels, HomeLabelSize,
+        HomePageTransition,
+        ThemeTextColor, ThemeAccent, ThemeGlassColor, ThemeFont, ThemeClockFont, ThemeClockWeight, ThemeIconShape, ThemeFontFile,
+        FolderPreview, FolderBackground, FolderShape, FolderTapFirst, FolderColumns,
+        DockEnabled, DockSlots, DockBackground, DockLabels,
         IconPack, IconPackHome, IconPackDrawer, IconMask,
         ThemedIcons, ThemedIconsWhere, ThemedIconsUncovered, ThemedIconsColors, ThemedIconsStyle,
         HomeMarginSide, HomeMarginTop, HomeMarginBottom, Clock24h, ClockSize, ClockDate, ClockGlass,
@@ -952,9 +1102,15 @@ object LauncherSettings {
      * home menu and the home screen's wallpaper blur and dim. Everything else is global.
      */
     val layoutKeys: Set<String> by lazy {
-        val sections = setOf("home", "clock", "gestures", "pill", "icons", "homeMenu")
+        val sections = setOf("home", "clock", "gestures", "pill", "icons", "homeMenu", "folders", "dock")
         all.filter { it.section in sections }.map { it.key }.toSet() +
             setOf(WallpaperHomeBlur.key, WallpaperHomeDim.key)
+    }
+
+    /** Keys that make up a theme: the Theme section and the glass look (not its quality, which is about this phone). */
+    val themeKeys: Set<String> by lazy {
+        all.filter { it.section == "theme" || (it.section == "glass" && it != GlassQuality && it != GlassAuto && it != GlassCap) }
+            .map { it.key }.toSet()
     }
 
     /** Keys a backup leaves out: counters, device facts and setup state of this phone. */
