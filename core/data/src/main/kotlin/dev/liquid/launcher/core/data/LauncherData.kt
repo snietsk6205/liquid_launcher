@@ -6,6 +6,9 @@ import dev.liquid.launcher.core.settings.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import java.io.File
@@ -31,6 +34,22 @@ class LauncherData private constructor(context: Context) {
 
     init {
         layout.ensureDefault(settings.get(LauncherSettings.HomeColumns), settings.get(LauncherSettings.HomeRows))
+        scope.launch {
+            settings.values
+                .map { iconConfig() }
+                .distinctUntilChanged()
+                .collect { apps.iconConfig.value = it }
+        }
+    }
+
+    private fun iconConfig(): IconConfig {
+        val main = settings.get(LauncherSettings.IconPack)
+        fun pick(value: String) = if (value == LauncherSettings.SAME_AS_MAIN) main else value
+        return IconConfig(
+            homePack = pick(settings.get(LauncherSettings.IconPackHome)),
+            drawerPack = pick(settings.get(LauncherSettings.IconPackDrawer)),
+            mask = settings.get(LauncherSettings.IconMask),
+        )
     }
 
     companion object {

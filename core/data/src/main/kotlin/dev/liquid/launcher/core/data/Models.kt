@@ -30,6 +30,8 @@ data class AppMeta(
     val hidden: Boolean = false,
     /** Ids of [Tag]s. */
     val tags: List<String> = emptyList(),
+    /** Own icon: "iconPackPackage|drawableName". */
+    val icon: String? = null,
 )
 
 @Serializable

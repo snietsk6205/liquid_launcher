@@ -8,6 +8,7 @@ object LauncherSettings {
 
     object Sections {
         val Home = SettingsSection("home", "Home screen", "Grid, icons, labels and the clock")
+        val Icons = SettingsSection("icons", "Icons", "Icon packs for home and drawer, and icons the pack does not cover")
         val Clock = SettingsSection("clock", "Clock", "Time format, size, date line and glass plate. Resize it in edit mode; more styles come with widgets")
         val Gestures = SettingsSection("gestures", "Gestures", "What swipes, taps and presses on the home screen do")
         val Pill = SettingsSection("pill", "Pill", "The glass bar: its items, size, position and gestures")
@@ -24,7 +25,7 @@ object LauncherSettings {
         val Handover = SettingsSection("handover", "Hand-over", "How the launcher appears after a redirect", "Redirect")
         val Log = SettingsSection("log", "Debug log", "What is recorded", "Redirect")
 
-        val all = listOf(Home, Clock, Gestures, Pill, Drawer, Tags, DrawerMotion, Menu, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
+        val all = listOf(Home, Icons, Clock, Gestures, Pill, Drawer, Tags, DrawerMotion, Menu, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
     }
 
     // ---- Redirect engine ----
@@ -285,6 +286,30 @@ object LauncherSettings {
         section = "clock", keywords = "clock date",
     )
 
+    // ---- Icons ----
+
+    val IconPack = TextSetting(
+        key = "icons.pack", default = "",
+        title = "Icon pack", section = "icons", keywords = "icon pack theme", hidden = true,
+    )
+    val IconPackHome = TextSetting(
+        key = "icons.packHome", default = SAME_AS_MAIN,
+        title = "Icon pack on the home screen", section = "icons", keywords = "icon pack home", hidden = true,
+    )
+    val IconPackDrawer = TextSetting(
+        key = "icons.packDrawer", default = SAME_AS_MAIN,
+        title = "Icon pack in the drawer", section = "icons", keywords = "icon pack drawer", hidden = true,
+    )
+    val IconMask = BoolSetting(
+        key = "icons.mask", default = true,
+        title = "Fit other icons to the pack",
+        summary = "Apps the pack has no icon for get the pack's background, shape and overlay, if it has them",
+        section = "icons", keywords = "icon mask shape uncovered adaptive",
+    )
+
+    /** Value of the home and drawer pack settings that means "use the main pack". */
+    const val SAME_AS_MAIN = "="
+
     // ---- Gestures ----
 
     val GestureSwipeUp = ActionSetting(
@@ -514,7 +539,7 @@ object LauncherSettings {
 
     /** Entry ids in display order; see MenuEntry in feature/home. Edited with the menu editor. */
     val MenuEntries = StringListSetting(
-        key = "menu.entries", default = listOf("info", "home", "rename", "tags", "hide", "uninstall"),
+        key = "menu.entries", default = listOf("info", "home", "rename", "icon", "tags", "hide", "uninstall"),
         title = "Menu entries", section = "menu", hidden = true,
     )
 
@@ -682,6 +707,7 @@ object LauncherSettings {
         ExcludeInCall, ExcludeSplitScreen, SystemHomePause, GuardCount, GuardWindow, GuardPause,
         SettleStyle, SettleDuration, ExcludeFromRecents,
         HomeColumns, HomeRows, HomeIconSize, HomeLabels, HomeLabelSize,
+        IconPack, IconPackHome, IconPackDrawer, IconMask,
         HomeMarginSide, HomeMarginTop, HomeMarginBottom, Clock24h, ClockSize, ClockDate, ClockGlass,
         GestureSwipeUp, GestureSwipeDown, GestureDoubleTap, GestureLongPress,
         PillEnabled, PillSlots, PillPosition, PillOffset, PillWidth, PillHeight, PillCorner, PillIconSize,

@@ -63,6 +63,7 @@ private fun rowsFor(target: MenuTarget, entries: List<MenuEntry>, controller: Ho
             }
             MenuEntry.Rename -> MenuRow(LauncherIcons.Edit, "Rename") { controller.renaming = app }
             MenuEntry.Tags -> MenuRow(LauncherIcons.Label, "Tags") { controller.tagging = app }
+            MenuEntry.Icon -> MenuRow(LauncherIcons.Apps, "Change icon") { controller.iconPicking = app }
             MenuEntry.Hide -> if (app.hidden) {
                 MenuRow(LauncherIcons.Visibility, "Show in drawer") { apps.setHidden(app.ref, false) }
             } else {

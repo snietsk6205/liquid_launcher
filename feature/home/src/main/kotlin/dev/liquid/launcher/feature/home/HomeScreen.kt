@@ -380,6 +380,7 @@ fun HomeScreen(
         }
         controller.renaming?.let { RenameDialog(it, controller) }
         controller.tagging?.let { TagsDialog(it, controller) }
+        controller.iconPicking?.let { IconPickerDialog(it, controller) }
     }
 }
 

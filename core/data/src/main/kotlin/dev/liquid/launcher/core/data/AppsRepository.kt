@@ -43,6 +43,10 @@ data class AppEntry(
     val installedAt: Long,
     /** Ids of the tags given to this app. */
     val tags: List<String> = emptyList(),
+    /** Icon on the home screen; differs from [icon] when home and drawer use different packs. */
+    val homeIcon: ImageBitmap? = icon,
+    /** The user picked this app's icon by hand. */
+    val customIcon: Boolean = false,
 ) {
     val key: String get() = ref.key
 }
@@ -68,12 +72,18 @@ class AppsRepository(
     /** True once the first load has finished. */
     val loaded: StateFlow<Boolean> = _loaded
 
+    /** Icon packs in use; set from the settings by [LauncherData]. */
+    val iconConfig = MutableStateFlow(IconConfig())
+    private val icons = IconThemer(context)
+
     /** Every launchable app, sorted by label, including hidden ones (see [AppEntry.hidden]). */
-    val apps: StateFlow<List<AppEntry>> = combine(installed, meta.value) { list, changes ->
+    val apps: StateFlow<List<AppEntry>> = combine(installed, meta.value, iconConfig) { list, changes, config ->
         val collator = Collator.getInstance()
+        icons.prepare(config)
         list.map { app ->
             val change = changes[app.key]
-            if (change == null) app else app.copy(label = change.label ?: app.systemLabel, hidden = change.hidden, tags = change.tags)
+            val themed = icons.apply(app, config, change?.icon)
+            if (change == null) themed else themed.copy(label = change.label ?: app.systemLabel, hidden = change.hidden, tags = change.tags)
         }.sortedWith { a, b -> collator.compare(a.label, b.label) }
     }.stateIn(loadScope, SharingStarted.Eagerly, emptyList())
 
@@ -172,6 +182,9 @@ class AppsRepository(
 
     fun setHidden(ref: AppRef, hidden: Boolean) = changeMeta(ref) { it.copy(hidden = hidden) }
 
+    /** [icon] is "iconPackPackage|drawableName", or null for the pack's or the app's own icon. */
+    fun setIcon(ref: AppRef, icon: String?) = changeMeta(ref) { it.copy(icon = icon) }
+
     fun setTag(ref: AppRef, tagId: String, on: Boolean) = changeMeta(ref) { meta ->
         meta.copy(tags = if (on) (meta.tags + tagId).distinct() else meta.tags - tagId)
     }
@@ -183,7 +196,7 @@ class AppsRepository(
         }
     }
 
-    private companion object {
+    internal companion object {
         const val ICON_DP = 56
     }
 }

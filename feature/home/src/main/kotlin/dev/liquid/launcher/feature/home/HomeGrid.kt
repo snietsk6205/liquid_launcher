@@ -225,7 +225,7 @@ fun AppIconView(
 ) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            AppIconImage(app.icon, Modifier.squareFraction(iconFraction), app.label)
+            AppIconImage(app.homeIcon, Modifier.squareFraction(iconFraction), app.label)
         }
         if (label != null) {
             Text(
@@ -275,7 +275,7 @@ private fun appHandler(item: HomeItem, app: AppEntry, holder: CoordinatesHolder,
                 controller.menu = MenuTarget(app, item.id, bounds)
             }
 
-            override fun onDragStart(grab: Offset, finger: Offset) = startHomeDrag(item, app.icon, grab, finger, holder, controller)
+            override fun onDragStart(grab: Offset, finger: Offset) = startHomeDrag(item, app.homeIcon, grab, finger, holder, controller)
             override fun onDrag(finger: Offset) = controller.moveDrag(finger)
             override fun onDragEnd() = controller.endDrag()
             override fun onDragCancel() = controller.cancelDrag()

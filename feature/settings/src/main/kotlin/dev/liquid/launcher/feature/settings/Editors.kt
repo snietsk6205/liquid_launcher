@@ -293,3 +293,65 @@ private fun NameDialog(title: String, initial: String, onDismiss: () -> Unit, on
     )
 }
 
+/** Main icon pack, and optionally a different one on the home screen or in the drawer. */
+@Composable
+internal fun IconPacksEditor(store: SettingsStore) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val packs = remember { dev.liquid.launcher.core.data.IconPacks.installed(context) }
+    val main by store.observe(LauncherSettings.IconPack)
+    val home by store.observe(LauncherSettings.IconPackHome)
+    val drawer by store.observe(LauncherSettings.IconPackDrawer)
+    var choosing by remember { mutableStateOf<dev.liquid.launcher.core.settings.TextSetting?>(null) }
+
+    fun name(value: String): String = when (value) {
+        LauncherSettings.SAME_AS_MAIN -> "Same as the icon pack"
+        "" -> "Apps' own icons"
+        else -> packs.firstOrNull { it.pkg == value }?.label ?: "$value (not installed)"
+    }
+
+    InfoCard {
+        Text("Icon packs", style = MaterialTheme.typography.titleMedium)
+        if (packs.isEmpty()) {
+            BodyText("No icon packs are installed. Any pack made for Nova or ADW works; install one and come back.")
+        }
+        for ((setting, title, value) in listOf(
+            Triple(LauncherSettings.IconPack, "Icon pack", main),
+            Triple(LauncherSettings.IconPackHome, "Home screen", home),
+            Triple(LauncherSettings.IconPackDrawer, "Drawer", drawer),
+        )) {
+            Column(Modifier.fillMaxWidth().clickable { choosing = setting }.padding(vertical = 10.dp)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge)
+                Text(name(value), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        BodyText("One app's icon: hold it, then Change icon.", Modifier.padding(top = 4.dp))
+    }
+
+    choosing?.let { setting ->
+        val options = buildList {
+            if (setting != LauncherSettings.IconPack) add(LauncherSettings.SAME_AS_MAIN)
+            add("")
+            packs.forEach { add(it.pkg) }
+        }
+        AlertDialog(
+            onDismissRequest = { choosing = null },
+            title = { Text(setting.title) },
+            text = {
+                Column {
+                    for (value in options) {
+                        Text(
+                            name(value),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                store.set(setting, value)
+                                choosing = null
+                            }.padding(vertical = 12.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { choosing = null }) { Text("Cancel") } },
+        )
+    }
+}
+
