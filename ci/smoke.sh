@@ -123,8 +123,12 @@ home_press_check() {
   sleep 2
   BEFORE=$(redirect_count)
   adb shell input keyevent KEYCODE_HOME
-  sleep 4
-  AFTER=$(redirect_count)
+  # Wait for the redirect itself (a slow emulator can take several seconds to show its launcher).
+  for i in $(seq 1 20); do
+    sleep 0.5
+    AFTER=$(redirect_count)
+    [ "$AFTER" -gt "$BEFORE" ] && break
+  done
   wait_top "$HOME_ACTIVITY" 6 && [ "$AFTER" -gt "$BEFORE" ]
 }
 if home_press_check; then
@@ -223,7 +227,10 @@ sleep 4
 adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard || true
 sleep 2
-if wait_top "$HOME_ACTIVITY" 6; then pass "launcher in front after screen off/on"; else fail "launcher in front after screen off/on"; fi
+if wait_top "$HOME_ACTIVITY" 10; then pass "launcher in front after screen off/on"; else
+  fail "launcher in front after screen off/on"
+  grep -E "screen off|REDIRECT \(screen off\)|launcher drawn" "$LOG" | tail -4 | sed 's/^/        /'
+fi
 
 echo "== 7. Settings screens open"
 for screen in "" setup diagnostics log; do
