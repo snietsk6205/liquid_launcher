@@ -174,6 +174,19 @@ Every Opus commit starts with `[opus]`: `git log --grep="\[opus\]"`.
 - Per-app icon overrides apply to home and drawer alike; the home / drawer pack split only affects the default icons.
 - Not tested with a real icon pack (none on the emulator). Calendar-style dynamic icons and adaptive-icon reshaping are not done.
 
+### Entry 5 addendum: rest of Phase 1B (15:35 → 15:50 UTC)
+
+| File | Change | Why |
+|---|---|---|
+| `core/data/Models.kt`, `LayoutRepository.kt` | `ItemKind.FOLDER` with `folder` and `name`; `dropApp`, `dropItem`, `takeFromFolder`, `renameFolder`; `swipeUp` / `swipeDown` on items and `setSwipe` + 3 tests | Folders and per-icon swipe actions |
+| `feature/home/Gestures.kt` | Before the long press, a vertical swipe the item has an action for is taken by the item; otherwise it is left to the pager, drawer or search as before | Swipe actions without breaking home swipes |
+| `feature/home/Folders.kt` (new), `HomeGrid.kt`, `HomeController.kt` | Folder tile (2 × 2 preview), glass folder view with editable name; drop app on app makes a folder | 1B folders |
+| `feature/home/SwipeActions.kt` (new) | Swipe up / down picker per home icon | 1B swipe actions |
+| `core/data/StaticShortcuts.kt` (new), `AppMenu.kt` | Manifest shortcuts at the top of the long-press menu; failures explained in a toast | 1B shortcuts (D9) |
+| `MenuEntry`, menu defaults | New entries: shortcuts, icon, swipe, tags | |
+
+Not done: dragging an app out of an open folder (use the menu's "Take out of the folder"), folder preview styles and shapes (Phase 2 per the roadmap), work-profile shortcuts.
+
 ### For Fable to review
 
 1. `IconThemer` caching and running inside the `apps` combine (on the loading dispatcher).
