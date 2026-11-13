@@ -186,6 +186,7 @@ Every Opus commit starts with `[opus]`: `git log --grep="\[opus\]"`.
 | `MenuEntry`, menu defaults | New entries: shortcuts, icon, swipe, tags | |
 
 | `feature/home/HomeController.kt`, gesture files | Drawer drag keeps its own position (`dragPosition`) and snaps undispatched; velocity trackers use `addPointerInputChange` (historical points) | Run 22: on the slow emulator a 518 px swipe was released "at 0.08, 0 px/s" and closed; the same can happen on the phone during a dropped frame |
+| `feature/home/HomeScreen.kt`, `ci/smoke.sh` | No home blur behind the drawer when the glass benchmark capped glass to tint; first emulator swipe 450 ms | Runs 23 / 23 re-run: software rendering of the full-screen blur starved the emulator's injected swipes. Redirect timing checks also made to wait for the redirect instead of a fixed 4 s |
 
 Not done: dragging an app out of an open folder (use the menu's "Take out of the folder"), folder preview styles and shapes (Phase 2 per the roadmap), work-profile shortcuts.
 
