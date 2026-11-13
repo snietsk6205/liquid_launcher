@@ -29,6 +29,11 @@ class MainActivity : ComponentActivity() {
     private var firstStart = true
     private var resumed = false
     private var pausedAt = 0L
+    private var imageCallback: ((android.net.Uri?) -> Unit)? = null
+    private val pickMedia = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { uri ->
+        imageCallback?.invoke(uri)
+        imageCallback = null
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,6 +52,18 @@ class MainActivity : ComponentActivity() {
             openSettings = { startActivity(SettingsActivity.intent(this)) },
             openSetup = { startActivity(SettingsActivity.intent(this, SettingsActivity.SCREEN_SETUP)) },
             openSection = { startActivity(SettingsActivity.intent(this, SettingsActivity.SECTION_PREFIX + it)) },
+            pickImage = { callback ->
+                imageCallback = callback
+                try {
+                    pickMedia.launch(
+                        androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                } catch (e: Exception) {
+                    DebugLog.error("App", "photo picker failed: $e")
+                    imageCallback = null
+                    callback(null)
+                }
+            },
         )
         setContent {
             LauncherTheme {
@@ -59,6 +76,8 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        intent?.getStringExtra(EXTRA_OPEN)?.let { returnState.request = it }
+
         val lastCrash = java.io.File(filesDir, "last-crash.txt")
         if (lastCrash.exists()) {
             DebugLog.error("App", "previous run crashed:\n" + lastCrash.readText().take(4000))
@@ -70,6 +89,11 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         @Suppress("DEPRECATION")
         overridePendingTransition(0, 0)
+        // Settings asked to open something here (the wallpaper screen): not a Home press.
+        intent.getStringExtra(EXTRA_OPEN)?.let {
+            returnState.request = it
+            return
+        }
         // Home on the launcher passes through the system launcher and the redirect brings us
         // straight back. A quick return without having started an app counts as a Home press.
         val now = SystemClock.uptimeMillis()
@@ -103,8 +127,11 @@ class MainActivity : ComponentActivity() {
         super.onPause()
     }
 
-    private companion object {
-        const val HOME_PRESS_WINDOW_MS = 1500L
+    companion object {
+        private const val HOME_PRESS_WINDOW_MS = 1500L
+
+        /** Extra naming what to open on the home screen: "wallpaper" or "layouts". */
+        const val EXTRA_OPEN = "dev.liquid.launcher.OPEN"
     }
 
     private fun applyExcludeFromRecents() {

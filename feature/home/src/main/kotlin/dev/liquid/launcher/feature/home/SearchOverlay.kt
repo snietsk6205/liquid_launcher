@@ -89,6 +89,9 @@ fun SearchOverlay(
         if (config.keyboard) runCatching { focus.requestFocus() }
         appear.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 500f))
     }
+    // The home screen behind blurs with this (Settings → Wallpaper → blur behind search).
+    LaunchedEffect(Unit) { androidx.compose.runtime.snapshotFlow { appear.value }.collect { controller.searchAmount = it.coerceIn(0f, 1f) } }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { controller.searchAmount = 0f } }
 
     val visible = remember(apps) { apps.filter { !it.hidden } }
     val suggestions = remember(visible, usage) {
@@ -120,7 +123,7 @@ fun SearchOverlay(
         Modifier
             .fillMaxSize()
             .graphicsLayer { alpha = appear.value.coerceIn(0f, 1f) }
-            .background(Color.Black.copy(alpha = 0.55f))
+            .background(Color.Black.copy(alpha = config.dim))
             .pointerInput(Unit) { detectTapGestures { controller.searchOpen = false } }
     ) {
         Column(

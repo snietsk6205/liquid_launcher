@@ -1,5 +1,9 @@
 package dev.liquid.launcher.feature.home
 
+import androidx.compose.foundation.gestures.awaitFirstDown
+
+import androidx.compose.foundation.gestures.awaitEachGesture
+
 import android.app.ActivityOptions
 import android.graphics.Rect as AndroidRect
 import androidx.compose.foundation.Image
@@ -99,7 +103,9 @@ fun HomePageView(index: Int, page: HomePage, env: PageEnv, controller: HomeContr
                     )
                 }
             }
-            Box(Modifier.fillMaxSize().then(taps))
+            // After a long press opened the home menu, follow the same finger so it can slide onto an item.
+            val slide = remember(controller) { Modifier.homeMenuSlide(controller) }
+            Box(Modifier.fillMaxSize().then(taps).then(slide))
         }
         val columns = env.grid.columns
         val rows = env.grid.rows
@@ -372,4 +378,39 @@ private fun startHomeDrag(
             start = finger,
         )
     )
+}
+
+/**
+ * Watches the finger of a press on empty space without taking it. If the press opened the
+ * home menu, the finger's position is passed on while it stays down, and letting go over an
+ * item runs it.
+ */
+private fun Modifier.homeMenuSlide(controller: HomeController): Modifier {
+    var coords: androidx.compose.ui.layout.LayoutCoordinates? = null
+    return this
+        .onPlaced { coords = it }
+        .pointerInput(controller) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                val wasOpen = controller.homeMenu
+                var start: androidx.compose.ui.geometry.Offset? = null
+                var moved = false
+                while (true) {
+                    val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Final)
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    val layout = coords?.takeIf { it.isAttached }
+                    val root = layout?.localToRoot(change.position)
+                    if (!wasOpen && controller.homeMenu && root != null) {
+                        if (start == null) start = root
+                        if ((root - start).getDistance() > viewConfiguration.touchSlop) moved = true
+                        if (moved) controller.homeMenuFinger = root
+                    }
+                    if (!change.pressed) {
+                        if (start != null && root != null) controller.releaseHomeMenuSlide(root, moved)
+                        break
+                    }
+                }
+                controller.homeMenuFinger = null
+            }
+        }
 }

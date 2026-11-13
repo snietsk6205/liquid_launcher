@@ -339,12 +339,32 @@ sleep 0.5
 adb shell input keyevent KEYCODE_BACK
 sleep 1
 
-# Edit mode: long press on empty space shows the edit toolbar.
+# Home menu: long press on empty space shows the two glass pills.
 adb shell input swipe 540 1250 540 1250 1000
+sleep 1.5
+peek 11-menu
+dump 11-menu
+if on_screen 11-menu "Wallpaper" exact && on_screen 11-menu "Layouts" exact; then pass "long press on empty space opens the home menu"; else fail "long press on empty space opens the home menu"; fi
+if tap_text 11-menu "Wallpaper" exact; then
+  sleep 1.5
+  peek 11-wallpaper
+  dump 11-wallpaper
+  if on_screen 11-wallpaper "Apply" exact && on_screen 11-wallpaper "Drawer" exact; then pass "home menu opens the wallpaper screen"; else fail "home menu opens the wallpaper screen"; fi
+  tap_text 11-wallpaper "Cancel" exact || adb shell input keyevent KEYCODE_BACK
+  sleep 1
+else
+  fail "home menu has a Wallpaper item"
+fi
+
+# Edit mode from the home menu shows the edit toolbar.
+adb shell input swipe 540 1250 540 1250 1000
+sleep 1.5
+dump 11-menu2
+tap_text 11-menu2 "Edit" exact || true
 sleep 1.5
 peek 11-edit
 dump 11-edit
-if on_screen 11-edit "Done" exact; then pass "long press on empty space opens edit mode"; else fail "long press on empty space opens edit mode"; fi
+if on_screen 11-edit "Done" exact; then pass "home menu opens edit mode"; else fail "home menu opens edit mode"; fi
 if tap_text 11-edit "Pages" exact; then
   sleep 1
   dump 12-pages

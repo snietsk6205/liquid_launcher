@@ -1,5 +1,7 @@
 package dev.liquid.launcher.feature.home
 
+import dev.liquid.launcher.core.designsystem.WallpaperStore
+
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
@@ -123,7 +125,47 @@ class HomeController(
     var removeZone: Rect = Rect.Zero
 
     val drawerOpen: Boolean get() = drawer.targetValue > 0.5f || drawer.value > 0.01f
-    val anyOverlay: Boolean get() = drawerOpen || searchOpen || menu != null || editMode || renaming != null || tagging != null || iconPicking != null || swipeEditing != null || openFolder != null
+    val anyOverlay: Boolean get() = drawerOpen || searchOpen || menu != null || editMode || renaming != null || tagging != null ||
+        iconPicking != null || swipeEditing != null || openFolder != null || homeMenu || wallpaperStudio || layoutsSheet || savingLayout
+
+    // ---- home menu, wallpaper, layouts ----
+
+    /** The home menu's glass pills are open. */
+    var homeMenu by mutableStateOf(false)
+
+    /** Finger position (root coordinates) while sliding from the long press onto a home menu item, or null. */
+    var homeMenuFinger by mutableStateOf<Offset?>(null)
+
+    /** Home menu items' bounds in root coordinates, by key, for press-and-slide. */
+    internal val homeMenuTargets = HashMap<String, androidx.compose.ui.geometry.Rect>()
+    internal var homeMenuRun: (String) -> Unit = {}
+
+    var wallpaperStudio by mutableStateOf(false)
+    var layoutsSheet by mutableStateOf(false)
+    var savingLayout by mutableStateOf(false)
+
+    /** How far search is open (0..1), for the blur behind it. */
+    var searchAmount by mutableFloatStateOf(0f)
+
+    /** Lets the activity pick an image (photo picker); set by the activity. */
+    internal val pickImage: ((android.net.Uri?) -> Unit) -> Unit get() = callbacks.pickImage
+
+    /** The finger let go after sliding: run the item under it, if any. */
+    fun releaseHomeMenuSlide(finger: Offset, moved: Boolean) {
+        homeMenuFinger = null
+        if (!moved) return
+        val hit = homeMenuTargets.entries.firstOrNull { it.value.contains(finger) }?.key ?: return
+        homeMenuRun(hit)
+    }
+
+    fun switchLayout(id: String) {
+        val result = data.layouts.switchTo(id, data.settings.get(LauncherSettings.LayoutsAutoSave)) ?: return toast("That layout no longer exists")
+        result.wallpaper?.let { file -> scope.launch { WallpaperStore.get(context).setFromFile(file, data.settings.get(LauncherSettings.WallpaperLockToo)) } }
+        val name = data.layouts.find(id)?.name ?: ""
+        val home = data.layout.layout.value.defaultIndex
+        scope.launch { runCatching { pager.scrollToPage(home) } }
+        toast("Layout: $name")
+    }
 
     // ---- drawer ----
 
@@ -195,6 +237,9 @@ class HomeController(
     }
 
     fun closeAll(immediately: Boolean = false) {
+        homeMenu = false
+        layoutsSheet = false
+        wallpaperStudio = false
         menu = null
         openFolder = null
         renaming = null
@@ -211,6 +256,10 @@ class HomeController(
             iconPicking != null -> iconPicking = null
             swipeEditing != null -> swipeEditing = null
             menu != null -> menu = null
+            savingLayout -> savingLayout = false
+            homeMenu -> homeMenu = false
+            layoutsSheet -> layoutsSheet = false
+            wallpaperStudio -> wallpaperStudio = false
             openFolder != null -> openFolder = null
             searchOpen -> searchOpen = false
             drawerOpen -> closeDrawer()
@@ -494,6 +543,29 @@ class HomeController(
                 val app = data.apps.find(action.ref)
                 if (app != null) launch(app) else toast("That app is not installed")
             }
+            LauncherAction.HomeMenu -> {
+                closeAll()
+                homeMenu = true
+            }
+            LauncherAction.Wallpaper -> {
+                closeAll()
+                if (editMode) exitEdit()
+                wallpaperStudio = true
+            }
+            LauncherAction.AddPage -> addPage()
+            LauncherAction.Pages -> {
+                closeAll()
+                editMode = true
+                pagesSheet = true
+            }
+            LauncherAction.Layouts -> {
+                closeAll()
+                layoutsSheet = true
+            }
+            LauncherAction.SaveLayout -> savingLayout = true
+            LauncherAction.NextLayout -> data.layouts.next()?.let { switchLayout(it.id) } ?: toast("No saved layouts yet")
+            is LauncherAction.SwitchLayout -> switchLayout(action.id)
+            is LauncherAction.Section -> callbacks.openSection(action.id)
         }
     }
 
@@ -539,4 +611,6 @@ class HomeCallbacks(
     val openSetup: () -> Unit,
     /** Opens one settings section by its id. */
     val openSection: (String) -> Unit = { openSettings() },
+    /** Shows the photo picker; the callback gets the picked image or null. */
+    val pickImage: ((android.net.Uri?) -> Unit) -> Unit = { it(null) },
 )

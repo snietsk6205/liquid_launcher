@@ -42,9 +42,10 @@ class LauncherData private constructor(private val context: Context) {
     )
     val apps = AppsRepository(context, metaStore, usage, scope)
     val layout = LayoutRepository(JsonStore(File(dir, "layout.json"), HomeLayout.serializer(), HomeLayout(), scope))
-    val organisation = OrganisationRepository(
-        JsonStore(File(dir, "organisation.json"), Organisation.serializer(), Organisation(), scope),
-    )
+    private val organisationStore = JsonStore(File(dir, "organisation.json"), Organisation.serializer(), Organisation(), scope)
+    val organisation = OrganisationRepository(organisationStore)
+    private val layoutsStore = JsonStore(File(dir, "layouts.json"), LayoutsState.serializer(), LayoutsState(), scope)
+    val layouts = LayoutsRepository(layoutsStore, layout, settings, File(context.filesDir, "layouts"))
 
     init {
         layout.ensureDefault(settings.get(LauncherSettings.HomeColumns), settings.get(LauncherSettings.HomeRows))
@@ -113,6 +114,88 @@ class LauncherData private constructor(private val context: Context) {
             themed = themed,
             packEpoch = if (themed != null) tick else 0,
         )
+    }
+
+    // ---- backup ----
+
+    /**
+     * Everything the user set up, as one zip: settings (without this phone's counters and
+     * measurements), home layout, tags and tabs, app labels / tags / icons, saved layouts, and
+     * the files under [fileDirs] (wallpapers, layout wallpapers), relative to the app's files.
+     */
+    fun backup(out: java.io.OutputStream, fileDirs: List<String> = listOf("wallpaper", "layouts")) {
+        val json = LayoutsRepository.json
+        java.util.zip.ZipOutputStream(out).use { zip ->
+            fun entry(name: String, text: String) {
+                zip.putNextEntry(java.util.zip.ZipEntry(name))
+                zip.write(text.toByteArray())
+                zip.closeEntry()
+            }
+            entry("backup.json", "{\"format\":1,\"created\":${System.currentTimeMillis()}}")
+            val values = settings.exportValues().filterKeys { !LauncherSettings.isDeviceState(it) }
+            entry("settings.json", json.encodeToString(MapSerializer(String.serializer(), String.serializer()), values))
+            entry("data/apps.json", json.encodeToString(MapSerializer(String.serializer(), AppMeta.serializer()), metaStore.get()))
+            entry("data/layout.json", json.encodeToString(HomeLayout.serializer(), layout.layout.value))
+            entry("data/organisation.json", json.encodeToString(Organisation.serializer(), organisationStore.get()))
+            entry("data/layouts.json", json.encodeToString(LayoutsState.serializer(), layoutsStore.get()))
+            for (dirName in fileDirs) {
+                val root = File(context.filesDir, dirName)
+                root.walkTopDown().filter { it.isFile }.forEach { file ->
+                    zip.putNextEntry(java.util.zip.ZipEntry("files/" + file.relativeTo(context.filesDir).invariantSeparatorsPath))
+                    file.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
+            }
+        }
+        DebugLog.event("Backup", "backup written")
+    }
+
+    /**
+     * Replaces everything with the backup in [input]. Returns null on success or what went
+     * wrong (then nothing was changed). The caller reloads the wallpaper afterwards.
+     */
+    fun restore(input: java.io.InputStream): String? {
+        val json = LayoutsRepository.json
+        val texts = HashMap<String, String>()
+        val files = HashMap<String, ByteArray>()
+        try {
+            java.util.zip.ZipInputStream(input).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    if (entry.isDirectory) continue
+                    val name = entry.name
+                    // Never write outside the app's files.
+                    if (name.contains("..")) continue
+                    if (name.startsWith("files/")) files[name.removePrefix("files/")] = zip.readBytes()
+                    else texts[name] = zip.readBytes().decodeToString()
+                }
+            }
+            if ("backup.json" !in texts) return "This is not a Liquid Launcher backup"
+            val values = texts["settings.json"]?.let { json.decodeFromString(MapSerializer(String.serializer(), String.serializer()), it) }
+            val meta = texts["data/apps.json"]?.let { json.decodeFromString(MapSerializer(String.serializer(), AppMeta.serializer()), it) }
+            val home = texts["data/layout.json"]?.let { json.decodeFromString(HomeLayout.serializer(), it) }
+            val org = texts["data/organisation.json"]?.let { json.decodeFromString(Organisation.serializer(), it) }
+            val saved = texts["data/layouts.json"]?.let { json.decodeFromString(LayoutsState.serializer(), it) }
+            // Decoded everything without errors: now apply.
+            for ((path, bytes) in files) {
+                val target = File(context.filesDir, path)
+                target.parentFile?.mkdirs()
+                target.writeBytes(bytes)
+            }
+            if (values != null) {
+                val keys = (settings.values.value.keys + values.keys).filter { !LauncherSettings.isDeviceState(it) }.toSet()
+                settings.importValues(values, keys)
+            }
+            meta?.let { metaStore.set(it) }
+            home?.let { layout.commit(it) }
+            org?.let { organisationStore.set(it) }
+            saved?.let { layoutsStore.set(it) }
+            DebugLog.event("Backup", "restored (${files.size} files)")
+            return null
+        } catch (e: Exception) {
+            DebugLog.error("Backup", "restore failed: $e")
+            return e.message ?: e.toString()
+        }
     }
 
     companion object {

@@ -59,6 +59,19 @@ fun actionIcon(action: LauncherAction): Int = when (action) {
     LauncherAction.SystemLauncher -> LauncherIcons.Home
     LauncherAction.OpenCalendar -> LauncherIcons.Calendar
     is LauncherAction.LaunchApp -> LauncherIcons.Apps
+    LauncherAction.HomeMenu -> LauncherIcons.Tune
+    LauncherAction.Wallpaper -> LauncherIcons.Image
+    LauncherAction.AddPage -> LauncherIcons.Add
+    LauncherAction.Pages -> LauncherIcons.Pages
+    LauncherAction.Layouts, LauncherAction.NextLayout, is LauncherAction.SwitchLayout -> LauncherIcons.Layers
+    LauncherAction.SaveLayout -> LauncherIcons.Save
+    is LauncherAction.Section -> when (action.id) {
+        "icons" -> LauncherIcons.Palette
+        "drawer" -> LauncherIcons.Apps
+        "tags" -> LauncherIcons.Label
+        "wallpaper" -> LauncherIcons.Image
+        else -> LauncherIcons.Settings
+    }
     LauncherAction.None -> LauncherIcons.CircleOutline
 }
 

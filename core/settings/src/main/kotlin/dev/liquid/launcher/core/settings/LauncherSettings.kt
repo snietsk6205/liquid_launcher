@@ -17,6 +17,9 @@ object LauncherSettings {
         val DrawerMotion = SettingsSection("drawerMotion", "Drawer motion", "Opening transition, scroll bar and scroll effects")
         val DrawerIndex = SettingsSection("drawerIndex", "Scroll index", "Letters at the edge of the drawer: curve, side, size, bubble, haptics, sections at the top")
         val Menu = SettingsSection("menu", "Long-press menu", "Which entries appear and in what order")
+        val HomeMenu = SettingsSection("homeMenu", "Home menu", "The two glass pills from holding empty space: items, order, labels")
+        val Wallpaper = SettingsSection("wallpaper", "Wallpaper", "Pick and adjust it with a live preview; blur and dim for home, drawer and search")
+        val Layouts = SettingsSection("layouts", "Saved layouts and backup", "Home setups you can switch between; back up and restore everything")
         val Search = SettingsSection("search", "Search", "Swipe-down search and web search")
         val Glass = SettingsSection("glass", "Liquid glass", "Quality, blur, refraction and tint, overall and per surface")
 
@@ -26,7 +29,7 @@ object LauncherSettings {
         val Handover = SettingsSection("handover", "Hand-over", "How the launcher appears after a redirect", "Redirect")
         val Log = SettingsSection("log", "Debug log", "What is recorded", "Redirect")
 
-        val all = listOf(Home, Icons, Clock, Gestures, Pill, Drawer, Tags, DrawerMotion, DrawerIndex, Menu, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
+        val all = listOf(Home, Icons, Clock, Gestures, Pill, Drawer, Tags, DrawerMotion, DrawerIndex, Menu, HomeMenu, Wallpaper, Layouts, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
     }
 
     // ---- Redirect engine ----
@@ -362,7 +365,7 @@ object LauncherSettings {
         title = "Double tap on empty space", section = "gestures", keywords = "gesture double tap lock",
     )
     val GestureLongPress = ActionSetting(
-        key = "gesture.longPress", default = "edit",
+        key = "gesture.longPress", default = "home_menu",
         title = "Long press on empty space", section = "gestures", keywords = "gesture long press edit",
     )
 
@@ -780,6 +783,74 @@ object LauncherSettings {
         section = "search", keywords = "keyboard focus",
     )
 
+    val SearchDim = IntSetting(
+        key = "search.dim", default = 55, min = 0, max = 90, step = 5, unit = "%",
+        title = "Dim behind search",
+        section = "wallpaper", keywords = "search dim background",
+    )
+    val SearchBlur = IntSetting(
+        key = "search.blur", default = 0, min = 0, max = 40, step = 2, unit = "dp",
+        title = "Blur behind search",
+        summary = "Off automatically when the glass benchmark found the phone only manages tint glass",
+        section = "wallpaper", keywords = "search blur background",
+    )
+
+    // ---- Home menu ----
+
+    /** Encoded launcher actions of the upper ("set up") pill. Edited with the home menu editor. */
+    val HomeMenuSetup = StringListSetting(
+        key = "homeMenu.setup", default = listOf("settings", "layouts"),
+        title = "Set-up pill", section = "homeMenu", hidden = true,
+    )
+    /** Encoded launcher actions of the lower ("actions") pill. */
+    val HomeMenuActions = StringListSetting(
+        key = "homeMenu.actions", default = listOf("wallpaper", "edit", "add_page", "pages"),
+        title = "Actions pill", section = "homeMenu", hidden = true,
+    )
+    val HomeMenuLabels = BoolSetting(
+        key = "homeMenu.labels", default = true,
+        title = "Show labels under the icons",
+        section = "homeMenu", keywords = "home menu labels names",
+    )
+    val HomeMenuSink = BoolSetting(
+        key = "homeMenu.sink", default = true,
+        title = "Home screen sinks back while the menu is open",
+        section = "homeMenu", keywords = "home menu depth scale",
+    )
+
+    // ---- Wallpaper ----
+
+    val WallpaperHomeBlur = IntSetting(
+        key = "wallpaper.homeBlur", default = 0, min = 0, max = 40, step = 2, unit = "dp",
+        title = "Blur on the home screen",
+        section = "wallpaper", keywords = "wallpaper blur home",
+    )
+    val WallpaperHomeDim = IntSetting(
+        key = "wallpaper.homeDim", default = 0, min = 0, max = 80, step = 5, unit = "%",
+        title = "Dim on the home screen",
+        section = "wallpaper", keywords = "wallpaper dim darken home",
+    )
+    val WallpaperLockToo = BoolSetting(
+        key = "wallpaper.lockToo", default = false,
+        title = "Also set it as the lock screen wallpaper",
+        section = "wallpaper", keywords = "wallpaper lock screen",
+    )
+    val WallpaperHistory = IntSetting(
+        key = "wallpaper.history", default = 12, min = 0, max = 30,
+        title = "Recent wallpapers to keep",
+        summary = "Shown in the wallpaper screen for one-tap switching back",
+        section = "wallpaper", keywords = "wallpaper history recent",
+    )
+
+    // ---- Saved layouts ----
+
+    val LayoutsAutoSave = BoolSetting(
+        key = "layouts.autoSave", default = true,
+        title = "Keep changes in each layout",
+        summary = "Before switching, the current layout is saved with your latest changes. Off: switching drops changes you did not save",
+        section = "layouts", keywords = "layouts auto save keep changes",
+    )
+
     // ---- Debug log ----
 
     val LogEnabled = BoolSetting(
@@ -866,13 +937,31 @@ object LauncherSettings {
         IndexVisibility, IndexSide, IndexCurve, IndexLetterSize, IndexSpacing, IndexBubble, IndexHaptics, IndexFollow, DrawerTopSections,
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
         MenuEntries,
-        SearchEngine, SearchOpenKeyboard,
+        SearchEngine, SearchOpenKeyboard, SearchDim, SearchBlur,
+        HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
+        WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperHistory, LayoutsAutoSave,
         GlassQuality, GlassAuto, GlassCap, GlassTintMode,
     ) + GlassDefault.settings + glassSurfaces.flatMap { it.settings } + listOf(
         LogEnabled, LogVerbosity, LogSize,
         LastSystemLauncherVersion, LastSystemLauncher, DetectorVerified,
         StatsKey, StatsHomeSeen, StatsHomeUnseen, StatsRecentsSeen, StatsRecentsUnseen, StatsInterrupted, StatsFallbacks, StatsReopened, SetupAppLaunchDone, SetupEmptyHomeDone, SetupMacrosDone,
     )
+
+    /**
+     * Keys that belong to a saved home layout: the home grid, clock, gestures, pill, icons,
+     * home menu and the home screen's wallpaper blur and dim. Everything else is global.
+     */
+    val layoutKeys: Set<String> by lazy {
+        val sections = setOf("home", "clock", "gestures", "pill", "icons", "homeMenu")
+        all.filter { it.section in sections }.map { it.key }.toSet() +
+            setOf(WallpaperHomeBlur.key, WallpaperHomeDim.key)
+    }
+
+    /** Keys a backup leaves out: counters, device facts and setup state of this phone. */
+    fun isDeviceState(key: String): Boolean {
+        val setting = all.firstOrNull { it.key == key } ?: return key.startsWith("stats.") || key.startsWith("state.")
+        return setting.section == "state" || setting == GlassCap
+    }
 
     fun inSection(sectionId: String): List<Setting<*>> = all.filter { it.section == sectionId && !it.hidden }
 

@@ -77,6 +77,49 @@ class SettingsStore internal constructor(
         }
     }
 
+    /** Stored (non-default) values as text ("b:", "i:" or "s:" and the value), limited to [keys] if given. */
+    fun exportValues(keys: Set<String>? = null): Map<String, String> =
+        _values.value.filterKeys { keys == null || it in keys }.mapValues { (_, value) ->
+            when (value) {
+                is Boolean -> "b:$value"
+                is Int -> "i:$value"
+                else -> "s:$value"
+            }
+        }
+
+    /**
+     * Replaces every value in [keys] with the one in [values] (keys missing from [values] go
+     * back to their default). Values from [exportValues].
+     */
+    fun importValues(values: Map<String, String>, keys: Set<String>) {
+        val decoded = HashMap<String, Any>()
+        for ((key, text) in values) {
+            if (key !in keys) continue
+            val value: Any = when {
+                text.startsWith("b:") -> text.removePrefix("b:").toBooleanStrictOrNull() ?: continue
+                text.startsWith("i:") -> text.removePrefix("i:").toIntOrNull() ?: continue
+                text.startsWith("s:") -> text.removePrefix("s:")
+                else -> continue
+            }
+            decoded[key] = value
+        }
+        _values.update { (it - keys) + decoded }
+        persist { prefs ->
+            for (key in keys) {
+                prefs.remove(booleanPreferencesKey(key))
+                prefs.remove(intPreferencesKey(key))
+                prefs.remove(stringPreferencesKey(key))
+            }
+            for ((key, value) in decoded) {
+                when (value) {
+                    is Boolean -> prefs[booleanPreferencesKey(key)] = value
+                    is Int -> prefs[intPreferencesKey(key)] = value
+                    else -> prefs[stringPreferencesKey(key)] = value.toString()
+                }
+            }
+        }
+    }
+
     private fun persist(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         val store = dataStore ?: return
         scope.launch {

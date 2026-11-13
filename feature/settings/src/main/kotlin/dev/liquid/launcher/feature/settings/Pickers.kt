@@ -39,7 +39,8 @@ import dev.liquid.launcher.core.data.LauncherData
 internal fun actionLabel(action: LauncherAction): String {
     val data = LauncherData.get(LocalContext.current)
     val apps by data.apps.apps.collectAsState()
-    return LauncherAction.label(action) { ref -> apps.firstOrNull { it.ref == ref }?.label }
+    val layouts by data.layouts.state.collectAsState()
+    return LauncherAction.label(action, { id -> layouts.layouts.firstOrNull { it.id == id }?.name }) { ref -> apps.firstOrNull { it.ref == ref }?.label }
 }
 
 /** Choose a built-in action or "open an app". */
@@ -52,6 +53,7 @@ internal fun ActionPickerDialog(
     onPick: (LauncherAction) -> Unit,
 ) {
     var pickingApp by remember { mutableStateOf(false) }
+    val savedLayouts = LauncherData.get(LocalContext.current).layouts.state.collectAsState().value.layouts
     if (pickingApp) {
         AppPickerDialog(title = "Open which app?", onDismiss = { pickingApp = false }) { app ->
             pickingApp = false
@@ -66,6 +68,14 @@ internal fun ActionPickerDialog(
             LazyColumn(Modifier.heightIn(max = 420.dp)) {
                 items(LauncherAction.builtIns.filter { includeNone || it.first != LauncherAction.None }) { (action, label) ->
                     ChoiceLine(label, selected = action == current) { onPick(action) }
+                }
+                items(LauncherAction.sections) { (id, label) ->
+                    val action = LauncherAction.Section(id)
+                    ChoiceLine("Open: $label", selected = action == current) { onPick(action) }
+                }
+                items(savedLayouts) { layout ->
+                    val action = LauncherAction.SwitchLayout(layout.id)
+                    ChoiceLine("Switch to layout: ${layout.name}", selected = action == current) { onPick(action) }
                 }
                 item {
                     ChoiceLine(

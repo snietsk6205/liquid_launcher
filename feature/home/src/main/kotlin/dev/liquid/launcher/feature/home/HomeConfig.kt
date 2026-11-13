@@ -255,9 +255,14 @@ fun SettingsStore.glassConfig(): GlassConfig {
     return GlassConfig(quality, get(S.GlassTintMode), surfaces)
 }
 
-data class SearchConfig(val engine: String, val keyboard: Boolean)
+data class SearchConfig(val engine: String, val keyboard: Boolean, val dim: Float, val blurDp: Int)
 
-fun SettingsStore.searchConfig() = SearchConfig(get(S.SearchEngine), get(S.SearchOpenKeyboard))
+fun SettingsStore.searchConfig() = SearchConfig(get(S.SearchEngine), get(S.SearchOpenKeyboard), get(S.SearchDim) / 100f, get(S.SearchBlur))
+
+/** Wallpaper treatment on the home screen. */
+data class WallpaperLook(val homeBlurDp: Int, val homeDim: Float)
+
+fun SettingsStore.wallpaperLook() = WallpaperLook(get(S.WallpaperHomeBlur), get(S.WallpaperHomeDim) / 100f)
 
 /** Glass surface ids, matching LauncherSettings.GlassSurface.id. */
 object Surfaces {

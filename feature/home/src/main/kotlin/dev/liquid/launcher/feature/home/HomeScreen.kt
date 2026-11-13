@@ -1,5 +1,9 @@
 package dev.liquid.launcher.feature.home
 
+import androidx.compose.ui.graphics.asImageBitmap
+
+import androidx.compose.ui.graphics.asAndroidBitmap
+
 import android.app.Activity
 import android.app.WallpaperColors
 import android.app.WallpaperManager
@@ -46,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -115,10 +120,13 @@ class HomeReturnState {
     fun onHomePressed() {
         homePresses++
     }
+
+    /** Something another screen asked the home screen to open ("wallpaper"), or null. */
+    var request by mutableStateOf<String?>(null)
 }
 
 /** How the home screen is shown: the real thing, or a miniature inside the settings app. */
-enum class HomeMode { Live, Preview, PreviewDrawer, PreviewDrawerMotion, PreviewDrawerIndex, PreviewMenu }
+enum class HomeMode { Live, Preview, PreviewDrawer, PreviewDrawerMotion, PreviewDrawerIndex, PreviewMenu, PreviewHomeMenu }
 
 @Composable
 fun HomeScreen(
@@ -144,13 +152,43 @@ fun HomeScreen(
     val drawerConfig by store.derive { drawerConfig() }
     val motion by store.derive { drawerMotion() }
     val indexConfig by store.derive { indexConfig() }
+    val look by store.derive { wallpaperLook() }
+    val homeMenuConfig by store.derive { homeMenuConfig() }
     val glass by store.derive { glassConfig() }
     val search by store.derive { searchConfig() }
     val menuEntries by store.derive { MenuEntry.fromIds(get(LauncherSettings.MenuEntries)) }
     val handover by store.derive { get(LauncherSettings.SettleStyle) to get(LauncherSettings.SettleDuration) }
-    val image by wallpaper.image.collectAsState()
+    val savedImage by wallpaper.image.collectAsState()
+    // The wallpaper screen tries values out on the real home screen before they are applied.
+    val studio = remember(controller.wallpaperStudio) { if (controller.wallpaperStudio && live) StudioState(store) else null }
+    val image = studio?.candidateImage ?: savedImage
+    val homeBlurDp = studio?.homeBlur ?: look.homeBlurDp
+    val homeDim = (studio?.homeDim?.div(100f)) ?: look.homeDim
+    val searchBlurDp = studio?.searchBlur ?: search.blurDp
+    val drawerShown = if (studio != null) drawerConfig.copy(dim = studio.drawerDim / 100f) else drawerConfig
+    val motionShown = if (studio != null) motion.copy(homeBlurDp = studio.drawerBlur) else motion
+    val density1 = LocalDensity.current
+    val blurredWallpaper by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, image, homeBlurDp) {
+        val source = image
+        value = if (source != null && homeBlurDp > 0) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                dev.liquid.launcher.core.designsystem.WallpaperBlur.blur(source.asAndroidBitmap(), homeBlurDp * density1.density).asImageBitmap()
+            }
+        } else {
+            null
+        }
+    }
+    if (studio != null) {
+        // Preview the screen being adjusted.
+        LaunchedEffect(studio.surface) {
+            if (studio.surface == "drawer") controller.openDrawer() else if (controller.drawer.value > 0f) controller.closeDrawer()
+        }
+    }
+    val menuSink by androidx.compose.animation.core.animateFloatAsState(
+        if (controller.homeMenu && homeMenuConfig.sink) 1f else 0f, label = "menuSink",
+    )
 
-    val lightBackground = remember(image) { wallpaperIsLight(context) }
+    val lightBackground = remember(savedImage) { wallpaperIsLight(context) }
     val contentColor = if (lightBackground) Color(0xFF16181C) else Color.White
     val shadow = if (lightBackground) null else Shadow(Color.Black.copy(alpha = 0.45f), Offset(0f, 1f), 4f)
 
@@ -173,6 +211,13 @@ fun HomeScreen(
                     animate(0f, 1f, animationSpec = tween(duration)) { value, _ -> progress.floatValue = value }
                 }
             }
+        }
+        LaunchedEffect(returnState.request) {
+            when (returnState.request) {
+                "wallpaper" -> controller.run(LauncherAction.Wallpaper)
+                "layouts" -> controller.run(LauncherAction.Layouts)
+            }
+            returnState.request = null
         }
         LaunchedEffect(returnState.homePresses) {
             if (returnState.homePresses == 0) return@LaunchedEffect
@@ -243,13 +288,16 @@ fun HomeScreen(
                   .fillMaxSize()
                   .graphicsLayer {
                       val p = controller.drawer.value.coerceIn(0f, 1f)
+                      val searchP = if (studio?.surface == "search") 1f else controller.searchAmount
                       // A phone that only holds the frame rate with tint glass (glass benchmark) gets no blur here either.
-                      val blurDp = if (glass.quality == GlassQuality.Tint) 0 else motion.homeBlurDp
-                      val radius = blurDp.dp.toPx() * p
+                      val tint = glass.quality == GlassQuality.Tint
+                      val drawerRadius = if (tint) 0f else motionShown.homeBlurDp.dp.toPx() * p
+                      val searchRadius = if (tint) 0f else searchBlurDp.dp.toPx() * searchP
+                      val radius = maxOf(drawerRadius, searchRadius)
                       renderEffect = if (radius >= 0.5f) BlurEffect(radius, radius, TileMode.Clamp) else null
                   }
           ) {
-            image?.let {
+            (blurredWallpaper ?: image)?.let {
                 Image(
                     bitmap = it,
                     contentDescription = null,
@@ -257,6 +305,7 @@ fun HomeScreen(
                     contentScale = ContentScale.Crop,
                 )
             }
+            if (homeDim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = homeDim)))
             val pillSpace = if (pill.enabled || controller.editMode) pill.heightDp + pill.offsetDp + 12 else 0
             // Remembered: a new gesture lambda would restart the detector and cancel a swipe in progress.
             val swipes = remember(gestures, controller.editMode) { Modifier.homeSwipes(gestures, controller) }
@@ -270,6 +319,7 @@ fun HomeScreen(
                         var scale = 1f - motion.homeScale * p
                         if (settle == "scale") scale *= 0.94f + 0.06f * back
                         if (controller.editMode) scale *= 0.9f
+                        scale *= 1f - 0.06f * menuSink
                         scaleX = scale
                         scaleY = scale
                     }
@@ -345,10 +395,13 @@ fun HomeScreen(
         }
 
         // ---- Overlays ----
+        if (studio?.surface == "search") {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = studio.searchDim / 100f)))
+        }
         AppDrawer(
             controller = controller,
-            config = drawerConfig,
-            motion = motion,
+            config = drawerShown,
+            motion = motionShown,
             indexConfig = indexConfig,
             glass = glass,
             lightBackground = lightBackground,
@@ -356,7 +409,7 @@ fun HomeScreen(
             homeBackdrop = homeBackdrop,
             drawerLayer = drawerLayer,
             ownSearchPill = !morph,
-            interactive = live,
+            interactive = live && studio == null,
         )
         if (morph) {
             MorphingPill(
@@ -388,6 +441,17 @@ fun HomeScreen(
         controller.menu?.let { target ->
             AppMenu(target, menuEntries, controller, glass, lightBackground, overlayBackdrop)
         }
+        if (mode == HomeMode.PreviewHomeMenu) SideEffect { controller.homeMenu = true }
+        if ((live || mode == HomeMode.PreviewHomeMenu) && controller.homeMenu) {
+            HomeMenu(homeMenuConfig, glass, lightBackground, overlayBackdrop, appIndex, controller)
+        }
+        if (live && controller.layoutsSheet) {
+            LayoutsSheet(glass, lightBackground, overlayBackdrop, controller)
+        }
+        if (studio != null) {
+            WallpaperStudio(studio, glass, lightBackground, overlayBackdrop, controller)
+        }
+        if (controller.savingLayout) SaveLayoutDialog(controller)
         controller.drag?.let { drag ->
             RemoveZone(drag, controller, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 12.dp))
             DragGhost(drag)
