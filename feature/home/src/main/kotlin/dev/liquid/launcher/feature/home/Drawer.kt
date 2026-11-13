@@ -69,6 +69,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
@@ -605,7 +606,7 @@ internal fun Modifier.closeOnDrag(controller: HomeController): Modifier = pointe
     detectVerticalDragGestures(
         onDragStart = { tracker.resetTracking() },
         onVerticalDrag = { change, dy ->
-            tracker.addPosition(change.uptimeMillis, change.position)
+            tracker.addPointerInputChange(change)
             change.consume()
             controller.dragDrawerBy(-dy / controller.screenHeight)
         },

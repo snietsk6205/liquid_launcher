@@ -138,6 +138,7 @@ class HomeController(
      * flick hands its momentum to the spring instead of restarting from rest.
      */
     fun openDrawer(velocity: Float = 0f) {
+        dragPosition = null
         menu = null
         searchOpen = false
         DebugLog.event("Home", "drawer: open from " + "%.2f".format(drawer.value))
@@ -145,6 +146,7 @@ class HomeController(
     }
 
     fun closeDrawer(immediately: Boolean = false, velocity: Float = 0f) {
+        dragPosition = null
         DebugLog.event("Home", "drawer: close from " + "%.2f".format(drawer.value))
         drawerFocusReset++
         drawerQuery = ""
@@ -153,17 +155,26 @@ class HomeController(
         }
     }
 
+    /**
+     * Where the finger has put the drawer, ahead of [drawer] itself: the snaps run on the main
+     * thread's queue, so on a slow frame the Animatable can lag several events behind.
+     */
+    private var dragPosition: Float? = null
+
     fun dragDrawerBy(deltaFraction: Float) {
-        scope.launch { drawer.snapTo((drawer.value + deltaFraction).coerceIn(0f, 1f)) }
+        val next = ((dragPosition ?: drawer.value) + deltaFraction).coerceIn(0f, 1f)
+        dragPosition = next
+        scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { drawer.snapTo(next) }
     }
 
     /** Finger released while moving the drawer: open or close depending on position and speed. */
     fun settleDrawer(velocityPxPerSec: Float) {
-        DebugLog.event("Home", "drawer: released at " + "%.2f".format(drawer.value) + ", " + velocityPxPerSec.toInt() + " px/s")
+        val position = dragPosition ?: drawer.value
+        DebugLog.event("Home", "drawer: released at " + "%.2f".format(position) + ", " + velocityPxPerSec.toInt() + " px/s")
         val open = when {
             velocityPxPerSec < -800f -> true
             velocityPxPerSec > 800f -> false
-            else -> drawer.value > 0.4f
+            else -> position > 0.4f
         }
         // Upward finger speed is negative on screen and positive for the drawer.
         val velocity = (-velocityPxPerSec / screenHeight).coerceIn(-8f, 8f)

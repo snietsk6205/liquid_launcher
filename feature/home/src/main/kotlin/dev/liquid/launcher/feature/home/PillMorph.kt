@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
@@ -156,7 +157,7 @@ private fun Modifier.morphGestures(config: PillConfig, controller: HomeControlle
                 fromOpen = controller.drawer.value >= 0.5f
             },
             onVerticalDrag = { change, dy ->
-                tracker.addPosition(change.uptimeMillis, change.position)
+                tracker.addPointerInputChange(change)
                 total += dy
                 change.consume()
                 if (fromOpen || (follow && (total < 0 || controller.drawer.value > 0f))) {

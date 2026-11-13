@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -405,7 +406,7 @@ private fun Modifier.homeSwipes(gestures: GestureConfig, controller: HomeControl
                 controller.menu = null
             },
             onVerticalDrag = { change, dy ->
-                tracker.addPosition(change.uptimeMillis, change.position)
+                tracker.addPointerInputChange(change)
                 total += dy
                 change.consume()
                 if (follow && (total < 0 || controller.drawer.value > 0f)) {

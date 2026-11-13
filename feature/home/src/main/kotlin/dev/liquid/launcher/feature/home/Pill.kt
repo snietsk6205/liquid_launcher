@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -112,7 +113,7 @@ private fun Modifier.pillGestures(config: PillConfig, controller: HomeController
                 total = 0f
             },
             onVerticalDrag = { change, dy ->
-                tracker.addPosition(change.uptimeMillis, change.position)
+                tracker.addPointerInputChange(change)
                 total += dy
                 change.consume()
                 if (follow && (total < 0 || controller.drawer.value > 0f)) {
