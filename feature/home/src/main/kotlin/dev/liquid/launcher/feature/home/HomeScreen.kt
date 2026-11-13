@@ -71,6 +71,7 @@ import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import dev.liquid.launcher.core.common.DebugLog
 import dev.liquid.launcher.core.data.LauncherAction
 import dev.liquid.launcher.core.data.LauncherData
 import dev.liquid.launcher.core.data.MenuEntry
@@ -326,6 +327,7 @@ private fun Modifier.homeSwipes(gestures: GestureConfig, controller: HomeControl
             onDragEnd = {
                 val velocity = tracker.calculateVelocity().y
                 val threshold = 48.dp.toPx()
+                DebugLog.event("Home", "swipe: " + total.toInt() + " px, " + velocity.toInt() + " px/s")
                 when {
                     follow && controller.drawer.value > 0f -> controller.settleDrawer(velocity)
                     total < -threshold || velocity < -1200f -> controller.run(gestures.swipeUp)

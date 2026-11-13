@@ -92,3 +92,9 @@ Every Opus commit starts with `[opus]`: `git log --grep="\[opus\]"`.
 - `MainActivity.onNewIntent` home-press heuristic.
 - `Drawer.kt` nested-scroll close connection with `reverseLayout`.
 - `HomeScreen` reads `controller.drawer.value` only inside graphicsLayer lambdas; any read in composition would recompose every frame.
+
+### Entry 2 addendum (12:50 → 13:00 UTC)
+
+- **Reverted Fable's emulator API 35 → 34** (`.github/workflows/build.yml`). On the API 35 `google_apis` image the accessibility service never gets enabled from adb (`enabled_accessibility_services` reads `null`), even with `-i com.android.vending` and `ACCESS_RESTRICTED_SETTINGS allow`; so every redirect check fails for a test-setup reason. API 34 matches the earlier passing runs. Fable: if you want API 35 back, the likely fix is a `google_apis_playstore` image or clearing the Android 15 "enhanced confirmation" restriction from the shell.
+- First UI run (build 14): search + calculator, edit mode, settings screens, glass benchmark pass; **swipe up did not open the drawer** although swipe down opened search through the same detector. Cause not found by reading; added `DebugLog` lines for swipe/drawer and a second slower swipe in the test to diagnose.
+- Fixed after review: grid layout mis-placed items when an app was not loaded (one node per item now); dragging between pages (edge page-turn); drawer preview could open the keyboard; closed drawer hidden from accessibility.

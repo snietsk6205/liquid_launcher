@@ -98,7 +98,7 @@ if wait_log 'service connected' 60; then
 else
   fail "accessibility service connected"
   echo "      enabled services: $(adb shell settings get secure enabled_accessibility_services)"
-  adb logcat -d 2>/dev/null | grep -iE "AccessibilityManager|restricted|EnhancedConfirmation|ecm" | grep -i "$PKG" | tail -15
+  adb logcat -d 2>/dev/null | grep -iE "accessib|restricted|EnhancedConfirmation" | tail -25 | sed 's/^/        /'
 fi
 sleep 2
 
@@ -252,12 +252,21 @@ tap_text() {
   adb shell input tap $pos
 }
 
-# Drawer: swipe up on the home screen.
+# Drawer: swipe up on the home screen (a second, slower try if the first does not open it).
+show_drawer_log() { grep -E "Home: (swipe|drawer)" "$LOG" | tail -6 | sed 's/^/        /'; }
 adb shell input swipe 540 1500 540 400 250
 sleep 2
-peek 06-drawer
 dump 06-drawer
+if ! on_screen 06-drawer "Search apps"; then
+  echo "      first swipe did not open the drawer; log so far:"
+  show_drawer_log
+  adb shell input swipe 540 1700 540 600 600
+  sleep 2
+  dump 06-drawer
+fi
+peek 06-drawer
 if on_screen 06-drawer "Search apps"; then pass "swipe up opens the drawer"; else fail "swipe up opens the drawer"; fi
+show_drawer_log
 if on_screen 06-drawer "Settings" exact || on_screen 06-drawer "Chrome" exact; then pass "drawer lists apps"; else fail "drawer lists apps"; fi
 
 # Long-press an app in the drawer: the glass menu, then add it to the home screen.

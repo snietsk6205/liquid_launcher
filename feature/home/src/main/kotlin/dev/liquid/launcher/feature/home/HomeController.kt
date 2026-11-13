@@ -103,10 +103,12 @@ class HomeController(
     fun openDrawer() {
         menu = null
         searchOpen = false
+        DebugLog.event("Home", "drawer: open from " + "%.2f".format(drawer.value))
         scope.launch { drawer.animateTo(1f, spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)) }
     }
 
     fun closeDrawer(immediately: Boolean = false) {
+        DebugLog.event("Home", "drawer: close from " + "%.2f".format(drawer.value))
         drawerFocusReset++
         drawerQuery = ""
         scope.launch {
@@ -120,6 +122,7 @@ class HomeController(
 
     /** Finger released while moving the drawer: open or close depending on position and speed. */
     fun settleDrawer(velocityPxPerSec: Float) {
+        DebugLog.event("Home", "drawer: released at " + "%.2f".format(drawer.value) + ", " + velocityPxPerSec.toInt() + " px/s")
         val open = when {
             velocityPxPerSec < -800f -> true
             velocityPxPerSec > 800f -> false
