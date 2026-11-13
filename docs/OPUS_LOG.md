@@ -118,7 +118,7 @@ Every Opus commit starts with `[opus]`: `git log --grep="\[opus\]"`.
 
 ## Session summary (2026-11-13, Opus)
 
-**State:** Phase 1B first part (0.2.0) is built. Local build and all 63 unit tests pass (redirect engine 35, layout 10, search 8, settings 7, latency 3). On the API 34 emulator every UI check passed in run 17 (drawer, app list, long-press menu, add to home, back, search + calculator, edit mode) and all redirect checks except the first Home press, which hit an emulator ANR dialog; run 18 retries that.
+**State:** Phase 1B first part (0.2.0) is built. Local build and all 63 unit tests pass (redirect engine 35, layout 10, search 8, settings 7, latency 3). On the API 34 emulator every UI check passed in run 17 (drawer, app list, long-press menu, add to home, back, search + calculator, edit mode) and all redirect checks except the first Home press, which hit an emulator ANR dialog. Run 18 (with dialog handling) passed every check and published release `v0.2.0` (build 18).
 
 **Builds:** `./gradlew testDebugUnitTest :app:assembleRelease` locally (SDK in `/root/android-sdk`, see Entry 1). CI publishes release `v0.2.0` when the emulator test passes.
 
