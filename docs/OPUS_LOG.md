@@ -185,6 +185,8 @@ Every Opus commit starts with `[opus]`: `git log --grep="\[opus\]"`.
 | `core/data/StaticShortcuts.kt` (new), `AppMenu.kt` | Manifest shortcuts at the top of the long-press menu; failures explained in a toast | 1B shortcuts (D9) |
 | `MenuEntry`, menu defaults | New entries: shortcuts, icon, swipe, tags | |
 
+| `feature/home/HomeController.kt`, gesture files | Drawer drag keeps its own position (`dragPosition`) and snaps undispatched; velocity trackers use `addPointerInputChange` (historical points) | Run 22: on the slow emulator a 518 px swipe was released "at 0.08, 0 px/s" and closed; the same can happen on the phone during a dropped frame |
+
 Not done: dragging an app out of an open folder (use the menu's "Take out of the folder"), folder preview styles and shapes (Phase 2 per the roadmap), work-profile shortcuts.
 
 ### For Fable to review
