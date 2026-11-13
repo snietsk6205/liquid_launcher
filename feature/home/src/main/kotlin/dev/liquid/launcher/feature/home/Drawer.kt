@@ -236,6 +236,8 @@ fun AppDrawer(
         Modifier
             .fillMaxSize()
             .then(if (closed) Modifier.clearAndSetSemantics { } else Modifier)
+            // Closed: placed below the screen, so the invisible list cannot take the home screen's touches.
+            .offset { if (controller.drawer.value <= 0f) IntOffset(0, controller.screenHeight.roundToInt() * 2) else IntOffset.Zero }
             .graphicsLayer { alpha = if (controller.drawer.value <= 0f) 0f else 1f }
     ) {
         // ---- Recorded for the glass: dim and apps ----
