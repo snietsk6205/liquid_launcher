@@ -109,12 +109,28 @@ sleep 4
 look 01-home 30
 
 echo "== 2. Home button while on the launcher returns to the launcher"
-BEFORE=$(redirect_count)
-adb shell input keyevent KEYCODE_HOME
-sleep 4
-AFTER=$(redirect_count)
-if wait_top "$HOME_ACTIVITY" 6 && [ "$AFTER" -gt "$BEFORE" ]; then
+# A freshly booted emulator sometimes shows "Pixel Launcher isn't responding"; that dialog
+# is the emulator's, not ours, so close system dialogs and allow one retry.
+close_dialogs() {
+  adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1
+  adb shell dumpsys window 2>/dev/null | grep -q "Application Not Responding" && adb shell input keyevent KEYCODE_ENTER
+  true
+}
+home_press_check() {
+  close_dialogs
+  adb shell am start -n "$HOME_ACTIVITY" >/dev/null
+  wait_top "$HOME_ACTIVITY" 8 || true
+  sleep 2
+  BEFORE=$(redirect_count)
+  adb shell input keyevent KEYCODE_HOME
+  sleep 4
+  AFTER=$(redirect_count)
+  wait_top "$HOME_ACTIVITY" 6 && [ "$AFTER" -gt "$BEFORE" ]
+}
+if home_press_check; then
   pass "home press redirected ($BEFORE -> $AFTER)"
+elif echo "      retrying once after closing system dialogs" && home_press_check; then
+  pass "home press redirected on retry ($BEFORE -> $AFTER)"
 else
   fail "home press redirected ($BEFORE -> $AFTER)"
 fi
