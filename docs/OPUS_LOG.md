@@ -278,7 +278,7 @@ Not done / limits: large folders; per-folder styles (all folders share one style
 
 ## Session summary (2026-11-13, Opus, updated for 0.4.0)
 
-**State:** 0.2.2 (build 25) and 0.3.0 (build 26) released after green emulator runs. 0.4.0 (Phase 2 part 2: theme, folders, dock, page settings, page transitions) built; unit tests pass. None of 0.2.2–0.4.0 is tested on the phone yet; the user asked to continue without a test in between.
+**State:** 0.2.2 (build 25) and 0.3.0 (build 26) released after green emulator runs. 0.4.0 (Phase 2 part 2: theme, folders, dock, page settings, page transitions) released as build 27 after a green emulator run; unit tests pass. None of 0.2.2–0.4.0 is tested on the phone yet; the user asked to continue without a test in between.
 
 **Next step:** the user tests 0.4.0 (which contains 0.2.2 and 0.3.0); then Phase 2 part 3 (0.5: gestures, double tap per icon, motion and haptics settings, in-app updater).
 

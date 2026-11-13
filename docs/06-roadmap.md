@@ -9,7 +9,7 @@
 | 1B | Redirect fixes, drawer transition / tabs / scroll bar, pages, clock resize, tags and own tabs, icon packs, folders, swipe actions, shortcuts | 0.2.1 | Tested on the phone |
 | 1B polish | Curved letter index (A), icons following the wallpaper (B), floating tabs pill with positions, styles and a per-tab menu (D) | 0.2.2 | Released (build 25) |
 | 2, part 1: home setup | Home menu (two glass pills on long press), wallpaper studio (picker, history, blur and dim per surface, live preview), saved layouts, backup / restore | 0.3.0 | Released (build 26) |
-| 2, part 2: look | Theme (text, accent and glass colours, fonts incl. an imported file, clock font and weight, icon shapes), presets and `.lltheme` files; folder preview / background / shape / tap-first / columns / drag out; dock; per-page grid, labels and name; page transitions | 0.4.0 | Built |
+| 2, part 2: look | Theme (text, accent and glass colours, fonts incl. an imported file, clock font and weight, icon shapes), presets and `.lltheme` files; folder preview / background / shape / tap-first / columns / drag out; dock; per-page grid, labels and name; page transitions | 0.4.0 | Released (build 27) |
 | 2, part 3: touch and motion (next) | Two-finger / pinch / edge gestures, double tap per icon, activity picker, motion and haptics settings (drawer tick, depth transition for search, launch animation), in-app updater | 0.5 | |
 | 3 | Widgets: other apps' widgets, clock gallery, built-in widgets, panels; "Widgets" joins the home menu | 2–3 builds | |
 | 4 | Search sources (contacts, calendar, files, settings pages), suggested apps, notification badges, drawer folders and rule-based tabs | 2 builds | |
