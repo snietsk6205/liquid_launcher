@@ -1,5 +1,22 @@
 # 6. Roadmap
 
+## Plan as of 0.2.0 (2026-11-13)
+
+| Phase | Content | Builds (rough) | State |
+|---|---|---|---|
+| 1A | Redirect engine, diagnostics, glass benchmark | 1 | Done (0.1.0) |
+| 1B | Home grid, pill, drawer, long-press menu, search v1, settings editors and previews | 0.2.0 | Built, needs phone test |
+| 1B (rest) | Icon packs (global / home / drawer / per app, masking), folders, tags and drawer tabs, per-icon swipe actions and icon change, static app shortcuts | 2–3 | Next |
+| 2 | Theme editor (colours, fonts, shapes), theme files, more gestures (two-finger, pinch, edges), dock, page transitions, backup/restore, in-app updater, haptics | 3 | |
+| 3 | Widgets: other apps' widgets, clock gallery, built-in widgets, custom panels | 2–3 | |
+| 4 | Search sources (contacts, calendar, files, settings pages), suggested apps, notification badges | 2 | |
+| 5 | Study companion: GitHub task sync, calendar blocks, Now card, study widgets | 2–3 | |
+| 6 | Profiles (Study / Free / Night), study mode, mindful friction | 2 | |
+| 7 | Performance and polish: baseline profiles, frame-time review, battery review | 1–2 | |
+
+About 16–19 builds in total. The original phase descriptions below still apply.
+
+
 Each phase ends with: a signed APK on the GitHub Releases page, a test checklist of about ten minutes, and a known-issues list. Phases are sized so that I can work through them without input; the only stops are phone tests and decisions that are expensive to reverse.
 
 Builds: GitHub Actions on every push to the working branch (compile, unit tests, lint), release APK attached to a GitHub Release at the end of each phase. From Phase 2 the launcher can update itself from those releases.

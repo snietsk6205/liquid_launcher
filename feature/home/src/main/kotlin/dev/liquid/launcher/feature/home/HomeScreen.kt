@@ -145,6 +145,7 @@ fun HomeScreen(
     val contentColor = if (lightBackground) Color(0xFF16181C) else Color.White
     val shadow = if (lightBackground) null else Shadow(Color.Black.copy(alpha = 0.45f), Offset(0f, 1f), 4f)
 
+    val density0 = LocalDensity.current
     val currentLayout by rememberUpdatedState(layout)
     controller.pager = rememberPagerState { currentLayout.pages.size.coerceAtLeast(1) }
 
@@ -172,6 +173,12 @@ fun HomeScreen(
             if (!wasOpen && controller.pager.currentPage != 0) controller.pager.animateScrollToPage(0)
         }
     }
+    if (live) {
+        val dragging = controller.drag != null
+        LaunchedEffect(dragging) {
+            if (dragging) controller.edgeScrollWhileDragging(with(density0) { 28.dp.toPx() })
+        }
+    }
     if (mode == HomeMode.PreviewDrawer) {
         LaunchedEffect(Unit) { controller.drawer.snapTo(1f) }
     }
@@ -194,7 +201,10 @@ fun HomeScreen(
     Box(
         Modifier
             .fillMaxSize()
-            .onSizeChanged { controller.screenHeight = it.height.toFloat().coerceAtLeast(1f) }
+            .onSizeChanged {
+                controller.screenHeight = it.height.toFloat().coerceAtLeast(1f)
+                controller.screenWidth = it.width.toFloat().coerceAtLeast(1f)
+            }
     ) {
         // ---- Home: wallpaper and pages, recorded so glass surfaces can refract them ----
         Box(Modifier.fillMaxSize().layerBackdrop(homeBackdrop)) {
@@ -276,7 +286,7 @@ fun HomeScreen(
         }
 
         // ---- Overlays ----
-        AppDrawer(controller, drawerConfig, glass, lightBackground, apps, homeBackdrop, live || mode == HomeMode.PreviewDrawer)
+        AppDrawer(controller, drawerConfig, glass, lightBackground, apps, homeBackdrop, live)
 
         if (live && controller.searchOpen) {
             SearchOverlay(controller, search, glass, lightBackground, overlayBackdrop, apps)

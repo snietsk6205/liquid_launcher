@@ -87,6 +87,7 @@ class HomeController(
     /** Bumped to ask the drawer to drop keyboard focus. */
     var drawerFocusReset by mutableIntStateOf(0)
     var screenHeight by mutableFloatStateOf(1f)
+    var screenWidth by mutableFloatStateOf(1f)
 
     lateinit var pager: PagerState
 
@@ -302,6 +303,39 @@ class HomeController(
     /** Cell the drag would land on right now, for the drop highlight. */
     fun previewCell(): Triple<Int, Int, Int>? = drag?.let { cellUnder(it) }
 
+    /**
+     * While an item is held near the left or right screen edge, turn the page; past the last
+     * page a new one is added. Runs for the duration of one drag.
+     */
+    suspend fun edgeScrollWhileDragging(edgePx: Float) {
+        var side = 0
+        var since = 0L
+        while (true) {
+            val d = drag ?: return
+            val now = android.os.SystemClock.uptimeMillis()
+            val newSide = when {
+                d.finger.x < edgePx -> -1
+                d.finger.x > screenWidth - edgePx -> 1
+                else -> 0
+            }
+            if (newSide != side) {
+                side = newSide
+                since = now
+            } else if (side != 0 && now - since > EDGE_DWELL_MS) {
+                val target = pager.currentPage + side
+                if (target >= 0) {
+                    if (target >= data.layout.layout.value.pages.size) {
+                        data.layout.commit(LayoutOps.addPage(data.layout.layout.value))
+                        kotlinx.coroutines.delay(32) // let the pager see the new page count
+                    }
+                    pager.animateScrollToPage(target)
+                }
+                since = android.os.SystemClock.uptimeMillis()
+            }
+            kotlinx.coroutines.delay(80)
+        }
+    }
+
     /** Removes empty pages at the end (never the first page). */
     fun tidyPages() {
         var layout = data.layout.layout.value
@@ -360,6 +394,8 @@ class HomeController(
 
     fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
 }
+
+private const val EDGE_DWELL_MS = 650L
 
 /** What the home screen asks the activity to do. */
 class HomeCallbacks(

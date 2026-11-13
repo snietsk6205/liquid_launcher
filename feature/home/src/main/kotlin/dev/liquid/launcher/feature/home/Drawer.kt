@@ -33,6 +33,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -58,6 +59,7 @@ import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -126,10 +128,13 @@ fun AppDrawer(
     }
 
     val closeConnection = remember(controller) { drawerCloseConnection(controller) }
+    // Flips only when the drawer fully closes or starts opening, not on every frame.
+    val closed by remember { derivedStateOf { controller.drawer.value <= 0f } }
 
     Box(
         Modifier
             .fillMaxSize()
+            .then(if (closed) Modifier.clearAndSetSemantics { } else Modifier)
             .graphicsLayer {
                 val p = controller.drawer.value
                 translationY = (1f - p) * size.height

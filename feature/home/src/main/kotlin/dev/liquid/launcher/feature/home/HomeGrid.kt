@@ -155,9 +155,10 @@ private fun ItemView(item: HomeItem, env: PageEnv, controller: HomeController) {
         ItemKind.APP -> {
             val app = item.app?.let { env.apps[it] }
             if (app == null) {
-                // Uninstalled or not loaded yet. Visible only while editing, so it can be removed.
-                if (env.editMode) {
-                    Box(base.iconGestures({ holder.value }, dragOnly(item, null, holder, controller), env.interactive)) {
+                // Uninstalled or not loaded yet. Always emit one node per item (the grid layout
+                // places children by index); show a placeholder only while editing.
+                Box(base.iconGestures({ holder.value }, dragOnly(item, null, holder, controller), env.interactive && env.editMode)) {
+                    if (env.editMode) {
                         Box(
                             Modifier
                                 .align(Alignment.Center)
@@ -181,8 +182,8 @@ private fun ItemView(item: HomeItem, env: PageEnv, controller: HomeController) {
 
         ItemKind.WIDGET -> {
             Box(base.iconGestures({ holder.value }, dragOnly(item, null, holder, controller), env.interactive)) {
-                when (item.widget) {
-                    "clock" -> ClockWidget(env.clock, env.contentColor, env.shadow, env.glass, env.lightBackground, env.wallpaperBackdrop)
+                if (item.widget == "clock") {
+                    ClockWidget(env.clock, env.contentColor, env.shadow, env.glass, env.lightBackground, env.wallpaperBackdrop)
                 }
             }
         }
