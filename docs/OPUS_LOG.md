@@ -224,21 +224,38 @@ Not done / limits: drawer folders (Phase 4); swipe along the tabs to scrub (0.5)
 
 ---
 
-## Session summary (2026-11-13, Opus, updated 17:35 UTC)
+## Entry 7: 0.3.0, Phase 2 part 1: home setup (2026-11-13, Opus 5.5)
 
-**State:** Phase 1B is complete as 0.2.1: the fixes from the 0.2.0 phone test (redirect, drawer, pages, clock) plus everything that was left in 1B (tags and own drawer tabs, icon packs and icon change, folders, per-icon swipe actions, app shortcuts). 85 unit tests pass. CI run 24 passed every emulator check (redirect and UI) and published `v0.2.1` build 24 (`LiquidLauncher-0.2.1-build24.apk`). Runs 22–23 failed on emulator timing; the fixes (drag position, velocity samples, blur fallback, test waits) are in Entry 5.
+**Goal:** the user's point C as designed in the roadmap ("Design for 0.3"), released without waiting for a phone test of 0.2.2 (the user asked for that).
 
-**Builds:** `./gradlew testDebugUnitTest :app:assembleRelease` locally (see Entry 1). CI publishes `v0.2.1` when the emulator test passes; newer builds replace the APK in that release.
+| File | Change | Why |
+|---|---|---|
+| `core/data/LauncherAction.kt`, `Pill.kt` | New actions: home menu, wallpaper, add page, pages, layouts, save layout, next layout, switch to a layout, open a settings section; icons | Items for the home menu, usable by every gesture and pill slot too |
+| `feature/home/HomeMenu.kt` (new), `HomeGrid.kt`, `HomeController.kt` | Two glass pills at the bottom; press-and-slide: the empty-space detector follows the same finger in the final pass and runs the item it is released over; home sinks back 6 % | D47 |
+| `core/settings` | Sections Home menu, Wallpaper, Saved layouts and backup; long press default `home_menu`; search dim and blur; home wallpaper blur and dim; lock screen; history size; keep changes in layouts; `layoutKeys`, `isDeviceState`; `SettingsStore.exportValues` / `importValues` + test | |
+| `core/designsystem/WallpaperStore.kt` | Decode without applying, apply with history and lock-screen flag, set from file, thumbnails; `WallpaperBlur` (quarter-size box blur) | D48 |
+| `feature/home/WallpaperStudio.kt` (new), `HomeScreen.kt`, `SearchOverlay.kt` | Wallpaper screen: Home / Drawer / Search preview tabs, photo picker, current and recent wallpapers, blur and dim sliders, lock screen switch, tap the preview to hide the controls, Apply / Cancel; home blur and dim, blur behind search | D48, per-surface values moved forward from Phase 6 (D46) |
+| `core/data/Layouts.kt` (new) + test, `LayoutsSheet.kt` (new) | Saved layouts: save as, keep changes, switch (one undo), rename, duplicate, delete, own wallpaper, export / import `.lllayout`; sheet with miniatures, hold for more, "add it to the home menu" | D49 |
+| `core/data/LauncherData.kt`, `feature/settings/HomeSetupEditors.kt` (new) | Backup / restore (`.llbackup`); editors for the home menu, wallpaper entry, layouts list with export / import, backup | D50 |
+| `app/MainActivity.kt` | Photo picker for the home screen; `EXTRA_OPEN` lets settings open the wallpaper screen or the layouts sheet (not counted as a Home press) | |
+| `ci/smoke.sh` | Long press now checks the home menu, opens the wallpaper screen, then edit mode through the menu | |
 
-**Untested on the phone:** everything new in 0.2.1, in particular the reopen-recents recovery (D38), the strict left-recents check (D37), the morphing pill, scroll bar dragging, resize handles, icon packs with a real pack, folders and swipe actions.
+Not done / limits: "Widgets" joins the home menu in Phase 3; no passphrase on backups; the wallpaper is centre-cropped (no pan or zoom yet); the search preview in the wallpaper screen shows only blur and dim, not the search field; automatic layout switching stays in Phase 6.
 
-**Next step:** the user tests 0.2.1; then 1B polish from that feedback (dragging apps out of folders is the known gap), then Phase 2.
+### For Fable to review
+1. Press-and-slide in `HomeGrid.homeMenuSlide` (observes the final pass without consuming).
+2. `LayoutsRepository` keeping changes on switch versus explicit saves.
+3. Restore replacing `JsonStore` values in memory while screens observe them.
+
+---
+
+## Session summary (2026-11-13, Opus, updated for 0.3.0)
+
+**State:** 0.2.2 (1B polish: letter index, themed icons, floating tabs) released as build 25 after a green emulator run. 0.3.0 (Phase 2 part 1: home menu, wallpaper screen, saved layouts, backup) built; 94 unit tests pass. Neither is tested on the phone yet; the user asked for both releases without a test in between.
+
+**Next step:** the user tests 0.2.2 and 0.3.0; then Phase 2 part 2 (0.4: theme editor, folders, dock, page transitions).
 
 ### For Fable to review (overall)
-
-1. D37–D39 in the redirect engine and the reopen-recents recovery.
-2. The drawer rewrite (`Drawer.kt`, `DrawerParts.kt`, `PillMorph.kt`): glass parts moved by layout and redrawn by a draw-phase read.
-3. `IconThemer` / `IconPacks` against a few real icon packs.
-4. The gesture detector change in `Gestures.kt` (item swipes before the long press).
-5. The saved-layouts proposal in the roadmap.
-6. Earlier items still open: home-press heuristic in `MainActivity.onNewIntent`; emulator on API 34 (D35).
+1. Entries 6 and 7 and decisions D43–D50.
+2. The roadmap changes (plan as of 0.3.0): tags and tabs moved to 1B, wallpaper per-surface values moved from Phase 6, Phase 2 split into three builds.
+3. Earlier items still open: D37–D39 redirect changes, the drawer rewrite, `IconThemer` with real packs, the home-press heuristic, emulator on API 34.

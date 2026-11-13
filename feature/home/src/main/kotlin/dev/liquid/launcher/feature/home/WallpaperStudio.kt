@@ -112,6 +112,10 @@ internal fun WallpaperStudio(
     fun close() {
         controller.wallpaperStudio = false
     }
+    // However the screen closes (Cancel, Apply, back, Home), the drawer preview goes away with it.
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { if (controller.drawer.value > 0f) controller.closeDrawer() }
+    }
 
     fun apply() {
         val settings = controller.data.settings

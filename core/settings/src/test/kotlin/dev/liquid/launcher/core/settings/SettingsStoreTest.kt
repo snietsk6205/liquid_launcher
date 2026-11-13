@@ -68,3 +68,26 @@ class SettingsStoreTest {
         assertTrue(LauncherSettings.search("zzzz").isEmpty())
     }
 }
+
+class SettingsExportTest {
+    @org.junit.Test
+    fun exportImportRoundTripLimitedToKeys() {
+        val a = SettingsStore.inMemory()
+        a.set(LauncherSettings.HomeColumns, 4)
+        a.set(LauncherSettings.HomeLabels, true)
+        a.set(LauncherSettings.DrawerTabMenu, listOf("rename", "icon"))
+        a.set(LauncherSettings.DrawerColumns, 7)
+        val keys = setOf(LauncherSettings.HomeColumns.key, LauncherSettings.HomeLabels.key, LauncherSettings.DrawerTabMenu.key)
+        val exported = a.exportValues(keys)
+        val b = SettingsStore.inMemory()
+        b.set(LauncherSettings.DrawerColumns, 3)
+        b.set(LauncherSettings.HomeRows, 12)
+        b.importValues(exported, keys + LauncherSettings.HomeRows.key)
+        org.junit.Assert.assertEquals(4, b.get(LauncherSettings.HomeColumns))
+        org.junit.Assert.assertEquals(true, b.get(LauncherSettings.HomeLabels))
+        org.junit.Assert.assertEquals(listOf("rename", "icon"), b.get(LauncherSettings.DrawerTabMenu))
+        // In the keys but not exported: back to the default. Outside the keys: untouched.
+        org.junit.Assert.assertEquals(LauncherSettings.HomeRows.default, b.get(LauncherSettings.HomeRows))
+        org.junit.Assert.assertEquals(3, b.get(LauncherSettings.DrawerColumns))
+    }
+}

@@ -1,15 +1,15 @@
 # 6. Roadmap
 
-## Plan as of 0.2.2 (2026-11-13, Opus)
+## Plan as of 0.3.0 (2026-11-13, Opus)
 
 | Phase | Content | Release | State |
 |---|---|---|---|
 | 1A | Redirect engine, diagnostics, glass benchmark | 0.1.0 | Done |
 | 1B | Home grid, pill, drawer, long-press menu, search v1, settings editors and previews | 0.2.0 | Tested on the phone |
 | 1B | Redirect fixes, drawer transition / tabs / scroll bar, pages, clock resize, tags and own tabs, icon packs, folders, swipe actions, shortcuts | 0.2.1 | Tested on the phone |
-| 1B polish | Curved letter index (A), icons following the wallpaper (B), floating tabs pill with positions, styles and a per-tab menu (D) | 0.2.2 | Built |
-| 2, part 1: home setup | Home menu (two glass pills on long press), wallpaper studio (picker, history, blur and dim per surface, live preview), saved layouts, backup / restore | 0.3 | Next |
-| 2, part 2: look | Theme editor (colours, fonts, shapes, glass), theme files and presets, folder styles and options, dock, per-page settings, page transitions | 0.4 | |
+| 1B polish | Curved letter index (A), icons following the wallpaper (B), floating tabs pill with positions, styles and a per-tab menu (D) | 0.2.2 | Released (build 25) |
+| 2, part 1: home setup | Home menu (two glass pills on long press), wallpaper studio (picker, history, blur and dim per surface, live preview), saved layouts, backup / restore | 0.3.0 | Built |
+| 2, part 2: look | Theme editor (colours, fonts, shapes, glass), theme files and presets, folder styles and options, dock, per-page settings, page transitions | 0.4 | Next |
 | 2, part 3: touch and motion | Two-finger / pinch / edge gestures, double tap per icon, activity picker, motion and haptics settings (drawer tick, depth transition for search, launch animation), in-app updater | 0.5 | |
 | 3 | Widgets: other apps' widgets, clock gallery, built-in widgets, panels; "Widgets" joins the home menu | 2–3 builds | |
 | 4 | Search sources (contacts, calendar, files, settings pages), suggested apps, notification badges, drawer folders and rule-based tabs | 2 builds | |
