@@ -218,6 +218,8 @@ fun HomeScreen(
                 )
             }
             val pillSpace = if (pill.enabled || controller.editMode) pill.heightDp + pill.offsetDp + 12 else 0
+            // Remembered: a new gesture lambda would restart the detector and cancel a swipe in progress.
+            val swipes = remember(gestures, controller.editMode) { Modifier.homeSwipes(gestures, controller) }
             Box(
                 Modifier
                     .fillMaxSize()
@@ -231,7 +233,7 @@ fun HomeScreen(
                         scaleX = scale
                         scaleY = scale
                     }
-                    .then(if (live) Modifier.homeSwipes(gestures, controller) else Modifier)
+                    .then(if (live) swipes else Modifier)
                     .statusBarsPadding()
                     .navigationBarsPadding()
                     .padding(

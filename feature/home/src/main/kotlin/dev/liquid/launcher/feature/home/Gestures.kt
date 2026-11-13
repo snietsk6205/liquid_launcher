@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerInputChange
@@ -40,6 +41,16 @@ fun Modifier.iconGestures(
     val current by rememberUpdatedState(handler)
     val coords by rememberUpdatedState(coordinates)
     if (!enabled) return this
+    // Remembered so recompositions (which happen during a drag) never restart the detector:
+    // a new pointerInput lambda would cancel the gesture in progress.
+    val gesture = remember { Modifier.iconPointerInput({ current }, { coords() }) }
+    return this.then(gesture)
+}
+
+private fun Modifier.iconPointerInput(
+    handler: () -> IconGestureHandler,
+    coords: () -> LayoutCoordinates?,
+): Modifier {
     return pointerInput(Unit) {
         val slop = viewConfiguration.touchSlop
         awaitEachGesture {
@@ -51,17 +62,17 @@ fun Modifier.iconGestures(
             }
             if (beforeLongPress == true) {
                 // Released (tap) or taken by a parent (swipe) before the long press.
-                if (up != null) current.onTap()
+                if (up != null) handler().onTap()
                 return@awaitEachGesture
             }
-            current.onLongPress()
+            handler().onLongPress()
             var dragging = false
             var travelled = Offset.Zero
             while (true) {
                 val event = awaitPointerEvent()
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                 if (!change.pressed) {
-                    if (dragging) current.onDragEnd()
+                    if (dragging) handler().onDragEnd()
                     change.consume()
                     return@awaitEachGesture
                 }
@@ -72,11 +83,11 @@ fun Modifier.iconGestures(
                 val root = layout.localToRoot(change.position)
                 if (!dragging && travelled.getDistance() > slop) {
                     dragging = true
-                    current.onDragStart(down.position, root)
+                    handler().onDragStart(down.position, root)
                 }
-                if (dragging) current.onDrag(root)
+                if (dragging) handler().onDrag(root)
             }
-            if (dragging) current.onDragCancel()
+            if (dragging) handler().onDragCancel()
         }
     }
 }

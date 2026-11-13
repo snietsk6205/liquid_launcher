@@ -76,13 +76,15 @@ fun Pill(
     val shape = RoundedCornerShape(percent = config.cornerPercent)
     val color = if (glass.lightGlass(Surfaces.Pill, lightBackground)) Color(0xFF16181C) else Color.White
     val flexible = config.slots.any { it == PillSlot.Search || it == PillSlot.Spacer }
+    // Remembered: the pill recomposes while the drawer moves, and a new gesture lambda would cancel the swipe.
+    val gestures = remember(config, controller) { Modifier.pillGestures(config, controller) }
     Row(
         modifier = modifier
             .fillMaxWidth(config.widthFraction)
             .height(config.heightDp.dp)
             .liquidGlass(backdrop, shape, glass.style(Surfaces.Pill, lightBackground))
             .clip(shape)
-            .then(if (interactive) Modifier.pillGestures(config, controller) else Modifier)
+            .then(if (interactive) gestures else Modifier)
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = if (flexible) Arrangement.spacedBy(4.dp) else Arrangement.SpaceEvenly,

@@ -75,21 +75,23 @@ fun HomePageView(index: Int, page: HomePage, env: PageEnv, controller: HomeContr
     Box(Modifier.fillMaxSize()) {
         // Empty space: double tap and long press. Icons sit above and take their own touches.
         if (env.interactive) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .pointerInput(env.gestures, env.editMode) {
-                        detectTapGestures(
-                            onTap = { if (env.editMode) controller.exitEdit() },
-                            onDoubleTap = if (env.editMode || env.gestures.doubleTap == LauncherAction.None) {
-                                null
-                            } else {
-                                { controller.run(env.gestures.doubleTap) }
-                            },
-                            onLongPress = { if (!env.editMode) controller.run(env.gestures.longPress) },
-                        )
-                    }
-            )
+            val gestures = env.gestures
+            val editMode = env.editMode
+            // Remembered so a recomposition between two taps does not restart the detector.
+            val taps = remember(gestures, editMode, controller) {
+                Modifier.pointerInput(gestures, editMode) {
+                    detectTapGestures(
+                        onTap = { if (editMode) controller.exitEdit() },
+                        onDoubleTap = if (editMode || gestures.doubleTap == LauncherAction.None) {
+                            null
+                        } else {
+                            { controller.run(gestures.doubleTap) }
+                        },
+                        onLongPress = { if (!editMode) controller.run(gestures.longPress) },
+                    )
+                }
+            }
+            Box(Modifier.fillMaxSize().then(taps))
         }
         val columns = env.grid.columns
         val rows = env.grid.rows

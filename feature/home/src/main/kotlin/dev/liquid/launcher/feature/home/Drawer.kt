@@ -195,7 +195,7 @@ private fun DrawerHeader(
             Modifier
                 .fillMaxWidth()
                 .height(52.dp)
-                .then(if (interactive) Modifier.closeOnDrag(controller) else Modifier),
+                .then(if (interactive) remember(controller) { Modifier.closeOnDrag(controller) } else Modifier),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -342,7 +342,7 @@ private fun DrawerSearchPill(
             .height(54.dp)
             .liquidGlass(backdrop, shape, glass.style(Surfaces.Drawer, lightBackground))
             .clip(shape)
-            .then(if (interactive) Modifier.closeOnDrag(controller) else Modifier)
+            .then(if (interactive) remember(controller) { Modifier.closeOnDrag(controller) } else Modifier)
             .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
