@@ -73,6 +73,8 @@ data class DrawerConfig(
     val tabsInSearch: Boolean,
     /** Tag ids shown as sections at the top of the main list. */
     val topSections: List<String>,
+    /** Space left and right of the apps, the same on both sides. */
+    val sideMarginDp: Int = 8,
 ) {
     val tabsTop: Boolean get() = tabsPosition == "top"
     val tabsBottom: Boolean get() = tabsPosition == "bottom"
@@ -115,6 +117,10 @@ data class IndexConfig(
     val haptics: String,
     /** Time constant of the list catching up with the finger, in milliseconds. */
     val followMs: Int,
+    /** How strongly the list bends with the finger, 0..1. */
+    val wave: Float,
+    /** Other apps fade while a letter is held. */
+    val focus: Boolean,
 )
 
 /** How the drawer opens and scrolls. */
@@ -233,6 +239,7 @@ fun SettingsStore.drawerConfig() = DrawerConfig(
     tabMenu = get(S.DrawerTabMenu),
     tabsInSearch = get(S.DrawerTabsInSearch),
     topSections = get(S.DrawerTopSections),
+    sideMarginDp = get(S.DrawerSideMargin),
 )
 
 fun SettingsStore.indexConfig() = IndexConfig(
@@ -244,6 +251,8 @@ fun SettingsStore.indexConfig() = IndexConfig(
     bubble = get(S.IndexBubble),
     haptics = get(S.IndexHaptics),
     followMs = get(S.IndexFollow),
+    wave = get(S.IndexWave) / 100f,
+    focus = get(S.IndexFocus),
 )
 
 fun SettingsStore.drawerMotion(): DrawerMotion {

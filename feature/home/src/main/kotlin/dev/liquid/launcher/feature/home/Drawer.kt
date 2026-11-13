@@ -30,7 +30,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -350,7 +350,8 @@ fun AppDrawer(
     DisposableEffect(Unit) { onDispose { controller.tabsBar = null } }
 
     val useIndex = motion.scrollbar == "index" && !searching && currentTab.sort == "az"
-    val reserve = if (useIndex && indexConfig.visibility == "always") IndexReserve else 0.dp
+    // The index floats over the list, so both sides keep the same margin whether it shows or not.
+    val wave = remember { IndexWave() }
     val density = LocalDensity.current
     val keyboardOrNav = WindowInsets.ime.union(WindowInsets.navigationBars)
     val tabsTop = showTabs && config.tabsTop
@@ -363,11 +364,11 @@ fun AppDrawer(
         else -> 0.dp
     }
     val statusInsets = WindowInsets.statusBars
-    val padding = remember(keyboardOrNav, statusInsets, density, bottomExtra, headerHeight, reserve, indexConfig.right) {
+    val padding = remember(keyboardOrNav, statusInsets, density, bottomExtra, headerHeight, config.sideMarginDp) {
         DrawerPadding(
             keyboardOrNav, statusInsets, density, headerHeight + 4.dp, bottomExtra,
-            left = 8.dp + if (indexConfig.right) 0.dp else reserve,
-            right = 8.dp + if (indexConfig.right) reserve else 0.dp,
+            left = config.sideMarginDp.dp,
+            right = config.sideMarginDp.dp,
         )
     }
 
@@ -411,11 +412,11 @@ fun AppDrawer(
                         .statusBarFade()
                 ) {
                     when {
-                        searching -> AppGrid(resultCells, resultsState, padding, config, motion, fx, color, controller, interactive)
-                        tabs.size == 1 -> AppGrid(tabs[0].cells, stateFor(tabs[0].id), padding, config, motion, fx, color, controller, interactive)
+                        searching -> AppGrid(resultCells, resultsState, padding, config, motion, fx, null, color, controller, interactive)
+                        tabs.size == 1 -> AppGrid(tabs[0].cells, stateFor(tabs[0].id), padding, config, motion, fx, wave, color, controller, interactive)
                         else -> HorizontalPager(pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { tabs.getOrNull(it)?.id ?: it }) { page ->
                             val tab = tabs.getOrNull(page) ?: return@HorizontalPager
-                            AppGrid(tab.cells, stateFor(tab.id), padding, config, motion, fx, color, controller, interactive)
+                            AppGrid(tab.cells, stateFor(tab.id), padding, config, motion, fx, wave.takeIf { page == pager.currentPage }, color, controller, interactive)
                         }
                     }
                 }
@@ -458,6 +459,7 @@ fun AppDrawer(
                     backdrop = glassBackdrop,
                     controller = controller,
                     interactive = interactive,
+                    wave = wave,
                     modifier = sideArea,
                 )
             } else if (motion.scrollbar != "off") {
@@ -527,6 +529,13 @@ fun AppDrawer(
         }
     }
     tabDialog?.let { dialog -> TabDialogView(dialog, controller) { tabDialog = null } }
+}
+
+/** Section headers bend with the list too. */
+@Composable
+private fun Modifier.headerWave(wave: IndexWave, index: Int): Modifier {
+    val holder = remember { CoordinatesHolder() }
+    return onPlaced { holder.value = it }.graphicsLayer { applyIndexWave(wave, holder.value, index) }
 }
 
 /** Fades the list out under the status bar, so app labels do not run into the clock and icons. */
@@ -612,6 +621,7 @@ private fun AppGrid(
     config: DrawerConfig,
     motion: DrawerMotion,
     fx: ScrollFx,
+    wave: IndexWave?,
     color: Color,
     controller: HomeController,
     interactive: Boolean,
@@ -626,17 +636,20 @@ private fun AppGrid(
         verticalArrangement = Arrangement.spacedBy(10.dp, if (config.fromBottom) Alignment.Bottom else Alignment.Top),
         overscrollEffect = overscroll,
     ) {
-        items(
+        itemsIndexed(
             cells,
-            key = { it.key },
-            span = { if (it is HeaderCell) GridItemSpan(maxLineSpan) else GridItemSpan(1) },
-            contentType = { if (it is HeaderCell) 1 else 0 },
-        ) { cell ->
+            key = { _, cell -> cell.key },
+            span = { _, cell -> if (cell is HeaderCell) GridItemSpan(maxLineSpan) else GridItemSpan(1) },
+            contentType = { _, cell -> if (cell is HeaderCell) 1 else 0 },
+        ) { i, cell ->
             when (cell) {
-                is AppCell -> DrawerItem(cell.app, config, color, controller, interactive, fx, state)
+                is AppCell -> DrawerItem(cell.app, config, color, controller, interactive, fx, state, wave, i)
                 is HeaderCell -> Text(
                     cell.title,
-                    modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 2.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (wave != null) Modifier.headerWave(wave, i) else Modifier)
+                        .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 2.dp),
                     style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.7f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -655,6 +668,8 @@ private fun DrawerItem(
     interactive: Boolean,
     fx: ScrollFx,
     state: LazyGridState,
+    wave: IndexWave?,
+    index: Int,
 ) {
     val holder = remember { CoordinatesHolder() }
     val view = LocalView.current
@@ -696,7 +711,7 @@ private fun DrawerItem(
         Modifier
             .fillMaxWidth()
             .onPlaced { holder.value = it }
-            .scrollEffect(fx, state, holder)
+            .scrollEffect(fx, state, holder, wave, index)
             .iconGestures({ holder.value }, handler, interactive)
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

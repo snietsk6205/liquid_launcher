@@ -34,6 +34,16 @@ class MainActivity : ComponentActivity() {
         imageCallback?.invoke(uri)
         imageCallback = null
     }
+    private var imagesCallback: ((List<android.net.Uri>) -> Unit)? = null
+    private val pickMediaMany = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia(50)) { uris ->
+        imagesCallback?.invoke(uris)
+        imagesCallback = null
+    }
+    private var folderCallback: ((android.net.Uri?) -> Unit)? = null
+    private val pickTree = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
+        folderCallback?.invoke(uri)
+        folderCallback = null
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,6 +71,28 @@ class MainActivity : ComponentActivity() {
                 } catch (e: Exception) {
                     DebugLog.error("App", "photo picker failed: $e")
                     imageCallback = null
+                    callback(null)
+                }
+            },
+            pickImages = { callback ->
+                imagesCallback = callback
+                try {
+                    pickMediaMany.launch(
+                        androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                } catch (e: Exception) {
+                    DebugLog.error("App", "photo picker failed: $e")
+                    imagesCallback = null
+                    callback(emptyList())
+                }
+            },
+            pickFolder = { callback ->
+                folderCallback = callback
+                try {
+                    pickTree.launch(null)
+                } catch (e: Exception) {
+                    DebugLog.error("App", "folder picker failed: $e")
+                    folderCallback = null
                     callback(null)
                 }
             },

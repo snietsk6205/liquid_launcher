@@ -13,6 +13,7 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
 import androidx.core.graphics.ColorUtils
+import dev.liquid.launcher.core.common.WallpaperTones
 
 /** Themed icons: on which surfaces, and in which colours. [epoch] changes when the wallpaper does. */
 data class ThemedIcons(
@@ -49,12 +50,23 @@ object ThemedColors {
         return fromSeed(seed(context), dark)
     }
 
-    /** The wallpaper's main colour (system wallpaper, which the launcher also sets). */
-    fun seed(context: Context): Int = try {
+    /**
+     * The wallpaper's main colour: taken from the image when the launcher set the wallpaper
+     * itself (immediate, and right even when the system reports late), otherwise the system's.
+     */
+    fun seed(context: Context): Int = WallpaperTones.current(context)?.primary ?: try {
         WallpaperManager.getInstance(context).getWallpaperColors(WallpaperManager.FLAG_SYSTEM)?.primaryColor?.toArgb()
     } catch (e: Exception) {
         null
     } ?: 0xFF6A7BA8.toInt()
+
+    /** True when dark text reads better on the wallpaper. */
+    fun isLight(context: Context): Boolean = WallpaperTones.current(context)?.light ?: try {
+        val colors = WallpaperManager.getInstance(context).getWallpaperColors(WallpaperManager.FLAG_SYSTEM)
+        colors != null && (colors.colorHints and android.app.WallpaperColors.HINT_SUPPORTS_DARK_TEXT) != 0
+    } catch (e: Exception) {
+        false
+    }
 
     /** Pale and deep tones of the seed's hue, swapped for dark mode. */
     fun fromSeed(seed: Int, dark: Boolean): Pair<Int, Int> {

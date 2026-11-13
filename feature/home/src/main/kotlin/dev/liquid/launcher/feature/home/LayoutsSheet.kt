@@ -181,7 +181,7 @@ internal fun LayoutsSheet(
                     DialogRow(if (layout.wallpaper != null) "Stop switching the wallpaper with it" else "Give it the current wallpaper") {
                         val file = if (layout.wallpaper != null) null else WallpaperStore.get(context).currentFile
                         if (layout.wallpaper == null && file == null) controller.toast("Pick a wallpaper in the launcher first")
-                        controller.data.layouts.setWallpaper(layout.id, file)
+                        controller.data.layouts.setWallpaper(layout.id, file, controller.data.wallpapers.get().current)
                         holding = null
                     }
                     DialogRow("Add it to the home menu") {
@@ -285,7 +285,7 @@ internal fun SaveLayoutDialog(controller: HomeController) {
         },
         confirmButton = {
             TextButton(onClick = {
-                controller.data.layouts.saveCurrentAs(name, if (withWallpaper) wallpaper.currentFile else null)
+                controller.data.layouts.saveCurrentAs(name, if (withWallpaper) wallpaper.currentFile else null, controller.data.wallpapers.get().current)
                 controller.savingLayout = false
                 controller.toast("Saved \"${name.trim()}\"")
             }) { Text("Save") }

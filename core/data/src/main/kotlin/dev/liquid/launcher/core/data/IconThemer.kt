@@ -34,13 +34,32 @@ internal class IconThemer(private val context: Context) {
 
     fun pack(pkg: String): IconPack? = packs.getOrPut(pkg) { IconPacks.load(context, pkg) }
 
-    /** Drops cached icons when the packs, the masking or the theme colours change. */
+    /** Theme keys of the last few colour sets, newest last: their icons stay cached. */
+    private val recentThemes = ArrayDeque<String>()
+
+    /**
+     * Drops cached icons when the packs, the masking or the shape change. A new colour set
+     * keeps the icons of the last [KEEP_THEMES] sets, so switching back to an earlier
+     * wallpaper (a layout's, for example) recolours instantly.
+     */
     fun prepare(config: IconConfig) {
-        if (config != lastConfig) {
-            if (config.packEpoch != lastConfig?.packEpoch) packs.clear()
+        val last = lastConfig
+        if (config == last) return
+        if (config.packEpoch != last?.packEpoch) packs.clear()
+        val sameIcons = last != null && config.homePack == last.homePack && config.drawerPack == last.drawerPack &&
+            config.mask == last.mask && config.shape == last.shape
+        if (!sameIcons) {
             cache.clear()
-            lastConfig = config
+            recentThemes.clear()
         }
+        val key = config.themed?.key ?: "null"
+        recentThemes.remove(key)
+        recentThemes.addLast(key)
+        while (recentThemes.size > KEEP_THEMES) {
+            val old = "|" + recentThemes.removeFirst() + "|"
+            cache.keys.removeAll { old in it }
+        }
+        lastConfig = config
     }
 
     fun apply(app: AppEntry, config: IconConfig, override: String?): AppEntry {
@@ -101,6 +120,10 @@ internal class IconThemer(private val context: Context) {
         } catch (e: Exception) {
             bitmap.asImageBitmap()
         }
+    }
+
+    private companion object {
+        const val KEEP_THEMES = 4
     }
 
     private inline fun cached(key: String, make: () -> ImageBitmap?): ImageBitmap? {

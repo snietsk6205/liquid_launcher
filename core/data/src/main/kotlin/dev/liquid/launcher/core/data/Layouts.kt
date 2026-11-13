@@ -25,6 +25,8 @@ data class SavedLayout(
     val settings: Map<String, String>,
     /** File name of this layout's wallpaper, or null to leave the wallpaper alone when switching. */
     val wallpaper: String? = null,
+    /** The wallpaper library picture that wallpaper was made from, if known. */
+    val wallpaperId: String? = null,
 )
 
 @Serializable
@@ -34,8 +36,8 @@ data class LayoutsState(
     val current: String? = null,
 )
 
-/** What switching needs from outside this module: the wallpaper to apply. */
-data class SwitchResult(val wallpaper: File?)
+/** What switching needs from outside this module: the wallpaper to apply and its library picture. */
+data class SwitchResult(val wallpaper: File?, val wallpaperId: String?)
 
 /**
  * Saved layouts: save the current setup under a name, switch between setups (one undo step),
@@ -57,11 +59,11 @@ class LayoutsRepository(
 
     fun wallpaperFile(layout: SavedLayout): File? = layout.wallpaper?.let { File(dir, it) }?.takeIf { it.exists() }
 
-    private fun capture(id: String, name: String, wallpaper: String?): SavedLayout =
-        SavedLayout(id, name, home.layout.value, settings.exportValues(LauncherSettings.layoutKeys), wallpaper)
+    private fun capture(id: String, name: String, wallpaper: String?, wallpaperId: String?): SavedLayout =
+        SavedLayout(id, name, home.layout.value, settings.exportValues(LauncherSettings.layoutKeys), wallpaper, wallpaperId)
 
     /** Saves the current home setup as a new layout (with a copy of [wallpaper] if given) and makes it current. */
-    fun saveCurrentAs(name: String, wallpaper: File?): SavedLayout {
+    fun saveCurrentAs(name: String, wallpaper: File?, wallpaperId: String? = null): SavedLayout {
         val id = LayoutOps.newId()
         val file = wallpaper?.takeIf { it.exists() }?.let { source ->
             dir.mkdirs()
@@ -69,7 +71,7 @@ class LayoutsRepository(
             source.copyTo(target, overwrite = true)
             target.name
         }
-        val saved = capture(id, name.trim().ifEmpty { "Layout" }, file)
+        val saved = capture(id, name.trim().ifEmpty { "Layout" }, file, wallpaperId.takeIf { file != null })
         store.update { it.copy(layouts = it.layouts + saved, current = id) }
         DebugLog.event("Layouts", "saved \"${saved.name}\"")
         return saved
@@ -79,7 +81,7 @@ class LayoutsRepository(
     fun updateCurrent() {
         val state = store.get()
         val current = state.layouts.firstOrNull { it.id == state.current } ?: return
-        val updated = capture(current.id, current.name, current.wallpaper)
+        val updated = capture(current.id, current.name, current.wallpaper, current.wallpaperId)
         if (updated == current) return
         store.update { s -> s.copy(layouts = s.layouts.map { if (it.id == current.id) updated else it }) }
     }
@@ -93,12 +95,15 @@ class LayoutsRepository(
         val target = find(id) ?: return null
         if (keepChanges) updateCurrent()
         val state = store.get()
-        beforeSwitch = capture("undo", "Before switching", null) to state.current
+        beforeSwitch = capture("undo", "Before switching", null, null) to state.current
         apply(target)
         store.update { it.copy(current = id) }
         DebugLog.event("Layouts", "switched to \"${target.name}\"")
-        return SwitchResult(wallpaperFile(target))
+        return SwitchResult(wallpaperFile(target), target.wallpaperId)
     }
+
+    /** What switching to [id] will need, without switching: lets the caller load the wallpaper first. */
+    fun peek(id: String): SwitchResult? = find(id)?.let { SwitchResult(wallpaperFile(it), it.wallpaperId) }
 
     /** The layout after the current one, wrapping around. */
     fun next(): SavedLayout? {
@@ -148,7 +153,7 @@ class LayoutsRepository(
     }
 
     /** Sets or clears a layout's own wallpaper. */
-    fun setWallpaper(id: String, wallpaper: File?) {
+    fun setWallpaper(id: String, wallpaper: File?, wallpaperId: String? = null) {
         val layout = find(id) ?: return
         wallpaperFile(layout)?.delete()
         val name = wallpaper?.takeIf { it.exists() }?.let { source ->
@@ -157,7 +162,7 @@ class LayoutsRepository(
             source.copyTo(target, overwrite = true)
             target.name
         }
-        store.update { s -> s.copy(layouts = s.layouts.map { if (it.id == id) it.copy(wallpaper = name) else it }) }
+        store.update { s -> s.copy(layouts = s.layouts.map { if (it.id == id) it.copy(wallpaper = name, wallpaperId = wallpaperId.takeIf { name != null }) else it }) }
     }
 
     fun move(from: Int, to: Int) {

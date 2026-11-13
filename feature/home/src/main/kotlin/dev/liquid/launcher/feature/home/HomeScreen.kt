@@ -54,6 +54,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Color
@@ -220,7 +222,8 @@ fun HomeScreen(
     val folderConfig by store.derive { folderConfig() }
     val dock by store.derive { dockConfig() }
     SideEffect { controller.folderConfig = folderConfig }
-    LaunchedEffect(theme, savedImageKey(wallpaper)) { HomeTheme.apply(context, theme) }
+    val colourTick by data.colourTick.collectAsState()
+    LaunchedEffect(theme, colourTick, savedImageKey(wallpaper)) { HomeTheme.apply(context, theme) }
     val glass by store.derive { glassConfig() }
     val search by store.derive { searchConfig() }
     val menuEntries by store.derive { MenuEntry.fromIds(get(LauncherSettings.MenuEntries)) }
@@ -255,7 +258,10 @@ fun HomeScreen(
         if (controller.homeMenu && homeMenuConfig.sink) 1f else 0f, label = "menuSink",
     )
 
-    val lightBackground = remember(savedImage) { wallpaperIsLight(context) }
+    val lightBackground = remember(savedImage, colourTick, studio?.candidateImage) {
+        // A wallpaper being tried out decides the text colour of the preview too.
+        studio?.rendered?.let { dev.liquid.launcher.core.common.WallpaperTones.fromBitmap(it)?.light } ?: wallpaperIsLight(context)
+    }
     val contentColor = theme.textColor ?: if (lightBackground) Color(0xFF16181C) else Color.White
     val shadow = if (lightBackground) null else Shadow(Color.Black.copy(alpha = 0.45f), Offset(0f, 1f), 4f)
 
@@ -339,6 +345,13 @@ fun HomeScreen(
     val density = LocalDensity.current
     val settle = handover.first
 
+    // Everything on screen is recorded once more, so a layout or wallpaper change can lay a
+    // picture of the old screen over the new one and melt it away.
+    val shotLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    if (live) SideEffect { controller.captureHome = { shotLayer.toImageBitmap() } }
+    val transitionStyle by store.derive { get(LauncherSettings.WallpaperTransition) }
+    if (live) SystemWallpaperOffsets(controller)
+
     Box(
         Modifier
             .fillMaxSize()
@@ -346,6 +359,12 @@ fun HomeScreen(
                 controller.screenHeight = it.height.toFloat().coerceAtLeast(1f)
                 controller.screenWidth = it.width.toFloat().coerceAtLeast(1f)
             }
+            .then(
+                if (live) Modifier.drawWithContent {
+                    shotLayer.record { this@drawWithContent.drawContent() }
+                    drawLayer(shotLayer)
+                } else Modifier
+            )
     ) {
         // ---- Home: wallpaper and pages, recorded so glass surfaces can refract them ----
         Box(Modifier.fillMaxSize().layerBackdrop(homeBackdrop)) {
@@ -364,12 +383,19 @@ fun HomeScreen(
                       renderEffect = if (radius >= 0.5f) BlurEffect(radius, radius, TileMode.Clamp) else null
                   }
           ) {
-            (blurredWallpaper ?: image)?.let {
-                Image(
-                    bitmap = it,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize().layerBackdrop(wallpaperBackdrop),
-                    contentScale = ContentScale.Crop,
+            val placing = studio?.takeIf { it.drawsSource }
+            val shownWallpaper = placing?.sourceImage ?: blurredWallpaper ?: image
+            if (shownWallpaper != null) {
+                WallpaperImage(
+                    image = shownWallpaper,
+                    frame = if (placing != null) ({ placing.frame(controller.screenWidth, controller.screenHeight) }) else ({ null }),
+                    offset = {
+                        studio?.sweep ?: run {
+                            val pages = controller.pager.pageCount
+                            if (pages <= 1) 0.5f else (controller.pager.currentPage + controller.pager.currentPageOffsetFraction) / (pages - 1)
+                        }
+                    },
+                    modifier = Modifier.layerBackdrop(wallpaperBackdrop),
                 )
             }
             if (homeDim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = homeDim)))
@@ -553,6 +579,9 @@ fun HomeScreen(
         if (live && controller.layoutsSheet) {
             LayoutsSheet(glass, lightBackground, overlayBackdrop, controller)
         }
+        if (live && controller.wallpaperStrip) {
+            WallpaperStrip(glass, lightBackground, overlayBackdrop, controller)
+        }
         if (studio != null) {
             WallpaperStudio(studio, glass, lightBackground, overlayBackdrop, controller)
         }
@@ -566,6 +595,30 @@ fun HomeScreen(
         controller.tagging?.let { TagsDialog(it, controller) }
         controller.iconPicking?.let { IconPickerDialog(it, controller) }
         controller.swipeEditing?.let { id -> layout.find(id)?.let { (_, item) -> SwipeActionsDialog(item, apps, controller) } }
+        if (live) TransitionOverlay(controller, transitionStyle)
+    }
+}
+
+/**
+ * Tells the system which part of a wide (parallax) wallpaper the home screen shows, so the
+ * system's own copy matches it around app launches and in recents.
+ */
+@Composable
+private fun SystemWallpaperOffsets(controller: HomeController) {
+    val view = LocalView.current
+    LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow {
+            if (!controller.pagerReady) null else controller.pager.settledPage to controller.pager.pageCount
+        }.collect { value ->
+            val (page, count) = value ?: return@collect
+            val token = view.windowToken ?: return@collect
+            runCatching {
+                val manager = WallpaperManager.getInstance(view.context)
+                val step = if (count > 1) 1f / (count - 1) else 0f
+                manager.setWallpaperOffsetSteps(step, 1f)
+                manager.setWallpaperOffsets(token, if (count > 1) page * step else 0.5f, 0.5f)
+            }
+        }
     }
 }
 
@@ -757,10 +810,8 @@ private fun StatusBarIcons(lightBackground: Boolean) {
     }
 }
 
-/** True when the wallpaper is light enough that dark text reads better. Needs no permission. */
-fun wallpaperIsLight(context: Context): Boolean = try {
-    val colors = WallpaperManager.getInstance(context).getWallpaperColors(WallpaperManager.FLAG_SYSTEM)
-    colors != null && (colors.colorHints and WallpaperColors.HINT_SUPPORTS_DARK_TEXT) != 0
-} catch (e: Exception) {
-    false
-}
+/**
+ * True when the wallpaper is light enough that dark text reads better: from the launcher's own
+ * image when it set the wallpaper, else from the system. Needs no permission.
+ */
+fun wallpaperIsLight(context: Context): Boolean = dev.liquid.launcher.core.data.ThemedColors.isLight(context)

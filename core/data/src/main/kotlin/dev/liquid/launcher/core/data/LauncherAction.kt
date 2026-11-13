@@ -17,7 +17,12 @@ sealed interface LauncherAction {
     data object SystemLauncher : LauncherAction
     data object OpenCalendar : LauncherAction
     data object HomeMenu : LauncherAction
+    /** The wallpaper strip: recent and favourite wallpapers for a one-tap switch, and the way to the wallpaper screen. */
     data object Wallpaper : LauncherAction
+    data object WallpaperStudio : LauncherAction
+    data object ShuffleWallpaper : LauncherAction
+    /** Opens the drawer with the list of tags to filter by. */
+    data object TagFilter : LauncherAction
     data object AddPage : LauncherAction
     data object Pages : LauncherAction
     data object Layouts : LauncherAction
@@ -41,6 +46,9 @@ sealed interface LauncherAction {
         OpenCalendar -> "calendar"
         HomeMenu -> "home_menu"
         Wallpaper -> "wallpaper"
+        WallpaperStudio -> "wallpaper_studio"
+        ShuffleWallpaper -> "shuffle_wallpaper"
+        TagFilter -> "tag_filter"
         AddPage -> "add_page"
         Pages -> "pages"
         Layouts -> "layouts"
@@ -64,7 +72,10 @@ sealed interface LauncherAction {
             OpenCalendar to "Open the calendar",
             EditHome to "Edit the home screen",
             HomeMenu to "Home menu (glass pills)",
-            Wallpaper to "Wallpaper",
+            Wallpaper to "Wallpapers (quick switch)",
+            WallpaperStudio to "Wallpaper screen (library, placing, blur)",
+            ShuffleWallpaper to "Shuffle wallpaper",
+            TagFilter to "Filter apps by tag",
             AddPage to "Add a page",
             Pages to "Pages overview",
             Layouts to "Saved layouts",

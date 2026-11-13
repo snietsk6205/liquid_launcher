@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -40,8 +41,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextLayoutResult
@@ -65,10 +70,7 @@ import kotlin.math.floor
 import kotlin.math.roundToInt
 
 /** Width of the touch strip along the edge. */
-internal val IndexStrip = 30.dp
-
-/** Space the list keeps free for letters that are always shown. */
-internal val IndexReserve = 22.dp
+internal val IndexStrip = 24.dp
 
 private val MaxBulge = 64.dp
 private val BubbleSize = 62.dp
@@ -97,6 +99,62 @@ private class IndexTouch {
 }
 
 /**
+ * How the drawer list bends with a finger on the index. Written by [ScrollIndex], read by
+ * every drawer item in its graphics layer, so the bend costs no recomposition.
+ */
+@Stable
+internal class IndexWave {
+    /** 0 = no bend, 1 = full bend; springs in on touch and back on release. */
+    val pop = Animatable(0f)
+
+    /** The finger's height, in root coordinates. */
+    var fingerY by mutableFloatStateOf(0f)
+
+    /** Items (list indices) of the entry under the finger: they stay bright while others fade. */
+    var focusFrom by mutableIntStateOf(-1)
+    var focusTo by mutableIntStateOf(-1)
+
+    var strength = 0.5f
+    var focus = true
+    var right = true
+
+    /** Reach of the bend above and below the finger, in pixels. */
+    var radius = 1f
+
+    /** Largest sideways move, in pixels (at full strength). */
+    var shift = 0f
+    var screenWidth = 1f
+}
+
+/**
+ * Applies [wave] to one list item: items near the finger move away from the index edge (so
+ * the bulging letters never cover them) and gather slightly towards the finger's height, the
+ * closer to the edge the more, like a liquid surface pressed by the finger.
+ */
+internal fun GraphicsLayerScope.applyIndexWave(wave: IndexWave, coords: LayoutCoordinates?, itemIndex: Int) {
+    val p = wave.pop.value
+    if (p <= 0.002f || coords == null || !coords.isAttached) return
+    val centre = coords.localToRoot(Offset(coords.size.width / 2f, coords.size.height / 2f))
+    if (wave.focus && wave.focusFrom >= 0) {
+        val inside = itemIndex in wave.focusFrom until wave.focusTo
+        if (!inside) alpha = 1f - 0.4f * p.coerceIn(0f, 1f)
+    }
+    val strength = wave.strength
+    if (strength <= 0f) return
+    val dy = centre.y - wave.fingerY
+    val d = dy / wave.radius
+    if (abs(d) >= 1f) return
+    val profile = (1f + cos(PI.toFloat() * d)) / 2f
+    val toEdge = (centre.x / wave.screenWidth).coerceIn(0f, 1f).let { if (wave.right) it else 1f - it }
+    val amount = profile * p * strength
+    translationX = (if (wave.right) -1f else 1f) * wave.shift * amount * (0.3f + 0.7f * toEdge)
+    translationY = -dy * 0.12f * amount
+    val scale = 1f - 0.06f * amount
+    scaleX = scale
+    scaleY = scale
+}
+
+/**
  * The drawer's letter index: letters along one edge that bend out around the finger, a
  * bubble with the letter (or section name) under it, and a list that follows the finger
  * continuously. Takes no space unless its letters are always shown.
@@ -112,6 +170,7 @@ internal fun ScrollIndex(
     backdrop: Backdrop,
     controller: HomeController,
     interactive: Boolean,
+    wave: IndexWave,
     modifier: Modifier,
 ) {
     val entries = index.entries
@@ -120,7 +179,8 @@ internal fun ScrollIndex(
     val view = LocalView.current
     val density = LocalDensity.current
     val touch = remember { IndexTouch() }
-    val pop = remember { Animatable(0f) }
+    val pop = wave.pop
+    var rootTop by remember { mutableFloatStateOf(0f) }
     val color = if (glass.lightGlass(Surfaces.Drawer, lightBackground)) Color(0xFF16181C) else Color.White
 
     // ---- visibility ----
@@ -162,7 +222,7 @@ internal fun ScrollIndex(
         touch.position = Float.NaN
     }
 
-    BoxWithConstraints(modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier.fillMaxSize().onPlaced { rootTop = it.positionInRoot().y }) {
         val height = constraints.maxHeight.toFloat()
         val width = constraints.maxWidth.toFloat()
         val n = entries.size
@@ -171,6 +231,19 @@ internal fun ScrollIndex(
         val edge = with(density) { EdgeInset.toPx() }
         val bulgeMax = with(density) { MaxBulge.toPx() } * config.curve
         val radius = maxOf(spacing * 4.5f, with(density) { 96.dp.toPx() })
+        SideEffect {
+            wave.strength = config.wave
+            wave.focus = config.focus
+            wave.right = config.right
+            wave.radius = maxOf(radius * 1.5f, with(density) { 170.dp.toPx() })
+            wave.shift = with(density) { 44.dp.toPx() }
+            wave.screenWidth = controller.screenWidth
+        }
+        /** Items of entry [i], for the highlight. */
+        fun focusOn(i: Int) {
+            wave.focusFrom = entries.getOrNull(i)?.firstItem ?: -1
+            wave.focusTo = entries.getOrNull(i + 1)?.firstItem ?: Int.MAX_VALUE
+        }
 
         /** Visual slot of entry [i]: entries run bottom to top when the list starts at the bottom. */
         fun slotOf(i: Int) = if (reverse) n - 1 - i else i
@@ -198,11 +271,13 @@ internal fun ScrollIndex(
         }
         fun follow(y: Float) {
             touch.fingerY = y.coerceIn(0f, height)
+            wave.fingerY = rootTop + touch.fingerY
             val position = positionAt(touch.fingerY)
             touch.target = index.rowAt(position)
             val entry = position.roundToInt().coerceIn(0, n - 1)
             if (entry != touch.active) {
                 touch.active = entry
+                focusOn(entry)
                 tick()
             }
         }
@@ -227,9 +302,11 @@ internal fun ScrollIndex(
                     withFrameNanos { }
                     t += 0.006f
                     // Down and up the letters, easing at the ends.
-                    val wave = (1f - cos(t * 2f * PI.toFloat())) / 2f
-                    touch.fingerY = top + spacing * (0.5f + wave * (n - 1))
+                    val swing = (1f - cos(t * 2f * PI.toFloat())) / 2f
+                    touch.fingerY = top + spacing * (0.5f + swing * (n - 1))
+                    wave.fingerY = rootTop + touch.fingerY
                     touch.active = positionAt(touch.fingerY).roundToInt().coerceIn(0, n - 1)
+                    focusOn(touch.active)
                 }
             }
         }
@@ -252,7 +329,8 @@ internal fun ScrollIndex(
                         val layout: TextLayoutResult = if (on) bold[i] else normal[i]
                         val w = layout.size.width.toFloat()
                         val h = layout.size.height.toFloat()
-                        val alpha = if (on) 1f else 0.72f
+                        // Lighter at rest: the letters float over the apps' labels.
+                        val alpha = if (on) 1f else if (touch.touching) 0.72f else 0.5f
                         val grow = if (on && touch.touching) 1.25f else 1f
                         scale(grow, Offset(x, y)) {
                             if (entries[i].section && glyph(entries[i].label, true) != "★") {

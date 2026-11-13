@@ -55,8 +55,34 @@ class LauncherApp : Application() {
 
         wallpaper = WallpaperStore.get(this)
         data = LauncherData.get(this)
-        appScope.launch { wallpaper.load() }
+        appScope.launch {
+            wallpaper.load()
+            // Wallpapers of earlier versions (history, current) join the library once.
+            data.wallpapers.migrate(wallpaper.legacyHistoryDir, wallpaper.currentFile)
+        }
         data.apps.start()
+        watchScreen()
+    }
+
+    /** Automatic wallpaper changes happen while the screen is off, ready for the next unlock. */
+    private fun watchScreen() {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+                if (intent.action != android.content.Intent.ACTION_SCREEN_OFF) return
+                if (settings.get(LauncherSettings.WallpaperRotation) == "off") return
+                val pending = goAsync()
+                appScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                    try {
+                        dev.liquid.launcher.feature.home.Wallpapers.onScreenOff(this@LauncherApp, data)
+                    } catch (e: Throwable) {
+                        DebugLog.error("Wallpaper", "automatic change failed: $e")
+                    } finally {
+                        pending.finish()
+                    }
+                }
+            }
+        }
+        registerReceiver(receiver, android.content.IntentFilter(android.content.Intent.ACTION_SCREEN_OFF))
     }
 
     /** No crash reporting service: the last crash is written to a file the debug log can show. */

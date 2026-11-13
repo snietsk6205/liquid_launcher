@@ -9,6 +9,9 @@ import android.os.Looper
 import dev.liquid.launcher.core.common.DebugLog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.drop
+import dev.liquid.launcher.core.common.WallpaperTones
 import kotlinx.coroutines.flow.combine
 import dev.liquid.launcher.core.settings.LauncherSettings
 import dev.liquid.launcher.core.settings.SettingsStore
@@ -28,8 +31,14 @@ class LauncherData private constructor(private val context: Context) {
 
     /** Bumped when the wallpaper colours change, so themed icons and colour-following packs are redrawn. */
     private val themeTick = MutableStateFlow(0)
+    private val _colourTick = MutableStateFlow(0)
+
+    /** Changes whenever the wallpaper's colours may have changed (accent, light or dark text, themed icons). */
+    val colourTick: StateFlow<Int> = _colourTick
+
+    /** What the colours looked like at the last check: seed, light flag and themed palette. */
     @Volatile
-    private var lastPalette: Pair<Int, Int>? = null
+    private var lastColours: Triple<Int, Boolean, Pair<Int, Int>?>? = null
     private val dir = File(context.filesDir, "data")
 
     val settings: SettingsStore = SettingsStore.get(context)
@@ -46,6 +55,8 @@ class LauncherData private constructor(private val context: Context) {
     val organisation = OrganisationRepository(organisationStore)
     private val layoutsStore = JsonStore(File(dir, "layouts.json"), LayoutsState.serializer(), LayoutsState(), scope)
     val layouts = LayoutsRepository(layoutsStore, layout, settings, File(context.filesDir, "layouts"))
+    private val wallpapersStore = JsonStore(File(dir, "wallpapers.json"), WallpaperLibraryState.serializer(), WallpaperLibraryState(), scope)
+    val wallpapers = WallpaperLibrary(context, wallpapersStore, File(context.filesDir, "wallpaper/library"), File(context.cacheDir, "wallpaper-thumbs"))
 
     init {
         layout.ensureDefault(settings.get(LauncherSettings.HomeColumns), settings.get(LauncherSettings.HomeRows))
@@ -57,13 +68,22 @@ class LauncherData private constructor(private val context: Context) {
                 .distinctUntilChanged()
                 .collect { apps.iconConfig.value = it }
         }
-        // Wallpaper colours change a moment before the system palette follows, so look again a little later too.
+        // A wallpaper the launcher sets itself brings its colours along: recolour at once.
+        WallpaperTones.load(context)
+        scope.launch {
+            // The system id arrives a moment later (after the system took the image): not a new colour.
+            WallpaperTones.tone.map { it?.copy(systemId = 0) }.distinctUntilChanged().drop(1).collect {
+                DebugLog.event("Icons", "wallpaper colours from the launcher's own image, recolouring now")
+                afterOwnWallpaper()
+            }
+        }
+        // Wallpapers set elsewhere: the system's colours, which can arrive late, so look again a little later too.
         WallpaperManager.getInstance(context).addOnColorsChangedListener({ _, which ->
             if (which and WallpaperManager.FLAG_SYSTEM != 0) {
                 checkWallpaperColours()
                 scope.launch {
                     delay(2000)
-                    checkWallpaperColours(force = true)
+                    checkWallpaperColours()
                     delay(4000)
                     checkWallpaperColours()
                 }
@@ -77,16 +97,35 @@ class LauncherData private constructor(private val context: Context) {
     }
 
     /**
-     * Redraws themed icons if the wallpaper colours changed (or always with [force], which
+     * Redraws what follows the wallpaper colours if they changed (or always with [force], which
      * also reloads icon packs that use the system colours). Cheap when nothing changed.
      */
     fun checkWallpaperColours(force: Boolean = false) {
-        if (!settings.get(LauncherSettings.ThemedIcons)) return
         scope.launch {
-            val palette = palette()
-            if (force || palette != lastPalette) {
-                DebugLog.event("Icons", "wallpaper colours changed, redrawing themed icons")
-                themeTick.value++
+            val themed = settings.get(LauncherSettings.ThemedIcons)
+            val colours = Triple(ThemedColors.seed(context), ThemedColors.isLight(context), if (themed) palette() else null)
+            if (force || colours != lastColours) {
+                lastColours = colours
+                _colourTick.value++
+                if (themed) {
+                    DebugLog.event("Icons", "wallpaper colours changed, redrawing themed icons")
+                    themeTick.value++
+                }
+            }
+        }
+    }
+
+    /**
+     * Called right after the launcher sets a wallpaper the system may still be working on: the
+     * system palette ("system" colour source) follows a few seconds later, so check again then.
+     */
+    fun afterOwnWallpaper() {
+        checkWallpaperColours(force = true)
+        if (settings.get(LauncherSettings.ThemedIconsColors) != "system") return
+        scope.launch {
+            for (wait in listOf(1500L, 3000L, 6000L)) {
+                delay(wait)
+                checkWallpaperColours()
             }
         }
     }
@@ -98,7 +137,7 @@ class LauncherData private constructor(private val context: Context) {
         val main = settings.get(LauncherSettings.IconPack)
         fun pick(value: String) = if (value == LauncherSettings.SAME_AS_MAIN) main else value
         val themed = if (settings.get(LauncherSettings.ThemedIcons)) {
-            val (background, foreground) = palette().also { lastPalette = it }
+            val (background, foreground) = palette()
             val where = settings.get(LauncherSettings.ThemedIconsWhere)
             ThemedIcons(
                 home = where != "drawer",
@@ -124,8 +163,9 @@ class LauncherData private constructor(private val context: Context) {
 
     /**
      * Everything the user set up, as one zip: settings (without this phone's counters and
-     * measurements), home layout, tags and tabs, app labels / tags / icons, saved layouts, and
-     * the files under [fileDirs] (wallpapers, layout wallpapers), relative to the app's files.
+     * measurements), home layout, tags and tabs, app labels / tags / icons, saved layouts, the
+     * wallpaper library, and the files under [fileDirs] (wallpapers and the library's pictures,
+     * layout wallpapers, fonts), relative to the app's files.
      */
     fun backup(out: java.io.OutputStream, fileDirs: List<String> = listOf("wallpaper", "layouts", "fonts")) {
         val json = LayoutsRepository.json
@@ -142,6 +182,7 @@ class LauncherData private constructor(private val context: Context) {
             entry("data/layout.json", json.encodeToString(HomeLayout.serializer(), layout.layout.value))
             entry("data/organisation.json", json.encodeToString(Organisation.serializer(), organisationStore.get()))
             entry("data/layouts.json", json.encodeToString(LayoutsState.serializer(), layoutsStore.get()))
+            entry("data/wallpapers.json", json.encodeToString(WallpaperLibraryState.serializer(), wallpapersStore.get().copy(folders = emptyList())))
             for (dirName in fileDirs) {
                 val root = File(context.filesDir, dirName)
                 root.walkTopDown().filter { it.isFile }.forEach { file ->
@@ -180,6 +221,7 @@ class LauncherData private constructor(private val context: Context) {
             val home = texts["data/layout.json"]?.let { json.decodeFromString(HomeLayout.serializer(), it) }
             val org = texts["data/organisation.json"]?.let { json.decodeFromString(Organisation.serializer(), it) }
             val saved = texts["data/layouts.json"]?.let { json.decodeFromString(LayoutsState.serializer(), it) }
+            val library = texts["data/wallpapers.json"]?.let { json.decodeFromString(WallpaperLibraryState.serializer(), it) }
             // Decoded everything without errors: now apply.
             for ((path, bytes) in files) {
                 val target = File(context.filesDir, path)
@@ -194,6 +236,8 @@ class LauncherData private constructor(private val context: Context) {
             home?.let { layout.commit(it) }
             org?.let { organisationStore.set(it) }
             saved?.let { layoutsStore.set(it) }
+            // Linked phone folders need the picker's permission again on a new phone, so they are not restored.
+            library?.let { restored -> wallpapersStore.set(restored.copy(folders = wallpapersStore.get().folders)) }
             DebugLog.event("Backup", "restored (${files.size} files)")
             return null
         } catch (e: Exception) {

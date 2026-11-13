@@ -34,7 +34,7 @@ object LauncherSettings {
         val DrawerIndex = SettingsSection("drawerIndex", "Scroll index", "Letters at the edge of the drawer: curve, side, size, bubble, haptics, sections at the top")
         val Menu = SettingsSection("menu", "Long-press menu", "Which entries appear and in what order")
         val HomeMenu = SettingsSection("homeMenu", "Home menu", "The two glass pills from holding empty space: items, order, labels")
-        val Wallpaper = SettingsSection("wallpaper", "Wallpaper", "Pick and adjust it with a live preview; blur and dim for home, drawer and search")
+        val Wallpaper = SettingsSection("wallpaper", "Wallpaper", "Your library, placing and parallax, blur and dim per screen, transitions, changing automatically")
         val Layouts = SettingsSection("layouts", "Saved layouts and backup", "Home setups you can switch between; back up and restore everything")
         val Search = SettingsSection("search", "Search", "Swipe-down search and web search")
         val Glass = SettingsSection("glass", "Liquid glass", "Quality, blur, refraction and tint, overall and per surface")
@@ -628,6 +628,12 @@ object LauncherSettings {
         title = "Close after opening an app",
         section = "drawer", keywords = "close launch",
     )
+    val DrawerSideMargin = IntSetting(
+        key = "drawer.sideMargin", default = 8, min = 0, max = 32, step = 2, unit = "dp",
+        title = "Side margins",
+        summary = "The same space on the left and the right of the apps",
+        section = "drawer", keywords = "margin padding edge side space symmetric",
+    )
     val DrawerDim = IntSetting(
         key = "drawer.dim", default = 45, min = 0, max = 90, step = 5, unit = "%",
         title = "Wallpaper dimming",
@@ -778,7 +784,7 @@ object LauncherSettings {
             "touch" to "Only while touching the edge",
         ),
         title = "Show the letters",
-        summary = "With \"Always\" the list keeps a narrow margin free for them",
+        summary = "The letters float over the list; they never push the apps aside",
         section = "drawerIndex", keywords = "index letters visible always touch hide",
     )
     val IndexSide = ChoiceSetting(
@@ -822,6 +828,18 @@ object LauncherSettings {
         title = "Glide",
         summary = "How softly the list catches up with your finger. 0 follows instantly; higher values glide over big jumps",
         section = "drawerIndex", keywords = "index smooth glide follow lag animation",
+    )
+    val IndexWave = IntSetting(
+        key = "index.wave", default = 50, min = 0, max = 100, step = 10, unit = "%",
+        title = "List follows the finger",
+        summary = "While you drag along the letters, the apps near your finger bend towards it and make room for the curve, then spring back. 0 turns it off",
+        section = "drawerIndex", keywords = "index wave bend list follow finger niagara intensity",
+    )
+    val IndexFocus = BoolSetting(
+        key = "index.focus", default = true,
+        title = "Highlight the letter's apps",
+        summary = "Other apps fade a little while you hold a letter",
+        section = "drawerIndex", keywords = "index focus highlight dim fade letter",
     )
 
     /** Tag ids shown as sections at the top of the main drawer list, in order. Edited in the tabs and tags editor. */
@@ -982,10 +1000,63 @@ object LauncherSettings {
         section = "wallpaper", keywords = "wallpaper lock screen",
     )
     val WallpaperHistory = IntSetting(
-        key = "wallpaper.history", default = 12, min = 0, max = 30,
-        title = "Recent wallpapers to keep",
-        summary = "Shown in the wallpaper screen for one-tap switching back",
+        key = "wallpaper.history", default = 12, min = 4, max = 40, step = 2,
+        title = "Recent wallpapers to show",
+        summary = "In the home menu's wallpaper strip and the library. Each picture appears once, however often you used it",
         section = "wallpaper", keywords = "wallpaper history recent",
+    )
+    val WallpaperParallax = IntSetting(
+        key = "wallpaper.parallax", default = 0, min = 0, max = 50, step = 5, unit = "%",
+        title = "Parallax for new wallpapers",
+        summary = "How much wider than the screen a wallpaper is made, so it slides a little as you change pages. " +
+            "Each wallpaper can have its own while you place it. 0 keeps it still",
+        section = "wallpaper", keywords = "wallpaper parallax scroll pages move slide",
+    )
+    val WallpaperTransition = ChoiceSetting(
+        key = "wallpaper.transition", default = "liquid",
+        options = listOf(
+            "liquid" to "Liquid (blurs and fades)",
+            "fade" to "Cross-fade",
+            "depth" to "Depth (the old one sinks away)",
+            "slide" to "Slide",
+            "none" to "None",
+        ),
+        title = "Transition",
+        summary = "When the wallpaper or the layout changes: wallpaper, icons and widgets change together",
+        section = "wallpaper", keywords = "wallpaper transition crossfade fade animation layout switch",
+    )
+    val WallpaperTransitionMs = IntSetting(
+        key = "wallpaper.transitionMs", default = 520, min = 200, max = 1400, step = 40, unit = "ms",
+        title = "Transition length",
+        section = "wallpaper", keywords = "wallpaper transition duration speed",
+    )
+    val WallpaperRotation = ChoiceSetting(
+        key = "wallpaper.rotation", default = "off",
+        options = listOf(
+            "off" to "Off",
+            "unlock" to "Every time you unlock",
+            "daily" to "Once a day",
+        ),
+        title = "Change automatically",
+        summary = "A new picture is put in place while the screen is off, so it is ready when you unlock. \"Shuffle wallpaper\" in the home menu changes it now",
+        section = "wallpaper", keywords = "wallpaper rotation automatic change shuffle daily unlock",
+    )
+    val WallpaperRotationPool = ChoiceSetting(
+        key = "wallpaper.rotationPool", default = "favourites",
+        options = listOf(
+            "favourites" to "Favourites",
+            "recent" to "Recently used",
+            "all" to "Everything in the library",
+            "folders" to "Linked phone folders",
+        ),
+        title = "Change between",
+        section = "wallpaper", keywords = "wallpaper rotation pool favourites folder",
+    )
+    val WallpaperRotationShuffle = BoolSetting(
+        key = "wallpaper.rotationShuffle", default = true,
+        title = "Shuffle",
+        summary = "Off: in order",
+        section = "wallpaper", keywords = "wallpaper rotation shuffle random order",
     )
 
     // ---- Saved layouts ----
@@ -1081,15 +1152,16 @@ object LauncherSettings {
         PillEnabled, PillSlots, PillPosition, PillOffset, PillWidth, PillHeight, PillCorner, PillIconSize,
         PillHint, PillTap, PillLongPress, PillSwipeUp, PillSwipeDown,
         DrawerColumns, DrawerIconSize, DrawerLabels, DrawerFromBottom, DrawerAutoKeyboard, DrawerSort,
-        DrawerWork, DrawerCloseOnLaunch, DrawerDim, DrawerTabsPosition,
+        DrawerWork, DrawerCloseOnLaunch, DrawerSideMargin, DrawerDim, DrawerTabsPosition,
         DrawerTransition, DrawerPillMorph, DrawerSpeed, DrawerBounce, DrawerRise, DrawerHomeScale, DrawerHomeBlur,
         DrawerScrollbar, DrawerScrollBubble, DrawerScrollEffect, DrawerScrollStrength, DrawerOverscroll,
-        IndexVisibility, IndexSide, IndexCurve, IndexLetterSize, IndexSpacing, IndexBubble, IndexHaptics, IndexFollow, DrawerTopSections,
+        IndexVisibility, IndexSide, IndexCurve, IndexLetterSize, IndexSpacing, IndexBubble, IndexHaptics, IndexFollow, IndexWave, IndexFocus, DrawerTopSections,
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
         MenuEntries,
         SearchEngine, SearchOpenKeyboard, SearchDim, SearchBlur,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
-        WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperHistory, LayoutsAutoSave,
+        WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
+        WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
         GlassQuality, GlassAuto, GlassCap, GlassTintMode,
     ) + GlassDefault.settings + glassSurfaces.flatMap { it.settings } + listOf(
         LogEnabled, LogVerbosity, LogSize,

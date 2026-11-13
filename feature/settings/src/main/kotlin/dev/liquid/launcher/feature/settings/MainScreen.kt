@@ -175,33 +175,20 @@ private fun StatusCard(store: SettingsStore) {
 @Composable
 internal fun WallpaperRow(wallpaper: WallpaperStore) {
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val image by wallpaper.image.collectAsStateCompat()
-    var message by remember { mutableStateOf("") }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) {
-            message = "Setting wallpaper…"
-            scope.launch {
-                val error = wallpaper.setFromUri(uri)
-                message = if (error == null) "Wallpaper set" else "Failed: $error"
-            }
-        }
-    }
+    // The wallpaper screen lives on the home screen, where every change is seen on the real thing.
     NavRow(
         title = "Wallpaper",
-        summary = when {
-            message.isNotEmpty() -> message
-            image != null -> "Managed by the launcher (glass can refract it). Tap to change"
-            else -> "System wallpaper shows through. Tap to pick one the launcher manages"
+        summary = if (image != null) {
+            "Your library, placing, parallax, blur and dim, changing automatically. Opens on the home screen"
+        } else {
+            "The system wallpaper shows through. Tap to pick one from your library or photos"
         },
-    ) {
-        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-    }
+    ) { openOnHome(context, "wallpaper") }
     if (image != null) {
         NavRow("Stop managing the wallpaper", "The system wallpaper stays as it is") {
-            scope.launch {
-                wallpaper.clear()
-                message = ""
-            }
+            scope.launch { wallpaper.clear() }
         }
     }
 }

@@ -109,6 +109,19 @@ class HomeController(
     var pagesSheet by mutableStateOf(false)
     var drawerQuery by mutableStateOf("")
 
+    /** Tags the drawer is filtered by (any of them); empty = no filter. */
+    var tagFilter by mutableStateOf<Set<String>>(emptySet())
+
+    /** The full list of tags (with its own search), over the drawer. */
+    var tagSheet by mutableStateOf(false)
+
+    /** Filters the drawer by [tags], remembering the use so often-used tags come first. */
+    fun filterByTags(tags: Set<String>) {
+        val added = tags - tagFilter
+        tagFilter = tags
+        added.forEach { data.usage.record("tag:$it") }
+    }
+
     /** Best match for the drawer query, launched by the keyboard's Go key. */
     var drawerFirstResult: AppEntry? = null
 
@@ -124,6 +137,7 @@ class HomeController(
     var screenWidth by mutableFloatStateOf(1f)
 
     lateinit var pager: PagerState
+    val pagerReady: Boolean get() = ::pager.isInitialized
 
     /** Grid area of each page, for turning a finger position into a cell. */
     val pageGrids = HashMap<Int, LayoutCoordinates>()
@@ -131,7 +145,8 @@ class HomeController(
 
     val drawerOpen: Boolean get() = drawer.targetValue > 0.5f || drawer.value > 0.01f
     val anyOverlay: Boolean get() = drawerOpen || searchOpen || menu != null || editMode || renaming != null || tagging != null ||
-        iconPicking != null || swipeEditing != null || openFolder != null || homeMenu || wallpaperStudio || layoutsSheet || savingLayout
+        iconPicking != null || swipeEditing != null || openFolder != null || homeMenu || wallpaperStudio || layoutsSheet || savingLayout ||
+        wallpaperStrip
 
     // ---- home menu, wallpaper, layouts ----
 
@@ -154,6 +169,8 @@ class HomeController(
 
     /** Lets the activity pick an image (photo picker); set by the activity. */
     internal val pickImage: ((android.net.Uri?) -> Unit) -> Unit get() = callbacks.pickImage
+    internal val pickImages: ((List<android.net.Uri>) -> Unit) -> Unit get() = callbacks.pickImages
+    internal val pickFolder: ((android.net.Uri?) -> Unit) -> Unit get() = callbacks.pickFolder
 
     /** The finger let go after sliding: run the item under it, if any. */
     fun releaseHomeMenuSlide(finger: Offset, moved: Boolean) {
@@ -163,13 +180,96 @@ class HomeController(
         homeMenuRun(hit)
     }
 
+    // ---- changing the whole screen at once (layouts, wallpapers) ----
+
+    /** Takes a picture of the home screen as it is now; set by the home screen. */
+    internal var captureHome: (suspend () -> androidx.compose.ui.graphics.ImageBitmap?)? = null
+
+    /** The picture of the screen before a change, fading out over the new screen; null when no change is running. */
+    var transitionShot by mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
+    val transitionProgress = Animatable(0f)
+    private var transitionJob: kotlinx.coroutines.Job? = null
+
+    /** The wallpaper strip from the home menu. */
+    var wallpaperStrip by mutableStateOf(false)
+
+    /**
+     * Changes the screen in one go: [prepare] does the slow work first (loading and placing the
+     * next wallpaper) while the old screen stays, then a picture of the old screen is laid over,
+     * [commit] swaps everything underneath, and the picture melts away. [after] runs once the
+     * transition is done (writing files, setting the system wallpaper), so it never stutters.
+     */
+    fun <T : Any> changeScreen(prepare: suspend () -> T?, commit: (T) -> Unit, after: suspend (T) -> Unit = {}) {
+        transitionJob?.cancel()
+        transitionJob = scope.launch {
+            val value = prepare() ?: return@launch
+            val style = data.settings.get(LauncherSettings.WallpaperTransition)
+            val shot = if (style != "none") runCatching { captureHome?.invoke() }.getOrNull() else null
+            transitionProgress.snapTo(0f)
+            transitionShot = shot
+            commit(value)
+            try {
+                if (shot != null) {
+                    // Let the new screen draw once under the picture before it starts to fade.
+                    androidx.compose.runtime.withFrameNanos { }
+                    transitionProgress.animateTo(
+                        1f,
+                        androidx.compose.animation.core.tween(
+                            data.settings.get(LauncherSettings.WallpaperTransitionMs),
+                            easing = androidx.compose.animation.core.FastOutSlowInEasing,
+                        ),
+                    )
+                }
+            } finally {
+                transitionShot = null
+            }
+            after(value)
+        }
+    }
+
+    /** A saved layout's wallpaper, loaded before switching so it arrives with the icons. */
+    private class LayoutSwitch(val wallpaper: android.graphics.Bitmap?, val file: java.io.File?, val wallpaperId: String?)
+
     fun switchLayout(id: String) {
-        val result = data.layouts.switchTo(id, data.settings.get(LauncherSettings.LayoutsAutoSave)) ?: return toast("That layout no longer exists")
-        result.wallpaper?.let { file -> scope.launch { WallpaperStore.get(context).setFromFile(file, data.settings.get(LauncherSettings.WallpaperLockToo)) } }
-        val name = data.layouts.find(id)?.name ?: ""
-        val home = data.layout.layout.value.defaultIndex
-        scope.launch { runCatching { pager.scrollToPage(home) } }
-        toast("Layout: $name")
+        val peek = data.layouts.peek(id) ?: return toast("That layout no longer exists")
+        val store = WallpaperStore.get(context)
+        changeScreen(
+            prepare = {
+                val bitmap = peek.wallpaper?.let { store.decodeFile(it) }
+                LayoutSwitch(bitmap, peek.wallpaper, peek.wallpaperId)
+            },
+            commit = { switch ->
+                data.layouts.switchTo(id, data.settings.get(LauncherSettings.LayoutsAutoSave))
+                switch.wallpaper?.let { store.show(it) }
+                val home = data.layout.layout.value.defaultIndex
+                runCatching { scope.launch { pager.scrollToPage(home) } }
+            },
+            after = { switch ->
+                val bitmap = switch.wallpaper ?: return@changeScreen
+                store.persist(bitmap, data.settings.get(LauncherSettings.WallpaperLockToo), switch.file)
+                switch.wallpaperId?.let { wid -> data.wallpapers.find(wid)?.let { data.wallpapers.markUsed(it.id, null) } }
+            },
+        )
+    }
+
+    /** Makes [pick] the wallpaper with the transition (wallpaper strip, shuffle). */
+    fun applyWallpaper(pick: WallpaperPick) {
+        changeScreen(
+            prepare = { Wallpapers.prepare(context, data, pick) ?: run { toast("Could not read that picture"); null } },
+            commit = { prepared -> WallpaperStore.get(context).show(prepared.bitmap) },
+            after = { prepared -> Wallpapers.persist(context, data, prepared)?.let { toast("Could not set the wallpaper: $it") } },
+        )
+    }
+
+    fun shuffleWallpaper() {
+        scope.launch {
+            val pick = Wallpapers.next(data)
+            if (pick == null) {
+                toast("Add favourites in the wallpaper screen to shuffle between them")
+                return@launch
+            }
+            applyWallpaper(pick)
+        }
     }
 
     // ---- drawer ----
@@ -243,6 +343,7 @@ class HomeController(
 
     fun closeAll(immediately: Boolean = false) {
         homeMenu = false
+        wallpaperStrip = false
         layoutsSheet = false
         wallpaperStudio = false
         menu = null
@@ -261,12 +362,15 @@ class HomeController(
             iconPicking != null -> iconPicking = null
             swipeEditing != null -> swipeEditing = null
             menu != null -> menu = null
+            tagSheet -> tagSheet = false
             savingLayout -> savingLayout = false
             homeMenu -> homeMenu = false
+            wallpaperStrip -> wallpaperStrip = false
             layoutsSheet -> layoutsSheet = false
             wallpaperStudio -> wallpaperStudio = false
             openFolder != null -> openFolder = null
             searchOpen -> searchOpen = false
+            drawerOpen && tagFilter.isNotEmpty() && drawerQuery.isEmpty() -> tagFilter = emptySet()
             drawerOpen -> closeDrawer()
             pageSettings != null -> pageSettings = null
             pagesSheet -> pagesSheet = false
@@ -624,7 +728,19 @@ class HomeController(
             LauncherAction.Wallpaper -> {
                 closeAll()
                 if (editMode) exitEdit()
+                wallpaperStrip = true
+            }
+            LauncherAction.WallpaperStudio -> {
+                closeAll()
+                if (editMode) exitEdit()
                 wallpaperStudio = true
+            }
+            LauncherAction.ShuffleWallpaper -> shuffleWallpaper()
+            LauncherAction.TagFilter -> {
+                closeAll()
+                if (editMode) exitEdit()
+                openDrawer()
+                tagSheet = true
             }
             LauncherAction.AddPage -> addPage()
             LauncherAction.Pages -> {
@@ -687,4 +803,8 @@ class HomeCallbacks(
     val openSection: (String) -> Unit = { openSettings() },
     /** Shows the photo picker; the callback gets the picked image or null. */
     val pickImage: ((android.net.Uri?) -> Unit) -> Unit = { it(null) },
+    /** Shows the photo picker for several images; the callback gets them (maybe none). */
+    val pickImages: ((List<android.net.Uri>) -> Unit) -> Unit = { it(emptyList()) },
+    /** Shows the system folder picker; the callback gets the folder or null. */
+    val pickFolder: ((android.net.Uri?) -> Unit) -> Unit = { it(null) },
 )

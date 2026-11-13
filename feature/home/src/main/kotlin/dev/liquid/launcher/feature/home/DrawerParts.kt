@@ -108,8 +108,13 @@ class ScrollFx(private val scope: CoroutineScope) {
 }
 
 /** Applies [fx] to one drawer item. All work happens in the layer, so scrolling recomposes nothing. */
-internal fun Modifier.scrollEffect(fx: ScrollFx, state: LazyGridState, holder: CoordinatesHolder): Modifier =
+internal fun Modifier.scrollEffect(fx: ScrollFx, state: LazyGridState, holder: CoordinatesHolder, wave: IndexWave? = null, index: Int = 0): Modifier =
     graphicsLayer {
+        // The index bend wins while a finger is on the letters; the scroll effect resumes after.
+        if (wave != null && wave.pop.value > 0.002f) {
+            applyIndexWave(wave, holder.value, index)
+            return@graphicsLayer
+        }
         val mode = fx.mode
         if (mode == "none") return@graphicsLayer
         // Read so the layer is updated on every scroll step.

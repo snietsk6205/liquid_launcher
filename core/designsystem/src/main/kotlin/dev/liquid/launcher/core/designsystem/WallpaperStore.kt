@@ -12,7 +12,10 @@ import android.net.Uri
 import android.view.WindowManager
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import dev.liquid.launcher.core.common.CropSpec
 import dev.liquid.launcher.core.common.DebugLog
+import dev.liquid.launcher.core.common.WallpaperTones
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,99 +23,127 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * The launcher-managed wallpaper: one screen-sized image that is both set as the system
- * wallpaper and kept as a file, so the launcher can draw it itself and glass can refract it.
- * Earlier wallpapers are kept in a short history for switching back with one tap.
+ * The launcher-managed wallpaper: one image (as wide as the screen, or wider for parallax) that
+ * is both set as the system wallpaper and kept as a file, so the launcher can draw it itself
+ * and glass can refract it. The pictures it is made from live in the wallpaper library.
+ *
+ * A new wallpaper shows at once ([show]); writing the file and handing it to the system
+ * ([persist]) happen afterwards, so a switch never waits for the slow parts.
  */
 class WallpaperStore private constructor(private val context: Context) {
-    private val file = File(context.filesDir, "wallpaper/home.png")
-    private val historyDir = File(context.filesDir, "wallpaper/history")
+    private val dir = File(context.filesDir, "wallpaper")
+    private val file = File(dir, "home.jpg")
+    private val legacy = File(dir, "home.png")
     private val _image = MutableStateFlow<ImageBitmap?>(null)
-    private val _history = MutableStateFlow<List<File>>(emptyList())
 
     /** The managed wallpaper, or null when the system wallpaper shows through instead. */
     val image: StateFlow<ImageBitmap?> = _image
 
-    /** Earlier wallpapers, newest first. */
-    val history: StateFlow<List<File>> = _history
+    /** Where earlier versions kept their wallpaper history (moved into the library on first start). */
+    val legacyHistoryDir: File get() = File(dir, "history")
 
-    val hasManagedWallpaper: Boolean get() = file.exists()
+    val hasManagedWallpaper: Boolean get() = currentFile != null
 
     /** The current wallpaper's file, for saving it with a layout. */
-    val currentFile: File? get() = file.takeIf { it.exists() }
+    val currentFile: File? get() = file.takeIf { it.exists() } ?: legacy.takeIf { it.exists() }
 
     suspend fun load() = withContext(Dispatchers.IO) {
-        refreshHistory()
-        if (!file.exists()) {
+        val source = currentFile
+        if (source == null) {
             _image.value = null
             return@withContext
         }
-        _image.value = decodeFile(file)?.asImageBitmap()
+        val bitmap = decodeFile(source)
+        _image.value = bitmap?.asImageBitmap()
+        // Earlier versions did not keep the colours: take them from the image once.
+        WallpaperTones.load(context)
+        if (bitmap != null && WallpaperTones.tone.value == null) {
+            WallpaperTones.fromBitmap(bitmap, WallpaperTones.systemId(context))?.let { WallpaperTones.set(context, it) }
+        }
     }
 
-    /** Decodes [uri] cropped to the screen, without applying it (for previews). */
-    suspend fun decode(uri: Uri): Bitmap? = withContext(Dispatchers.IO) {
+    /** Decodes a picture for placing (no larger than [MAX_SOURCE] on its long side, turned upright). */
+    suspend fun decodeSource(uri: Uri): Bitmap? = decodeSource { ImageDecoder.createSource(context.contentResolver, uri) }
+
+    suspend fun decodeSource(source: File): Bitmap? = decodeSource { ImageDecoder.createSource(source) }
+
+    private suspend fun decodeSource(make: () -> ImageDecoder.Source): Bitmap? = withContext(Dispatchers.IO) {
         try {
-            val (targetW, targetH) = screen()
-            val source = ImageDecoder.createSource(context.contentResolver, uri)
-            val decoded = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+            ImageDecoder.decodeBitmap(make()) { decoder, info, _ ->
                 decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-                // Decode no larger than needed to cover the screen.
-                val scale = maxOf(targetW.toFloat() / info.size.width, targetH.toFloat() / info.size.height)
-                if (scale < 1f) {
-                    decoder.setTargetSize(
-                        (info.size.width * scale).toInt().coerceAtLeast(targetW),
-                        (info.size.height * scale).toInt().coerceAtLeast(targetH),
-                    )
+                val long = maxOf(info.size.width, info.size.height)
+                if (long > MAX_SOURCE) {
+                    val scale = MAX_SOURCE.toFloat() / long
+                    decoder.setTargetSize((info.size.width * scale).toInt().coerceAtLeast(1), (info.size.height * scale).toInt().coerceAtLeast(1))
                 }
             }
-            centerCrop(decoded, targetW, targetH)
         } catch (e: Throwable) {
             DebugLog.error("Wallpaper", "decode failed: $e")
             null
         }
     }
 
+    /** Decodes a finished wallpaper file (the current one, a layout's) as it is. */
     suspend fun decodeFile(source: File): Bitmap? = withContext(Dispatchers.IO) {
         try {
             val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
-            BitmapFactory.decodeFile(source.path, options)?.let { bitmap ->
-                val (w, h) = screen()
-                if (bitmap.width == w && bitmap.height == h) bitmap else centerCrop(bitmap, w, h)
-            }
+            BitmapFactory.decodeFile(source.path, options)
         } catch (e: Throwable) {
             DebugLog.error("Wallpaper", "load failed: $e")
             null
         }
     }
 
-    /** A small version of [source] for a history thumbnail. */
-    suspend fun thumbnail(source: File): ImageBitmap? = withContext(Dispatchers.IO) {
-        try {
-            BitmapFactory.decodeFile(source.path, BitmapFactory.Options().apply { inSampleSize = 8 })?.asImageBitmap()
-        } catch (e: Throwable) {
-            null
-        }
+    /**
+     * The wallpaper made from [source]: the part [crop] picks, on a canvas the screen's height
+     * and (1 + [parallax]) times its width, so it can slide with the pages.
+     */
+    suspend fun render(source: Bitmap, crop: CropSpec, parallax: Float): Bitmap = withContext(Dispatchers.Default) {
+        val (screenW, screenH) = screen()
+        val canvasW = (screenW * (1f + parallax.coerceIn(0f, 1f))).roundToInt()
+        val frame = crop.frame(source.width, source.height, canvasW.toFloat(), screenH.toFloat())
+        val result = Bitmap.createBitmap(canvasW, screenH, Bitmap.Config.ARGB_8888)
+        Canvas(result).drawBitmap(
+            source,
+            Rect(frame.left.roundToInt(), frame.top.roundToInt(), frame.right.roundToInt(), frame.bottom.roundToInt()),
+            Rect(0, 0, canvasW, screenH),
+            Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG),
+        )
+        result
     }
 
     /**
-     * Makes [bitmap] the wallpaper: the current one goes into the history (keeping
-     * [keepHistory] files), the new one is stored and set as the system wallpaper (and the lock
-     * screen's with [lockToo]). Returns null on success or a message describing the failure.
+     * Shows [bitmap] as the wallpaper right away: the home screen draws it and themed icons,
+     * accent and text colour follow its colours at once. Nothing is written yet.
      */
-    suspend fun apply(bitmap: Bitmap, lockToo: Boolean, keepHistory: Int = 12): String? = withContext(Dispatchers.IO) {
+    fun show(bitmap: Bitmap) {
+        WallpaperTones.fromBitmap(bitmap, -1)?.let { WallpaperTones.set(context, it) }
+        _image.value = bitmap.asImageBitmap()
+    }
+
+    /**
+     * Stores [bitmap] (copying [sourceFile] instead of encoding again when given) and sets it as
+     * the system wallpaper, and the lock screen's with [lockToo]. Returns null or what went wrong.
+     */
+    suspend fun persist(bitmap: Bitmap, lockToo: Boolean, sourceFile: File? = null): String? = withContext(Dispatchers.IO) {
         try {
-            if (file.exists() && keepHistory > 0) {
-                historyDir.mkdirs()
-                file.copyTo(File(historyDir, "${System.currentTimeMillis()}.png"), overwrite = true)
+            dir.mkdirs()
+            val temp = File(dir, "home.tmp")
+            if (sourceFile != null && sourceFile.exists() && sourceFile.canonicalPath != file.canonicalPath) {
+                sourceFile.copyTo(temp, overwrite = true)
+            } else {
+                temp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it) }
             }
-            trimHistory(keepHistory)
-            file.parentFile?.mkdirs()
-            file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            _image.value = bitmap.asImageBitmap()
+            if (!temp.renameTo(file)) {
+                file.delete()
+                temp.renameTo(file)
+            }
+            legacy.delete()
             val flags = WallpaperManager.FLAG_SYSTEM or if (lockToo) WallpaperManager.FLAG_LOCK else 0
-            WallpaperManager.getInstance(context).setBitmap(bitmap, null, true, flags)
-            DebugLog.event("Wallpaper", "managed wallpaper set, ${bitmap.width}x${bitmap.height}${if (lockToo) ", lock screen too" else ""}")
+            val id = WallpaperManager.getInstance(context).setBitmap(bitmap, null, true, flags)
+            val systemId = if (id > 0) id else WallpaperTones.systemId(context)
+            WallpaperTones.tone.value?.let { WallpaperTones.set(context, it.copy(systemId = systemId)) }
+            DebugLog.event("Wallpaper", "managed wallpaper set, ${bitmap.width}x${bitmap.height}, id $systemId${if (lockToo) ", lock screen too" else ""}")
             null
         } catch (e: Throwable) {
             DebugLog.error("Wallpaper", "set failed: $e")
@@ -120,61 +151,36 @@ class WallpaperStore private constructor(private val context: Context) {
         }
     }
 
-    /** Crops [uri] to the screen, stores it and sets it as the system home wallpaper. */
-    suspend fun setFromUri(uri: Uri, lockToo: Boolean = false): String? {
-        val bitmap = decode(uri) ?: return "Could not read the image"
-        return apply(bitmap, lockToo)
+    /** [show] and [persist] in one go. */
+    suspend fun apply(bitmap: Bitmap, lockToo: Boolean, sourceFile: File? = null): String? {
+        withContext(Dispatchers.Main.immediate) { show(bitmap) }
+        return persist(bitmap, lockToo, sourceFile)
     }
 
-    /** Sets a stored image (a layout's or a history entry) as the wallpaper. */
+    /** Sets a finished wallpaper file (a layout's) as the wallpaper. */
     suspend fun setFromFile(source: File, lockToo: Boolean = false): String? {
         val bitmap = decodeFile(source) ?: return "Could not read the image"
-        return apply(bitmap, lockToo)
-    }
-
-    fun removeFromHistory(entry: File) {
-        entry.delete()
-        refreshHistory()
+        return apply(bitmap, lockToo, source)
     }
 
     /** Stops drawing the wallpaper in the launcher. The system wallpaper is left as it is. */
     suspend fun clear() = withContext(Dispatchers.IO) {
         file.delete()
+        legacy.delete()
         _image.value = null
+        WallpaperTones.clear(context)
     }
 
-    private fun trimHistory(keep: Int) {
-        val files = historyDir.listFiles()?.sortedByDescending { it.lastModified() }.orEmpty()
-        files.drop(keep.coerceAtLeast(0)).forEach { it.delete() }
-        refreshHistory()
-    }
-
-    private fun refreshHistory() {
-        _history.value = historyDir.listFiles()?.filter { it.isFile }?.sortedByDescending { it.lastModified() }.orEmpty()
-    }
-
-    private fun screen(): Pair<Int, Int> {
+    /** The screen size in pixels. */
+    fun screen(): Pair<Int, Int> {
         val bounds = context.getSystemService(WindowManager::class.java).maximumWindowMetrics.bounds
         return bounds.width() to bounds.height()
     }
 
-    private fun centerCrop(source: Bitmap, targetW: Int, targetH: Int): Bitmap {
-        val scale = maxOf(targetW.toFloat() / source.width, targetH.toFloat() / source.height)
-        val srcW = (targetW / scale).toInt().coerceAtMost(source.width)
-        val srcH = (targetH / scale).toInt().coerceAtMost(source.height)
-        val left = (source.width - srcW) / 2
-        val top = (source.height - srcH) / 2
-        val result = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
-        Canvas(result).drawBitmap(
-            source,
-            Rect(left, top, left + srcW, top + srcH),
-            Rect(0, 0, targetW, targetH),
-            Paint(Paint.FILTER_BITMAP_FLAG),
-        )
-        return result
-    }
-
     companion object {
+        /** Long side of a picture decoded for placing: enough to zoom in about 1.5x on a 1080 × 2400 screen. */
+        const val MAX_SOURCE = 3600
+
         @Volatile
         private var instance: WallpaperStore? = null
 
