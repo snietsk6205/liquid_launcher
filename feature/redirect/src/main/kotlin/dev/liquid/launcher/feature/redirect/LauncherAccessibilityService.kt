@@ -53,6 +53,16 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
      */
     private var engineThread: HandlerThread? = null
     private lateinit var engineHandler: Handler
+
+    /**
+     * Looks that may wait a long time (the full window list, a walk over a whole view tree for
+     * the log) run here, so they can never hold up a redirect.
+     */
+    private var sideThread: HandlerThread? = null
+    private lateinit var sideHandler: Handler
+
+    /** Last known split-screen state, refreshed on [sideThread]. */
+    @Volatile private var splitScreen = false
     private val timers = EnumMap<EngineTimer, Runnable>(EngineTimer::class.java)
     private val engine = RedirectEngine(this)
     private var scope: CoroutineScope? = null
@@ -116,6 +126,9 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         val thread = HandlerThread("redirect-engine").apply { start() }
         engineThread = thread
         engineHandler = Handler(thread.looper)
+        val side = HandlerThread("redirect-side").apply { start() }
+        sideThread = side
+        sideHandler = Handler(side.looper)
 
         // Broadcasts are delivered on the engine thread.
         registerReceiver(
@@ -181,6 +194,11 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
             thread.quitSafely()
         }
         engineThread = null
+        sideThread?.let { side ->
+            sideHandler.removeCallbacksAndMessages(null)
+            side.quitSafely()
+        }
+        sideThread = null
         RedirectStatus.detach(this)
     }
 
@@ -218,6 +236,7 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
             exactIds = recentsIds.map(::full).distinct(),
             substrings = store.get(LauncherSettings.RecentsIdSubstrings),
             homeIds = homeIds.map(::full).distinct(),
+            drawerIds = store.get(LauncherSettings.DrawerIds).map(::full).distinct(),
         )
 
         // The learned counts only mean something for one launcher version and one set of ids.
@@ -250,6 +269,8 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
             signatureFallbackMs = store.get(LauncherSettings.HomeScreenFallback).toLong(),
             fastMode = store.get(LauncherSettings.FastWhenProven) && reliable,
             fastDelayMs = store.get(LauncherSettings.FastDelay).toLong(),
+            reopenRecents = store.get(LauncherSettings.ReopenRecents),
+            reopenWindowMs = store.get(LauncherSettings.ReopenWindow).toLong(),
         )
         updateServiceInfo()
     }
@@ -354,7 +375,12 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
                 onEngine {
                     val home = isHomeClass(className)
                     DebugLog.event(TAG, "window: ${className.substringAfterLast('.')}${if (home) " (home)" else ""}")
-                    if (home) engine.onSystemLauncherWindow() else engine.onContentChanged()
+                    if (home) {
+                        refreshSplitScreen()
+                        engine.onSystemLauncherWindow()
+                    } else {
+                        engine.onContentChanged()
+                    }
                 }
             }
 
@@ -461,6 +487,26 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         }
     }
 
+    /** Reads the window list on the side thread; the result is used by the next redirect. */
+    private fun refreshSplitScreen() {
+        if (sideThread == null || !store.get(LauncherSettings.ExcludeSplitScreen)) return
+        sideHandler.post {
+            val start = SystemClock.uptimeMillis()
+            splitScreen = try {
+                windows.any { it.type == AccessibilityWindowInfo.TYPE_SPLIT_SCREEN_DIVIDER }
+            } catch (e: Exception) {
+                false
+            }
+            val took = SystemClock.uptimeMillis() - start
+            if (took >= 300) DebugLog.decision(TAG, "window list took $took ms (outside the redirect path)")
+        }
+    }
+
+    /** Runs [block] on the side thread, if the service is still connected. */
+    private fun onSide(block: () -> Unit) {
+        if (sideThread != null) sideHandler.post(block)
+    }
+
     override fun exclusionReason(): String? {
         if (store.get(LauncherSettings.ExcludeInCall)) {
             val mode = getSystemService(AudioManager::class.java).mode
@@ -471,14 +517,9 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
                 return "call in progress"
             }
         }
-        if (store.get(LauncherSettings.ExcludeSplitScreen)) {
-            val split = try {
-                windows.any { it.type == AccessibilityWindowInfo.TYPE_SPLIT_SCREEN_DIVIDER }
-            } catch (e: Exception) {
-                false
-            }
-            if (split) return "split screen"
-        }
+        // Asking for the window list here once held a redirect up for three seconds; the
+        // last value read on the side thread is used instead.
+        if (store.get(LauncherSettings.ExcludeSplitScreen) && splitScreen) return "split screen"
         return null
     }
 
@@ -495,6 +536,7 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         val now = SystemClock.uptimeMillis()
         RedirectStatus.onLaunchRequested(now, triggerAt)
         DebugLog.decision(TAG, "REDIRECT ($reason), ${now - triggerAt} ms after trigger")
+        if (DebugLog.verbosity == LogLevel.TREE) traceWindow("at redirect")
         try {
             val intent = Intent(Intent.ACTION_MAIN)
                 .setComponent(component)
@@ -503,6 +545,14 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         } catch (e: Exception) {
             DebugLog.error(TAG, "launch failed: $e")
         }
+    }
+
+    override fun reopenRecents() {
+        store.set(LauncherSettings.StatsReopened, store.get(LauncherSettings.StatsReopened) + 1)
+        // Give the launcher's own window a moment to settle before asking for recents.
+        engineHandler.postDelayed({
+            if (!performGlobalAction(GLOBAL_ACTION_RECENTS)) DebugLog.error(TAG, "could not open recents")
+        }, REOPEN_DELAY_MS)
     }
 
     override fun setTracking(on: Boolean) = Unit
@@ -515,10 +565,31 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
 
     override fun onStateChanged(state: EngineState) {
         RedirectStatus.engineState.value = state
-        if (state == EngineState.HOME && DebugLog.verbosity == LogLevel.TREE) {
-            val ids = RecentsDetector.collectIds(activeRoot(), limit = 300)
-            DebugLog.tree(TAG, "home ids: ${ids.joinToString { it.substringAfter(":id/") }}")
+        if (state == EngineState.HOME && DebugLog.verbosity == LogLevel.TREE) traceWindow("home")
+    }
+
+    /**
+     * Most detailed log level only: what the active window holds and where the home screen
+     * views are. Runs on the side thread: walking another app's tree can take a second, and
+     * in 0.2.0 that walk ran on the engine thread and delayed redirects.
+     */
+    private fun traceWindow(label: String) = onSide {
+        val root = activeRoot()
+        val pkg = root?.packageName?.toString() ?: "none"
+        val ids = RecentsDetector.collectIds(root, limit = 300)
+        DebugLog.tree(TAG, "$label: $pkg, ids: ${ids.joinToString { it.substringAfter(":id/") }}")
+        if (pkg == systemLauncher && detectConfig.homeIds.isNotEmpty()) {
+            DebugLog.tree(TAG, "$label: bounds: ${RecentsDetector.bounds(root, detectConfig.homeIds)}")
         }
+        val list = try {
+            windows.joinToString { w ->
+                "${w.type}/${w.layer}${if (w.isActive) "a" else ""}${if (w.isFocused) "f" else ""} " +
+                    (w.root?.packageName?.toString()?.substringAfterLast('.') ?: w.title ?: "?")
+            }
+        } catch (e: Exception) {
+            "unavailable"
+        }
+        DebugLog.tree(TAG, "$label: windows: $list")
     }
 
     override fun onLaunchUnconfirmed() {
@@ -553,12 +624,13 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
     private companion object {
         const val TAG = "Redirect"
         const val SLOW_MS = 40L
+        const val REOPEN_DELAY_MS = 60L
         const val RECHECK_MS = 5000L
         const val MAX_RECHECKS = 24
         val STATS = listOf(
             LauncherSettings.StatsHomeSeen, LauncherSettings.StatsHomeUnseen,
             LauncherSettings.StatsRecentsSeen, LauncherSettings.StatsRecentsUnseen,
-            LauncherSettings.StatsInterrupted, LauncherSettings.StatsFallbacks,
+            LauncherSettings.StatsInterrupted, LauncherSettings.StatsFallbacks, LauncherSettings.StatsReopened,
         )
     }
 }

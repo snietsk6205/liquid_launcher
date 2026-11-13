@@ -31,11 +31,18 @@ private class FakeHost : EngineHost {
     }
     override fun cancel(timer: EngineTimer) { timers.remove(timer) }
     override fun probe() = probe
-    override fun exclusionReason() = exclusion
+    /** How long the exclusion check blocks (it asks the system for the window list). */
+    var exclusionTakesMs = 0L
+    override fun exclusionReason(): String? {
+        time += exclusionTakesMs
+        return exclusion
+    }
     override fun isLauncherResumed() = launcherResumed
     var launcherInFront = false
     override fun isLauncherInFront() = launcherInFront
     override fun launchLauncher(reason: String, triggerAt: Long) { launches += reason }
+    var reopened = 0
+    override fun reopenRecents() { reopened++ }
     override fun setTracking(on: Boolean) { trackingOn = on }
     override fun onRecentsConfirmed() { recentsConfirmed++ }
     override fun onStateChanged(state: EngineState) = Unit
@@ -66,8 +73,8 @@ private class FakeHost : EngineHost {
         time = end
     }
 
-    fun showHome(signature: Boolean = false) {
-        show(Probe(SYSTEM, isSystemLauncher = true, recents = false, homeSignature = signature))
+    fun showHome(signature: Boolean = false, drawer: Boolean = false) {
+        show(Probe(SYSTEM, isSystemLauncher = true, recents = false, homeSignature = signature, drawerSignature = drawer))
     }
     fun showRecents() { show(Probe(SYSTEM, isSystemLauncher = true, recents = true, detail = "id")) }
     fun showOtherApp() { show(Probe(OTHER, isSystemLauncher = false, recents = false)) }
@@ -534,17 +541,158 @@ class RedirectEngineTest {
     }
 
     @Test
-    fun leavingRecents_doesNotWaitForTheSignature() {
+    fun leavingRecents_waitsForTheHomeScreen_withoutFallback() {
         val host = setup(signatureConfig)
         host.showRecents()
         host.engine.onSystemLauncherWindow()
         host.advance(1000)
+        // Recents closed, but what shows is not the home screen (an app-lock screen, a dialog).
+        host.showHome(signature = false)
+        host.engine.onContentChanged()
+        host.advance(5000)
+        assertTrue(host.launches.isEmpty())
+        host.showHome(signature = true)
+        host.engine.onContentChanged()
+        host.advance(RedirectEngine.COALESCE_MS)
+        assertEquals(listOf("left recents"), host.launches)
+        host.confirmLaunch()
+        assertTrue(host.episodes.isEmpty())
+    }
+
+    @Test
+    fun leavingRecentsIntoTheSystemDrawer_redirects() {
+        val host = setup(signatureConfig)
+        host.showRecents()
+        host.engine.onSystemLauncherWindow()
+        host.advance(500)
+        host.showHome(drawer = true)
+        host.engine.onContentChanged()
+        host.advance(RedirectEngine.COALESCE_MS + 80)
+        assertEquals(listOf("left recents"), host.launches)
+    }
+
+    @Test
+    fun leavingRecentsIntoAnApp_neverRedirects() {
+        val host = setup(signatureConfig)
+        host.showRecents()
+        host.engine.onSystemLauncherWindow()
+        host.advance(500)
+        // The recents closing animation still reports the system launcher for a moment.
+        host.showHome(signature = false)
+        host.engine.onContentChanged()
+        host.advance(60)
+        host.showOtherApp()
+        host.advance(2000)
+        assertTrue(host.launches.isEmpty())
+        assertEquals(EngineState.IDLE, host.engine.state)
+    }
+
+    @Test
+    fun leavingRecents_withoutTheHomeScreenCheck_behavesAsBefore() {
+        val host = setup(signatureConfig.copy(requireHomeSignature = false))
+        host.showRecents()
+        host.engine.onSystemLauncherWindow()
+        host.advance(500)
         host.showHome(signature = false)
         host.engine.onContentChanged()
         host.advance(RedirectEngine.COALESCE_MS + 80)
         assertEquals(listOf("left recents"), host.launches)
+    }
+
+    @Test
+    fun drawerVisible_countsAsHomeWhenTheSystemLauncherAppears() {
+        val host = setup(signatureConfig)
+        host.showHome(drawer = true)
+        host.engine.onSystemLauncherWindow()
+        host.advance(160)
+        assertEquals(1, host.launches.size)
+        assertEquals(0, host.fallbacks)
+    }
+
+    // ---- recents interrupted by a redirect ----
+
+    private fun interrupt(host: FakeHost, recentsAfterMs: Long) {
+        val before = host.launches.size
+        host.showHome(signature = true)
+        host.engine.onSystemLauncherWindow()
+        host.advance(160)
+        assertEquals(before + 1, host.launches.size)
+        host.showRecents()
+        host.engine.onContentChanged()
+        host.advance(recentsAfterMs)
+    }
+
+    @Test
+    fun interruptedRecents_isReopenedOnceTheLauncherCoversIt() {
+        val host = setup(signatureConfig)
+        interrupt(host, recentsAfterMs = 120)
+        assertEquals(EngineState.RECENTS, host.engine.state)
+        assertEquals(0, host.reopened)
         host.confirmLaunch()
-        assertTrue(host.episodes.isEmpty())
+        assertEquals(1, host.reopened)
+        assertEquals(EngineState.IDLE, host.engine.state)
+    }
+
+    @Test
+    fun interruptedRecents_thatStaysOnTop_isLeftAlone() {
+        val host = setup(signatureConfig)
+        interrupt(host, recentsAfterMs = 120)
+        host.advance(3000)
+        assertEquals(0, host.reopened)
+        assertEquals(EngineState.RECENTS, host.engine.state)
+        // The launcher reaching the front much later is not the interruption any more.
+        host.confirmLaunch()
+        assertEquals(0, host.reopened)
+    }
+
+    @Test
+    fun recentsLongAfterTheRedirect_isNotReopened() {
+        val late = setup(signatureConfig)
+        late.showHome(signature = true)
+        late.engine.onSystemLauncherWindow()
+        late.advance(160 + 700)
+        late.showRecents()
+        late.engine.onContentChanged()
+        late.advance(RedirectEngine.COALESCE_MS)
+        late.confirmLaunch()
+        assertEquals(0, late.reopened)
+    }
+
+    @Test
+    fun reopen_happensAtMostOnceInAShortTime() {
+        val host = setup(signatureConfig)
+        interrupt(host, recentsAfterMs = 100)
+        host.confirmLaunch()
+        assertEquals(1, host.reopened)
+        host.advance(1500)
+        interrupt(host, recentsAfterMs = 100)
+        host.confirmLaunch()
+        assertEquals(1, host.reopened)
+    }
+
+    @Test
+    fun reopen_canBeSwitchedOff() {
+        val host = setup(signatureConfig.copy(reopenRecents = false))
+        interrupt(host, recentsAfterMs = 100)
+        host.confirmLaunch()
+        assertEquals(0, host.reopened)
+    }
+
+    // ---- a blocked service thread ----
+
+    @Test
+    fun slowExclusionCheck_doesNotCauseAnImmediateSecondLaunch() {
+        val host = setup(signatureConfig)
+        host.exclusionTakesMs = 3000
+        host.showHome(signature = true)
+        host.engine.onSystemLauncherWindow()
+        host.advance(160)
+        assertEquals(1, host.launches.size)
+        host.exclusionTakesMs = 0
+        host.engine.onContentChanged()
+        host.advance(RedirectEngine.COALESCE_MS)
+        assertEquals(1, host.launches.size)
+        assertTrue(host.logs.any { it.startsWith("exclusion check took") })
     }
 
     @Test

@@ -149,6 +149,7 @@ internal object Diagnostics {
             val recentsUnseen = store.get(LauncherSettings.StatsRecentsUnseen)
             val interrupted = store.get(LauncherSettings.StatsInterrupted)
             val fallbacks = store.get(LauncherSettings.StatsFallbacks)
+            val reopened = store.get(LauncherSettings.StatsReopened)
             val reliable = RedirectStatus.signatureReliable.value
             val status = when {
                 !store.get(LauncherSettings.RequireHomeScreen) -> DiagStatus.INFO
@@ -158,13 +159,15 @@ internal object Diagnostics {
             status to "ids: ${store.get(LauncherSettings.HomeIds).joinToString()}\n" +
                 "redirects: $seen with the home screen visible, $unseen without\n" +
                 "recents openings: $recentsUnseen with it not visible, $recentsSeen although it was visible\n" +
-                "recents interrupted by a redirect: $interrupted, fallbacks: $fallbacks\n" +
+                "recents interrupted by a redirect: $interrupted, reopened afterwards: $reopened, fallbacks: $fallbacks\n" +
                 "proven reliable: ${yesNo(reliable)}" +
-                (if (reliable && store.get(LauncherSettings.FastWhenProven)) {
-                    " (short delay of ${store.get(LauncherSettings.FastDelay)} ms in use)"
-                } else {
-                    " (needs 10 redirects and 5 recents openings)"
-                })
+                when {
+                    reliable && store.get(LauncherSettings.FastWhenProven) ->
+                        " (short delay of ${store.get(LauncherSettings.FastDelay)} ms in use)"
+                    recentsSeen * 20 > recentsUnseen && recentsSeen >= 3 ->
+                        " (recents opens while the home screen is visible on this phone, so the short delay stays off)"
+                    else -> " (needs 10 redirects and 5 recents openings)"
+                }
         }
 
         check("Recents detection") {

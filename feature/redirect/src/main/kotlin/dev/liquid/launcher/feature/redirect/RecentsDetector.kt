@@ -11,6 +11,8 @@ internal data class DetectConfig(
     val substrings: List<String>,
     /** Full resource names that are all visible when the home screen itself is showing. */
     val homeIds: List<String>,
+    /** Full resource names of which any one is visible when the system launcher's app drawer is showing. */
+    val drawerIds: List<String> = emptyList(),
 )
 
 /** Tells the system launcher's home screen from recents by looking for known view ids. */
@@ -43,14 +45,33 @@ internal object RecentsDetector {
                 return Probe(pkg, isSystemLauncher = true, recents = true, detail = "~" + hit.substringAfter(":id/"))
             }
         }
-        val home = config.homeIds.isNotEmpty() && config.homeIds.all { id ->
-            try {
-                !root.findAccessibilityNodeInfosByViewId(id).isNullOrEmpty()
+        val home = config.homeIds.isNotEmpty() && config.homeIds.all { has(root, it) }
+        val drawer = !home && config.drawerIds.any { has(root, it) }
+        return Probe(pkg, isSystemLauncher = true, recents = false, homeSignature = home, drawerSignature = drawer)
+    }
+
+    private fun has(root: AccessibilityNodeInfo, id: String): Boolean = try {
+        !root.findAccessibilityNodeInfosByViewId(id).isNullOrEmpty()
+    } catch (e: Exception) {
+        false
+    }
+
+    /** Screen bounds of the first node with each id, for the most detailed log level. */
+    fun bounds(root: AccessibilityNodeInfo?, ids: List<String>): String {
+        if (root == null) return "no window"
+        val rect = android.graphics.Rect()
+        return ids.joinToString { id ->
+            val node = try {
+                root.findAccessibilityNodeInfosByViewId(id).firstOrNull()
             } catch (e: Exception) {
-                false
+                null
+            }
+            val short = id.substringAfter(":id/")
+            if (node == null) "$short -" else {
+                node.getBoundsInScreen(rect)
+                "$short ${rect.toShortString()}"
             }
         }
-        return Probe(pkg, isSystemLauncher = true, recents = false, homeSignature = home)
     }
 
     /** All view ids in the window, for calibration and the most detailed log level. */

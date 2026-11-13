@@ -46,9 +46,9 @@ object LauncherSettings {
     )
     val RequireHomeScreen = BoolSetting(
         key = "redirect.requireHomeScreen", default = true,
-        title = "Wait until the home screen is visible",
-        summary = "While you are opening recents the system launcher's home screen is not shown yet, " +
-            "so waiting for it keeps the redirect from interrupting recents",
+        title = "Only redirect over the home screen or drawer",
+        summary = "Waits until the system launcher's home screen (or its app drawer) is visible. " +
+            "When leaving recents this is strict: closing recents into an app, a lock screen or anything else never redirects",
         section = "redirect", keywords = "home screen signature workspace recents interrupt",
     )
     val FastWhenProven = BoolSetting(
@@ -68,6 +68,19 @@ object LauncherSettings {
         title = "Redirect anyway after",
         summary = "If the home screen never becomes visible (for example after an update renamed it)",
         section = "redirect", keywords = "fallback timeout home screen",
+    )
+    val ReopenRecents = BoolSetting(
+        key = "redirect.reopenRecents", default = true,
+        title = "Reopen recents if a redirect covered it",
+        summary = "A slow recents gesture can look like going home at first. If recents opens just after a redirect, " +
+            "it is opened again over the launcher",
+        section = "redirect", keywords = "recents interrupted recovery reopen overview",
+    )
+    val ReopenWindow = IntSetting(
+        key = "redirect.reopenWindow", default = 600, min = 200, max = 1500, step = 50, unit = "ms",
+        title = "Counts as covered within",
+        summary = "How soon after the redirect recents must open",
+        section = "redirect", keywords = "recents interrupted window",
     )
     val OnRecentsExit = BoolSetting(
         key = "redirect.onRecentsExit", default = true,
@@ -135,6 +148,12 @@ object LauncherSettings {
         title = "Home screen view ids",
         summary = "All of these are visible when the system launcher shows its home screen. Leave empty to switch the check off",
         section = "detection", keywords = "home workspace hotseat view id signature",
+    )
+    val DrawerIds = StringListSetting(
+        key = "detect.drawerIds", default = listOf("apps_list_view", "all_apps_tabs_view_pager"),
+        title = "System launcher drawer view ids",
+        summary = "If any of these is visible, the system launcher's own app drawer is showing, which a redirect may replace",
+        section = "detection", keywords = "drawer apps list view id signature",
     )
     val LearnedIds = StringListSetting(
         key = "detect.learnedIds", default = emptyList(),
@@ -543,6 +562,7 @@ object LauncherSettings {
     val StatsRecentsUnseen = counter("stats.recentsUnseen", "Recents openings with the home screen not visible")
     val StatsInterrupted = counter("stats.interrupted", "Recents openings that a redirect interrupted")
     val StatsFallbacks = counter("stats.fallbacks", "Redirects sent without the home screen becoming visible")
+    val StatsReopened = counter("stats.reopened", "Recents openings reopened after a redirect covered them")
     val DetectorVerified = BoolSetting(
         key = "state.detectorVerified", default = false,
         title = "Recents detection confirmed", section = "state", hidden = true,
@@ -566,9 +586,9 @@ object LauncherSettings {
 
     val all: List<Setting<*>> = listOf(
         RedirectEnabled, OnHome, OnHomeDelay, RequireHomeScreen, FastWhenProven, FastDelay, HomeScreenFallback,
-        OnRecentsExit, OnRecentsExitDelay,
+        ReopenRecents, ReopenWindow, OnRecentsExit, OnRecentsExitDelay,
         ScreenOffMode, ScreenOffDelay, UnlockCheck,
-        SystemLauncherPackage, HomeClasses, RecentsIds, RecentsIdSubstrings, HomeIds, LearnedIds, PollInterval,
+        SystemLauncherPackage, HomeClasses, RecentsIds, RecentsIdSubstrings, HomeIds, DrawerIds, LearnedIds, PollInterval,
         ExcludeInCall, ExcludeSplitScreen, SystemHomePause, GuardCount, GuardWindow, GuardPause,
         SettleStyle, SettleDuration, ExcludeFromRecents,
         HomeColumns, HomeRows, HomeIconSize, HomeLabels, HomeLabelSize,
@@ -584,7 +604,7 @@ object LauncherSettings {
     ) + GlassDefault.settings + glassSurfaces.flatMap { it.settings } + listOf(
         LogEnabled, LogVerbosity, LogSize,
         LastSystemLauncherVersion, LastSystemLauncher, DetectorVerified,
-        StatsKey, StatsHomeSeen, StatsHomeUnseen, StatsRecentsSeen, StatsRecentsUnseen, StatsInterrupted, StatsFallbacks, SetupAppLaunchDone, SetupEmptyHomeDone, SetupMacrosDone,
+        StatsKey, StatsHomeSeen, StatsHomeUnseen, StatsRecentsSeen, StatsRecentsUnseen, StatsInterrupted, StatsFallbacks, StatsReopened, SetupAppLaunchDone, SetupEmptyHomeDone, SetupMacrosDone,
     )
 
     fun inSection(sectionId: String): List<Setting<*>> = all.filter { it.section == sectionId && !it.hidden }

@@ -11,6 +11,7 @@ object SettingDependencies {
         map[LauncherSettings.HomeLabelSize.key] = LauncherSettings.HomeLabels
         map[LauncherSettings.FastDelay.key] = LauncherSettings.FastWhenProven
         map[LauncherSettings.HomeScreenFallback.key] = LauncherSettings.RequireHomeScreen
+        map[LauncherSettings.ReopenWindow.key] = LauncherSettings.ReopenRecents
         map
     }
 

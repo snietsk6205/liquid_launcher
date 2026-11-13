@@ -28,6 +28,12 @@ data class EngineConfig(
     /** The home screen views have proven reliable on this phone: use [fastDelayMs] when they are visible. */
     val fastMode: Boolean = false,
     val fastDelayMs: Long = 30,
+    /**
+     * When recents opens within [reopenWindowMs] of a redirect and the launcher then covers it,
+     * open recents again: the redirect interrupted a slow recents gesture.
+     */
+    val reopenRecents: Boolean = true,
+    val reopenWindowMs: Long = 600,
 )
 
 /** What is on screen right now, as far as the engine needs to know. */
@@ -39,7 +45,12 @@ data class Probe(
     val detail: String = "",
     /** The system launcher's home screen views are visible. */
     val homeSignature: Boolean = false,
-)
+    /** The system launcher's own app drawer is visible. */
+    val drawerSignature: Boolean = false,
+) {
+    /** Home screen or app drawer: what a redirect may replace. */
+    val homeVisible: Boolean get() = homeSignature || drawerSignature
+}
 
 enum class EngineState {
     /** Some other app, our launcher, or unknown. Nothing is being watched. */
@@ -71,6 +82,9 @@ interface EngineHost {
     /** The launcher activity is resumed right now. */
     fun isLauncherInFront(): Boolean
     fun launchLauncher(reason: String, triggerAt: Long)
+
+    /** Opens recents again (a redirect covered it). */
+    fun reopenRecents()
 
     /** The engine starts (true) or stops (false) watching the system launcher closely. */
     fun setTracking(on: Boolean)
@@ -130,9 +144,17 @@ class RedirectEngine(private val host: EngineHost) {
     private var launchAttempts = 0
     private var nextAttemptAt = 0L
     private var lastExclusion: String? = null
+    private var redirectDueAt = 0L
+    private var contentEvents = 0
+
+    // Recents interrupted by a redirect.
+    private var lastLaunchAt = -1_000_000L
+    private var reopenUntil = 0L
+    private var lastReopenAt = -1_000_000L
 
     /** An appearance of the system launcher whose outcome has not been reported yet. */
     private var episodeOpen = false
+    private var unreadableLogged = false
 
     val isPaused: Boolean get() = host.now() < pausedUntil
 
@@ -165,6 +187,7 @@ class RedirectEngine(private val host: EngineHost) {
 
     /** Something inside the system launcher changed. Many of these arrive during animations. */
     fun onContentChanged() {
+        if (state == EngineState.HOME) contentEvents++
         if (state == EngineState.IDLE || evaluateQueued) return
         evaluateQueued = true
         host.schedule(EngineTimer.EVALUATE, COALESCE_MS)
@@ -210,7 +233,14 @@ class RedirectEngine(private val host: EngineHost) {
                 }
             }
 
-            EngineTimer.REDIRECT -> evaluate()
+            EngineTimer.REDIRECT -> {
+                val late = host.now() - redirectDueAt
+                if (redirectDueAt > 0 && late >= LATE_MS) {
+                    host.log(LogLevel.DECISION, "redirect check ran $late ms late (the service thread was busy)")
+                }
+                redirectDueAt = 0L
+                evaluate()
+            }
             EngineTimer.SCREEN_OFF -> fireScreenOff()
         }
     }
@@ -231,6 +261,9 @@ class RedirectEngine(private val host: EngineHost) {
             // While idle there is nothing to leave; a watch after a window event keeps running.
             if (probe.activePackage != null && state != EngineState.IDLE) {
                 toIdle("in front: ${probe.activePackage}")
+            } else if (probe.activePackage == null && state == EngineState.HOME && !unreadableLogged) {
+                unreadableLogged = true
+                host.log(LogLevel.DECISION, "active window unreadable (${probe.detail}); checking again")
             }
             return
         }
@@ -267,6 +300,8 @@ class RedirectEngine(private val host: EngineHost) {
         launchAttempts = 0
         nextAttemptAt = 0L
         lastExclusion = null
+        contentEvents = 0
+        unreadableLogged = false
         watchFastUntil = 0L
         watchUntil = 0L
         episodeOpen = fromIdle
@@ -279,50 +314,68 @@ class RedirectEngine(private val host: EngineHost) {
             host.log(LogLevel.DECISION, "$reason; not redirecting: this trigger is switched off")
             return
         }
-        val wait = dueAt(probe) - enteredHomeAt
+        val due = dueAt(probe)
+        val wait = due - enteredHomeAt
         host.log(
             LogLevel.DECISION,
             when {
                 !needsSignature() -> "$reason, redirect in $wait ms"
-                probe.homeSignature -> "$reason, home screen visible, redirect in $wait ms"
+                probe.homeVisible -> "$reason, ${visibleName(probe)} visible, redirect in $wait ms"
+                due == NEVER -> "$reason, home screen not visible: waiting for it (no redirect over anything else)"
                 else -> "$reason, home screen not visible yet: waiting for it (at most $wait ms)"
             },
         )
     }
 
-    private fun needsSignature() = config.requireHomeSignature && fromIdle
+    private fun visibleName(probe: Probe) = if (probe.homeSignature) "home screen" else "drawer"
+
+    /**
+     * The home screen check applies when the system launcher appears (with a fallback, in case
+     * its ids changed) and when recents closes (without one: closing recents into an app, a
+     * lock screen or anything else must never redirect).
+     */
+    private fun needsSignature() = config.requireHomeSignature
 
     /** When the redirect for the current HOME stay is due, given what is on screen now. */
-    private fun dueAt(probe: Probe): Long = enteredHomeAt + when {
-        !needsSignature() -> baseDelayMs
-        probe.homeSignature -> if (config.fastMode) minOf(config.fastDelayMs, baseDelayMs) else baseDelayMs
-        else -> maxOf(baseDelayMs, config.signatureFallbackMs)
+    private fun dueAt(probe: Probe): Long = when {
+        !needsSignature() -> enteredHomeAt + baseDelayMs
+        probe.homeVisible -> enteredHomeAt + if (config.fastMode && fromIdle) minOf(config.fastDelayMs, baseDelayMs) else baseDelayMs
+        fromIdle -> enteredHomeAt + maxOf(baseDelayMs, config.signatureFallbackMs)
+        else -> NEVER
     }
 
     /** In HOME with the system launcher in front and recents not showing: launch now or later. */
     private fun decide(probe: Probe) {
-        if (probe.homeSignature && !signatureSeen) {
+        if (probe.homeVisible && !signatureSeen) {
             signatureSeen = true
-            if (waitingLogged) host.log(LogLevel.DECISION, "home screen visible")
+            if (waitingLogged) host.log(LogLevel.DECISION, "${visibleName(probe)} visible")
         }
         if (declined) return
         val now = host.now()
         val due = maxOf(dueAt(probe), nextAttemptAt)
         if (now < due) {
-            if (needsSignature() && !probe.homeSignature && !waitingLogged && launchAttempts == 0 && now >= enteredHomeAt + baseDelayMs) {
+            if (needsSignature() && !probe.homeVisible && !waitingLogged && launchAttempts == 0 && now >= enteredHomeAt + baseDelayMs) {
                 waitingLogged = true
                 host.log(LogLevel.DECISION, "waiting for the home screen to become visible")
             }
-            host.schedule(EngineTimer.REDIRECT, due - now)
+            // With no due time the poll and the launcher's own events keep checking.
+            if (due != NEVER) {
+                redirectDueAt = due
+                host.schedule(EngineTimer.REDIRECT, due - now)
+            }
             return
         }
-        val fallback = needsSignature() && !probe.homeSignature && launchAttempts == 0
+        val fallback = needsSignature() && !probe.homeVisible && launchAttempts == 0
         attemptLaunch(if (launchAttempts == 0) entryReason else "retry", fallback)
     }
 
     private fun enterRecents(probe: Probe) {
         if (state == EngineState.RECENTS) return
+        val now = host.now()
         val interrupted = state == EngineState.HOME && launchAttempts > 0
+        val reopen = interrupted && config.reopenRecents &&
+            now - lastLaunchAt <= config.reopenWindowMs && now - lastReopenAt > REOPEN_GUARD_MS
+        reopenUntil = if (reopen) now + REOPEN_WAIT_MS else 0L
         if (episodeOpen && state == EngineState.HOME && host.now() - enteredHomeAt <= EPISODE_MS) {
             host.onEpisode(recentsFollowed = true, signatureSeen = signatureSeen, afterLaunch = interrupted)
         }
@@ -336,7 +389,11 @@ class RedirectEngine(private val host: EngineHost) {
         host.onStateChanged(EngineState.RECENTS)
         host.log(
             LogLevel.DECISION,
-            "recents open (${probe.detail})" + if (interrupted) "; it opened just after the redirect was sent" else "",
+            "recents open (${probe.detail})" + when {
+                reopen -> "; it opened ${now - lastLaunchAt} ms after the redirect was sent, so it will be reopened if the launcher covers it"
+                interrupted -> "; it opened just after the redirect was sent"
+                else -> ""
+            },
         )
         host.onRecentsConfirmed()
     }
@@ -347,8 +404,11 @@ class RedirectEngine(private val host: EngineHost) {
     }
 
     private fun attemptLaunch(reason: String, signatureFallback: Boolean) {
-        val now = host.now()
+        val checkStart = host.now()
         val exclusion = host.exclusionReason()
+        // The check can wait for the system; everything below counts from when it returned.
+        val now = host.now()
+        if (now - checkStart >= LATE_MS) host.log(LogLevel.DECISION, "exclusion check took ${now - checkStart} ms")
         if (exclusion != null) {
             if (exclusion != lastExclusion) host.log(LogLevel.DECISION, "not redirecting: $exclusion")
             lastExclusion = exclusion
@@ -379,9 +439,14 @@ class RedirectEngine(private val host: EngineHost) {
             host.log(LogLevel.DECISION, "home screen views not seen after ${now - enteredHomeAt} ms, redirecting anyway")
             host.onSignatureFallback()
         }
+        if (launchAttempts == 0) {
+            host.log(LogLevel.TREE, "waited ${now - enteredHomeAt} ms; $contentEvents content changes meanwhile")
+        }
         recentLaunches.addLast(now)
         launchAttempts++
+        lastLaunchAt = now
         nextAttemptAt = now + RETRY_MS
+        redirectDueAt = nextAttemptAt
         host.schedule(EngineTimer.REDIRECT, RETRY_MS)
         host.launchLauncher(reason, enteredHomeAt)
     }
@@ -401,7 +466,14 @@ class RedirectEngine(private val host: EngineHost) {
         if (episodeOpen && state == EngineState.HOME && launchAttempts > 0) {
             host.onEpisode(recentsFollowed = false, signatureSeen = signatureSeen, afterLaunch = true)
         }
+        val reopen = reopenUntil != 0L && host.now() <= reopenUntil
+        reopenUntil = 0L
         toIdle("launcher in front")
+        if (reopen) {
+            lastReopenAt = host.now()
+            host.log(LogLevel.DECISION, "the redirect covered recents: opening recents again")
+            host.reopenRecents()
+        }
     }
 
     private fun toIdle(reason: String) {
@@ -409,6 +481,8 @@ class RedirectEngine(private val host: EngineHost) {
         state = EngineState.IDLE
         evaluateQueued = false
         episodeOpen = false
+        reopenUntil = 0L
+        redirectDueAt = 0L
         declined = false
         launchAttempts = 0
         nextAttemptAt = 0L
@@ -440,5 +514,17 @@ class RedirectEngine(private val host: EngineHost) {
 
         /** Recents opening within this time of the system launcher appearing counts as one gesture. */
         const val EPISODE_MS = 2000L
+
+        /** A timer or check this much later than planned is worth a line in the log. */
+        const val LATE_MS = 300L
+
+        /** After an interrupted recents opening, the launcher must cover it within this time to reopen it. */
+        const val REOPEN_WAIT_MS = 1500L
+
+        /** At most one reopen in this time, so a misreading can never loop. */
+        const val REOPEN_GUARD_MS = 5000L
+
+        /** No redirect until the home screen becomes visible. */
+        private const val NEVER = Long.MAX_VALUE
     }
 }
