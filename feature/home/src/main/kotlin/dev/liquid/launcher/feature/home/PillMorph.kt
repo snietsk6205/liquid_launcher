@@ -64,8 +64,11 @@ fun MorphingPill(
     val open by remember { derivedStateOf { controller.drawer.value >= 0.5f } }
     val showItems by remember { derivedStateOf { controller.drawer.value < 0.45f } }
     val showSearch by remember { derivedStateOf { controller.drawer.value > 0.02f } }
-    val shape = remember(config.cornerPercent) {
-        RoundedCornerShape(MorphCorner(config.cornerPercent, 50) { controller.drawer.value })
+    // Tabs inside the search pill make it taller; it then rounds less so the tabs keep their width.
+    val bar = if (drawer.tabsInPill) controller.tabsBar else null
+    val extra = if (bar != null) tabsRowHeight(drawer.tabsSize) else 0.dp
+    val shape = remember(config.cornerPercent, bar != null) {
+        RoundedCornerShape(MorphCorner(config.cornerPercent, if (bar != null) 30 else 50) { controller.drawer.value })
     }
     val gestures = remember(config, controller) { Modifier.morphGestures(config, controller) }
     val homeColor = if (glass.lightGlass(Surfaces.Pill, lightBackground)) Color(0xFF16181C) else Color.White
@@ -77,7 +80,7 @@ fun MorphingPill(
 
     Box(
         modifier
-            .morphLayout(controller, config)
+            .morphLayout(controller, config, extra)
             .liquidGlass(backdrop, shape, glass.style(surface, if (open) drawerLight else lightBackground))
             .clip(shape)
             .then(if (interactive) gestures else Modifier),
@@ -96,15 +99,25 @@ fun MorphingPill(
             }
         }
         if (showSearch) {
-            DrawerSearchField(
-                controller = controller,
-                color = searchColor,
-                autoKeyboard = drawer.autoKeyboard,
-                interactive = interactive && open,
-                modifier = Modifier
-                    .requiredSize(searchWidth, SearchHeight)
+            androidx.compose.foundation.layout.Column(
+                Modifier
+                    .requiredSize(searchWidth, SearchHeight + extra)
                     .graphicsLayer { alpha = ((controller.drawer.value - 0.35f) / 0.65f).coerceIn(0f, 1f) },
-            )
+            ) {
+                if (bar != null) {
+                    TabsRow(
+                        bar, drawer.tabsSize, drawer.tabsIcons, searchColor, interactive && open,
+                        Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp).requiredSize(searchWidth - 12.dp, extra - 6.dp),
+                    )
+                }
+                DrawerSearchField(
+                    controller = controller,
+                    color = searchColor,
+                    autoKeyboard = drawer.autoKeyboard,
+                    interactive = interactive && open,
+                    modifier = Modifier.requiredSize(searchWidth, SearchHeight),
+                )
+            }
         }
     }
 }
@@ -118,12 +131,12 @@ private class MorphCorner(private val from: Int, private val to: Int, private va
 }
 
 /** Size and bottom margin between the pill's and the search field's, by drawer position. */
-private fun Modifier.morphLayout(controller: HomeController, config: PillConfig): Modifier =
+private fun Modifier.morphLayout(controller: HomeController, config: PillConfig, extra: androidx.compose.ui.unit.Dp): Modifier =
     layout { measurable, constraints ->
         val p = controller.drawer.value.coerceIn(0f, 1f)
         val full = constraints.maxWidth.toFloat()
         val width = lerp(full * config.widthFraction, full - SearchSideMargin.toPx() * 2, p)
-        val height = lerp(config.heightDp.dp.toPx(), SearchHeight.toPx(), p)
+        val height = lerp(config.heightDp.dp.toPx(), (SearchHeight + extra).toPx(), p)
         val bottom = lerp(config.offsetDp.dp.toPx(), SearchBottomMargin.toPx(), p)
         val placeable = measurable.measure(Constraints.fixed(width.roundToInt(), height.roundToInt()))
         layout(constraints.maxWidth, (height + bottom).roundToInt()) {

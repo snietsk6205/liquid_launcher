@@ -118,7 +118,7 @@ class HomeReturnState {
 }
 
 /** How the home screen is shown: the real thing, or a miniature inside the settings app. */
-enum class HomeMode { Live, Preview, PreviewDrawer, PreviewDrawerMotion, PreviewMenu }
+enum class HomeMode { Live, Preview, PreviewDrawer, PreviewDrawerMotion, PreviewDrawerIndex, PreviewMenu }
 
 @Composable
 fun HomeScreen(
@@ -143,6 +143,7 @@ fun HomeScreen(
     val pill by store.derive { pillConfig() }
     val drawerConfig by store.derive { drawerConfig() }
     val motion by store.derive { drawerMotion() }
+    val indexConfig by store.derive { indexConfig() }
     val glass by store.derive { glassConfig() }
     val search by store.derive { searchConfig() }
     val menuEntries by store.derive { MenuEntry.fromIds(get(LauncherSettings.MenuEntries)) }
@@ -189,9 +190,11 @@ fun HomeScreen(
         }
     }
     SideEffect { controller.motion = motion }
-    if (mode == HomeMode.PreviewDrawer) {
+    if (mode == HomeMode.PreviewDrawer || mode == HomeMode.PreviewDrawerIndex) {
         LaunchedEffect(Unit) { controller.drawer.snapTo(1f) }
     }
+    // The index preview moves a pretend finger along the letters.
+    controller.indexDemo = mode == HomeMode.PreviewDrawerIndex
     if (mode == HomeMode.PreviewDrawerMotion) {
         // Opens and closes the drawer in a loop, so the transition settings can be seen.
         LaunchedEffect(motion) {
@@ -346,6 +349,7 @@ fun HomeScreen(
             controller = controller,
             config = drawerConfig,
             motion = motion,
+            indexConfig = indexConfig,
             glass = glass,
             lightBackground = lightBackground,
             apps = apps,

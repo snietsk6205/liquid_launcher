@@ -60,7 +60,39 @@ data class DrawerConfig(
     val work: String,
     val closeOnLaunch: Boolean,
     val dim: Float,
-    val tabsTop: Boolean,
+    /** "top", "bottom", "search" (inside the search pill) or "hidden". */
+    val tabsPosition: String,
+    /** "pill", "chips" or "text". */
+    val tabsStyle: String,
+    /** "small", "medium" or "large". */
+    val tabsSize: String,
+    /** "auto", "on" or "off". */
+    val tabsIcons: String,
+    val tabsButtons: List<String>,
+    val tabMenu: List<String>,
+    val tabsInSearch: Boolean,
+    /** Tag ids shown as sections at the top of the main list. */
+    val topSections: List<String>,
+) {
+    val tabsTop: Boolean get() = tabsPosition == "top"
+    val tabsBottom: Boolean get() = tabsPosition == "bottom"
+    val tabsInPill: Boolean get() = tabsPosition == "search"
+}
+
+/** The drawer's letter index. */
+data class IndexConfig(
+    /** "always", "scroll" or "touch". */
+    val visibility: String,
+    val right: Boolean,
+    val curve: Float,
+    val letterSp: Int,
+    val spacingDp: Int,
+    /** "glass", "solid" or "none". */
+    val bubble: String,
+    /** "light", "strong" or "off". */
+    val haptics: String,
+    /** Time constant of the list catching up with the finger, in milliseconds. */
+    val followMs: Int,
 )
 
 /** How the drawer opens and scrolls. */
@@ -169,7 +201,25 @@ fun SettingsStore.drawerConfig() = DrawerConfig(
     work = get(S.DrawerWork),
     closeOnLaunch = get(S.DrawerCloseOnLaunch),
     dim = get(S.DrawerDim) / 100f,
-    tabsTop = get(S.DrawerTabsPosition) != "bottom",
+    tabsPosition = get(S.DrawerTabsPosition),
+    tabsStyle = get(S.DrawerTabsStyle),
+    tabsSize = get(S.DrawerTabsSize),
+    tabsIcons = get(S.DrawerTabsIcons),
+    tabsButtons = get(S.DrawerTabsButtons),
+    tabMenu = get(S.DrawerTabMenu),
+    tabsInSearch = get(S.DrawerTabsInSearch),
+    topSections = get(S.DrawerTopSections),
+)
+
+fun SettingsStore.indexConfig() = IndexConfig(
+    visibility = get(S.IndexVisibility),
+    right = get(S.IndexSide) != "left",
+    curve = get(S.IndexCurve) / 100f,
+    letterSp = get(S.IndexLetterSize),
+    spacingDp = get(S.IndexSpacing),
+    bubble = get(S.IndexBubble),
+    haptics = get(S.IndexHaptics),
+    followMs = get(S.IndexFollow),
 )
 
 fun SettingsStore.drawerMotion(): DrawerMotion {

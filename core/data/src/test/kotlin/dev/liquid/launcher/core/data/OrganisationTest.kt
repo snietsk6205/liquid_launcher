@@ -19,6 +19,19 @@ class OrganisationTest {
         OrganisationOps.filter(tab, apps, workMode, { it.work }, { it.tags }, known).map { it.name }
 
     @Test
+    fun tabWithSeveralSourcesShowsAppsMatchingAny() {
+        val org = OrganisationOps.addTab(Organisation(), "Mix", "tag:study")
+        val id = org.tabs.last().id
+        val mixed = OrganisationOps.setTabSources(org, id, listOf("tag:study", "untagged"))
+        val tab = mixed.tabs.last()
+        assertEquals(listOf("tag:study", "untagged"), tab.sources)
+        assertEquals(listOf("anki", "maps", "teams", "mail"), names(tab))
+        // The main tab keeps its main source.
+        val main = OrganisationOps.setTabSources(mixed, "apps", listOf("tag:study"))
+        assertEquals(listOf("personal", "tag:study"), main.tabs.first().sources)
+    }
+
+    @Test
     fun mainListAndWorkFollowTheWorkSetting() {
         val main = DrawerTabDef("a", "Apps", "personal")
         val work = DrawerTabDef("w", "Work", "work")

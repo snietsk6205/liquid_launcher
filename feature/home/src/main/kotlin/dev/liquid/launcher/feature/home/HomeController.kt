@@ -105,6 +105,12 @@ class HomeController(
     /** Best match for the drawer query, launched by the keyboard's Go key. */
     var drawerFirstResult: AppEntry? = null
 
+    /** Settings preview of the scroll index: a pretend finger moves along the letters. */
+    var indexDemo = false
+
+    /** The drawer's tabs, when they are shown inside the search pill (set by the drawer). */
+    internal var tabsBar by mutableStateOf<TabsBar?>(null)
+
     /** Bumped to ask the drawer to drop keyboard focus. */
     var drawerFocusReset by mutableIntStateOf(0)
     var screenHeight by mutableFloatStateOf(1f)

@@ -189,6 +189,10 @@ internal fun TabsAndTagsEditor() {
         source.startsWith("tag:") -> "Tag: " + (org.tag(source.removePrefix("tag:"))?.name ?: "deleted")
         else -> source
     }
+    val store = data.settings
+    val topSections by store.observe(LauncherSettings.DrawerTopSections)
+    val buttons by store.observe(LauncherSettings.DrawerTabsButtons)
+    val tabMenu by store.observe(LauncherSettings.DrawerTabMenu)
 
     InfoCard {
         Text("Drawer tabs", style = MaterialTheme.typography.titleMedium)
@@ -197,7 +201,7 @@ internal fun TabsAndTagsEditor() {
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f).clickable { renaming = "tab:${tab.id}" to tab.name }) {
                     Text(tab.name, style = MaterialTheme.typography.bodyLarge)
-                    Text(sourceLabel(tab.source), style = MaterialTheme.typography.bodySmall)
+                    Text(tab.sources.joinToString(" + ") { sourceLabel(it) }, style = MaterialTheme.typography.bodySmall)
                 }
                 IconButton(onClick = { data.organisation.update { OrganisationOps.moveTab(it, index, index - 1) } }, enabled = index > 0) {
                     LauncherIcon(LauncherIcons.ArrowUp, contentDescription = "Move up", size = 20.dp)
@@ -234,6 +238,61 @@ internal fun TabsAndTagsEditor() {
             }
         }
         OutlinedButton(onClick = { newTag = true }, modifier = Modifier.padding(top = 8.dp)) { Text("New tag") }
+    }
+
+    InfoCard {
+        Text("Sections at the top of the main list", style = MaterialTheme.typography.titleMedium)
+        BodyText("A ticked tag's apps also appear in their own section above all apps, with an entry in the scroll index (a star for a tag called Favourites).")
+        if (org.tags.isEmpty()) BodyText("Create a tag first.", Modifier.padding(top = 8.dp))
+        for (tag in org.tags) {
+            val on = tag.id in topSections
+            Row(Modifier.fillMaxWidth().clickable { store.set(LauncherSettings.DrawerTopSections, if (on) topSections - tag.id else topSections + tag.id) }, verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = on, onCheckedChange = { store.set(LauncherSettings.DrawerTopSections, if (on) topSections - tag.id else topSections + tag.id) })
+                Text(tag.name, style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+    }
+
+    InfoCard {
+        Text("Buttons in the tabs pill", style = MaterialTheme.typography.titleMedium)
+        BodyText("Shown after the tabs. None by default.")
+        for ((id, label) in listOf("add" to "New tag", "sort" to "Sort (opens the current tab's menu)", "settings" to "Drawer settings")) {
+            val on = id in buttons
+            Row(Modifier.fillMaxWidth().clickable { store.set(LauncherSettings.DrawerTabsButtons, if (on) buttons - id else buttons + id) }, verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = on, onCheckedChange = { store.set(LauncherSettings.DrawerTabsButtons, if (on) buttons - id else buttons + id) })
+                Text(label, style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+    }
+
+    InfoCard {
+        Text("Held tab menu", style = MaterialTheme.typography.titleMedium)
+        BodyText("What holding a tab offers, in this order.")
+        val all = listOf(
+            "rename" to "Rename", "icon" to "Icon", "contents" to "Which apps it shows", "apps" to "Choose apps (tag tabs)",
+            "sort" to "Sort order of this tab", "move" to "Move left / right", "newtag" to "New tag", "remove" to "Remove tab",
+            "edit" to "Edit tabs and tags (settings)", "settings" to "Drawer settings",
+        )
+        val names = all.toMap()
+        tabMenu.forEachIndexed { index, id ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = true, onCheckedChange = { store.set(LauncherSettings.DrawerTabMenu, tabMenu - id) })
+                Text(names[id] ?: id, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                IconButton(onClick = { store.set(LauncherSettings.DrawerTabMenu, tabMenu.move(index, -1)) }, enabled = index > 0) {
+                    LauncherIcon(LauncherIcons.ArrowUp, contentDescription = "Move up", size = 20.dp)
+                }
+                IconButton(onClick = { store.set(LauncherSettings.DrawerTabMenu, tabMenu.move(index, 1)) }, enabled = index < tabMenu.lastIndex) {
+                    LauncherIcon(LauncherIcons.ArrowDown, contentDescription = "Move down", size = 20.dp)
+                }
+            }
+        }
+        for ((id, label) in all.filter { it.first !in tabMenu }) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = false, onCheckedChange = { store.set(LauncherSettings.DrawerTabMenu, tabMenu + id) })
+                Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+        TextButton(onClick = { store.reset(LauncherSettings.DrawerTabMenu) }) { Text("Reset") }
     }
 
     renaming?.let { (key, current) ->

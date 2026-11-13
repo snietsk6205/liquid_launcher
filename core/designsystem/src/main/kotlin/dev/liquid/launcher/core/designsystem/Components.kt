@@ -47,6 +47,34 @@ object LauncherIcons {
     val Web = R.drawable.ic_web
     val Calculate = R.drawable.ic_calculate
     val Label = R.drawable.ic_label
+    val Star = R.drawable.ic_star
+    val School = R.drawable.ic_school
+    val Music = R.drawable.ic_music
+    val Game = R.drawable.ic_game
+    val Chat = R.drawable.ic_chat
+    val Camera = R.drawable.ic_camera
+    val Code = R.drawable.ic_code
+    val Image = R.drawable.ic_image
+    val Layers = R.drawable.ic_layers
+    val Pages = R.drawable.ic_pages
+    val Folder = R.drawable.ic_folder
+    val Sort = R.drawable.ic_sort
+    val Widgets = R.drawable.ic_widgets
+    val Save = R.drawable.ic_save
+    val Shopping = R.drawable.ic_shopping
+    val Heart = R.drawable.ic_heart
+    val Palette = R.drawable.ic_palette
+
+    /** Icons a drawer tab or quick pill item can be given, by stable name. */
+    val named: Map<String, Int> by lazy {
+        linkedMapOf(
+            "apps" to Apps, "star" to Star, "heart" to Heart, "label" to Label, "school" to School,
+            "work" to Work, "code" to Code, "chat" to Chat, "music" to Music, "game" to Game,
+            "camera" to Camera, "image" to Image, "shopping" to Shopping, "web" to Web,
+            "calendar" to Calendar, "schedule" to Schedule, "tune" to Tune, "folder" to Folder,
+            "home" to Home, "lock" to Lock, "palette" to Palette,
+        )
+    }
 }
 
 @Composable

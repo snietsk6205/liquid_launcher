@@ -15,6 +15,7 @@ object LauncherSettings {
         val Drawer = SettingsSection("drawer", "App drawer", "Layout, sorting, search, tabs and the work profile")
         val Tags = SettingsSection("tags", "Drawer tabs and tags", "Your own drawer pages built from tags; rename, reorder, remove")
         val DrawerMotion = SettingsSection("drawerMotion", "Drawer motion", "Opening transition, scroll bar and scroll effects")
+        val DrawerIndex = SettingsSection("drawerIndex", "Scroll index", "Letters at the edge of the drawer: curve, side, size, bubble, haptics, sections at the top")
         val Menu = SettingsSection("menu", "Long-press menu", "Which entries appear and in what order")
         val Search = SettingsSection("search", "Search", "Swipe-down search and web search")
         val Glass = SettingsSection("glass", "Liquid glass", "Quality, blur, refraction and tint, overall and per surface")
@@ -25,7 +26,7 @@ object LauncherSettings {
         val Handover = SettingsSection("handover", "Hand-over", "How the launcher appears after a redirect", "Redirect")
         val Log = SettingsSection("log", "Debug log", "What is recorded", "Redirect")
 
-        val all = listOf(Home, Icons, Clock, Gestures, Pill, Drawer, Tags, DrawerMotion, Menu, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
+        val all = listOf(Home, Icons, Clock, Gestures, Pill, Drawer, Tags, DrawerMotion, DrawerIndex, Menu, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
     }
 
     // ---- Redirect engine ----
@@ -449,10 +450,51 @@ object LauncherSettings {
     )
     val DrawerTabsPosition = ChoiceSetting(
         key = "drawer.tabsPosition", default = "top",
-        options = listOf("top" to "Top", "bottom" to "Bottom, above the search field"),
+        options = listOf(
+            "top" to "Top, floating over the apps",
+            "bottom" to "Bottom, above the search field",
+            "search" to "Inside the search pill",
+            "hidden" to "Hidden (swipe sideways to change tab)",
+        ),
         title = "Tabs position",
-        summary = "The glass pill with your tabs. Tap a tab to switch, tap it again to jump to the start, hold it for quick options",
-        section = "tags", keywords = "tabs pill work apps position top bottom",
+        summary = "The glass pill with your tabs. Tap a tab to switch, tap it again to jump to the start, hold it for that tab's options",
+        section = "tags", keywords = "tabs pill work apps position top bottom search merged hidden",
+    )
+    val DrawerTabsStyle = ChoiceSetting(
+        key = "drawer.tabsStyle", default = "pill",
+        options = listOf(
+            "pill" to "One glass pill with a sliding highlight",
+            "chips" to "Separate glass chips",
+            "text" to "Text only, no glass",
+        ),
+        title = "Tabs style",
+        section = "tags", keywords = "tabs style pill chips text glass",
+    )
+    val DrawerTabsSize = ChoiceSetting(
+        key = "drawer.tabsSize", default = "medium",
+        options = listOf("small" to "Small", "medium" to "Medium", "large" to "Large"),
+        title = "Tabs size",
+        section = "tags", keywords = "tabs size height small large",
+    )
+    val DrawerTabsIcons = ChoiceSetting(
+        key = "drawer.tabsIcons", default = "auto",
+        options = listOf("auto" to "When there is room", "on" to "Always (icons only when tight)", "off" to "Never"),
+        title = "Tab icons",
+        section = "tags", keywords = "tabs icons",
+    )
+    val DrawerTabsButtons = StringListSetting(
+        key = "drawer.tabsButtons", default = emptyList(),
+        title = "Buttons in the tabs pill", section = "tags", hidden = true,
+    )
+    val DrawerTabMenu = StringListSetting(
+        key = "drawer.tabMenu", default = listOf("rename", "icon", "contents", "apps", "sort", "move", "newtag", "remove"),
+        title = "Held tab menu", section = "tags", hidden = true,
+    )
+    val DrawerTabsInSearch = BoolSetting(
+        key = "drawer.tabsInSearch", default = true,
+        title = "Tabs filter search results",
+        summary = "While you type, the tabs stay visible: tap one to search only its apps, tap it again for all apps. #name highlights that tag's tab",
+        section = "tags", keywords = "tabs search filter scope tag hash",
     )
 
     // ---- Drawer motion ----
@@ -503,10 +545,15 @@ object LauncherSettings {
         section = "drawerMotion", keywords = "blur background wallpaper depth",
     )
     val DrawerScrollbar = ChoiceSetting(
-        key = "drawer.scrollbar", default = "glass",
-        options = listOf("glass" to "Glass handle", "line" to "Thin line", "off" to "Off"),
+        key = "drawer.scrollbar", default = "index",
+        options = listOf(
+            "index" to "Letter index on a curve (alphabetical order; otherwise the glass handle)",
+            "glass" to "Glass handle",
+            "line" to "Thin line",
+            "off" to "Off",
+        ),
         title = "Scroll bar",
-        summary = "Floats over the apps while you scroll. Drag the handle to move through the list quickly",
+        summary = "Floats over the apps. Drag it to move through the list quickly. The letter index has its own section",
         section = "drawerMotion", keywords = "scroll bar fast scroller handle thumb",
     )
     val DrawerScrollBubble = BoolSetting(
@@ -534,6 +581,68 @@ object LauncherSettings {
         options = listOf("stretch" to "Stretch", "none" to "None"),
         title = "At the end of the list",
         section = "drawerMotion", keywords = "overscroll stretch bounce edge",
+    )
+
+    // ---- Scroll index ----
+
+    val IndexVisibility = ChoiceSetting(
+        key = "index.visibility", default = "always",
+        options = listOf(
+            "always" to "Always",
+            "scroll" to "While scrolling or touching",
+            "touch" to "Only while touching the edge",
+        ),
+        title = "Show the letters",
+        summary = "With \"Always\" the list keeps a narrow margin free for them",
+        section = "drawerIndex", keywords = "index letters visible always touch hide",
+    )
+    val IndexSide = ChoiceSetting(
+        key = "index.side", default = "right",
+        options = listOf("right" to "Right", "left" to "Left"),
+        title = "Side",
+        section = "drawerIndex", keywords = "index side left right hand",
+    )
+    val IndexCurve = IntSetting(
+        key = "index.curve", default = 60, min = 0, max = 100, step = 5, unit = "%",
+        title = "Curve strength",
+        summary = "How far the letters near your finger bend out of the edge. 0 keeps them in a straight line",
+        section = "drawerIndex", keywords = "index curve bend arc wave strength",
+    )
+    val IndexLetterSize = IntSetting(
+        key = "index.letterSize", default = 12, min = 9, max = 20, unit = "sp",
+        title = "Letter size",
+        section = "drawerIndex", keywords = "index letter text size font",
+    )
+    val IndexSpacing = IntSetting(
+        key = "index.spacing", default = 22, min = 12, max = 34, unit = "dp",
+        title = "Letter spacing",
+        summary = "Gets tighter by itself when the letters would not fit",
+        section = "drawerIndex", keywords = "index spacing gap distance",
+    )
+    val IndexBubble = ChoiceSetting(
+        key = "index.bubble", default = "glass",
+        options = listOf("glass" to "Liquid glass", "solid" to "Solid", "none" to "None"),
+        title = "Bubble",
+        summary = "The letter (or section name) under your finger, shown large next to the curve",
+        section = "drawerIndex", keywords = "index bubble popup letter style",
+    )
+    val IndexHaptics = ChoiceSetting(
+        key = "index.haptics", default = "light",
+        options = listOf("light" to "Light tick per letter", "strong" to "Stronger tick per letter", "off" to "Off"),
+        title = "Haptics",
+        section = "drawerIndex", keywords = "index haptic vibration tick feedback",
+    )
+    val IndexFollow = IntSetting(
+        key = "index.follow", default = 45, min = 0, max = 150, step = 15, unit = "ms",
+        title = "Glide",
+        summary = "How softly the list catches up with your finger. 0 follows instantly; higher values glide over big jumps",
+        section = "drawerIndex", keywords = "index smooth glide follow lag animation",
+    )
+
+    /** Tag ids shown as sections at the top of the main drawer list, in order. Edited in the tabs and tags editor. */
+    val DrawerTopSections = StringListSetting(
+        key = "drawer.topSections", default = emptyList(),
+        title = "Sections at the top of the list", section = "drawerIndex", hidden = true,
     )
 
     // ---- Long-press menu ----
@@ -717,6 +826,8 @@ object LauncherSettings {
         DrawerWork, DrawerCloseOnLaunch, DrawerDim, DrawerTabsPosition,
         DrawerTransition, DrawerPillMorph, DrawerSpeed, DrawerBounce, DrawerRise, DrawerHomeScale, DrawerHomeBlur,
         DrawerScrollbar, DrawerScrollBubble, DrawerScrollEffect, DrawerScrollStrength, DrawerOverscroll,
+        IndexVisibility, IndexSide, IndexCurve, IndexLetterSize, IndexSpacing, IndexBubble, IndexHaptics, IndexFollow, DrawerTopSections,
+        DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
         MenuEntries,
         SearchEngine, SearchOpenKeyboard,
         GlassQuality, GlassAuto, GlassCap, GlassTintMode,

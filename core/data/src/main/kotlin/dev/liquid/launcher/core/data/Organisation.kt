@@ -9,14 +9,21 @@ data class Tag(val id: String, val name: String)
 
 /**
  * One page of the drawer. [source] says which apps it shows:
- * "personal" (the main list), "work", "untagged", or "tag:<id>".
+ * "personal" (the main list), "work", "untagged", or "tag:<id>"; [extra] adds more sources
+ * (the tab shows apps matching any of them). [icon] is a LauncherIcons name, [sort] a drawer
+ * sort value; null means the default.
  */
 @Serializable
 data class DrawerTabDef(
     val id: String,
     val name: String,
     val source: String,
-)
+    val icon: String? = null,
+    val sort: String? = null,
+    val extra: List<String> = emptyList(),
+) {
+    val sources: List<String> get() = (listOf(source) + extra).distinct()
+}
 
 /** Tags and drawer tabs, stored together in `organisation.json`. */
 @Serializable
@@ -59,7 +66,10 @@ object OrganisationOps {
 
     /** Removes the tag and any tab built from it. Apps keep a dangling id, which is ignored. */
     fun deleteTag(org: Organisation, id: String): Organisation =
-        org.copy(tags = org.tags.filter { it.id != id }, tabs = org.tabs.filter { it.source != "tag:$id" })
+        org.copy(
+            tags = org.tags.filter { it.id != id },
+            tabs = org.tabs.filter { it.source != "tag:$id" }.map { tab -> tab.copy(extra = tab.extra - "tag:$id") },
+        )
 
     fun addTab(org: Organisation, name: String, source: String): Organisation {
         if (org.tabs.any { it.source == source }) return org
@@ -74,6 +84,20 @@ object OrganisationOps {
     /** The main tab ("personal") cannot be removed: the drawer always has a list of everything. */
     fun removeTab(org: Organisation, id: String): Organisation =
         org.copy(tabs = org.tabs.filter { it.id != id || it.source == "personal" })
+
+    fun editTab(org: Organisation, id: String, change: (DrawerTabDef) -> DrawerTabDef): Organisation =
+        org.copy(tabs = org.tabs.map { if (it.id == id) change(it) else it })
+
+    /** Sets which apps a tab shows; the first source is the main one. An empty list leaves the tab as it is. */
+    fun setTabSources(org: Organisation, id: String, sources: List<String>): Organisation {
+        val clean = sources.distinct()
+        if (clean.isEmpty()) return org
+        return editTab(org, id) { tab ->
+            // The main list keeps "personal" as its main source, so it can never be removed.
+            val main = if (tab.source == "personal") "personal" else clean.first()
+            tab.copy(source = main, extra = clean.filter { it != main })
+        }
+    }
 
     fun moveTab(org: Organisation, from: Int, to: Int): Organisation {
         if (from !in org.tabs.indices || to !in org.tabs.indices) return org
@@ -95,16 +119,30 @@ object OrganisationOps {
         knownTags: Set<String>,
     ): List<T> {
         val visible = if (workMode == "hidden") items.filter { !isWork(it) } else items
-        return when {
-            tab.source == "personal" -> if (workMode == "merged") visible else visible.filter { !isWork(it) }
-            tab.source == "work" -> if (workMode == "tab") visible.filter(isWork) else emptyList()
-            tab.source == "untagged" -> visible.filter { item -> tagsOf(item).none { it in knownTags } }
-            tab.source.startsWith("tag:") -> {
-                val id = tab.source.removePrefix("tag:")
-                visible.filter { id in tagsOf(it) }
-            }
-            else -> emptyList()
+        val sources = tab.sources
+        if (sources.size == 1) return filterSource(sources[0], visible, workMode, isWork, tagsOf, knownTags)
+        // Several sources: apps matching any of them, in the original order.
+        val matching: MutableSet<T> = java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
+        for (source in sources) matching += filterSource(source, visible, workMode, isWork, tagsOf, knownTags)
+        return visible.filter { it in matching }
+    }
+
+    private fun <T> filterSource(
+        source: String,
+        visible: List<T>,
+        workMode: String,
+        isWork: (T) -> Boolean,
+        tagsOf: (T) -> List<String>,
+        knownTags: Set<String>,
+    ): List<T> = when {
+        source == "personal" -> if (workMode == "merged") visible else visible.filter { !isWork(it) }
+        source == "work" -> if (workMode == "tab") visible.filter(isWork) else emptyList()
+        source == "untagged" -> visible.filter { item -> tagsOf(item).none { it in knownTags } }
+        source.startsWith("tag:") -> {
+            val id = source.removePrefix("tag:")
+            visible.filter { id in tagsOf(it) }
         }
+        else -> emptyList()
     }
 }
 

@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -56,6 +55,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
+import dev.liquid.launcher.core.data.DrawerTabDef
+import dev.liquid.launcher.core.data.OrganisationOps
 import com.kyant.backdrop.Backdrop
 import dev.liquid.launcher.core.data.AppEntry
 import dev.liquid.launcher.core.designsystem.LauncherIcon
@@ -279,95 +282,233 @@ internal fun DrawerScrollbar(
 
 private val TabWidth = 104.dp
 
+/** One tab as the pill shows it. */
+internal data class TabLabel(val name: String, val icon: Int)
+
 /**
- * The drawer's pages in a glass pill. The highlight follows the pager as it is swiped. Tap
- * switches, tapping the current tab jumps to the start, holding opens quick options.
+ * The drawer's tabs and what they do, shared by the floating pill and the search pill.
+ * [selected] is the highlighted tab as a continuous position (it follows the pager while
+ * swiping), or -1 for none (searching all apps).
+ */
+@Stable
+internal class TabsBar(
+    val labels: List<TabLabel>,
+    val selected: () -> Float,
+    val onTap: (Int) -> Unit,
+    val onLongPress: (Int) -> Unit,
+    /** Extra buttons after the tabs: "add" (new tag), "sort", "settings". */
+    val buttons: List<String>,
+    val onButton: (String) -> Unit,
+)
+
+private class TabMetrics(val height: Dp, val font: TextUnit, val icon: Dp)
+
+private fun tabMetrics(size: String) = when (size) {
+    "small" -> TabMetrics(36.dp, 13.sp, 16.dp)
+    "large" -> TabMetrics(52.dp, 16.sp, 20.dp)
+    else -> TabMetrics(44.dp, 14.sp, 18.dp)
+}
+
+private fun buttonIcon(id: String): Int = when (id) {
+    "add" -> LauncherIcons.Add
+    "sort" -> LauncherIcons.Sort
+    else -> LauncherIcons.Settings
+}
+
+/**
+ * The tabs floating at the top or bottom of the drawer. "pill": one glass pill with a
+ * highlight that slides with the pager; "chips": a glass chip per tab; "text": labels only.
  */
 @Composable
 internal fun DrawerTabs(
-    labels: List<Pair<String, Int>>,
-    pager: PagerState,
+    bar: TabsBar,
+    style: String,
+    size: String,
+    icons: String,
     glass: GlassConfig,
     lightBackground: Boolean,
     backdrop: Backdrop,
     controller: HomeController,
     interactive: Boolean,
-    onReselect: (Int) -> Unit,
-    onLongPress: () -> Unit,
     modifier: Modifier,
 ) {
-    val scope = rememberCoroutineScope()
-    val shape = RoundedCornerShape(50)
+    val m = tabMetrics(size)
     val color = if (glass.lightGlass(Surfaces.Drawer, lightBackground)) Color(0xFF16181C) else Color.White
     val density = LocalDensity.current
-    // Many tabs share the screen width; below a comfortable width the icons are dropped.
-    val available = with(density) { controller.screenWidth.toDp() } - 40.dp
-    val tabWidth = minOf(TabWidth, available / labels.size.coerceAtLeast(1))
-    val showIcons = tabWidth >= 96.dp
-    Box(
-        modifier
-            .height(44.dp)
-            .width(tabWidth * labels.size + 8.dp)
-            .drawBehind { controller.drawer.value }
-            .liquidGlass(backdrop, shape, glass.style(Surfaces.Drawer, lightBackground))
-            .clip(shape)
-            .padding(4.dp),
-    ) {
+    val n = bar.labels.size.coerceAtLeast(1)
+    val buttonsWidth = m.height * bar.buttons.size
+    val available = with(density) { controller.screenWidth.toDp() } - 40.dp - buttonsWidth
+    val tabWidth = minOf(TabWidth, available / n)
+    val shape = RoundedCornerShape(50)
+    when (style) {
+        "chips" -> Row(modifier.height(m.height), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            val chipWidth = minOf(TabWidth, (available - 6.dp * (n - 1)) / n)
+            bar.labels.forEachIndexed { i, label ->
+                Box(
+                    Modifier
+                        .width(chipWidth)
+                        .fillMaxHeight()
+                        .drawBehind { controller.drawer.value }
+                        .liquidGlass(backdrop, shape, glass.style(Surfaces.Drawer, lightBackground))
+                        .clip(shape)
+                        .drawBehind {
+                            val closeness = (1f - kotlin.math.abs(bar.selected() - i)).coerceIn(0f, 1f)
+                            if (bar.selected() >= 0f && closeness > 0f) drawRect(color.copy(alpha = 0.18f * closeness))
+                        }
+                        .tabGestures(bar, i, interactive),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    TabContent(label, m, color, showIcon(icons, chipWidth), showText(icons, chipWidth))
+                }
+            }
+            for (id in bar.buttons) {
+                Box(
+                    Modifier
+                        .size(m.height)
+                        .drawBehind { controller.drawer.value }
+                        .liquidGlass(backdrop, CircleShape, glass.style(Surfaces.Drawer, lightBackground))
+                        .clip(CircleShape)
+                        .then(if (interactive) Modifier.clickable { bar.onButton(id) } else Modifier),
+                    contentAlignment = Alignment.Center,
+                ) { LauncherIcon(buttonIcon(id), contentDescription = id, tint = color, size = m.icon) }
+            }
+        }
+        "text" -> TabsRow(
+            bar, size, icons, color, interactive,
+            modifier.height(m.height).width(tabWidth * n + buttonsWidth),
+            underline = true,
+        )
+        else -> Box(
+            modifier
+                .height(m.height)
+                .width(tabWidth * n + buttonsWidth + 8.dp)
+                .drawBehind { controller.drawer.value }
+                .liquidGlass(backdrop, shape, glass.style(Surfaces.Drawer, lightBackground))
+                .clip(shape)
+                .padding(4.dp),
+        ) {
+            TabsRow(bar, size, icons, color, interactive, Modifier.fillMaxSize())
+        }
+    }
+}
+
+/**
+ * Tabs side by side with a highlight that follows [TabsBar.selected], and the extra buttons
+ * at the end. No glass of its own: used inside the pill and inside the search pill.
+ */
+@Composable
+internal fun TabsRow(
+    bar: TabsBar,
+    size: String,
+    icons: String,
+    color: Color,
+    interactive: Boolean,
+    modifier: Modifier,
+    underline: Boolean = false,
+) {
+    val m = tabMetrics(size)
+    BoxWithConstraints(modifier) {
+        val n = bar.labels.size.coerceAtLeast(1)
+        val buttonSize = maxHeight
+        val tabWidth = (maxWidth - buttonSize * bar.buttons.size) / n
+        val shape = RoundedCornerShape(50)
         Box(
             Modifier
-                .offset { IntOffset(((pager.currentPage + pager.currentPageOffsetFraction) * tabWidth.toPx()).roundToInt(), 0) }
-                .size(tabWidth, 36.dp)
-                .background(color.copy(alpha = 0.16f), shape)
+                .offset { IntOffset((bar.selected().coerceAtLeast(0f) * tabWidth.toPx()).roundToInt(), 0) }
+                .size(tabWidth, maxHeight)
+                .graphicsLayer { alpha = if (bar.selected() < 0f) 0f else 1f }
+                .then(
+                    if (underline) {
+                        Modifier.drawBehind {
+                            val area = this.size
+                            val w = area.width * 0.4f
+                            drawRoundRect(
+                                color,
+                                topLeft = Offset((area.width - w) / 2f, area.height - 3.dp.toPx()),
+                                size = androidx.compose.ui.geometry.Size(w, 2.5.dp.toPx()),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
+                            )
+                        }
+                    } else {
+                        Modifier.background(color.copy(alpha = 0.16f), shape)
+                    }
+                )
         )
         Row(Modifier.fillMaxSize()) {
-            labels.forEachIndexed { index, (label, icon) ->
-                Row(
-                    Modifier
-                        .width(tabWidth)
-                        .fillMaxHeight()
-                        .then(
-                            if (!interactive) Modifier else Modifier.pointerInput(index) {
-                                detectTapGestures(
-                                    onTap = {
-                                        if (pager.currentPage == index) onReselect(index)
-                                        else scope.launch { pager.animateScrollToPage(index) }
-                                    },
-                                    onLongPress = { onLongPress() },
-                                )
-                            }
-                        ),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
+            bar.labels.forEachIndexed { i, label ->
+                Box(
+                    Modifier.width(tabWidth).fillMaxHeight().clip(shape).tabGestures(bar, i, interactive),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    if (showIcons) {
-                        LauncherIcon(icon, contentDescription = null, tint = color, size = 18.dp)
-                        Spacer(Modifier.width(8.dp))
-                    }
-                    Text(
-                        label,
-                        style = TextStyle(color = color, fontSize = 14.sp, fontWeight = FontWeight.Medium),
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    )
+                    TabContent(label, m, color, showIcon(icons, tabWidth), showText(icons, tabWidth))
                 }
+            }
+            for (id in bar.buttons) {
+                Box(
+                    Modifier.size(buttonSize).clip(CircleShape).then(if (interactive) Modifier.clickable { bar.onButton(id) } else Modifier),
+                    contentAlignment = Alignment.Center,
+                ) { LauncherIcon(buttonIcon(id), contentDescription = id, tint = color, size = m.icon) }
             }
         }
     }
 }
 
-/** Held tab: sort order and a way into the drawer settings. */
+private fun showIcon(mode: String, width: Dp) = when (mode) {
+    "off" -> false
+    "on" -> true
+    else -> width >= 96.dp
+}
+
+/** With icons always on, narrow tabs show only the icon. */
+private fun showText(mode: String, width: Dp) = !(mode == "on" && width < 64.dp)
+
 @Composable
-internal fun TabQuickMenu(
+private fun TabContent(label: TabLabel, m: TabMetrics, color: Color, icon: Boolean, text: Boolean) {
+    Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 6.dp)) {
+        if (icon) {
+            LauncherIcon(label.icon, contentDescription = if (text) null else label.name, tint = color, size = m.icon)
+            if (text) Spacer(Modifier.width(7.dp))
+        }
+        if (text) {
+            Text(
+                label.name,
+                style = TextStyle(color = color, fontSize = m.font, fontWeight = FontWeight.Medium),
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+private fun Modifier.tabGestures(bar: TabsBar, index: Int, interactive: Boolean): Modifier =
+    if (!interactive) this else pointerInput(bar, index) {
+        detectTapGestures(onTap = { bar.onTap(index) }, onLongPress = { bar.onLongPress(index) })
+    }
+
+/**
+ * Held tab: what can be changed about this tab, in the order the user chose (Settings →
+ * Drawer tabs and tags → Held tab menu). No settings entries unless the user adds them.
+ */
+@Composable
+internal fun TabMenu(
+    tab: DrawerTabDef?,
+    tabIndex: Int,
+    tabCount: Int,
     config: DrawerConfig,
     glass: GlassConfig,
     lightBackground: Boolean,
     backdrop: Backdrop,
     controller: HomeController,
     atTop: Boolean,
+    onDialog: (TabDialog) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
     val shape = RoundedCornerShape(24.dp)
+    var sortOpen by remember { mutableStateOf(false) }
+    val org = controller.data.organisation
+    val tagSource = tab?.sources?.firstOrNull { it.startsWith("tag:") }?.removePrefix("tag:")
+    val orgIndex = tab?.let { t -> org.value.value.tabs.indexOfFirst { it.id == t.id } } ?: -1
     Box(
         Modifier
             .fillMaxSize()
@@ -376,47 +517,64 @@ internal fun TabQuickMenu(
         Column(
             Modifier
                 .align(if (atTop) Alignment.TopCenter else Alignment.BottomCenter)
-                .then(if (atTop) Modifier.statusBarsPadding().padding(top = 56.dp) else Modifier.navigationBarsPadding().padding(bottom = SearchZone + 56.dp))
-                .width(260.dp)
+                .then(if (atTop) Modifier.statusBarsPadding().padding(top = 64.dp) else Modifier.navigationBarsPadding().padding(bottom = SearchZone + 60.dp))
+                .width(270.dp)
                 .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground))
                 .clip(shape)
                 .padding(vertical = 8.dp),
         ) {
-            Text(
-                "Sort",
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
-                style = TextStyle(color = color.copy(alpha = 0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium),
-            )
-            for ((value, label) in LauncherSettings.DrawerSort.options) {
-                MenuRow(
-                    label = label,
-                    icon = if (config.sort == value) LauncherIcons.Check else null,
-                    color = color,
-                ) {
-                    controller.data.settings.set(LauncherSettings.DrawerSort, value)
-                    onDismiss()
+            if (tab != null) {
+                Text(
+                    tab.name,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+                    style = TextStyle(color = color.copy(alpha = 0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium),
+                )
+            }
+            for (entry in config.tabMenu) {
+                when (entry) {
+                    "rename" -> if (tab != null) MenuRow("Rename", LauncherIcons.Edit, color) { onDismiss(); onDialog(TabDialog.Rename(tab.id, tab.name)) }
+                    "icon" -> if (tab != null) MenuRow("Icon", tabIcon(tab), color) { onDismiss(); onDialog(TabDialog.Icon(tab.id)) }
+                    "contents" -> if (tab != null) MenuRow("Which apps it shows", LauncherIcons.Tune, color) { onDismiss(); onDialog(TabDialog.Contents(tab.id)) }
+                    "apps" -> if (tagSource != null) MenuRow("Choose apps", LauncherIcons.Apps, color) { onDismiss(); onDialog(TabDialog.Apps(tagSource)) }
+                    "sort" -> if (tab != null) {
+                        val current = tab.sort
+                        val label = current?.let { c -> dev.liquid.launcher.core.settings.LauncherSettings.DrawerSort.options.firstOrNull { it.first == c }?.second } ?: "Like the drawer"
+                        MenuRow("Sort: $label", LauncherIcons.Sort, color) { sortOpen = !sortOpen }
+                        if (sortOpen) {
+                            val options = listOf<Pair<String?, String>>(null to "Like the drawer") + dev.liquid.launcher.core.settings.LauncherSettings.DrawerSort.options
+                            for ((value, name) in options) {
+                                MenuRow(name, if (current == value) LauncherIcons.Check else null, color, indent = true) {
+                                    org.update { OrganisationOps.editTab(it, tab.id) { t -> t.copy(sort = value) } }
+                                    onDismiss()
+                                }
+                            }
+                        }
+                    }
+                    "move" -> if (tab != null && orgIndex >= 0) {
+                        val size = org.value.value.tabs.size
+                        if (orgIndex > 0) MenuRow("Move left", LauncherIcons.ArrowBack, color) { org.update { OrganisationOps.moveTab(it, orgIndex, orgIndex - 1) }; onDismiss() }
+                        if (orgIndex < size - 1) MenuRow("Move right", LauncherIcons.ChevronRight, color) { org.update { OrganisationOps.moveTab(it, orgIndex, orgIndex + 1) }; onDismiss() }
+                    }
+                    "newtag" -> MenuRow("New tag…", LauncherIcons.Add, color) { onDismiss(); onDialog(TabDialog.NewTag) }
+                    "remove" -> if (tab != null && tab.source != "personal") MenuRow("Remove tab", LauncherIcons.Close, color) {
+                        org.update { OrganisationOps.removeTab(it, tab.id) }
+                        onDismiss()
+                    }
+                    "edit" -> MenuRow("Edit tabs and tags", LauncherIcons.Label, color) { onDismiss(); controller.openSection(LauncherSettings.Sections.Tags.id) }
+                    "settings" -> MenuRow("Drawer settings", LauncherIcons.Settings, color) { onDismiss(); controller.openSection(LauncherSettings.Sections.Drawer.id) }
                 }
-            }
-            Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(color.copy(alpha = 0.12f)))
-            MenuRow("Edit tabs and tags", LauncherIcons.Label, color) {
-                onDismiss()
-                controller.openSection(LauncherSettings.Sections.Tags.id)
-            }
-            MenuRow("Drawer settings", LauncherIcons.Settings, color) {
-                onDismiss()
-                controller.openSection(LauncherSettings.Sections.Drawer.id)
             }
         }
     }
 }
 
 @Composable
-private fun MenuRow(label: String, icon: Int?, color: Color, onClick: () -> Unit) {
+private fun MenuRow(label: String, icon: Int?, color: Color, indent: Boolean = false, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(start = if (indent) 54.dp else 20.dp, end = 20.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {

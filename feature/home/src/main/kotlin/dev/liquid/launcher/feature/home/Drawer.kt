@@ -22,16 +22,17 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,23 +44,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
@@ -82,6 +87,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -99,14 +105,17 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import dev.liquid.launcher.core.data.AppEntry
 import dev.liquid.launcher.core.data.DrawerTabDef
+import dev.liquid.launcher.core.data.Fuzzy
+import dev.liquid.launcher.core.data.GridIndex
+import dev.liquid.launcher.core.data.IndexItem
 import dev.liquid.launcher.core.data.Organisation
 import dev.liquid.launcher.core.data.OrganisationOps
-import dev.liquid.launcher.core.data.Fuzzy
 import dev.liquid.launcher.core.data.Usage
 import dev.liquid.launcher.core.designsystem.LauncherIcon
 import dev.liquid.launcher.core.designsystem.LauncherIcons
 import dev.liquid.launcher.core.designsystem.liquidGlass
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import kotlin.math.ln
 import kotlin.math.roundToInt
 
@@ -120,43 +129,109 @@ fun sortApps(apps: List<AppEntry>, sort: String, usage: Map<String, Usage>): Lis
 fun usageBoost(app: AppEntry, usage: Map<String, Usage>): Int =
     (ln(1.0 + (usage[app.key]?.count ?: 0)) * 20).toInt()
 
-/** One page of the drawer: its pill label, icon and apps. */
-private class DrawerTab(val id: String, val label: String, val icon: Int, val apps: List<AppEntry>)
-
-private fun tabIcon(def: DrawerTabDef): Int = when {
-    def.source == "personal" -> LauncherIcons.Apps
-    def.source == "work" -> LauncherIcons.Work
-    def.source.startsWith("tag:") -> LauncherIcons.Label
-    else -> LauncherIcons.CircleOutline
+/** One cell of the drawer list: an app, or a full-width section header. */
+internal sealed interface GridCell {
+    val key: String
 }
 
-/** "#study" lists the apps tagged Study (any tag starting with what was typed). */
-private fun tagResults(query: String, apps: List<AppEntry>, org: Organisation): List<AppEntry>? {
+internal class AppCell(val app: AppEntry, override val key: String) : GridCell
+
+internal class HeaderCell(val title: String, override val key: String) : GridCell
+
+/** One page of the drawer: its pill label and icon, its cells and its letter index. */
+private class DrawerTab(
+    val def: DrawerTabDef?,
+    val id: String,
+    val label: String,
+    val icon: Int,
+    val apps: List<AppEntry>,
+    val cells: List<GridCell>,
+    val index: GridIndex,
+    val sort: String,
+)
+
+internal fun tabIcon(def: DrawerTabDef): Int {
+    def.icon?.let { name -> LauncherIcons.named[name]?.let { return it } }
+    return when {
+        def.source == "personal" -> LauncherIcons.Apps
+        def.source == "work" -> LauncherIcons.Work
+        def.source.startsWith("tag:") -> LauncherIcons.Label
+        else -> LauncherIcons.CircleOutline
+    }
+}
+
+/** Ids of the tags whose name starts with what follows "#", or null when the query is not a tag search. */
+private fun tagQuery(query: String, org: Organisation): Set<String>? {
     if (!query.startsWith("#")) return null
     val name = query.drop(1).trim()
-    val ids = org.tags.filter { it.name.startsWith(name, ignoreCase = true) }.map { it.id }.toSet()
-    return apps.filter { app -> app.tags.any { it in ids } }
+    return org.tags.filter { it.name.startsWith(name, ignoreCase = true) }.map { it.id }.toSet()
+}
+
+/** Builds a tab's cells: optional sections at the top (tags), then the tab's own apps. */
+private fun makeTab(
+    def: DrawerTabDef?,
+    id: String,
+    label: String,
+    icon: Int,
+    apps: List<AppEntry>,
+    sort: String,
+    sections: List<Pair<dev.liquid.launcher.core.data.Tag, List<AppEntry>>>,
+    columns: Int,
+): DrawerTab {
+    val cells = ArrayList<GridCell>(apps.size + sections.sumOf { it.second.size + 1 } + 1)
+    val items = ArrayList<IndexItem>(cells.size)
+    val letters = sort == "az"
+    for ((tag, list) in sections) {
+        cells += HeaderCell(tag.name, "h:${tag.id}")
+        items += IndexItem.Header(tag.name)
+        for (app in list) {
+            cells += AppCell(app, "s:${tag.id}:${app.key}")
+            items += IndexItem.Cell(null)
+        }
+    }
+    if (sections.isNotEmpty()) {
+        cells += HeaderCell(label, "h:all")
+        items += IndexItem.Header(null)
+    }
+    for (app in apps) {
+        cells += AppCell(app, app.key)
+        items += IndexItem.Cell(if (letters) GridIndex.letterOf(app.label) else null)
+    }
+    return DrawerTab(def, id, label, icon, apps, cells, GridIndex.build(items, columns), sort)
 }
 
 /** Space the floating search field takes at the bottom (54 dp and its margins). */
 internal val SearchZone = 90.dp
-private val HeaderHeight = 52.dp
-private val TabsHeight = 44.dp
+private val HandleHeight = 52.dp
+
+internal fun tabsHeight(size: String): Dp = when (size) {
+    "small" -> 36.dp
+    "large" -> 52.dp
+    else -> 44.dp
+}
+
+/** Height the tabs add to the search pill when they sit inside it. */
+internal fun tabsRowHeight(size: String): Dp = tabsHeight(size) + 4.dp
 
 /**
- * Bottom content padding that follows the keyboard. Read during layout, so the keyboard
- * sliding in moves the list without recomposing the drawer.
+ * Content padding of the list: room for the status bar and the floating parts at the top,
+ * and for the keyboard (or navigation bar) and the search field at the bottom. Insets are
+ * read during layout, so the keyboard sliding in moves the list without recomposing the drawer.
  */
 @Stable
-private class KeyboardAwarePadding(
-    private val insets: WindowInsets,
+private class DrawerPadding(
+    private val bottomInsets: WindowInsets,
+    private val topInsets: WindowInsets,
     private val screen: Density,
+    private val extraTop: Dp,
     private val extraBottom: Dp,
+    private val left: Dp,
+    private val right: Dp,
 ) : PaddingValues {
-    override fun calculateLeftPadding(layoutDirection: LayoutDirection) = 8.dp
-    override fun calculateRightPadding(layoutDirection: LayoutDirection) = 8.dp
-    override fun calculateTopPadding() = 8.dp
-    override fun calculateBottomPadding(): Dp = with(screen) { insets.getBottom(screen).toDp() } + extraBottom
+    override fun calculateLeftPadding(layoutDirection: LayoutDirection) = left
+    override fun calculateRightPadding(layoutDirection: LayoutDirection) = right
+    override fun calculateTopPadding(): Dp = with(screen) { topInsets.getTop(screen).toDp() } + extraTop
+    override fun calculateBottomPadding(): Dp = with(screen) { bottomInsets.getBottom(screen).toDp() } + extraBottom
 }
 
 /**
@@ -164,13 +239,15 @@ private class KeyboardAwarePadding(
  * stall and a drag that starts in it survives the drawer closing.
  *
  * Two layers: the dim and the apps are recorded into [drawerLayer] (what the glass parts
- * refract); the glass parts (tabs, scroll bar, search field) sit above it and move with it.
+ * refract); the glass parts (tabs, scroll index, search field) float above it and move with
+ * it. The list runs under the floating parts at both ends.
  */
 @Composable
 fun AppDrawer(
     controller: HomeController,
     config: DrawerConfig,
     motion: DrawerMotion,
+    indexConfig: IndexConfig,
     glass: GlassConfig,
     lightBackground: Boolean,
     apps: List<AppEntry>,
@@ -186,29 +263,55 @@ fun AppDrawer(
     val light = lightBackground && config.dim < 0.35f
     val color = if (light) Color(0xFF16181C) else Color.White
     val query = controller.drawerQuery
+    val searching = query.isNotBlank()
 
     val org by controller.data.organisation.value.collectAsState()
     val visible = remember(apps) { apps.filter { !it.hidden } }
-    val results = remember(query, visible, usage, org) {
-        when {
-            query.isBlank() -> emptyList()
-            else -> tagResults(query, visible, org) ?: Fuzzy.rank(query, visible, { it.label }, { usageBoost(it, usage) })
-        }
-    }
-    SideEffect { controller.drawerFirstResult = results.firstOrNull() }
 
-    // Pages from the user's tab list: the main list, work, and tabs built from tags.
-    val tabs = remember(visible, org, config.work, config.sort, usage) {
+    // Pages from the user's tab list: the main list (with sections at its top), work, and tabs built from tags.
+    val tabs = remember(visible, org, config.work, config.sort, usage, config.topSections, config.columns) {
         val known = org.tags.map { it.id }.toSet()
+        val sections = config.topSections.mapNotNull { id ->
+            val tag = org.tag(id) ?: return@mapNotNull null
+            val list = visible.filter { id in it.tags && !(it.isWorkProfile && config.work == "hidden") }
+            if (list.isEmpty()) null else tag to sortApps(list, config.sort, usage)
+        }
         val built = org.tabs.mapNotNull { def ->
             val list = OrganisationOps.filter(def, visible, config.work, { it.isWorkProfile }, { it.tags }, known)
-            if (def.source == "work" && list.isEmpty()) null
-            else DrawerTab(def.id, def.name, tabIcon(def), sortApps(list, config.sort, usage))
+            if (def.source == "work" && def.extra.isEmpty() && list.isEmpty()) return@mapNotNull null
+            val sort = def.sort ?: config.sort
+            makeTab(
+                def, def.id, def.name, tabIcon(def), sortApps(list, sort, usage), sort,
+                if (def.source == "personal") sections else emptyList(), config.columns,
+            )
         }
-        built.ifEmpty { listOf(DrawerTab("apps", "Apps", LauncherIcons.Apps, sortApps(visible, config.sort, usage))) }
+        built.ifEmpty { listOf(makeTab(null, "apps", "Apps", LauncherIcons.Apps, sortApps(visible, config.sort, usage), config.sort, sections, config.columns)) }
     }
-    val searching = query.isNotBlank()
-    val showTabs = tabs.size > 1 && !searching
+
+    // Search: optionally limited to one tab; "#name" lists a tag's apps and highlights its tab.
+    var searchScope by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(searching) { if (!searching) searchScope = null }
+    val tagIds = remember(query, org) { tagQuery(query, org) }
+    val results = remember(query, visible, usage, org, searchScope, tabs) {
+        when {
+            !searching -> emptyList()
+            tagIds != null -> visible.filter { app -> app.tags.any { it in tagIds } }
+            else -> {
+                val pool = searchScope?.let { id -> tabs.firstOrNull { it.id == id }?.apps } ?: visible
+                Fuzzy.rank(query, pool, { it.label }, { usageBoost(it, usage) })
+            }
+        }
+    }
+    val resultCells = remember(results) { results.map { AppCell(it, it.key) } }
+    SideEffect { controller.drawerFirstResult = results.firstOrNull() }
+    val searchHighlight = when {
+        !searching -> -1
+        tagIds != null -> tabs.indexOfFirst { tab -> tab.def?.sources?.any { it.startsWith("tag:") && it.removePrefix("tag:") in tagIds } == true }
+        else -> tabs.indexOfFirst { it.id == searchScope }
+    }
+
+    val position = config.tabsPosition
+    val showTabs = tabs.size > 1 && position != "hidden" && (!searching || config.tabsInSearch)
     val pager = rememberPagerState { tabs.size }
     // One list state per tab, kept across recompositions and tab edits.
     val tabStates = remember { HashMap<String, LazyGridState>() }
@@ -218,11 +321,55 @@ fun AppDrawer(
     val active: LazyGridState = if (searching) resultsState else stateFor(currentTab.id)
     val activeApps = if (searching) results else currentTab.apps
 
+    var tabMenu by remember { mutableStateOf<Int?>(null) }
+    var tabDialog by remember { mutableStateOf<TabDialog?>(null) }
+    val bar = TabsBar(
+        labels = tabs.map { TabLabel(it.label, it.icon) },
+        selected = { if (searching) searchHighlight.toFloat() else pager.currentPage + pager.currentPageOffsetFraction },
+        onTap = { i ->
+            val tab = tabs.getOrNull(i)
+            when {
+                tab == null -> Unit
+                searching -> searchScope = if (searchScope == tab.id) null else tab.id
+                pager.currentPage == i -> controller.scope.launchScrollToStart(stateFor(tab.id))
+                else -> controller.scope.launch { pager.animateScrollToPage(i) }
+            }
+        },
+        onLongPress = { i -> tabMenu = i },
+        buttons = config.tabsButtons,
+        onButton = { id ->
+            when (id) {
+                "add" -> tabDialog = TabDialog.NewTag
+                "sort" -> tabMenu = pager.currentPage
+                "settings" -> controller.openSection(dev.liquid.launcher.core.settings.LauncherSettings.Sections.Drawer.id)
+            }
+        },
+    )
+    val inPill = showTabs && config.tabsInPill
+    SideEffect { controller.tabsBar = if (inPill) bar else null }
+    DisposableEffect(Unit) { onDispose { controller.tabsBar = null } }
+
+    val useIndex = motion.scrollbar == "index" && !searching && currentTab.sort == "az"
+    val reserve = if (useIndex && indexConfig.visibility == "always") IndexReserve else 0.dp
     val density = LocalDensity.current
     val keyboardOrNav = WindowInsets.ime.union(WindowInsets.navigationBars)
-    val tabsAtBottom = showTabs && !config.tabsTop
-    val bottomExtra = SearchZone + if (tabsAtBottom) TabsHeight + 10.dp else 0.dp
-    val padding = remember(keyboardOrNav, density, bottomExtra) { KeyboardAwarePadding(keyboardOrNav, density, bottomExtra) }
+    val tabsTop = showTabs && config.tabsTop
+    val tabsBottom = showTabs && config.tabsBottom
+    val tabsH = tabsHeight(config.tabsSize)
+    val headerHeight = if (tabsTop) maxOf(HandleHeight, tabsH + 16.dp) else HandleHeight
+    val bottomExtra = SearchZone + when {
+        tabsBottom -> tabsH + 10.dp
+        inPill -> tabsRowHeight(config.tabsSize)
+        else -> 0.dp
+    }
+    val statusInsets = WindowInsets.statusBars
+    val padding = remember(keyboardOrNav, statusInsets, density, bottomExtra, headerHeight, reserve, indexConfig.right) {
+        DrawerPadding(
+            keyboardOrNav, statusInsets, density, headerHeight + 4.dp, bottomExtra,
+            left = 8.dp + if (indexConfig.right) 0.dp else reserve,
+            right = 8.dp + if (indexConfig.right) reserve else 0.dp,
+        )
+    }
 
     val fx = remember(controller) { ScrollFx(controller.scope) }
     fx.mode = motion.scrollEffect
@@ -231,7 +378,6 @@ fun AppDrawer(
     val closeConnection = remember(controller) { drawerCloseConnection(controller) }
     // Flips only when the drawer fully closes or starts opening, not on every frame.
     val closed by remember { derivedStateOf { controller.drawer.value <= 0f } }
-    var tabMenu by remember { mutableStateOf(false) }
 
     Box(
         Modifier
@@ -256,33 +402,34 @@ fun AppDrawer(
                     .nestedScroll(closeConnection)
                     .nestedScroll(fx.connection)
             ) {
-                Column(Modifier.fillMaxSize().statusBarsPadding()) {
-                    // Above the list: the tabs pill floats here (top position) or a handle shows.
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(HeaderHeight)
-                            .then(if (interactive) remember(controller) { Modifier.closeOnDrag(controller) } else Modifier),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (!showTabs || tabsAtBottom) {
-                            Box(Modifier.size(width = 36.dp, height = 4.dp).background(color.copy(alpha = 0.4f), RoundedCornerShape(2.dp)))
+                // The list fills the screen and scrolls under the floating parts; it fades out under the status bar.
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .onSizeChanged { fx.viewport = it.height.toFloat() }
+                        .onPlaced { fx.grid = it }
+                        .statusBarFade()
+                ) {
+                    when {
+                        searching -> AppGrid(resultCells, resultsState, padding, config, motion, fx, color, controller, interactive)
+                        tabs.size == 1 -> AppGrid(tabs[0].cells, stateFor(tabs[0].id), padding, config, motion, fx, color, controller, interactive)
+                        else -> HorizontalPager(pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { tabs.getOrNull(it)?.id ?: it }) { page ->
+                            val tab = tabs.getOrNull(page) ?: return@HorizontalPager
+                            AppGrid(tab.cells, stateFor(tab.id), padding, config, motion, fx, color, controller, interactive)
                         }
                     }
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .onSizeChanged { fx.viewport = it.height.toFloat() }
-                            .onPlaced { fx.grid = it }
-                    ) {
-                        when {
-                            searching -> AppGrid(results, resultsState, padding, config, motion, fx, color, controller, interactive)
-                            tabs.size == 1 -> AppGrid(tabs[0].apps, stateFor(tabs[0].id), padding, config, motion, fx, color, controller, interactive)
-                            else -> HorizontalPager(pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { tabs.getOrNull(it)?.id ?: it }) { page ->
-                                val tab = tabs.getOrNull(page) ?: return@HorizontalPager
-                                AppGrid(tab.apps, stateFor(tab.id), padding, config, motion, fx, color, controller, interactive)
-                            }
-                        }
+                }
+                // The strip at the top closes the drawer when dragged down; a handle shows when no tabs float there.
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .height(headerHeight)
+                        .then(if (interactive) remember(controller) { Modifier.closeOnDrag(controller) } else Modifier),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (!tabsTop) {
+                        Box(Modifier.size(width = 36.dp, height = 4.dp).background(color.copy(alpha = 0.4f), RoundedCornerShape(2.dp)))
                     }
                 }
             }
@@ -295,7 +442,25 @@ fun AppDrawer(
                 .graphicsLayer { alpha = overlayAlpha(controller.drawer.value, motion) }
                 .offset { IntOffset(0, overlayOffset(controller.drawer.value, motion, controller.screenHeight)) }
         ) {
-            if (motion.scrollbar != "off") {
+            val sideArea = Modifier
+                .statusBarsPadding()
+                .padding(top = headerHeight + 8.dp)
+                .padding(bottom = 8.dp)
+                .keyboardInsetBottom(keyboardOrNav, bottomExtra)
+            if (useIndex) {
+                ScrollIndex(
+                    state = active,
+                    index = currentTab.index,
+                    config = indexConfig,
+                    reverse = config.fromBottom,
+                    glass = glass,
+                    lightBackground = light,
+                    backdrop = glassBackdrop,
+                    controller = controller,
+                    interactive = interactive,
+                    modifier = sideArea,
+                )
+            } else if (motion.scrollbar != "off") {
                 DrawerScrollbar(
                     state = active,
                     apps = activeApps,
@@ -307,27 +472,22 @@ fun AppDrawer(
                     backdrop = glassBackdrop,
                     controller = controller,
                     interactive = interactive,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .statusBarsPadding()
-                        .padding(top = HeaderHeight + 8.dp)
-                        .padding(bottom = 8.dp)
-                        .keyboardInsetBottom(keyboardOrNav, bottomExtra),
+                    modifier = Modifier.align(Alignment.TopEnd).then(sideArea),
                 )
             }
-            if (showTabs) {
+            if (showTabs && (tabsTop || tabsBottom)) {
                 DrawerTabs(
-                    labels = tabs.map { it.label to it.icon },
-                    pager = pager,
+                    bar = bar,
+                    style = config.tabsStyle,
+                    size = config.tabsSize,
+                    icons = config.tabsIcons,
                     glass = glass,
                     lightBackground = light,
                     backdrop = glassBackdrop,
                     controller = controller,
                     interactive = interactive,
-                    onReselect = { page -> tabs.getOrNull(page)?.let { controller.scope.launchScrollToStart(stateFor(it.id)) } },
-                    onLongPress = { tabMenu = true },
-                    modifier = if (config.tabsTop) {
-                        Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = (HeaderHeight - TabsHeight) / 2)
+                    modifier = if (tabsTop) {
+                        Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = (headerHeight - tabsH) / 2)
                     } else {
                         Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = SearchZone)
                     },
@@ -336,10 +496,10 @@ fun AppDrawer(
             if (ownSearchPill) {
                 DrawerSearchPill(
                     controller = controller,
+                    config = config,
                     glass = glass,
                     lightBackground = light,
                     backdrop = glassBackdrop,
-                    autoKeyboard = config.autoKeyboard,
                     interactive = interactive,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -348,17 +508,43 @@ fun AppDrawer(
                         .padding(horizontal = 20.dp, vertical = 14.dp),
                 )
             }
-            if (tabMenu && interactive) {
-                TabQuickMenu(
+            val menuFor = tabMenu
+            if (menuFor != null && interactive) {
+                TabMenu(
+                    tab = tabs.getOrNull(menuFor)?.def,
+                    tabIndex = menuFor,
+                    tabCount = tabs.size,
                     config = config,
                     glass = glass,
                     lightBackground = light,
                     backdrop = glassBackdrop,
                     controller = controller,
-                    atTop = config.tabsTop,
-                    onDismiss = { tabMenu = false },
+                    atTop = tabsTop,
+                    onDialog = { tabDialog = it },
+                    onDismiss = { tabMenu = null },
                 )
             }
+        }
+    }
+    tabDialog?.let { dialog -> TabDialogView(dialog, controller) { tabDialog = null } }
+}
+
+/** Fades the list out under the status bar, so app labels do not run into the clock and icons. */
+@Composable
+private fun Modifier.statusBarFade(): Modifier {
+    val insets = WindowInsets.statusBars
+    return this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val top = insets.getTop(this).toFloat()
+        val fade = top + 20.dp.toPx()
+        if (fade > 0f) {
+            drawRect(
+                brush = Brush.verticalGradient(0f to Color.Transparent, (top / fade) to Color.Transparent, 1f to Color.Black, startY = 0f, endY = fade),
+                size = Size(size.width, fade),
+                blendMode = BlendMode.DstIn,
+            )
         }
     }
 }
@@ -420,7 +606,7 @@ private fun overlayAlpha(p: Float, motion: DrawerMotion): Float = when {
 
 @Composable
 private fun AppGrid(
-    apps: List<AppEntry>,
+    cells: List<GridCell>,
     state: LazyGridState,
     padding: PaddingValues,
     config: DrawerConfig,
@@ -440,8 +626,22 @@ private fun AppGrid(
         verticalArrangement = Arrangement.spacedBy(10.dp, if (config.fromBottom) Alignment.Bottom else Alignment.Top),
         overscrollEffect = overscroll,
     ) {
-        items(apps, key = { it.key }, contentType = { 0 }) { app ->
-            DrawerItem(app, config, color, controller, interactive, fx, state)
+        items(
+            cells,
+            key = { it.key },
+            span = { if (it is HeaderCell) GridItemSpan(maxLineSpan) else GridItemSpan(1) },
+            contentType = { if (it is HeaderCell) 1 else 0 },
+        ) { cell ->
+            when (cell) {
+                is AppCell -> DrawerItem(cell.app, config, color, controller, interactive, fx, state)
+                is HeaderCell -> Text(
+                    cell.title,
+                    modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 2.dp),
+                    style = TextStyle(color = color.copy(alpha = 0.7f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
@@ -516,30 +716,33 @@ private fun DrawerItem(
 
 // ---- the search field ----
 
-/** The drawer's own search pill, used when the home pill does not turn into it. */
+/** The drawer's own search pill, used when the home pill does not turn into it. Holds the tabs when they sit inside it. */
 @Composable
 private fun DrawerSearchPill(
     controller: HomeController,
+    config: DrawerConfig,
     glass: GlassConfig,
     lightBackground: Boolean,
     backdrop: Backdrop,
-    autoKeyboard: Boolean,
     interactive: Boolean,
     modifier: Modifier,
 ) {
-    val shape = RoundedCornerShape(50)
+    val bar = if (config.tabsInPill) controller.tabsBar else null
+    val shape = RoundedCornerShape(if (bar != null) 28.dp else 27.dp)
     val color = if (glass.lightGlass(Surfaces.Drawer, lightBackground)) Color(0xFF16181C) else Color.White
-    Box(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .height(54.dp)
             // Re-draw while the drawer moves, so the glass samples its new position.
             .drawBehind { controller.drawer.value }
             .liquidGlass(backdrop, shape, glass.style(Surfaces.Drawer, lightBackground))
             .clip(shape)
             .then(if (interactive) remember(controller) { Modifier.closeOnDrag(controller) } else Modifier),
     ) {
-        DrawerSearchField(controller, color, autoKeyboard, interactive, Modifier.fillMaxSize())
+        if (bar != null) {
+            TabsRow(bar, config.tabsSize, config.tabsIcons, color, interactive, Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp).height(tabsHeight(config.tabsSize) - 2.dp))
+        }
+        DrawerSearchField(controller, color, config.autoKeyboard, interactive, Modifier.fillMaxWidth().height(54.dp))
     }
 }
 
