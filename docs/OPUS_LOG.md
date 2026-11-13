@@ -309,7 +309,7 @@ Not done / limits: albums you make yourself (folders on the phone stand in); no 
 
 ## Session summary (2026-11-13, Opus, updated for 0.4.1)
 
-**State:** the user tested 0.4.0 (with 0.2.2 and 0.3.0) and sent five points. 0.4.1 fixes them (index symmetry and list wave, tag filtering, themed icon recolouring, layout wallpaper transition, wallpaper library with placing and parallax) plus a final pass. Unit tests pass; see the release line below for the CI run.
+**State:** the user tested 0.4.0 (with 0.2.2 and 0.3.0) and sent five points. 0.4.1 fixes them (index symmetry and list wave, tag filtering, themed icon recolouring, layout wallpaper transition, wallpaper library with placing and parallax) plus a final pass. Unit tests pass; released as build 28 (CI run 28: unit tests, release APK, emulator smoke test all passed, including the new wallpaper strip → wallpaper screen → blur and dim checks). Not tested on the phone yet.
 
 **Next step:** the user tests 0.4.1; then Phase 2 part 3 (0.5: gestures, double tap per icon, motion and haptics settings, in-app updater).
 
