@@ -34,6 +34,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.asComposePath
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onPlaced
@@ -51,26 +53,68 @@ import dev.liquid.launcher.core.data.AppRef
 import dev.liquid.launcher.core.data.HomeItem
 import dev.liquid.launcher.core.designsystem.liquidGlass
 
-/** A folder on the home screen: a tinted tile with the first four apps, and its name if labels are on. */
+/** Compose shape for a folder tile. "icons" follows the theme's icon shape. */
+private fun folderShape(config: FolderConfig): androidx.compose.ui.graphics.Shape {
+    val id = when (config.shape) {
+        "icons" -> config.iconShape
+        "circle" -> "circle"
+        "squircle" -> "squircle"
+        else -> "rounded"
+    }
+    if (id == "system" || id == "rounded") return RoundedCornerShape(28)
+    return androidx.compose.foundation.shape.GenericShape { size, _ ->
+        dev.liquid.launcher.core.data.IconShapes.path(id, size.minDimension)?.let { addPath(it.asComposePath()) }
+    }
+}
+
+/** A folder on the home screen: its preview (grid, stack or first app), and its name if labels are on. */
 @Composable
-internal fun FolderIcon(item: HomeItem, env: PageEnv, modifier: Modifier) {
-    val apps = item.folder.orEmpty().take(4).map { env.apps[it] }
+internal fun FolderIcon(item: HomeItem, env: PageEnv, config: FolderConfig, modifier: Modifier) {
+    val apps = item.folder.orEmpty().take(4).mapNotNull { env.apps[it] }
+    val shape = remember(config.shape, config.iconShape) { folderShape(config) }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Box(
-                Modifier
-                    .squareFraction(env.grid.iconFraction)
-                    .clip(RoundedCornerShape(28))
-                    .background(env.contentColor.copy(alpha = 0.18f))
-                    .padding(6.dp),
-            ) {
-                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    for (row in 0 until 2) {
-                        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                            for (col in 0 until 2) {
-                                val app = apps.getOrNull(row * 2 + col)
-                                Box(Modifier.weight(1f).fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    if (app != null) AppIconImage(app.homeIcon, Modifier.fillMaxSize(), null)
+            val tile = Modifier
+                .squareFraction(env.grid.iconFraction)
+                .then(
+                    when (config.background) {
+                        "glass" -> Modifier.liquidGlass(env.wallpaperBackdrop, RoundedCornerShape(28), env.glass.style(Surfaces.Menu, env.lightBackground)).clip(shape)
+                        "accent" -> Modifier.clip(shape).background(HomeTheme.accent.copy(alpha = 0.6f))
+                        "none" -> Modifier.clip(shape)
+                        else -> Modifier.clip(shape).background(env.contentColor.copy(alpha = 0.18f))
+                    }
+                )
+            when (config.preview) {
+                "stack" -> Box(tile, contentAlignment = Alignment.Center) {
+                    // Up to three icons fanned out, the first on top.
+                    apps.take(3).reversed().forEachIndexed { i, app ->
+                        val pos = apps.take(3).size - 1 - i
+                        AppIconImage(
+                            app.homeIcon,
+                            Modifier.fillMaxSize(0.62f).graphicsLayer {
+                                rotationZ = (pos - 1) * -10f
+                                translationX = (pos - 1) * size.width * -0.16f
+                                translationY = pos * size.height * 0.05f
+                            },
+                            null,
+                        )
+                    }
+                }
+                "first" -> Box(tile.padding(6.dp)) {
+                    apps.firstOrNull()?.let { AppIconImage(it.homeIcon, Modifier.fillMaxSize(0.74f).align(Alignment.TopStart), null) }
+                    Row(Modifier.align(Alignment.BottomEnd), horizontalArrangement = Arrangement.spacedBy((-6).dp)) {
+                        for (app in apps.drop(1).take(3)) AppIconImage(app.homeIcon, Modifier.fillMaxSize(0.3f), null)
+                    }
+                }
+                else -> Box(tile.padding(6.dp)) {
+                    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        for (row in 0 until 2) {
+                            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                for (col in 0 until 2) {
+                                    val app = apps.getOrNull(row * 2 + col)
+                                    Box(Modifier.weight(1f).fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        if (app != null) AppIconImage(app.homeIcon, Modifier.fillMaxSize(), null)
+                                    }
                                 }
                             }
                         }
@@ -115,11 +159,15 @@ internal fun FolderOverlay(
         onDispose { controller.renameFolder(folder.id, latestName) }
     }
     val entries = folder.folder.orEmpty().mapNotNull { apps[it] }
-    val columns = 4
+    val columns = controller.folderConfig.columns
+    val origin = remember(folder.id) { controller.folderOrigin }
+    var card by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
 
+    val draggingOut = controller.drag?.source is DragSource.FolderApp
     Box(
         Modifier
             .fillMaxSize()
+            .graphicsLayer { alpha = if (draggingOut) 0f else 1f }
             .background(Color.Black.copy(alpha = 0.25f))
             .pointerInput(folder.id) {
                 detectTapGestures {
@@ -132,11 +180,23 @@ internal fun FolderOverlay(
         Column(
             Modifier
                 .fillMaxWidth(0.86f)
+                .onPlaced { if (it.isAttached) card = it.boundsInRoot() }
                 .graphicsLayer {
                     val p = appear.value
                     alpha = p.coerceIn(0f, 1f)
-                    scaleX = 0.88f + 0.12f * p
-                    scaleY = 0.88f + 0.12f * p
+                    // Grows out of the folder that was tapped.
+                    val bounds = card
+                    if (origin != null && bounds != null && bounds.width > 0f && bounds.height > 0f) {
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
+                            ((origin.x - bounds.left) / bounds.width).coerceIn(-1f, 2f),
+                            ((origin.y - bounds.top) / bounds.height).coerceIn(-1f, 2f),
+                        )
+                        scaleX = 0.25f + 0.75f * p
+                        scaleY = 0.25f + 0.75f * p
+                    } else {
+                        scaleX = 0.88f + 0.12f * p
+                        scaleY = 0.88f + 0.12f * p
+                    }
                 }
                 .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground))
                 .clip(shape)
@@ -184,10 +244,27 @@ private fun FolderApp(app: AppEntry, folderId: String, color: Color, grid: GridC
                 controller.menu = MenuTarget(app, null, bounds, folderId = folderId)
             }
 
-            override fun onDragStart(grab: Offset, finger: Offset) = Unit
-            override fun onDrag(finger: Offset) = Unit
-            override fun onDragEnd() = Unit
-            override fun onDragCancel() = Unit
+            // Hold and move: the folder closes and the app follows the finger onto the home screen.
+            override fun onDragStart(grab: Offset, finger: Offset) {
+                val size = holder.value?.size ?: androidx.compose.ui.unit.IntSize.Zero
+                controller.menu = null
+                // The folder stays composed (invisible) until the drag ends, so this gesture keeps running.
+                controller.startDrag(
+                    DragState(
+                        source = DragSource.FolderApp(folderId, app.ref),
+                        icon = app.homeIcon,
+                        widget = null,
+                        cells = androidx.compose.ui.unit.IntSize(1, 1),
+                        grab = grab,
+                        size = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat()),
+                        start = finger,
+                    )
+                )
+            }
+
+            override fun onDrag(finger: Offset) = controller.moveDrag(finger)
+            override fun onDragEnd() = controller.endDrag()
+            override fun onDragCancel() = controller.cancelDrag()
         }
     }
     Column(

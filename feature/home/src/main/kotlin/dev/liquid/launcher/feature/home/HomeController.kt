@@ -1,5 +1,7 @@
 package dev.liquid.launcher.feature.home
 
+import dev.liquid.launcher.core.data.HomeLayout
+
 import dev.liquid.launcher.core.designsystem.WallpaperStore
 
 import android.accessibilityservice.AccessibilityService
@@ -52,6 +54,9 @@ data class MenuTarget(
 sealed interface DragSource {
     data class Home(val itemId: String) : DragSource
     data class NewApp(val ref: AppRef) : DragSource
+
+    /** An app dragged out of an open folder. */
+    data class FolderApp(val folderId: String, val ref: AppRef) : DragSource
 }
 
 /** A widget's new area while one of its edges is being dragged. */
@@ -415,6 +420,22 @@ class HomeController(
         return (page.columns ?: columns) to (page.rows ?: rows)
     }
 
+    /** The dock's bounds on screen while it is shown, for dropping apps onto it. */
+    var dockBounds: androidx.compose.ui.geometry.Rect? = null
+    var dockSlots = 5
+
+    /** Dock slot under [finger], or null when the finger is not over the dock. */
+    fun dockSlotAt(finger: Offset): Int? {
+        val bounds = dockBounds?.takeIf { it.contains(finger) } ?: return null
+        return ((finger.x - bounds.left) / (bounds.width / dockSlots)).toInt().coerceIn(0, dockSlots - 1)
+    }
+
+    /** Folder look and behaviour; set by the home screen from the settings. */
+    var folderConfig by mutableStateOf(FolderConfig())
+
+    /** Where the open folder was tapped (root coordinates), so it can grow out of it. */
+    var folderOrigin: Offset? = null
+
     /** Page settings dialog for this page index, or null. */
     var pageSettings by mutableStateOf<Int?>(null)
 
@@ -449,8 +470,23 @@ class HomeController(
     fun endDrag() {
         val d = drag ?: return
         drag = null
+        if (d.source is DragSource.FolderApp) openFolder = null
         if (d.overRemove) {
-            if (d.source is DragSource.Home) removeFromHome(d.source.itemId)
+            when (val source = d.source) {
+                is DragSource.Home -> removeFromHome(source.itemId)
+                is DragSource.FolderApp -> takeOutOfFolder(source, place = false)?.let { data.layout.commit(it) }
+                is DragSource.NewApp -> Unit
+            }
+            return
+        }
+        dockSlotAt(d.finger)?.let { slot ->
+            val layout = data.layout.layout.value
+            val updated = when (val source = d.source) {
+                is DragSource.Home -> LayoutOps.dockMoveItem(layout, source.itemId, slot, dockSlots)
+                is DragSource.NewApp -> LayoutOps.dockAddApp(layout, slot, dockSlots, source.ref)
+                is DragSource.FolderApp -> takeOutOfFolder(source, place = false)?.let { LayoutOps.dockAddApp(it, slot, dockSlots, source.ref) }
+            }
+            if (updated != null) data.layout.commit(updated) else toast("That place in the dock is taken (or that item cannot go there)")
             return
         }
         val target = cellUnder(d) ?: return
@@ -465,12 +501,27 @@ class HomeController(
                     toast("That cell is taken")
                     null
                 }
+            is DragSource.FolderApp -> takeOutOfFolder(source, place = false)?.let { without ->
+                LayoutOps.dropApp(without, page, x, y, source.ref, columns, rows)
+                    ?: LayoutOps.addApp(without, page, source.ref, columns, rows)
+                    ?: run {
+                        toast("No room on this page")
+                        null
+                    }
+            }
         }
         if (updated != null) data.layout.commit(updated)
     }
 
     fun cancelDrag() {
+        if (drag?.source is DragSource.FolderApp) openFolder = null
         drag = null
+    }
+
+    private fun takeOutOfFolder(source: DragSource.FolderApp, place: Boolean): HomeLayout? {
+        val layout = data.layout.layout.value
+        val (columns, rows) = gridFor(layout.find(source.folderId)?.first ?: 0)
+        return LayoutOps.takeFromFolder(layout, source.folderId, source.ref, columns, rows, place)
     }
 
     /** Page and top-left cell the dragged item would land on, or null if outside the grid. */

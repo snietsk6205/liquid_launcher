@@ -217,6 +217,9 @@ fun HomeScreen(
     val homeMenuConfig by store.derive { homeMenuConfig() }
     val theme by store.derive { themeConfig() }
     val pageTransition by store.derive { get(LauncherSettings.HomePageTransition) }
+    val folderConfig by store.derive { folderConfig() }
+    val dock by store.derive { dockConfig() }
+    SideEffect { controller.folderConfig = folderConfig }
     LaunchedEffect(theme, savedImageKey(wallpaper)) { HomeTheme.apply(context, theme) }
     val glass by store.derive { glassConfig() }
     val search by store.derive { searchConfig() }
@@ -370,7 +373,8 @@ fun HomeScreen(
                 )
             }
             if (homeDim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = homeDim)))
-            val pillSpace = if (pill.enabled || controller.editMode) pill.heightDp + pill.offsetDp + 12 else 0
+            val pillSpace = (if (pill.enabled || controller.editMode) pill.heightDp + pill.offsetDp + 12 else 0) +
+                (if (dock.enabled) dock.height.value.toInt() + 8 else 0)
             // Remembered: a new gesture lambda would restart the detector and cancel a swipe in progress.
             val swipes = remember(gestures, controller.editMode) { Modifier.homeSwipes(gestures, controller) }
             Box(
@@ -464,6 +468,31 @@ fun HomeScreen(
             EditToolbar(controller, glass, lightBackground, homeBackdrop, pill, barModifier)
         } else if (pill.enabled && !morph) {
             Pill(pill, glass, lightBackground, homeBackdrop, appIndex, controller, live, barModifier)
+        }
+
+        if (dock.enabled) {
+            val belowPill = (pill.enabled || controller.editMode) && !pill.top
+            Dock(
+                config = dock,
+                layout = layout,
+                apps = appIndex,
+                glass = glass,
+                lightBackground = lightBackground,
+                backdrop = homeBackdrop,
+                color = contentColor,
+                shadow = shadow,
+                controller = controller,
+                interactive = live,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = if (belowPill) (pill.offsetDp + maxOf(pill.heightDp, 54) + 10).dp else 14.dp)
+                    .padding(horizontal = (grid.marginSideDp + 8).dp)
+                    .graphicsLayer {
+                        val p = controller.drawer.value
+                        alpha = (1f - p * 2f).coerceIn(0f, 1f) * returnState.progress.floatValue
+                    },
+            )
         }
 
         if (live) {
@@ -636,7 +665,7 @@ private fun ToolButton(icon: Int, label: String, color: Color, enabled: Boolean 
 
 @Composable
 private fun RemoveZone(drag: DragState, controller: HomeController, modifier: Modifier) {
-    val label = if (drag.source is DragSource.Home) "Remove" else "Cancel"
+    val label = if (drag.source !is DragSource.NewApp) "Remove" else "Cancel"
     Row(
         modifier
             .onGloballyPositioned { controller.removeZone = it.boundsInRoot().inflate(24f) }
@@ -645,7 +674,7 @@ private fun RemoveZone(drag: DragState, controller: HomeController, modifier: Mo
             .padding(horizontal = 22.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LauncherIcon(if (drag.source is DragSource.Home) LauncherIcons.Delete else LauncherIcons.Close, contentDescription = null, tint = Color.White, size = 20.dp)
+        LauncherIcon(if (drag.source !is DragSource.NewApp) LauncherIcons.Delete else LauncherIcons.Close, contentDescription = null, tint = Color.White, size = 20.dp)
         Spacer(Modifier.width(8.dp))
         Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium))
     }

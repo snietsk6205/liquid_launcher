@@ -79,6 +79,28 @@ data class DrawerConfig(
     val tabsInPill: Boolean get() = tabsPosition == "search"
 }
 
+/** How folders look and behave. */
+data class FolderConfig(
+    /** "grid", "stack" or "first". */
+    val preview: String = "grid",
+    /** "tint", "glass", "accent" or "none". */
+    val background: String = "tint",
+    /** "icons", "rounded", "circle" or "squircle". */
+    val shape: String = "icons",
+    val iconShape: String = "system",
+    val tapFirst: Boolean = false,
+    val columns: Int = 4,
+)
+
+fun SettingsStore.folderConfig() = FolderConfig(
+    preview = get(S.FolderPreview),
+    background = get(S.FolderBackground),
+    shape = get(S.FolderShape),
+    iconShape = get(S.ThemeIconShape),
+    tapFirst = get(S.FolderTapFirst),
+    columns = get(S.FolderColumns),
+)
+
 /** The drawer's letter index. */
 data class IndexConfig(
     /** "always", "scroll" or "touch". */

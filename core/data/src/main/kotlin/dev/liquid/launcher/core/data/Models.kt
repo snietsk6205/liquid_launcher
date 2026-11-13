@@ -82,6 +82,8 @@ data class HomeLayout(
     val pages: List<HomePage> = emptyList(),
     /** Id of the page Home returns to; the first page when null or gone. */
     val defaultPage: String? = null,
+    /** Apps in the dock, which stays on every page; an item's x is its slot. */
+    val dock: List<HomeItem> = emptyList(),
 ) {
     val defaultIndex: Int get() = pages.indexOfFirst { it.id == defaultPage }.coerceAtLeast(0)
 
@@ -92,8 +94,10 @@ data class HomeLayout(
         return null
     }
 
+    fun dockItem(itemId: String): HomeItem? = dock.firstOrNull { it.id == itemId }
+
     fun containsApp(ref: AppRef): Boolean =
-        pages.any { page -> page.items.any { it.app == ref || it.folder?.contains(ref) == true } }
+        pages.any { page -> page.items.any { it.app == ref || it.folder?.contains(ref) == true } } || dock.any { it.app == ref }
 }
 
 /** Launch statistics for one app, used for "most used" sorting and search ranking. */

@@ -57,13 +57,61 @@ object LayoutOps {
     }
 
     fun removeItem(layout: HomeLayout, itemId: String): HomeLayout? {
+        if (layout.dockItem(itemId) != null) return layout.copy(dock = layout.dock.filter { it.id != itemId })
         val (pageIndex, _) = layout.find(itemId) ?: return null
         val page = layout.pages[pageIndex]
         return layout.replacePage(pageIndex, page.copy(items = page.items.filter { it.id != itemId }))
     }
 
     fun removeApp(layout: HomeLayout, ref: AppRef): HomeLayout =
-        layout.copy(pages = layout.pages.map { page -> page.copy(items = page.items.filter { it.app != ref }) })
+        layout.copy(
+            pages = layout.pages.map { page -> page.copy(items = page.items.filter { it.app != ref }) },
+            dock = layout.dock.filter { it.app != ref },
+        )
+
+    // ---- dock ----
+
+    /** A new app in dock slot [slot] (0 until [slots]); null when the slot is taken. */
+    fun dockAddApp(layout: HomeLayout, slot: Int, slots: Int, ref: AppRef): HomeLayout? {
+        if (slot !in 0 until slots || layout.dock.any { it.x == slot }) return null
+        return layout.copy(dock = layout.dock + HomeItem(newId(), ItemKind.APP, slot, 0, 1, 1, app = ref))
+    }
+
+    /**
+     * Moves an item into dock slot [slot]: from another slot (swapping with what is there) or
+     * an app from a page (only into a free slot). Null when not possible.
+     */
+    fun dockMoveItem(layout: HomeLayout, itemId: String, slot: Int, slots: Int): HomeLayout? {
+        if (slot !in 0 until slots) return null
+        val occupant = layout.dock.firstOrNull { it.x == slot }
+        layout.dockItem(itemId)?.let { item ->
+            if (occupant?.id == item.id) return null
+            return layout.copy(dock = layout.dock.map {
+                when (it.id) {
+                    item.id -> it.copy(x = slot)
+                    occupant?.id -> it.copy(x = item.x)
+                    else -> it
+                }
+            })
+        }
+        val (_, item) = layout.find(itemId) ?: return null
+        val ref = item.app ?: return null
+        if (item.kind != ItemKind.APP || occupant != null) return null
+        val removed = removeItem(layout, itemId) ?: return null
+        return removed.copy(dock = removed.dock + item.copy(x = slot, y = 0, w = 1, h = 1, app = ref))
+    }
+
+    /** Moves a dock item onto a page cell (an app on an app makes a folder, as on the page). */
+    fun dockToPage(layout: HomeLayout, itemId: String, toPage: Int, x: Int, y: Int, columns: Int, rows: Int): HomeLayout? {
+        val item = layout.dockItem(itemId) ?: return null
+        val ref = item.app ?: return null
+        val without = layout.copy(dock = layout.dock.filter { it.id != itemId })
+        return dropApp(without, toPage, x, y, ref, columns, rows)
+    }
+
+    /** Drops slots past [slots] (after the dock was made smaller), keeping their apps nowhere. */
+    fun dockTrim(layout: HomeLayout, slots: Int): HomeLayout =
+        if (layout.dock.all { it.x < slots }) layout else layout.copy(dock = layout.dock.filter { it.x < slots })
 
     // ---- folders ----
 
@@ -101,6 +149,7 @@ object LayoutOps {
 
     /** Moves an item; an app dropped on an app or a folder joins it in a folder. */
     fun dropItem(layout: HomeLayout, itemId: String, toPage: Int, x: Int, y: Int, columns: Int, rows: Int): HomeLayout? {
+        if (layout.dockItem(itemId) != null) return dockToPage(layout, itemId, toPage, x, y, columns, rows)
         moveItem(layout, itemId, toPage, x, y, columns, rows)?.let { return it }
         val (_, item) = layout.find(itemId) ?: return null
         val ref = item.app ?: return null

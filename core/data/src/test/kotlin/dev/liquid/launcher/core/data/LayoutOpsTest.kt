@@ -200,4 +200,28 @@ class LayoutOpsTest {
         org.junit.Assert.assertEquals(false, ok.pages[0].labels)
         org.junit.Assert.assertEquals("Study", ok.pages[0].name)
     }
+
+    @Test
+    fun dockAddMoveSwapAndBackToPage() {
+        val a = AppRef("a", "A", 0)
+        val b = AppRef("b", "B", 0)
+        var layout = LayoutOps.defaultLayout(5, 9)
+        layout = LayoutOps.dockAddApp(layout, 0, 5, a)!!
+        org.junit.Assert.assertNull(LayoutOps.dockAddApp(layout, 0, 5, b))
+        layout = LayoutOps.dockAddApp(layout, 2, 5, b)!!
+        val idA = layout.dock.first { it.app == a }.id
+        // Swap A (slot 0) with B (slot 2).
+        layout = LayoutOps.dockMoveItem(layout, idA, 2, 5)!!
+        org.junit.Assert.assertEquals(2, layout.dockItem(idA)!!.x)
+        org.junit.Assert.assertEquals(0, layout.dock.first { it.app == b }.x)
+        // Onto the page, below the clock.
+        layout = LayoutOps.dropItem(layout, idA, 0, 1, 5, 5, 9)!!
+        org.junit.Assert.assertTrue(layout.dock.none { it.app == a })
+        org.junit.Assert.assertTrue(layout.pages[0].items.any { it.app == a })
+        // A page app into a free dock slot.
+        val pageItem = layout.pages[0].items.first { it.app == a }.id
+        layout = LayoutOps.dockMoveItem(layout, pageItem, 4, 5)!!
+        org.junit.Assert.assertEquals(4, layout.dock.first { it.app == a }.x)
+        org.junit.Assert.assertTrue(layout.pages[0].items.none { it.app == a })
+    }
 }

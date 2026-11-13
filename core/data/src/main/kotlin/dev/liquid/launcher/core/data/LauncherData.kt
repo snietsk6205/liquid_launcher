@@ -127,7 +127,7 @@ class LauncherData private constructor(private val context: Context) {
      * measurements), home layout, tags and tabs, app labels / tags / icons, saved layouts, and
      * the files under [fileDirs] (wallpapers, layout wallpapers), relative to the app's files.
      */
-    fun backup(out: java.io.OutputStream, fileDirs: List<String> = listOf("wallpaper", "layouts")) {
+    fun backup(out: java.io.OutputStream, fileDirs: List<String> = listOf("wallpaper", "layouts", "fonts")) {
         val json = LayoutsRepository.json
         java.util.zip.ZipOutputStream(out).use { zip ->
             fun entry(name: String, text: String) {

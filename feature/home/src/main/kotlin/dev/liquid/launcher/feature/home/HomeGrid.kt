@@ -208,6 +208,7 @@ private fun ItemView(item: HomeItem, pageIndex: Int, env: PageEnv, controller: H
         ItemKind.FOLDER -> FolderIcon(
             item = item,
             env = env,
+            config = controller.folderConfig,
             modifier = base.iconGestures({ holder.value }, folderHandler(item, holder, controller), env.interactive),
         )
 
@@ -268,7 +269,7 @@ fun Modifier.squareFraction(fraction: Float): Modifier = layout { measurable, co
 }
 
 @Composable
-private fun appHandler(item: HomeItem, app: AppEntry, holder: CoordinatesHolder, controller: HomeController): IconGestureHandler {
+internal fun appHandler(item: HomeItem, app: AppEntry, holder: CoordinatesHolder, controller: HomeController): IconGestureHandler {
     val view = LocalView.current
     return remember(item, app, controller) {
         object : IconGestureHandler {
@@ -308,8 +309,14 @@ private fun appHandler(item: HomeItem, app: AppEntry, holder: CoordinatesHolder,
 private fun folderHandler(item: HomeItem, holder: CoordinatesHolder, controller: HomeController): IconGestureHandler =
     remember(item, controller) {
         object : IconGestureHandler {
-            override fun onTap() {
+            private fun open() {
+                controller.folderOrigin = holder.value?.takeIf { it.isAttached }?.boundsInRoot()?.center
                 controller.openFolder = item.id
+            }
+
+            override fun onTap() {
+                val first = item.folder?.firstOrNull()?.let { controller.data.apps.find(it) }
+                if (controller.folderConfig.tapFirst && !controller.editMode && first != null) controller.launch(first) else open()
             }
 
             override fun onLongPress() {
@@ -321,7 +328,9 @@ private fun folderHandler(item: HomeItem, holder: CoordinatesHolder, controller:
             override fun onDragEnd() = controller.endDrag()
             override fun onDragCancel() = controller.cancelDrag()
 
-            override fun hasSwipe(up: Boolean): Boolean = false
+            // With "tap opens the first app", a swipe up opens the folder.
+            override fun hasSwipe(up: Boolean): Boolean = up && controller.folderConfig.tapFirst
+            override fun onSwipe(up: Boolean) = open()
         }
     }
 
