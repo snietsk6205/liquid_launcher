@@ -277,7 +277,8 @@ tap_text() {
 
 # Drawer: swipe up on the home screen (a second, slower try if the first does not open it).
 show_drawer_log() { grep -E "Home: (swipe|drawer)" "$LOG" | tail -6 | sed 's/^/        /'; }
-adb shell input swipe 540 1500 540 400 250
+# 450 ms: on a slow emulator a faster swipe arrives as two or three points.
+adb shell input swipe 540 1500 540 400 450
 sleep 2
 dump 06-drawer
 if ! on_screen 06-drawer "Search apps"; then

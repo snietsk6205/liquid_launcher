@@ -498,7 +498,8 @@ object LauncherSettings {
     val DrawerHomeBlur = IntSetting(
         key = "drawer.homeBlur", default = 14, min = 0, max = 40, step = 2, unit = "dp",
         title = "Blur behind the drawer",
-        summary = "Blurs the wallpaper and home screen while the drawer is open. 0 is the lightest on the battery",
+        summary = "Blurs the wallpaper and home screen while the drawer is open. 0 is the lightest on the battery. " +
+            "Off automatically when the glass benchmark found the phone only manages tint glass",
         section = "drawerMotion", keywords = "blur background wallpaper depth",
     )
     val DrawerScrollbar = ChoiceSetting(

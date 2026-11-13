@@ -80,6 +80,7 @@ import dev.liquid.launcher.core.data.ItemKind
 import dev.liquid.launcher.core.data.LauncherAction
 import dev.liquid.launcher.core.data.LauncherData
 import dev.liquid.launcher.core.data.MenuEntry
+import dev.liquid.launcher.core.designsystem.GlassQuality
 import dev.liquid.launcher.core.designsystem.LauncherIcon
 import dev.liquid.launcher.core.designsystem.LauncherIcons
 import dev.liquid.launcher.core.designsystem.WallpaperStore
@@ -239,7 +240,9 @@ fun HomeScreen(
                   .fillMaxSize()
                   .graphicsLayer {
                       val p = controller.drawer.value.coerceIn(0f, 1f)
-                      val radius = motion.homeBlurDp.dp.toPx() * p
+                      // A phone that only holds the frame rate with tint glass (glass benchmark) gets no blur here either.
+                      val blurDp = if (glass.quality == GlassQuality.Tint) 0 else motion.homeBlurDp
+                      val radius = blurDp.dp.toPx() * p
                       renderEffect = if (radius >= 0.5f) BlurEffect(radius, radius, TileMode.Clamp) else null
                   }
           ) {
