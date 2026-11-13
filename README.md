@@ -1,6 +1,6 @@
 # Liquid Launcher
 
-A personal Android launcher for the HONOR 90 Lite (MagicOS, Android 13, no root).
+A personal Android launcher for the HONOR 90 Lite (MagicOS 9, Android 15, no root).
 
 HONOR Home stays the default launcher so recents stays smooth. Liquid Launcher is a normal app that its own accessibility service brings to the front whenever HONOR Home would be shown.
 
@@ -8,7 +8,7 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
-0.2.0 (Phase 1B, first part): real home screen with pages, free grid and drag and drop with undo; customizable liquid-glass pill; app drawer with floating glass search, bottom-first option and work page; glass long-press menu; swipe-down search with calculator and bangs; per-surface glass settings and live previews in settings. Icon packs, folders, tags and drawer tabs come in the next build.
+0.2.1 (Phase 1B): real home screen with pages (reorder, home page), free grid, resizable clock and drag and drop with undo; customizable liquid-glass pill that turns into the drawer's search field; app drawer with depth / slide / fade transitions, glass tabs, glass scroll bar and scroll effects; glass long-press menu; swipe-down search with calculator and bangs; per-surface glass settings and live previews. Redirect: strict home check when leaving recents and recovery when a redirect covers recents. Icon packs, folders, tags and custom drawer tabs come next.
 
 ## Install
 
@@ -16,7 +16,7 @@ Download the APK from the [latest release](https://github.com/snietsk6205/liquid
 
 ## Build
 
-GitHub Actions builds every push: unit tests, a signed release APK, then a test on an Android 13 emulator that checks the redirect against the emulator's launcher, and finally a release. Locally: `./gradlew testDebugUnitTest :app:assembleRelease` (needs the Android SDK).
+GitHub Actions builds every push: unit tests, a signed release APK, then a test on an Android 14 emulator (Android 15 images refuse to enable the accessibility service from adb) that checks the redirect against the emulator's launcher, and finally a release. Locally: `./gradlew testDebugUnitTest :app:assembleRelease` (needs the Android SDK).
 
 ## Project layout
 

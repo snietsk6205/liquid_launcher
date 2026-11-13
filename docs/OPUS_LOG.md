@@ -116,6 +116,41 @@ Every Opus commit starts with `[opus]`: `git log --grep="\[opus\]"`.
 
 ---
 
+## Entry 4: fixes from the 0.2.0 phone test (2026-11-13 14:50 → 15:40 UTC)
+
+**Model:** Opus 5.5
+**Goal:** fix the bugs from the user's 0.2.0 test, build drawer and home feedback that belongs to 1B, place the rest in the roadmap.
+
+| File | Change | Why |
+|---|---|---|
+| `feature/redirect/engine/RedirectEngine.kt` | Leaving recents needs home or drawer signature, no fallback; reopen recents after an interrupted redirect; retry timing after the exclusion check; late-timer and unreadable-window log lines | Log: redirects over MEGA, app lock, Messenger; 7 interrupted recents; 3.2 s delayed redirect with an instant retry |
+| `feature/redirect/LauncherAccessibilityService.kt` | Side thread for tree logging and the split-screen window list; `reopenRecents()` via `GLOBAL_ACTION_RECENTS` | Tree walk of the new app's window (up to 1 s) and `getWindows()` (3 s) ran on the engine thread |
+| `feature/redirect/RecentsDetector.kt` | Drawer ids (any of), bounds for the trace log | HONOR's drawer counts as home for leaving recents (user's rule) |
+| `core/settings/LauncherSettings.kt` | Reopen recents (+ window), drawer ids, reopened counter; Drawer motion section (13 options); tabs position; Clock section | Feedback 3–5, point 2 |
+| `feature/home/Drawer.kt` (rewrite), `DrawerParts.kt`, `PillMorph.kt` (new) | Depth / slide / fade; pill morph; glass tabs + quick menu; scroll bar; elastic / curve effects; keyboard-aware bottom padding | Feedback 3–6 |
+| `feature/home/HomeController.kt` | Spring takes finger velocity; pages ops; widget selection and resize | Feedback 2–3 |
+| `feature/home/EditTools.kt` (new), `HomeGrid.kt`, `HomeScreen.kt` | Pages overview, resize frame with handles and clock settings chip; home blur; morph pill above the drawer | Point 2 |
+| `core/data` | `HomeLayout.defaultPage`, `movePage`, `setDefaultPage`, `resizeItem` + 3 tests | Point 2 |
+| `ci/smoke.sh` | Pages overview check | New UI |
+| Docs | Android 15 correction, D36–D41, roadmap placements and saved-layouts proposal | User request |
+
+### Notes
+
+- The "ListView" window event is not a usable early signal: it also arrives on plain home gestures (15:00:56, 15:01:12, 15:33:48).
+- The home-screen check (Fable's) cannot tell recents apart on HONOR: workspace and hotseat are visible during the gesture (21 recents openings with them visible). The fast 30 ms mode will therefore never switch on; diagnostics now say so.
+- Glass parts in the drawer read the drawer position in a draw block so they redraw while moving (kyant's node keeps the same coordinates object, so a pure move would not redraw it).
+- Not tested on a device: morph pill, scroll bar drag, resize handles, reopen-recents. The emulator test covers drawer open / close, menu, edit mode and the pages overview.
+
+### For Fable to review
+
+1. D38 recovery: is `GLOBAL_ACTION_RECENTS` after the launcher resumes acceptable, or should the redirect itself be delayed further on slow swipes?
+2. `PillMorph.kt`: one glass shape for pill and search field; geometry set in a layout modifier.
+3. `ScrollFx` elastic formula and default strength.
+4. `KeyboardAwarePadding` (insets read during layout to avoid recomposing the drawer).
+5. Saved-layouts proposal in the roadmap: placement and scope.
+
+---
+
 ## Session summary (2026-11-13, Opus)
 
 **State:** Phase 1B first part (0.2.0) is built. Local build and all 63 unit tests pass (redirect engine 35, layout 10, search 8, settings 7, latency 3). On the API 34 emulator every UI check passed in run 17 (drawer, app list, long-press menu, add to home, back, search + calculator, edit mode) and all redirect checks except the first Home press, which hit an emulator ANR dialog. Run 18 (with dialog handling) passed every check and published release `v0.2.0` (build 18).

@@ -96,7 +96,7 @@ Shared data sources, each started only while at least one visible widget uses it
 | **Notification digest** | Count or icons of pending notifications | notification access |
 | **Settings shortcuts** | Row of buttons opening system panels (Wi-Fi, Bluetooth, sound…) | nothing |
 
-A normal app cannot switch Wi-Fi, Bluetooth or mobile data directly on Android 13, so those buttons open the system panel instead of toggling.
+A normal app cannot switch Wi-Fi, Bluetooth or mobile data directly on Android 13 and later (the phone runs 15), so those buttons open the system panel instead of toggling.
 
 ### Utility
 

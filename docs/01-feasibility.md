@@ -1,6 +1,17 @@
 # 1. Feasibility review
 
-Device: HONOR 90 Lite, MagicOS on Android 13 (API 33), no root, locked bootloader.
+Device: HONOR 90 Lite, MagicOS 9 on Android 15 (API 35), 90 Hz, no root, locked bootloader. (The first version of this document said Android 13; corrected after the 0.2.0 diagnostics. The app keeps minSdk and targetSdk 33, see D16 and D36.)
+
+### Android 15 behaviour that matters here
+
+| Topic | Effect on this project |
+|---|---|
+| Restricted settings for sideloaded apps | Same step as on 13: App info → ⋮ → Allow restricted settings, then enable the accessibility service. On an emulator, Android 15 refuses to enable the service from adb at all (D35), so CI tests on Android 14. |
+| Background activity starts | Still allowed for an app whose accessibility service is bound; confirmed by 0.1.0 and 0.2.0 on the phone. |
+| Private space (new in 15) | Its apps are visible only to the default launcher (needs the launcher role), so they will not appear in the drawer. Work profile apps do appear (diagnostics: 57 apps). |
+| Edge-to-edge enforcement | Applies to apps targeting 35; the launcher already draws edge-to-edge, so raising targetSdk later costs nothing here. |
+| Reading the system wallpaper | The diagnostics read a 922 × 1024 image without All-files access; whether it is the real wallpaper or a stand-in is not checked yet. Launcher-managed wallpaper stays the default either way. |
+| Window blur across windows | Reported "not available" on the phone, so glass can only refract what the launcher draws itself (unchanged plan). |
 Architecture: HONOR Home stays the default launcher; Liquid Launcher is a normal app that its own AccessibilityService brings to the front.
 
 Legend: **OK** = works, low risk. **TEST** = should work, must be confirmed on your phone (Phase 1A does this). **LIMIT** = works only partly, trade-off described. **CUT** = not doing it, reason given.
@@ -20,7 +31,7 @@ The whole plan is feasible without root. The redirect trick is the only part the
 | Battery cost | **OK** | The service subscribes to events from two packages only (HONOR Home and itself). While you are in any other app it receives nothing and does not wake. Content-change events are subscribed only while HONOR Home is in front. |
 | Surviving reboot | **OK** | Android re-binds enabled accessibility services after boot without any receiver. |
 | Surviving app kill | **TEST** | Android re-binds after a crash. HONOR's power manager can kill and effectively disable the service unless the app is set to "manage manually" in App launch and unrestricted in Battery. Onboarding walks through both, and the home screen shows a banner if the service is not connected. |
-| Enabling the service on a sideloaded app | **TEST** | Android 13 hides accessibility and notification access for sideloaded apps behind "Allow restricted settings" (App info → ⋮). One-time step, covered in onboarding. |
+| Enabling the service on a sideloaded app | **OK** | Android 13 and later (the phone runs 15) hide accessibility and notification access for sideloaded apps behind "Allow restricted settings" (App info → ⋮). One-time step, covered in onboarding. |
 
 ### 1.2.1 How it works
 
@@ -59,7 +70,7 @@ screen off ──delay C (default 1000 ms)─► REDIRECT (pre-positions the lau
 
 | Feature | Status | Plan |
 |---|---|---|
-| Listing and launching apps, including work profile | **TEST** | `LauncherApps.getActivityList/startMainActivity` work for profiles in your own profile group without the launcher role on Android 13. Phase 1A diagnostics confirm it with Island. |
+| Listing and launching apps, including work profile | **TEST** | `LauncherApps.getActivityList/startMainActivity` work for profiles in your own profile group without the launcher role (Android 13–15; confirmed on the phone, 57 work apps). Phase 1A diagnostics confirm it with Island. |
 | Deep shortcuts (long-press) | **LIMIT** | `LauncherApps.getShortcuts` is refused for non-default launchers. Replacement, in order: (1) static shortcuts parsed from the app's manifest, shown when their target activity is exported (many are, some are not); (2) legacy `CREATE_SHORTCUT` providers (direct dial, settings pages, etc.); (3) an activity picker like Nova's "Activities"; (4) the app's live notifications and their actions in the popup. Dynamic shortcuts (e.g. a specific chat) are not available. |
 | "Add to home screen" from other apps | **CUT** | Pin requests are delivered to the default launcher only. Use the launcher's own pickers instead. |
 | Work profile pause/resume | **LIMIT** | Needs the launcher role. The launcher shows the paused state and the button opens Island (or system settings) as you proposed. |
@@ -74,7 +85,7 @@ Verified from the library source (`io.github.kyant0:backdrop` 2.0.1, Apache-2.0)
 
 - Refraction (`lens`) needs RuntimeShader, API 33. Blur needs API 31. minSdk 33 covers both.
 - The glass samples a **backdrop made of the app's own drawing** (a recorded Compose layer or a canvas callback). It cannot sample the system wallpaper behind a transparent window.
-- Android 13 no longer lets a normal app read the current wallpaper image (`WallpaperManager.getDrawable` returns the default wallpaper unless the app holds All-files access).
+- Since Android 13 (and on the phone's Android 15) a normal app cannot read the current wallpaper image (`WallpaperManager.getDrawable` returns the default wallpaper unless the app holds All-files access).
 
 Consequence and plan:
 

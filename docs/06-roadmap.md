@@ -5,8 +5,9 @@
 | Phase | Content | Builds (rough) | State |
 |---|---|---|---|
 | 1A | Redirect engine, diagnostics, glass benchmark | 1 | Done (0.1.0) |
-| 1B | Home grid, pill, drawer, long-press menu, search v1, settings editors and previews | 0.2.0 | Built, needs phone test |
-| 1B (rest) | Icon packs (global / home / drawer / per app, masking), folders, tags and drawer tabs, per-icon swipe actions and icon change, static app shortcuts | 2–3 | Next |
+| 1B | Home grid, pill, drawer, long-press menu, search v1, settings editors and previews | 0.2.0 | Tested on the phone |
+| 1B | Fixes from the 0.2.0 test: redirect, drawer transition / tabs / scroll bar, page overview, clock resize | 0.2.1 | Built, needs phone test |
+| 1B (rest) | Icon packs (global / home / drawer / per app, masking), folders, tags and custom drawer tabs (organising apps), per-icon swipe actions and icon change, static app shortcuts | 2–3 | Next |
 | 2 | Theme editor (colours, fonts, shapes), theme files, more gestures (two-finger, pinch, edges), dock, page transitions, backup/restore, in-app updater, haptics | 3 | |
 | 3 | Widgets: other apps' widgets, clock gallery, built-in widgets, custom panels | 2–3 | |
 | 4 | Search sources (contacts, calendar, files, settings pages), suggested apps, notification badges | 2 | |
@@ -15,6 +16,56 @@
 | 7 | Performance and polish: baseline profiles, frame-time review, battery review | 1–2 | |
 
 About 16–19 builds in total. The original phase descriptions below still apply.
+
+## Feedback on 0.2.0: where each point went (2026-11-13, Opus)
+
+| Point | Where | Notes and recommendations |
+|---|---|---|
+| Page reorder, home page | Done in 0.2.1 | Edit mode → Pages: miniatures, move left/right, house = page Home returns to, remove, add. |
+| Widgets | Phase 3 | Unchanged. Recommendation: the edit toolbar's "Add clock" button becomes "Widgets" (picker with built-in and system widgets) in Phase 3. |
+| Clock customisation and resize | Resize and settings entry done in 0.2.1; styles in Phase 3 | Hold the clock: edit mode with resize handles and a "Clock settings" chip. Clock gallery (stacked, analog, word, flip…) stays Phase 3. |
+| Long-press on empty space menu | Phase 2 | Recommendation: make the edit toolbar a customisable list like the pill (items, order), and offer "hold empty space → glass quick menu" (Edit, Pages, Widgets, Wallpaper, Settings) as an alternative to going straight into edit mode. |
+| Drawer transition | Done in 0.2.1 | Depth / slide / fade, pill morph, spring with finger speed, speed / bounce / rise / shrink / blur settings. Recommendations for Phase 2 (motion): a haptic tick when the drawer passes the open point; the same depth transition for the swipe-down search; icon launch animation from the drawer item. |
+| Drawer tabs in a glass pill | Done in 0.2.1 | Top or bottom, tap / tap again / hold. |
+| Organising apps (tags, own tabs) | 1B rest (next build) | Tags first, then custom tabs built from tags or rules; they appear in the same tabs pill. |
+| Scroll bar and scroll effects | Done in 0.2.1 | Glass handle or line, letter bubble, elastic / curved effect, stretch switch. |
+| Search results behind the keyboard | Fixed in 0.2.1 | |
+| Recents interrupted, redirect after leaving recents | Fixed in 0.2.1 | D37–D39. |
+
+## Proposal: saved home layouts (for Fable to review and place)
+
+The user's idea: save the whole home setup under a name and switch between setups.
+
+**What a layout contains**
+
+| Included | Excluded (always global) |
+|---|---|
+| Pages and items (apps, widgets, clock size and place), home page | Installed apps, hidden apps, renamed labels |
+| Pill items, position, size and actions | Redirect settings, debug and detection settings |
+| Icon pack choice and per-app icons (once icon packs exist) | Glass quality and benchmark cap (device facts) |
+| Home grid, margins, labels, clock options | Usage statistics |
+| Gestures on the home screen | Drawer contents and tags (shared), drawer sort |
+| Wallpaper (optional per layout, off by default) | |
+
+Stored as `layouts/<id>.json`: the `HomeLayout` plus a snapshot of the setting keys listed above (the registry can mark keys as "part of a layout" with one flag, so new options join automatically).
+
+**Switching**
+
+- Edit mode → Layouts: list with live miniatures (the same drawing as the page overview), Save current as…, Switch, Rename, Duplicate, Delete.
+- Pill or gesture action "Switch layout" (picker) and "Next layout".
+- Switching is one undo step (undo returns to the previous layout) and cross-fades the home screen.
+- A layout can be marked "temporary": switching back restores it exactly, unsaved changes to the temporary one are dropped.
+
+**Automatic switching** (overlaps with Phase 6 profiles; recommendation: build layouts first, then let profiles pick a layout instead of owning their own copy)
+
+- By time of day and weekday (simple schedule rows).
+- By calendar study block (Phase 5) and by study mode.
+- By headphones / charging / Wi-Fi name later if wanted.
+- Manual switch pauses automatic switching until the next rule boundary.
+
+**Export / import**: a layout exports as one `.lllayout` file (JSON plus missing icon files), and is part of the backup (Phase 2). Importing checks for apps that are not installed and leaves their cells empty with a placeholder.
+
+**Placement suggestion**: core (save / switch / undo / export) in Phase 2 next to backup and theme files, about 1 build; automatic switching with Phase 6.
 
 
 Each phase ends with: a signed APK on the GitHub Releases page, a test checklist of about ten minutes, and a known-issues list. Phases are sized so that I can work through them without input; the only stops are phone tests and decisions that are expensive to reverse.
