@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.2.2 (Phase 1B polish): curved letter index in the drawer with a bubble and continuous scrolling; icons that follow the wallpaper colours (themed icons, colour-following icon packs); floating drawer tabs (top, bottom, inside the search pill or hidden) with a per-tab menu and search filtering.
+
 0.2.1 (Phase 1B): real home screen with pages (reorder, home page), free grid, resizable clock and drag and drop with undo; customizable liquid-glass pill that turns into the drawer's search field; app drawer with depth / slide / fade transitions, glass tabs, glass scroll bar and scroll effects; glass long-press menu; swipe-down search with calculator and bangs; per-surface glass settings and live previews. Tags and your own drawer tabs built from them; icon packs (separate for home and drawer, uncovered icons fitted to the pack) and a per-app icon picker. Redirect: strict home check when leaving recents and recovery when a redirect covers recents. Folders, per-icon swipe actions on home icons, and app shortcuts in the long-press menu.
 
 ## Install

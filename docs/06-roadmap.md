@@ -1,23 +1,68 @@
 # 6. Roadmap
 
-## Plan as of 0.2.0 (2026-11-13)
+## Plan as of 0.2.2 (2026-11-13, Opus)
 
-| Phase | Content | Builds (rough) | State |
+| Phase | Content | Release | State |
 |---|---|---|---|
-| 1A | Redirect engine, diagnostics, glass benchmark | 1 | Done (0.1.0) |
+| 1A | Redirect engine, diagnostics, glass benchmark | 0.1.0 | Done |
 | 1B | Home grid, pill, drawer, long-press menu, search v1, settings editors and previews | 0.2.0 | Tested on the phone |
-| 1B | Fixes from the 0.2.0 test: redirect, drawer transition / tabs / scroll bar, page overview, clock resize; tags and own drawer tabs; icon packs and icon change; folders, per-icon swipe actions, app shortcuts | 0.2.1 | Built, needs phone test; completes Phase 1B |
-| 1B (polish) | Whatever the 0.2.1 test turns up; dragging apps out of folders | 1 | Next |
-| 2 | Theme editor (colours, fonts, shapes), theme files, more gestures (two-finger, pinch, edges), dock, page transitions, backup/restore, in-app updater, haptics | 3 | |
-| 3 | Widgets: other apps' widgets, clock gallery, built-in widgets, custom panels | 2–3 | |
-| 4 | Search sources (contacts, calendar, files, settings pages), suggested apps, notification badges | 2 | |
-| 5 | Study companion: GitHub task sync, calendar blocks, Now card, study widgets | 2–3 | |
-| 6 | Profiles (Study / Free / Night), study mode, mindful friction | 2 | |
-| 7 | Performance and polish: baseline profiles, frame-time review, battery review | 1–2 | |
+| 1B | Redirect fixes, drawer transition / tabs / scroll bar, pages, clock resize, tags and own tabs, icon packs, folders, swipe actions, shortcuts | 0.2.1 | Tested on the phone |
+| 1B polish | Curved letter index (A), icons following the wallpaper (B), floating tabs pill with positions, styles and a per-tab menu (D) | 0.2.2 | Built |
+| 2, part 1: home setup | Home menu (two glass pills on long press), wallpaper studio (picker, history, blur and dim per surface, live preview), saved layouts, backup / restore | 0.3 | Next |
+| 2, part 2: look | Theme editor (colours, fonts, shapes, glass), theme files and presets, folder styles and options, dock, per-page settings, page transitions | 0.4 | |
+| 2, part 3: touch and motion | Two-finger / pinch / edge gestures, double tap per icon, activity picker, motion and haptics settings (drawer tick, depth transition for search, launch animation), in-app updater | 0.5 | |
+| 3 | Widgets: other apps' widgets, clock gallery, built-in widgets, panels; "Widgets" joins the home menu | 2–3 builds | |
+| 4 | Search sources (contacts, calendar, files, settings pages), suggested apps, notification badges, drawer folders and rule-based tabs | 2 builds | |
+| 5 | Study companion: GitHub task sync, calendar blocks, Now card, study widgets | 2–3 builds | |
+| 6 | Profiles (Study / Free / Night), study mode, friction; automatic layout switching; wallpaper per profile | 2 builds | |
+| 7 | Performance and polish | 1–2 builds | |
 
-About 16–19 builds in total. The original phase descriptions below still apply.
+Changes to Fable's plan, and why:
+- Tags and own drawer tabs moved from Phase 4 to 1B (done in 0.2.1, the user asked for them with the tabs pill).
+- Per-icon swipe actions and app shortcuts moved from Phase 2 to 1B (done in 0.2.1).
+- Wallpaper blur and dim **per surface** moved from Phase 6 to 0.3: the user changes wallpapers often and needs it now, and it belongs with the wallpaper picker. Blur and dim **per profile** stay in Phase 6.
+- Saved layouts core in 0.3 (proposal below); automatic switching in Phase 6, where profiles pick a layout.
 
-## Feedback on 0.2.0: where each point went (2026-11-13, Opus)
+## Feedback on 0.2.1: where each point went (2026-11-13, Opus)
+
+| Point | Where | Notes |
+|---|---|---|
+| A. Scroll index like the screenshot | Done in 0.2.2 | Letters on a curve at the edge, bubble, continuous scroll with a short glide, haptic tick per letter; curve, side, letter size and spacing, bubble style, haptics, visibility, glide; tag sections at the top with their own index entries (a star for "Favourites"). D43. |
+| B. Icons following the wallpaper | Done in 0.2.2 | Switch in Icons. Monochrome icons in wallpaper tones, two-tone for apps without one (also when fitted to a pack), colour-following packs reloaded when the wallpaper changes. Pack icons themselves are never recoloured. D45. |
+| C. Wallpaper, long press, layouts | 0.3 (Phase 2 part 1) | Design below. |
+| D. Top pill does not float | Fixed in 0.2.2 | The list runs under the floating parts at both ends, fading under the status bar. D44. |
+| D. Settings in the pill by default | Fixed in 0.2.2 | Held-tab menu is tab-specific and customisable; settings entries only if added. |
+| D. Position, size, style | Done in 0.2.2 | Top / bottom / inside the search pill / hidden; small / medium / large; one pill, chips, or text; icons auto / on / off; optional buttons (new tag, sort, settings). |
+| D. Page customisation and search | Done in 0.2.2 | Hold a tab: rename, icon, which apps it shows (several tags combined), choose apps for its tag, sort order, move, new tag, remove. While searching, tapping a tab limits results to it; `#name` highlights that tag's tab. |
+| D. Folder from the pill | Phase 4 | Drawer folders belong with the rest of drawer organisation (rule-based tabs, groups). |
+
+Recommendations for later (D):
+- Swipe along the tabs pill to scrub between tabs (Phase 2 part 3, with the gesture work).
+- Rule-based tabs: "installed this week", "most used 12", app category (Phase 4).
+- Badge counts on tabs once notification badges exist (Phase 4).
+
+## Design for 0.3: home menu, wallpaper, layouts (C)
+
+**Home menu (long press on empty space).** Two glass pills rise at the bottom, in the thumb zone: "Set up" (default: Settings, Layouts) and "Actions" (default: Wallpaper, Edit, Add page, Pages). Both are lists the user edits like the pill: any item in either pill, any order, labels on or off. Improvements over the idea:
+- Press and slide: after the long press, keep the finger down, slide onto an item and let go to run it. A normal tap works too.
+- Saved layouts can be items themselves ("Study", "Projects"), with the current one highlighted, so switching is long press + one tap. The "Layouts" item opens the full list in place of the pill.
+- The home screen sinks back slightly while the menu is open, like edit mode, so it reads as the same space.
+- Items: settings, layouts list, a specific layout, save layout, wallpaper, edit mode, add page, pages overview, icons, drawer settings, lock screen, notifications, any app or launcher action. "Widgets" joins in Phase 3.
+- "Long press on empty space" stays a normal gesture setting, so going straight into edit mode remains possible.
+
+Why pills and not a sheet or a radial menu: they match the home pill, stay where the thumb is, and two short groups are faster to scan than one long list.
+
+**Wallpaper studio.** Opens over the real home screen (not inside settings): a glass sheet at the bottom, the live screen behind it.
+- Pick from the photo picker (no permission needed) or from the recent wallpapers (the last 12 are kept, one tap switches back).
+- Blur and dim separately for the home screen, the drawer and search. Tabs in the sheet switch the preview behind it between the three screens, so each value is judged on the real thing.
+- Nothing changes until Apply; Cancel restores everything. Optionally also set as the lock screen wallpaper.
+- Themed icons (B) follow the new colours when applied.
+
+**Saved layouts.** As in the proposal below: save the current setup under a name, switch, rename, duplicate, delete, undo a switch; wallpaper optionally part of a layout; export / import as a file.
+
+**Backup / restore.** One file with settings, home layout, tags and tabs, app labels and icons, saved layouts and wallpapers; restoring asks first and replaces everything.
+
+## Feedback on 0.2.0: where each point went (2026-11-13, Opus, kept for reference)
 
 | Point | Where | Notes and recommendations |
 |---|---|---|

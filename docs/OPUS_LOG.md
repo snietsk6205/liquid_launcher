@@ -198,6 +198,32 @@ Not done: dragging an app out of an open folder (use the menu's "Take out of the
 
 ---
 
+## Entry 6: 0.2.2, feedback on 0.2.1 (2026-11-13, Opus 5.5)
+
+**Goal:** the user's points A, B and D (bugs and current-phase work), placement and design of C.
+
+| File | Change | Why |
+|---|---|---|
+| `core/data/GridIndex.kt` (new) + test | Rows of a drawer list with headers, index entries (sections, letters), continuous row for a finger position, letter normalisation | A: smooth index scrolling, testable without Android |
+| `feature/home/ScrollIndex.kt` (new) | Curved letter index: cosine bulge around the finger, bubble (glass / solid / none), glide loop on frames, haptic tick per letter, visibility always / scroll / touch, demo finger in the settings preview | A |
+| `core/settings`, `HomeConfig.kt` | Section "Scroll index" (8 options); scroll bar default "index"; tag sections at the top (`drawer.topSections`); tabs style / size / icons / buttons / held-tab menu / filter search | A, D |
+| `feature/home/Drawer.kt` | Grid cells with section headers; list fills the screen with insets as content padding and a fade under the status bar; tabs bar model shared by pill and search pill; search scope by tab, `#tag` highlights its tab | D: the top pill now floats |
+| `feature/home/DrawerParts.kt`, `DrawerTabsEdit.kt` (new) | Tabs in three styles and three sizes, optional buttons; held-tab menu (rename, icon, contents, choose apps, sort, move, new tag, remove; settings only if added); dialogs | D |
+| `feature/home/PillMorph.kt` | Morphing pill grows a tabs row when tabs sit inside the search pill | D: "merged with the search pill" |
+| `core/data/Organisation.kt` | `DrawerTabDef.icon`, `sort`, `extra` (several sources), `editTab`, `setTabSources`; filter takes the union | D: per-tab customisation |
+| `core/data/ThemedColors.kt` (new), `IconThemer.kt`, `AppsRepository.kt`, `LauncherData.kt` | Monochrome masks kept per app; themed icons (system shape + glyph), glyph on the pack's background, two-tone for the rest; palette from `WallpaperColors` or the system palette; reload on wallpaper colour change and on resume when the colours differ | B |
+| `core/designsystem` | 18 more icons and a name map for tab icons | D |
+| Docs | Roadmap: plan as of 0.2.2, placement of every point, design for C; D43–D46 | |
+
+Not done / limits: drawer folders (Phase 4); swipe along the tabs to scrub (0.5); the "solid" bubble uses neutral colours, not the wallpaper's; themed icons need Android 13+ monochrome layers (the phone has them).
+
+### For Fable to review
+1. `ScrollIndex` glide loop (`withFrameNanos` + `scrollToItem` per frame) and row height estimation for rows not on screen.
+2. Offscreen layer for the status-bar fade over the whole list (cost while scrolling).
+3. `ThemedColors.fromSeed` tones versus a real tonal palette.
+
+---
+
 ## Session summary (2026-11-13, Opus, updated 17:35 UTC)
 
 **State:** Phase 1B is complete as 0.2.1: the fixes from the 0.2.0 phone test (redirect, drawer, pages, clock) plus everything that was left in 1B (tags and own drawer tabs, icon packs and icon change, folders, per-icon swipe actions, app shortcuts). 85 unit tests pass. CI run 24 passed every emulator check (redirect and UI) and published `v0.2.1` build 24 (`LiquidLauncher-0.2.1-build24.apk`). Runs 22–23 failed on emulator timing; the fixes (drag position, velocity samples, blur fallback, test waits) are in Entry 5.
