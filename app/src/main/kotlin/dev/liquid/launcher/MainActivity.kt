@@ -87,6 +87,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // The wallpaper may have changed while another app was open (themed icons).
+        dev.liquid.launcher.core.data.LauncherData.get(this).checkWallpaperColours()
         resumed = true
         RedirectStatus.onLauncherResumed()
         window.decorView.post {

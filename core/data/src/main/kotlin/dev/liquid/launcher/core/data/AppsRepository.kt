@@ -47,6 +47,8 @@ data class AppEntry(
     val homeIcon: ImageBitmap? = icon,
     /** The user picked this app's icon by hand. */
     val customIcon: Boolean = false,
+    /** The app's themed (monochrome) icon as an alpha mask, Android 13+; null when it has none. */
+    val monochrome: android.graphics.Bitmap? = null,
 ) {
     val key: String get() = ref.key
 }
@@ -122,6 +124,11 @@ class AppsRepository(
                         } catch (e: Throwable) {
                             null
                         }
+                        val mono = try {
+                            ThemedColors.monochromeMask(info.getIcon(0), iconPx)
+                        } catch (e: Throwable) {
+                            null
+                        }
                         val label = info.label?.toString().orEmpty().ifEmpty { component.packageName }
                         result += AppEntry(
                             ref = AppRef(component.packageName, component.className, serial),
@@ -133,6 +140,7 @@ class AppsRepository(
                             isWorkProfile = user != myUser,
                             hidden = false,
                             installedAt = info.firstInstallTime,
+                            monochrome = mono,
                         )
                     }
                 }

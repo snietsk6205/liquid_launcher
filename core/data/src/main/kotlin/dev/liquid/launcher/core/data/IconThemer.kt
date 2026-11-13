@@ -14,6 +14,10 @@ data class IconConfig(
     val drawerPack: String = "",
     /** Fit icons the pack does not cover to the pack's shape. */
     val mask: Boolean = true,
+    /** Themed icons in the wallpaper's colours, or null when off. */
+    val themed: ThemedIcons? = null,
+    /** Changes when the wallpaper does, so packs that use system colours are loaded again. */
+    val packEpoch: Int = 0,
 )
 
 /**
@@ -28,9 +32,10 @@ internal class IconThemer(private val context: Context) {
 
     fun pack(pkg: String): IconPack? = packs.getOrPut(pkg) { IconPacks.load(context, pkg) }
 
-    /** Drops cached icons when the packs or the masking change. */
+    /** Drops cached icons when the packs, the masking or the theme colours change. */
     fun prepare(config: IconConfig) {
         if (config != lastConfig) {
+            if (config.packEpoch != lastConfig?.packEpoch) packs.clear()
             cache.clear()
             lastConfig = config
         }
@@ -41,19 +46,40 @@ internal class IconThemer(private val context: Context) {
             val own = cached("own|$override|${app.key}") { forOverride(app, override) }
             if (own != null) return app.copy(icon = own, homeIcon = own, customIcon = true)
         }
-        if (config.homePack.isBlank() && config.drawerPack.isBlank()) return app
-        val drawer = themed(app, config.drawerPack, config.mask)
-        val home = if (config.homePack == config.drawerPack) drawer else themed(app, config.homePack, config.mask)
+        val themed = config.themed
+        if (config.homePack.isBlank() && config.drawerPack.isBlank() && themed == null) return app
+        val drawerTheme = themed?.takeIf { it.drawer }
+        val homeTheme = themed?.takeIf { it.home }
+        val drawer = forSurface(app, config.drawerPack, config.mask, drawerTheme)
+        val home = if (config.homePack == config.drawerPack && homeTheme == drawerTheme) drawer else forSurface(app, config.homePack, config.mask, homeTheme)
         return app.copy(icon = drawer, homeIcon = home)
     }
 
-    private fun themed(app: AppEntry, packPkg: String, mask: Boolean): ImageBitmap? {
-        if (packPkg.isBlank()) return app.icon
-        return cached("$packPkg|${app.key}") {
-            val pack = pack(packPkg) ?: return@cached app.icon
-            pack.iconFor(app.component, sizePx)?.let { return@cached badge(it, app) }
+    /**
+     * The icon on one surface: the pack's own icon if it has one (never recoloured), otherwise
+     * the app's icon, themed in the wallpaper colours if [theme] is set, then fitted to the pack.
+     */
+    private fun forSurface(app: AppEntry, packPkg: String, mask: Boolean, theme: ThemedIcons?): ImageBitmap? {
+        if (packPkg.isBlank() && theme == null) return app.icon
+        return cached("$packPkg|${theme?.key}|${app.key}") {
+            val pack = if (packPkg.isBlank()) null else pack(packPkg)
+            pack?.iconFor(app.component, sizePx)?.let { return@cached badge(it, app) }
+            val fit = pack != null && mask && pack.canMask
+            val mono = app.monochrome
+            if (theme != null && mono != null) {
+                // A pack with a background of its own gets just the glyph on that background.
+                return@cached if (fit && pack!!.hasBack) {
+                    badge(pack.masked(ThemedColors.glyph(mono, sizePx, theme.foreground), app.key, sizePx), app)
+                } else {
+                    val shaped = ThemedColors.themed(mono, sizePx, theme.background, theme.foreground)
+                    badge(if (fit) pack!!.masked(shaped, app.key, sizePx) else shaped, app)
+                }
+            }
             val original = app.icon ?: return@cached null
-            if (mask && pack.canMask) pack.masked(original.asAndroidBitmap(), app.key, sizePx).asImageBitmap() else original
+            var bitmap = original.asAndroidBitmap()
+            if (theme != null && theme.tintUncovered) bitmap = ThemedColors.duotone(bitmap, theme.background, theme.foreground)
+            if (fit) bitmap = pack!!.masked(bitmap, app.key, sizePx)
+            if (bitmap === original.asAndroidBitmap()) original else bitmap.asImageBitmap()
         }
     }
 

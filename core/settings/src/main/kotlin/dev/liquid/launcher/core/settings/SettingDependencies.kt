@@ -12,6 +12,9 @@ object SettingDependencies {
         map[LauncherSettings.FastDelay.key] = LauncherSettings.FastWhenProven
         map[LauncherSettings.HomeScreenFallback.key] = LauncherSettings.RequireHomeScreen
         map[LauncherSettings.ReopenWindow.key] = LauncherSettings.ReopenRecents
+        for (s in listOf(LauncherSettings.ThemedIconsWhere, LauncherSettings.ThemedIconsUncovered, LauncherSettings.ThemedIconsColors, LauncherSettings.ThemedIconsStyle)) {
+            map[s.key] = LauncherSettings.ThemedIcons
+        }
         map
     }
 

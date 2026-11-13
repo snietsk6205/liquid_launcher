@@ -308,6 +308,42 @@ object LauncherSettings {
         section = "icons", keywords = "icon mask shape uncovered adaptive",
     )
 
+    val ThemedIcons = BoolSetting(
+        key = "icons.themed", default = false,
+        title = "Icons follow the wallpaper colours",
+        summary = "Apps with a themed (monochrome) icon get it in your wallpaper's colours and change with it. Icon packs that use the " +
+            "system colours (Material You packs) are reloaded when the wallpaper changes. Off: icons stay as they are",
+        section = "icons", keywords = "themed icons monochrome material you dynamic colour wallpaper tint",
+    )
+    val ThemedIconsWhere = ChoiceSetting(
+        key = "icons.themedWhere", default = "both",
+        options = listOf("both" to "Home screen and drawer", "home" to "Home screen only", "drawer" to "Drawer only"),
+        title = "Where",
+        section = "icons", keywords = "themed icons home drawer",
+    )
+    val ThemedIconsUncovered = ChoiceSetting(
+        key = "icons.themedUncovered", default = "tint",
+        options = listOf("tint" to "Two-tone in the wallpaper colours", "keep" to "Keep their own colours"),
+        title = "Apps without a themed icon",
+        summary = "Also applies to icons fitted to an icon pack's style. Icons the pack itself draws are never changed",
+        section = "icons", keywords = "themed icons uncovered legacy tint duotone",
+    )
+    val ThemedIconsColors = ChoiceSetting(
+        key = "icons.themedColors", default = "wallpaper",
+        options = listOf(
+            "wallpaper" to "Taken from the wallpaper (works on every phone)",
+            "system" to "System colours (Material You, if the phone sets them)",
+        ),
+        title = "Colours",
+        section = "icons", keywords = "themed icons colour source monet system wallpaper",
+    )
+    val ThemedIconsStyle = ChoiceSetting(
+        key = "icons.themedStyle", default = "auto",
+        options = listOf("auto" to "Follow dark theme", "light" to "Light", "dark" to "Dark"),
+        title = "Themed icon style",
+        section = "icons", keywords = "themed icons light dark",
+    )
+
     /** Value of the home and drawer pack settings that means "use the main pack". */
     const val SAME_AS_MAIN = "="
 
@@ -818,6 +854,7 @@ object LauncherSettings {
         SettleStyle, SettleDuration, ExcludeFromRecents,
         HomeColumns, HomeRows, HomeIconSize, HomeLabels, HomeLabelSize,
         IconPack, IconPackHome, IconPackDrawer, IconMask,
+        ThemedIcons, ThemedIconsWhere, ThemedIconsUncovered, ThemedIconsColors, ThemedIconsStyle,
         HomeMarginSide, HomeMarginTop, HomeMarginBottom, Clock24h, ClockSize, ClockDate, ClockGlass,
         GestureSwipeUp, GestureSwipeDown, GestureDoubleTap, GestureLongPress,
         PillEnabled, PillSlots, PillPosition, PillOffset, PillWidth, PillHeight, PillCorner, PillIconSize,

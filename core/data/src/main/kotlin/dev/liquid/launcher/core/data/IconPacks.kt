@@ -101,6 +101,9 @@ class IconPack internal constructor(
      * scaled down and cut by the mask, then the overlay. Picks the background by app so the
      * same app always gets the same one.
      */
+    /** True when the pack draws a background behind icons it fits to its style. */
+    val hasBack: Boolean get() = filter.backs.isNotEmpty()
+
     fun masked(original: Bitmap, key: String, sizePx: Int): Bitmap {
         val out = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
