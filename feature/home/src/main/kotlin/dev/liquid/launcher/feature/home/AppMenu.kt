@@ -55,6 +55,7 @@ private fun rowsFor(target: MenuTarget, entries: List<MenuEntry>, controller: Ho
     val apps = controller.data.apps
     return entries.mapNotNull { entry ->
         when (entry) {
+            MenuEntry.Shortcuts -> null // drawn as its own block, loaded from the app
             MenuEntry.Info -> MenuRow(LauncherIcons.Info, "App info") { apps.showAppInfo(app) }
             MenuEntry.Home -> if (target.folderId != null) {
                 MenuRow(LauncherIcons.RemoveCircle, "Take out of the folder") { controller.takeFromFolder(target.folderId, app.ref) }
@@ -90,6 +91,14 @@ fun AppMenu(
     backdrop: Backdrop,
 ) {
     val rows = remember(target, entries, target.app.hidden) { rowsFor(target, entries, controller) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val shortcuts by androidx.compose.runtime.produceState(emptyList<dev.liquid.launcher.core.data.StaticShortcut>(), target) {
+        if (MenuEntry.Shortcuts in entries && !target.app.isWorkProfile) {
+            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                dev.liquid.launcher.core.data.StaticShortcuts.load(context, target.app.component).take(4)
+            }
+        }
+    }
     val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
     val shape = RoundedCornerShape(26.dp)
     val appear = remember(target) { Animatable(0f) }
@@ -128,6 +137,25 @@ fun AppMenu(
                         )
                     }
                     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(1.dp).background(color.copy(alpha = 0.15f)))
+                    for (shortcut in shortcuts) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    controller.menu = null
+                                    controller.openShortcut(shortcut)
+                                }
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        ) {
+                            AppIconImage(shortcut.icon ?: target.app.icon, Modifier.size(22.dp), null)
+                            Spacer(Modifier.width(14.dp))
+                            Text(shortcut.label, style = TextStyle(color = color, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    if (shortcuts.isNotEmpty()) {
+                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(1.dp).background(color.copy(alpha = 0.15f)))
+                    }
                     for (row in rows) {
                         Row(
                             Modifier

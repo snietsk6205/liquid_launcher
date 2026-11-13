@@ -2,6 +2,7 @@ package dev.liquid.launcher.core.data
 
 /** Entries the long-press menu can show, in their default order. Stored by [id]. */
 enum class MenuEntry(val id: String, val title: String) {
+    Shortcuts("shortcuts", "App shortcuts (the ones apps declare)"),
     Info("info", "App info"),
     Home("home", "Add to / remove from home"),
     Rename("rename", "Rename"),

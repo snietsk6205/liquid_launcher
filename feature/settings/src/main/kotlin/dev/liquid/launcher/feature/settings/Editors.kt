@@ -152,7 +152,7 @@ internal fun MenuEntriesEditor(store: SettingsStore) {
             }
         }
         BodyText(
-            "Coming next: change icon, swipe actions, move to folder, and app shortcuts.",
+            "App shortcuts are the ones an app declares in its manifest; only the default launcher can show an app's other shortcuts (for example a recent chat).",
             Modifier.padding(top = 8.dp),
         )
         TextButton(onClick = { store.reset(LauncherSettings.MenuEntries) }) { Text("Reset entries") }

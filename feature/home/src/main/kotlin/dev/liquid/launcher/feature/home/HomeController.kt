@@ -486,6 +486,19 @@ class HomeController(
 
     fun openSection(id: String) = callbacks.openSection(id)
 
+    /** Static shortcuts may point at activities their app does not export; then only the default launcher can open them. */
+    fun openShortcut(shortcut: dev.liquid.launcher.core.data.StaticShortcut) {
+        try {
+            LaunchClock.mark()
+            context.startActivity(Intent(shortcut.intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+        } catch (e: SecurityException) {
+            toast("The app only lets the system launcher open this shortcut")
+        } catch (e: Exception) {
+            DebugLog.error("Home", "shortcut failed: $e")
+            toast("This shortcut could not be opened")
+        }
+    }
+
     fun openUrl(url: String) = start(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
 
     fun start(intent: Intent) {
