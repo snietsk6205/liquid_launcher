@@ -139,6 +139,7 @@ class SettingsStore internal constructor(
                     (if (setting.options.any { it.first == value }) value else setting.default) as T
                 }
                 is TextSetting -> (stored as? String ?: setting.default) as T
+                is ActionSetting -> (stored as? String ?: setting.default) as T
                 is StringListSetting -> {
                     val text = stored as? String ?: return setting.default
                     text.split(LIST_SEPARATOR).map { it.trim() }.filter { it.isNotEmpty() } as T

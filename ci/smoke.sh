@@ -15,7 +15,10 @@ mkdir -p "$OUT"
 
 APK=$(ls out/*.apk | head -1)
 echo "== Installing $APK"
-adb install -r "$APK" || { echo "FAIL: install"; exit 1; }
+# Android 15 refuses accessibility for apps with no installer ("restricted settings"), so
+# install as if from a store and allow restricted settings, like the user does by hand.
+adb install -r -i com.android.vending "$APK" || adb install -r "$APK" || { echo "FAIL: install"; exit 1; }
+adb shell appops set "$PKG" ACCESS_RESTRICTED_SETTINGS allow 2>/dev/null || true
 
 # The launcher's own log lines, captured as a stream so nothing is lost to buffer rotation.
 adb logcat -c
@@ -94,6 +97,8 @@ if wait_log 'service connected' 60; then
   pass "accessibility service connected"
 else
   fail "accessibility service connected"
+  echo "      enabled services: $(adb shell settings get secure enabled_accessibility_services)"
+  adb logcat -d 2>/dev/null | grep -iE "AccessibilityManager|restricted|EnhancedConfirmation|ecm" | grep -i "$PKG" | tail -15
 fi
 sleep 2
 

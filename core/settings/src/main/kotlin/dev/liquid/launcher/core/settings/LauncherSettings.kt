@@ -7,15 +7,20 @@ package dev.liquid.launcher.core.settings
 object LauncherSettings {
 
     object Sections {
-        val Redirect = SettingsSection("redirect", "Redirect engine", "When and how the launcher is brought to the front")
-        val Detection = SettingsSection("detection", "Detection", "How HONOR Home and recents are recognised")
-        val Exclusions = SettingsSection("exclusions", "Exclusions and safety", "When not to redirect, loop guard")
-        val Handover = SettingsSection("handover", "Hand-over", "How the launcher appears after a redirect")
-        val Home = SettingsSection("home", "Home screen", "Temporary home screen options for this build")
-        val Glass = SettingsSection("glass", "Glass", "Liquid glass quality")
-        val Log = SettingsSection("log", "Debug log", "What is recorded")
+        val Home = SettingsSection("home", "Home screen", "Grid, icons, labels and the clock")
+        val Gestures = SettingsSection("gestures", "Gestures", "What swipes, taps and presses on the home screen do")
+        val Pill = SettingsSection("pill", "Pill", "The glass bar: its items, size, position and gestures")
+        val Drawer = SettingsSection("drawer", "App drawer", "Layout, sorting, search and the work profile")
+        val Menu = SettingsSection("menu", "Long-press menu", "Which entries appear and in what order")
+        val Glass = SettingsSection("glass", "Liquid glass", "Quality, blur, refraction and tint, overall and per surface")
 
-        val all = listOf(Redirect, Detection, Exclusions, Handover, Home, Glass, Log)
+        val Redirect = SettingsSection("redirect", "Redirect engine", "When and how the launcher is brought to the front", "Redirect")
+        val Detection = SettingsSection("detection", "Detection", "How the system launcher's home screen and recents are recognised", "Redirect")
+        val Exclusions = SettingsSection("exclusions", "Exclusions and safety", "When not to redirect, loop guard", "Redirect")
+        val Handover = SettingsSection("handover", "Hand-over", "How the launcher appears after a redirect", "Redirect")
+        val Log = SettingsSection("log", "Debug log", "What is recorded", "Redirect")
+
+        val all = listOf(Home, Gestures, Pill, Drawer, Menu, Glass, Redirect, Detection, Exclusions, Handover, Log)
     }
 
     // ---- Redirect engine ----
@@ -197,22 +202,210 @@ object LauncherSettings {
         section = "handover", keywords = "recents card overview",
     )
 
-    // ---- Home (temporary, replaced by the real home screen in Phase 1B) ----
+    // ---- Home screen ----
 
     val HomeColumns = IntSetting(
-        key = "home.columns", default = 5, min = 3, max = 8,
-        title = "App grid columns",
+        key = "home.columns", default = 5, min = 2, max = 12,
+        title = "Columns",
         section = "home", keywords = "grid columns",
     )
+    val HomeRows = IntSetting(
+        key = "home.rows", default = 9, min = 2, max = 16,
+        title = "Rows",
+        section = "home", keywords = "grid rows",
+    )
+    val HomeIconSize = IntSetting(
+        key = "home.iconSize", default = 70, min = 40, max = 100, step = 5, unit = "%",
+        title = "Icon size",
+        summary = "Share of a grid cell the icon fills",
+        section = "home", keywords = "icon size scale",
+    )
     val HomeLabels = BoolSetting(
-        key = "home.labels", default = true,
+        key = "home.labels", default = false,
         title = "Show app labels",
         section = "home", keywords = "labels names text",
     )
+    val HomeLabelSize = IntSetting(
+        key = "home.labelSize", default = 11, min = 8, max = 16, unit = "sp",
+        title = "Label size",
+        section = "home", keywords = "label text size font",
+    )
+    val HomeMarginSide = IntSetting(
+        key = "home.marginSide", default = 16, min = 0, max = 64, step = 2, unit = "dp",
+        title = "Side margin",
+        section = "home", keywords = "margin padding left right",
+    )
+    val HomeMarginTop = IntSetting(
+        key = "home.marginTop", default = 8, min = 0, max = 160, step = 4, unit = "dp",
+        title = "Top margin",
+        section = "home", keywords = "margin padding top",
+    )
+    val HomeMarginBottom = IntSetting(
+        key = "home.marginBottom", default = 8, min = 0, max = 200, step = 4, unit = "dp",
+        title = "Bottom margin",
+        summary = "Space between the grid and the pill",
+        section = "home", keywords = "margin padding bottom",
+    )
     val Clock24h = BoolSetting(
         key = "home.clock24h", default = true,
-        title = "24-hour clock",
+        title = "Clock: 24-hour time",
         section = "home", keywords = "clock time format",
+    )
+    val ClockSize = IntSetting(
+        key = "home.clockSize", default = 100, min = 40, max = 160, step = 5, unit = "%",
+        title = "Clock: size",
+        section = "home", keywords = "clock size font",
+    )
+    val ClockDate = BoolSetting(
+        key = "home.clockDate", default = false,
+        title = "Clock: show the date",
+        section = "home", keywords = "clock date",
+    )
+
+    // ---- Gestures ----
+
+    val GestureSwipeUp = ActionSetting(
+        key = "gesture.swipeUp", default = "drawer",
+        title = "Swipe up", section = "gestures", keywords = "gesture swipe up drawer",
+    )
+    val GestureSwipeDown = ActionSetting(
+        key = "gesture.swipeDown", default = "search",
+        title = "Swipe down", section = "gestures", keywords = "gesture swipe down search notifications",
+    )
+    val GestureDoubleTap = ActionSetting(
+        key = "gesture.doubleTap", default = "lock",
+        title = "Double tap on empty space", section = "gestures", keywords = "gesture double tap lock",
+    )
+    val GestureLongPress = ActionSetting(
+        key = "gesture.longPress", default = "edit",
+        title = "Long press on empty space", section = "gestures", keywords = "gesture long press edit",
+    )
+
+    // ---- Pill ----
+
+    val PillEnabled = BoolSetting(
+        key = "pill.enabled", default = true,
+        title = "Show the pill",
+        section = "pill", keywords = "pill bar dock search",
+    )
+
+    /** Ordered slot codes, see PillSlot in core/data. Edited with the pill editor, not a generic row. */
+    val PillSlots = StringListSetting(
+        key = "pill.slots", default = listOf("search", "date"),
+        title = "Pill items", section = "pill", hidden = true,
+    )
+    val PillPosition = ChoiceSetting(
+        key = "pill.position", default = "bottom",
+        options = listOf("bottom" to "Bottom", "top" to "Top"),
+        title = "Position",
+        section = "pill", keywords = "position top bottom",
+    )
+    val PillOffset = IntSetting(
+        key = "pill.offset", default = 20, min = 0, max = 400, step = 4, unit = "dp",
+        title = "Distance from the edge",
+        section = "pill", keywords = "offset margin position",
+    )
+    val PillWidth = IntSetting(
+        key = "pill.width", default = 86, min = 30, max = 100, step = 2, unit = "%",
+        title = "Width",
+        section = "pill", keywords = "width size",
+    )
+    val PillHeight = IntSetting(
+        key = "pill.height", default = 54, min = 36, max = 96, step = 2, unit = "dp",
+        title = "Height",
+        section = "pill", keywords = "height size",
+    )
+    val PillCorner = IntSetting(
+        key = "pill.corner", default = 50, min = 0, max = 50, step = 2, unit = "%",
+        title = "Corner roundness",
+        summary = "50% is a full capsule",
+        section = "pill", keywords = "corner radius shape capsule",
+    )
+    val PillIconSize = IntSetting(
+        key = "pill.iconSize", default = 24, min = 14, max = 48, step = 2, unit = "dp",
+        title = "Icon size",
+        section = "pill", keywords = "icon size",
+    )
+    val PillHint = TextSetting(
+        key = "pill.hint", default = "Search", placeholder = "No text",
+        title = "Search item text",
+        section = "pill", keywords = "hint placeholder search text",
+    )
+    val PillTap = ActionSetting(
+        key = "pill.tap", default = "search",
+        title = "Tap on empty pill space", section = "pill", keywords = "gesture tap",
+    )
+    val PillLongPress = ActionSetting(
+        key = "pill.longPress", default = "settings",
+        title = "Long press on the pill", section = "pill", keywords = "gesture long press",
+    )
+    val PillSwipeUp = ActionSetting(
+        key = "pill.swipeUp", default = "drawer",
+        title = "Swipe up on the pill", section = "pill", keywords = "gesture swipe",
+    )
+    val PillSwipeDown = ActionSetting(
+        key = "pill.swipeDown", default = "notifications",
+        title = "Swipe down on the pill", section = "pill", keywords = "gesture swipe",
+    )
+
+    // ---- App drawer ----
+
+    val DrawerColumns = IntSetting(
+        key = "drawer.columns", default = 5, min = 3, max = 8,
+        title = "Columns",
+        section = "drawer", keywords = "grid columns",
+    )
+    val DrawerIconSize = IntSetting(
+        key = "drawer.iconSize", default = 52, min = 32, max = 72, step = 2, unit = "dp",
+        title = "Icon size",
+        section = "drawer", keywords = "icon size",
+    )
+    val DrawerLabels = BoolSetting(
+        key = "drawer.labels", default = true,
+        title = "Show app labels",
+        section = "drawer", keywords = "labels names",
+    )
+    val DrawerFromBottom = BoolSetting(
+        key = "drawer.fromBottom", default = true,
+        title = "Start from the bottom",
+        summary = "The first apps sit next to your thumb and the list grows upwards",
+        section = "drawer", keywords = "bottom thumb reverse fill",
+    )
+    val DrawerAutoKeyboard = BoolSetting(
+        key = "drawer.autoKeyboard", default = false,
+        title = "Open the keyboard with the drawer",
+        summary = "Start typing straight away to filter apps",
+        section = "drawer", keywords = "keyboard focus search automatic",
+    )
+    val DrawerSort = ChoiceSetting(
+        key = "drawer.sort", default = "az",
+        options = listOf("az" to "Alphabetical", "used" to "Most used", "recent" to "Recently installed"),
+        title = "Sort by",
+        section = "drawer", keywords = "sort order alphabetical most used recent",
+    )
+    val DrawerWork = ChoiceSetting(
+        key = "drawer.work", default = "tab",
+        options = listOf("tab" to "On their own page", "merged" to "Mixed with other apps", "hidden" to "Hidden"),
+        title = "Work profile apps",
+        section = "drawer", keywords = "work profile island tab page",
+    )
+    val DrawerCloseOnLaunch = BoolSetting(
+        key = "drawer.closeOnLaunch", default = true,
+        title = "Close after opening an app",
+        section = "drawer", keywords = "close launch",
+    )
+    val DrawerDim = IntSetting(
+        key = "drawer.dim", default = 45, min = 0, max = 90, step = 5, unit = "%",
+        title = "Wallpaper dimming",
+        section = "drawer", keywords = "dim background wallpaper",
+    )
+
+    // ---- Long-press menu ----
+
+    /** Entry ids in display order; see MenuEntry in feature/home. Edited with the menu editor. */
+    val MenuEntries = StringListSetting(
+        key = "menu.entries", default = listOf("info", "home", "rename", "hide", "uninstall"),
+        title = "Menu entries", section = "menu", hidden = true,
     )
 
     // ---- Glass ----
@@ -224,11 +417,10 @@ object LauncherSettings {
             "frosted" to "Frosted (blur only)",
             "tint" to "Tint (no blur)",
         ),
-        title = "Glass quality",
+        title = "Quality",
         summary = "Run the glass benchmark in Diagnostics to see which tier holds the frame rate",
         section = "glass", keywords = "liquid glass blur refraction performance",
     )
-
     val GlassAuto = BoolSetting(
         key = "glass.auto", default = true,
         title = "Lower quality automatically",
@@ -239,6 +431,53 @@ object LauncherSettings {
         key = "state.glassCap", default = "full",
         options = listOf("full" to "Full", "frosted" to "Frosted", "tint" to "Tint"),
         title = "Best tier the benchmark allows", section = "state", hidden = true,
+    )
+    val GlassTintMode = ChoiceSetting(
+        key = "glass.tintMode", default = "auto",
+        options = listOf("auto" to "Follow the wallpaper", "light" to "Light", "dark" to "Dark"),
+        title = "Tint colour",
+        section = "glass", keywords = "tint colour color light dark",
+    )
+
+    /** Blur, refraction and tint for one glass surface, or the overall values ([custom] null). */
+    class GlassSurface(val id: String, val name: String, hasCustomSwitch: Boolean) {
+        val custom: BoolSetting? = if (!hasCustomSwitch) null else BoolSetting(
+            key = "glass.$id.custom", default = false,
+            title = "$name: own glass values",
+            summary = "Off: uses the overall values",
+            section = "glass", keywords = "glass $name surface custom",
+        )
+        private val prefix = if (hasCustomSwitch) "$name: " else ""
+        val blur = IntSetting(
+            key = "glass.$id.blur", default = 4, min = 0, max = 40, unit = "dp",
+            title = "${prefix}blur".replaceFirstChar { it.uppercase() },
+            section = "glass", keywords = "blur $name",
+        )
+        val refraction = IntSetting(
+            key = "glass.$id.refraction", default = 60, min = 0, max = 100, step = 5, unit = "%",
+            title = "${prefix}refraction".replaceFirstChar { it.uppercase() },
+            summary = if (hasCustomSwitch) "" else "How strongly the edges bend what is behind the glass (Full quality only)",
+            section = "glass", keywords = "refraction lens intensity $name",
+        )
+        val tint = IntSetting(
+            key = "glass.$id.tint", default = 18, min = 0, max = 70, step = 2, unit = "%",
+            title = "${prefix}tint strength".replaceFirstChar { it.uppercase() },
+            section = "glass", keywords = "tint opacity $name",
+        )
+        val settings: List<Setting<*>> get() = listOfNotNull(custom, blur, refraction, tint)
+    }
+
+    val GlassDefault = GlassSurface("all", "Overall", hasCustomSwitch = false)
+    val GlassPill = GlassSurface("pill", "Pill", hasCustomSwitch = true)
+    val GlassDrawer = GlassSurface("drawer", "Drawer search pill", hasCustomSwitch = true)
+    val GlassMenu = GlassSurface("menu", "Long-press menu", hasCustomSwitch = true)
+    val GlassClock = GlassSurface("clock", "Clock", hasCustomSwitch = true)
+    val glassSurfaces = listOf(GlassPill, GlassDrawer, GlassMenu, GlassClock)
+
+    val ClockGlass = BoolSetting(
+        key = "home.clockGlass", default = false,
+        title = "Clock: glass plate behind it",
+        section = "home", keywords = "clock glass background plate",
     )
 
     // ---- Debug log ----
@@ -312,8 +551,16 @@ object LauncherSettings {
         SystemLauncherPackage, HomeClasses, RecentsIds, RecentsIdSubstrings, HomeIds, LearnedIds, PollInterval,
         ExcludeInCall, ExcludeSplitScreen, SystemHomePause, GuardCount, GuardWindow, GuardPause,
         SettleStyle, SettleDuration, ExcludeFromRecents,
-        HomeColumns, HomeLabels, Clock24h,
-        GlassQuality, GlassAuto, GlassCap,
+        HomeColumns, HomeRows, HomeIconSize, HomeLabels, HomeLabelSize,
+        HomeMarginSide, HomeMarginTop, HomeMarginBottom, Clock24h, ClockSize, ClockDate, ClockGlass,
+        GestureSwipeUp, GestureSwipeDown, GestureDoubleTap, GestureLongPress,
+        PillEnabled, PillSlots, PillPosition, PillOffset, PillWidth, PillHeight, PillCorner, PillIconSize,
+        PillHint, PillTap, PillLongPress, PillSwipeUp, PillSwipeDown,
+        DrawerColumns, DrawerIconSize, DrawerLabels, DrawerFromBottom, DrawerAutoKeyboard, DrawerSort,
+        DrawerWork, DrawerCloseOnLaunch, DrawerDim,
+        MenuEntries,
+        GlassQuality, GlassAuto, GlassCap, GlassTintMode,
+    ) + GlassDefault.settings + glassSurfaces.flatMap { it.settings } + listOf(
         LogEnabled, LogVerbosity, LogSize,
         LastSystemLauncherVersion, LastSystemLauncher, DetectorVerified,
         StatsKey, StatsHomeSeen, StatsHomeUnseen, StatsRecentsSeen, StatsRecentsUnseen, StatsInterrupted, StatsFallbacks, SetupAppLaunchDone, SetupEmptyHomeDone, SetupMacrosDone,

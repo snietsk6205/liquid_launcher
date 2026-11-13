@@ -67,6 +67,17 @@ class TextSetting(
     hidden: Boolean = false,
 ) : Setting<String>(key, default, title, summary, section, keywords, hidden)
 
+/** A launcher action (see LauncherAction), stored as its short text form. */
+class ActionSetting(
+    key: String,
+    default: String,
+    title: String,
+    summary: String = "",
+    section: String,
+    keywords: String = "",
+    hidden: Boolean = false,
+) : Setting<String>(key, default, title, summary, section, keywords, hidden)
+
 class StringListSetting(
     key: String,
     default: List<String>,
@@ -81,4 +92,6 @@ data class SettingsSection(
     val id: String,
     val title: String,
     val summary: String,
+    /** Heading the section is listed under on the first settings screen. */
+    val group: String = "Launcher",
 )
