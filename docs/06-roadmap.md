@@ -6,8 +6,8 @@
 |---|---|---|---|
 | 1A | Redirect engine, diagnostics, glass benchmark | 1 | Done (0.1.0) |
 | 1B | Home grid, pill, drawer, long-press menu, search v1, settings editors and previews | 0.2.0 | Tested on the phone |
-| 1B | Fixes from the 0.2.0 test: redirect, drawer transition / tabs / scroll bar, page overview, clock resize | 0.2.1 | Built, needs phone test |
-| 1B (rest) | Icon packs (global / home / drawer / per app, masking), folders, tags and custom drawer tabs (organising apps), per-icon swipe actions and icon change, static app shortcuts | 2–3 | Next |
+| 1B | Fixes from the 0.2.0 test: redirect, drawer transition / tabs / scroll bar, page overview, clock resize; tags and own drawer tabs; icon packs and icon change | 0.2.1 | Built, needs phone test |
+| 1B (rest) | Folders, per-icon swipe actions, static app shortcuts | 1–2 | Next |
 | 2 | Theme editor (colours, fonts, shapes), theme files, more gestures (two-finger, pinch, edges), dock, page transitions, backup/restore, in-app updater, haptics | 3 | |
 | 3 | Widgets: other apps' widgets, clock gallery, built-in widgets, custom panels | 2–3 | |
 | 4 | Search sources (contacts, calendar, files, settings pages), suggested apps, notification badges | 2 | |

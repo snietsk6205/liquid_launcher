@@ -151,6 +151,37 @@ Every Opus commit starts with `[opus]`: `git log --grep="\[opus\]"`.
 
 ---
 
+## Entry 5: Phase 1B rest, part 1 (2026-11-13 15:40 → 16:05 UTC)
+
+**Model:** Opus 5.5
+**Goal:** start the rest of Phase 1B: organising apps and icon packs; fix the failed emulator run.
+
+| File | Change | Why |
+|---|---|---|
+| `core/data/Organisation.kt` (new) | Tags, drawer tab definitions, pure ops + repository (`organisation.json`) | Feedback 4: organise apps |
+| `core/data/Models.kt`, `AppsRepository.kt` | `AppMeta.tags`, `AppMeta.icon`; `AppEntry.tags`, `homeIcon`, `customIcon`; `setTag`, `setIcon` | Tags and per-app icons |
+| `core/data/IconPacks.kt`, `IconThemer.kt` (new) | Find packs (Nova/ADW intents), read `appfilter.xml` / `drawable.xml`, mask uncovered icons, cache per pack and app, keep the work badge | 1B icon packs |
+| `core/data/LauncherData.kt` | Organisation store; icon settings feed the apps repository | |
+| `core/settings` | Sections Icons and Drawer tabs and tags; icon pack keys; menu entries "icon" and "tags" in the default | |
+| `feature/home/Drawer.kt`, `DrawerParts.kt` | Tabs come from the user's list; `#tag` search; tabs share the width when there are many; closed drawer placed off screen | Run 20 failed: the hidden drawer (depth / fade keep it in place) took all home touches |
+| `feature/home/AppMenu.kt`, `IconPicker.kt` (new) | Tags dialog (with "also add as a tab"); icon picker with the pack's match and name matches first | |
+| `feature/settings/Editors.kt` | Tabs and tags editor; icon packs editor | |
+| Tests | `OrganisationTest` (4), `AppFilterTest` (2) | |
+
+### Notes
+
+- The work tab is now a tab definition with source "work"; the old "Work profile apps" setting still decides whether it shows (tab / merged / hidden).
+- Per-app icon overrides apply to home and drawer alike; the home / drawer pack split only affects the default icons.
+- Not tested with a real icon pack (none on the emulator). Calendar-style dynamic icons and adaptive-icon reshaping are not done.
+
+### For Fable to review
+
+1. `IconThemer` caching and running inside the `apps` combine (on the loading dispatcher).
+2. Mask drawing in `IconPack.masked` (DST_OUT with the mask image, as most packs expect).
+3. Tab state map in `AppDrawer` (plain `HashMap` of `LazyGridState`, not saved across process death).
+
+---
+
 ## Session summary (2026-11-13, Opus)
 
 **State:** Phase 1B first part (0.2.0) is built. Local build and all 63 unit tests pass (redirect engine 35, layout 10, search 8, settings 7, latency 3). On the API 34 emulator every UI check passed in run 17 (drawer, app list, long-press menu, add to home, back, search + calculator, edit mode) and all redirect checks except the first Home press, which hit an emulator ANR dialog. Run 18 (with dialog handling) passed every check and published release `v0.2.0` (build 18).
