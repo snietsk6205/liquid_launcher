@@ -539,7 +539,7 @@ object LauncherSettings {
 
     /** Entry ids in display order; see MenuEntry in feature/home. Edited with the menu editor. */
     val MenuEntries = StringListSetting(
-        key = "menu.entries", default = listOf("info", "home", "rename", "icon", "tags", "hide", "uninstall"),
+        key = "menu.entries", default = listOf("info", "home", "rename", "icon", "swipe", "tags", "hide", "uninstall"),
         title = "Menu entries", section = "menu", hidden = true,
     )
 

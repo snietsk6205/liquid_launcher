@@ -145,4 +145,15 @@ class LayoutOpsTest {
         val wider = LayoutOps.resizeItem(layout, clock.id, 1, 0, 4, 3, 5, 9)!!
         assertEquals(1, wider.find(clock.id)!!.second.x)
     }
+
+    @Test
+    fun swipeActionsAreSetAndCleared() {
+        var layout = LayoutOps.addApp(LayoutOps.defaultLayout(5, 9), 0, app1, 5, 9)!!
+        val id = layout.pages[0].items.first { it.kind == ItemKind.APP }.id
+        layout = LayoutOps.setSwipe(layout, id, up = true, action = "notifications")!!
+        assertEquals("notifications", layout.find(id)!!.second.swipeUp)
+        assertNull(LayoutOps.setSwipe(layout, id, up = true, action = "notifications"))
+        layout = LayoutOps.setSwipe(layout, id, up = true, action = "none")!!
+        assertNull(layout.find(id)!!.second.swipeUp)
+    }
 }

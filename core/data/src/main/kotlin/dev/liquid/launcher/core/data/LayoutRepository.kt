@@ -90,6 +90,16 @@ object LayoutOps {
         return layout.copy(defaultPage = page.id)
     }
 
+    /** Sets (or clears, with null or "none") the swipe-up or swipe-down action of an item. */
+    fun setSwipe(layout: HomeLayout, itemId: String, up: Boolean, action: String?): HomeLayout? {
+        val (pageIndex, item) = layout.find(itemId) ?: return null
+        val value = action?.takeIf { it != "none" }
+        val updated = if (up) item.copy(swipeUp = value) else item.copy(swipeDown = value)
+        if (updated == item) return null
+        val page = layout.pages[pageIndex]
+        return layout.replacePage(pageIndex, page.copy(items = page.items.map { if (it.id == itemId) updated else it }))
+    }
+
     /** Gives a widget a new position and size, if that area is free. */
     fun resizeItem(layout: HomeLayout, itemId: String, x: Int, y: Int, w: Int, h: Int, columns: Int, rows: Int): HomeLayout? {
         val (pageIndex, item) = layout.find(itemId) ?: return null

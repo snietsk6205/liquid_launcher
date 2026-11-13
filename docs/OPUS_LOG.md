@@ -116,7 +116,7 @@ Every Opus commit starts with `[opus]`: `git log --grep="\[opus\]"`.
 
 ---
 
-## Entry 4: fixes from the 0.2.0 phone test (2026-11-13 14:50 → 15:40 UTC)
+## Entry 4: fixes from the 0.2.0 phone test (2026-11-13 14:40 → 15:25 UTC)
 
 **Model:** Opus 5.5
 **Goal:** fix the bugs from the user's 0.2.0 test, build drawer and home feedback that belongs to 1B, place the rest in the roadmap.
@@ -151,7 +151,7 @@ Every Opus commit starts with `[opus]`: `git log --grep="\[opus\]"`.
 
 ---
 
-## Entry 5: Phase 1B rest, part 1 (2026-11-13 15:40 → 16:05 UTC)
+## Entry 5: Phase 1B rest, part 1 (2026-11-13 15:25 → 15:35 UTC)
 
 **Model:** Opus 5.5
 **Goal:** start the rest of Phase 1B: organising apps and icon packs; fix the failed emulator run.

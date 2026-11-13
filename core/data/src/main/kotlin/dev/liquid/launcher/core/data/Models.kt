@@ -49,6 +49,9 @@ data class HomeItem(
     val app: AppRef? = null,
     /** Built-in widget type, for example "clock". */
     val widget: String? = null,
+    /** Encoded [LauncherAction]s run by swiping up or down on the item. */
+    val swipeUp: String? = null,
+    val swipeDown: String? = null,
 ) {
     fun covers(cx: Int, cy: Int): Boolean = cx in x until x + w && cy in y until y + h
 

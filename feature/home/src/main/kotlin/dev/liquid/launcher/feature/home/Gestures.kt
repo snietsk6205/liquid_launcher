@@ -24,6 +24,10 @@ interface IconGestureHandler {
     fun onDrag(finger: Offset)
     fun onDragEnd()
     fun onDragCancel()
+
+    /** True when a vertical swipe on the item does something of its own ([up] or down). */
+    fun hasSwipe(up: Boolean): Boolean = false
+    fun onSwipe(up: Boolean) = Unit
 }
 
 /**
@@ -47,6 +51,8 @@ fun Modifier.iconGestures(
     return this.then(gesture)
 }
 
+private enum class Early { Tap, Gone, SwipeUp, SwipeDown }
+
 private fun Modifier.iconPointerInput(
     handler: () -> IconGestureHandler,
     coords: () -> LayoutCoordinates?,
@@ -55,15 +61,49 @@ private fun Modifier.iconPointerInput(
         val slop = viewConfiguration.touchSlop
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
-            var up: PointerInputChange? = null
-            val beforeLongPress = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-                up = waitForUpOrCancellation()
-                true
+            // Before the long press: a tap, a swipe of the item's own, or a swipe for a parent.
+            val early = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                var moved = Offset.Zero
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull Early.Gone
+                    if (!change.pressed) {
+                        return@withTimeoutOrNull if (change.isConsumed) Early.Gone else Early.Tap
+                    }
+                    if (change.isConsumed) return@withTimeoutOrNull Early.Gone
+                    moved += change.positionChange()
+                    if (moved.getDistance() > slop) {
+                        val vertical = kotlin.math.abs(moved.y) > kotlin.math.abs(moved.x)
+                        val upward = moved.y < 0
+                        if (vertical && handler().hasSwipe(upward)) {
+                            change.consume()
+                            return@withTimeoutOrNull if (upward) Early.SwipeUp else Early.SwipeDown
+                        }
+                        // Not ours: leave the swipe to the pager, the drawer or search.
+                        return@withTimeoutOrNull Early.Gone
+                    }
+                }
+                @Suppress("UNREACHABLE_CODE")
+                Early.Gone
             }
-            if (beforeLongPress == true) {
-                // Released (tap) or taken by a parent (swipe) before the long press.
-                if (up != null) handler().onTap()
-                return@awaitEachGesture
+            when (early) {
+                Early.Tap -> {
+                    handler().onTap()
+                    return@awaitEachGesture
+                }
+                Early.Gone -> return@awaitEachGesture
+                Early.SwipeUp, Early.SwipeDown -> {
+                    // Take the rest of the gesture, then run the action on release.
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        change.consume()
+                        if (!change.pressed) break
+                    }
+                    handler().onSwipe(early == Early.SwipeUp)
+                    return@awaitEachGesture
+                }
+                null -> Unit
             }
             handler().onLongPress()
             var dragging = false

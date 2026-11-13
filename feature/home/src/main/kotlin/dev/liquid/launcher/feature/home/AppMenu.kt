@@ -53,7 +53,7 @@ private data class MenuRow(val icon: Int, val label: String, val onClick: () -> 
 private fun rowsFor(target: MenuTarget, entries: List<MenuEntry>, controller: HomeController): List<MenuRow> {
     val app = target.app
     val apps = controller.data.apps
-    return entries.map { entry ->
+    return entries.mapNotNull { entry ->
         when (entry) {
             MenuEntry.Info -> MenuRow(LauncherIcons.Info, "App info") { apps.showAppInfo(app) }
             MenuEntry.Home -> if (target.itemId != null) {
@@ -64,6 +64,9 @@ private fun rowsFor(target: MenuTarget, entries: List<MenuEntry>, controller: Ho
             MenuEntry.Rename -> MenuRow(LauncherIcons.Edit, "Rename") { controller.renaming = app }
             MenuEntry.Tags -> MenuRow(LauncherIcons.Label, "Tags") { controller.tagging = app }
             MenuEntry.Icon -> MenuRow(LauncherIcons.Apps, "Change icon") { controller.iconPicking = app }
+            MenuEntry.Swipe -> target.itemId?.let { id ->
+                MenuRow(LauncherIcons.ArrowUp, "Swipe actions") { controller.swipeEditing = id }
+            }
             MenuEntry.Hide -> if (app.hidden) {
                 MenuRow(LauncherIcons.Visibility, "Show in drawer") { apps.setHidden(app.ref, false) }
             } else {

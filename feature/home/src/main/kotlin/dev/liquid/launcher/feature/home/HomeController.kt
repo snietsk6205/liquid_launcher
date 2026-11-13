@@ -88,6 +88,9 @@ class HomeController(
     var tagging by mutableStateOf<AppEntry?>(null)
     var iconPicking by mutableStateOf<AppEntry?>(null)
 
+    /** Home item whose swipe actions are being edited. */
+    var swipeEditing by mutableStateOf<String?>(null)
+
     /** Widget showing resize handles in edit mode. */
     var selectedItem by mutableStateOf<String?>(null)
     var resizing by mutableStateOf<ResizePreview?>(null)
@@ -109,7 +112,7 @@ class HomeController(
     var removeZone: Rect = Rect.Zero
 
     val drawerOpen: Boolean get() = drawer.targetValue > 0.5f || drawer.value > 0.01f
-    val anyOverlay: Boolean get() = drawerOpen || searchOpen || menu != null || editMode || renaming != null || tagging != null || iconPicking != null
+    val anyOverlay: Boolean get() = drawerOpen || searchOpen || menu != null || editMode || renaming != null || tagging != null || iconPicking != null || swipeEditing != null
 
     // ---- drawer ----
 
@@ -183,6 +186,7 @@ class HomeController(
             renaming != null -> renaming = null
             tagging != null -> tagging = null
             iconPicking != null -> iconPicking = null
+            swipeEditing != null -> swipeEditing = null
             menu != null -> menu = null
             searchOpen -> searchOpen = false
             drawerOpen -> closeDrawer()
@@ -218,6 +222,10 @@ class HomeController(
 
     private fun currentArea(itemId: String): ResizePreview? =
         data.layout.layout.value.find(itemId)?.second?.let { ResizePreview(it.id, it.x, it.y, it.w, it.h) }
+
+    fun setSwipe(itemId: String, up: Boolean, action: LauncherAction) {
+        LayoutOps.setSwipe(data.layout.layout.value, itemId, up, action.encode())?.let { data.layout.commit(it) }
+    }
 
     // ---- pages ----
 

@@ -276,6 +276,14 @@ private fun appHandler(item: HomeItem, app: AppEntry, holder: CoordinatesHolder,
             }
 
             override fun onDragStart(grab: Offset, finger: Offset) = startHomeDrag(item, app.homeIcon, grab, finger, holder, controller)
+
+            override fun hasSwipe(up: Boolean): Boolean =
+                !controller.editMode && (if (up) item.swipeUp else item.swipeDown) != null
+
+            override fun onSwipe(up: Boolean) {
+                val encoded = (if (up) item.swipeUp else item.swipeDown) ?: return
+                controller.run(LauncherAction.decode(encoded))
+            }
             override fun onDrag(finger: Offset) = controller.moveDrag(finger)
             override fun onDragEnd() = controller.endDrag()
             override fun onDragCancel() = controller.cancelDrag()

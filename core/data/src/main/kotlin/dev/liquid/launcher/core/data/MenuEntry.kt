@@ -6,6 +6,7 @@ enum class MenuEntry(val id: String, val title: String) {
     Home("home", "Add to / remove from home"),
     Rename("rename", "Rename"),
     Icon("icon", "Change icon"),
+    Swipe("swipe", "Swipe actions (home only)"),
     Tags("tags", "Tags"),
     Hide("hide", "Hide from / show in the drawer"),
     Uninstall("uninstall", "Uninstall");
