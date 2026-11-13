@@ -300,6 +300,7 @@ if [ -n "$APP_LABEL" ]; then
   peek 07-menu
   dump 07-menu
   if on_screen 07-menu "App info" && on_screen 07-menu "Add to home"; then pass "long press opens the app menu"; else fail "long press opens the app menu"; fi
+  if on_screen 07-menu "Tags" exact && on_screen 07-menu "Change icon" exact; then pass "menu offers tags and icon change"; else fail "menu offers tags and icon change"; fi
   tap_text 07-menu "Add to home" || true
   sleep 1
   adb shell input keyevent KEYCODE_BACK
