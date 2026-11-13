@@ -195,22 +195,21 @@ Not done: dragging an app out of an open folder (use the menu's "Take out of the
 
 ---
 
-## Session summary (2026-11-13, Opus)
+## Session summary (2026-11-13, Opus, updated 15:50 UTC)
 
-**State:** Phase 1B first part (0.2.0) is built. Local build and all 63 unit tests pass (redirect engine 35, layout 10, search 8, settings 7, latency 3). On the API 34 emulator every UI check passed in run 17 (drawer, app list, long-press menu, add to home, back, search + calculator, edit mode) and all redirect checks except the first Home press, which hit an emulator ANR dialog. Run 18 (with dialog handling) passed every check and published release `v0.2.0` (build 18).
+**State:** Phase 1B is complete as 0.2.1: the fixes from the 0.2.0 phone test (redirect, drawer, pages, clock) plus everything that was left in 1B (tags and own drawer tabs, icon packs and icon change, folders, per-icon swipe actions, app shortcuts). 85 unit tests pass locally. CI run 21 (without folders / swipe / shortcuts) passed every emulator check and published `v0.2.1`; run 22 carries the rest.
 
-**Builds:** `./gradlew testDebugUnitTest :app:assembleRelease` locally (SDK in `/root/android-sdk`, see Entry 1). CI publishes release `v0.2.0` when the emulator test passes.
+**Builds:** `./gradlew testDebugUnitTest :app:assembleRelease` locally (see Entry 1). CI publishes `v0.2.1` when the emulator test passes; newer builds replace the APK in that release.
 
-**Does not exist yet:** icon packs, folders, tags and custom drawer tabs, per-icon swipe actions, icon change, app shortcuts (all Phase 1B rest, see roadmap).
+**Untested on the phone:** everything new in 0.2.1, in particular the reopen-recents recovery (D38), the strict left-recents check (D37), the morphing pill, scroll bar dragging, resize handles, icon packs with a real pack, folders and swipe actions.
 
-**Untested on the phone:** everything in 0.2.0, including the home-screen check in the redirect (Fable's `cc5e6e7`), which on the emulator worked ("home screen visible, redirect in 160 ms") but has no phone data yet.
-
-**Next step:** user tests 0.2.0 on the phone (checklist in the hand-over message); then icon packs and folders.
+**Next step:** the user tests 0.2.1; then 1B polish from that feedback (dragging apps out of folders is the known gap), then Phase 2.
 
 ### For Fable to review (overall)
 
-1. `HomeController` + `Gestures.kt`: drag and drop and the remembered gesture modifiers.
-2. The home-press heuristic in `MainActivity.onNewIntent`.
-3. Emulator API 34 vs 35 (D35).
-4. Defaults chosen in D31 (5 × 9 grid etc.) — check against the user's next feedback.
-5. Glass on the long-press menu opened from the drawer samples the home layer, not the drawer.
+1. D37–D39 in the redirect engine and the reopen-recents recovery.
+2. The drawer rewrite (`Drawer.kt`, `DrawerParts.kt`, `PillMorph.kt`): glass parts moved by layout and redrawn by a draw-phase read.
+3. `IconThemer` / `IconPacks` against a few real icon packs.
+4. The gesture detector change in `Gestures.kt` (item swipes before the long press).
+5. The saved-layouts proposal in the roadmap.
+6. Earlier items still open: home-press heuristic in `MainActivity.onNewIntent`; emulator on API 34 (D35).
