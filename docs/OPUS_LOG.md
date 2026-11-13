@@ -251,7 +251,7 @@ Not done / limits: "Widgets" joins the home menu in Phase 3; no passphrase on ba
 
 ## Session summary (2026-11-13, Opus, updated for 0.3.0)
 
-**State:** 0.2.2 (1B polish: letter index, themed icons, floating tabs) released as build 25 after a green emulator run. 0.3.0 (Phase 2 part 1: home menu, wallpaper screen, saved layouts, backup) built; 94 unit tests pass. Neither is tested on the phone yet; the user asked for both releases without a test in between.
+**State:** 0.2.2 (1B polish: letter index, themed icons, floating tabs) released as build 25 after a green emulator run. 0.3.0 (Phase 2 part 1: home menu, wallpaper screen, saved layouts, backup) released as build 26 after a green emulator run (including the new checks: home menu, wallpaper screen, edit mode through the menu); 94 unit tests pass. Neither is tested on the phone yet; the user asked for both releases without a test in between.
 
 **Next step:** the user tests 0.2.2 and 0.3.0; then Phase 2 part 2 (0.4: theme editor, folders, dock, page transitions).
 
