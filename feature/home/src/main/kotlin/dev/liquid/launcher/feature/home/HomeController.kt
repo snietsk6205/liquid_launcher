@@ -85,6 +85,7 @@ class HomeController(
     var menu by mutableStateOf<MenuTarget?>(null)
     var drag by mutableStateOf<DragState?>(null)
     var renaming by mutableStateOf<AppEntry?>(null)
+    var tagging by mutableStateOf<AppEntry?>(null)
 
     /** Widget showing resize handles in edit mode. */
     var selectedItem by mutableStateOf<String?>(null)
@@ -107,7 +108,7 @@ class HomeController(
     var removeZone: Rect = Rect.Zero
 
     val drawerOpen: Boolean get() = drawer.targetValue > 0.5f || drawer.value > 0.01f
-    val anyOverlay: Boolean get() = drawerOpen || searchOpen || menu != null || editMode || renaming != null
+    val anyOverlay: Boolean get() = drawerOpen || searchOpen || menu != null || editMode || renaming != null || tagging != null
 
     // ---- drawer ----
 
@@ -179,6 +180,7 @@ class HomeController(
     fun back(): Boolean {
         when {
             renaming != null -> renaming = null
+            tagging != null -> tagging = null
             menu != null -> menu = null
             searchOpen -> searchOpen = false
             drawerOpen -> closeDrawer()

@@ -379,6 +379,7 @@ fun HomeScreen(
             DragGhost(drag)
         }
         controller.renaming?.let { RenameDialog(it, controller) }
+        controller.tagging?.let { TagsDialog(it, controller) }
     }
 }
 

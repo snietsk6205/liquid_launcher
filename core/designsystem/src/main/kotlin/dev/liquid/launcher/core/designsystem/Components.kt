@@ -46,6 +46,7 @@ object LauncherIcons {
     val Space = R.drawable.ic_space
     val Web = R.drawable.ic_web
     val Calculate = R.drawable.ic_calculate
+    val Label = R.drawable.ic_label
 }
 
 @Composable

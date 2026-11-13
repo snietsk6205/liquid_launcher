@@ -299,10 +299,15 @@ internal fun DrawerTabs(
     val scope = rememberCoroutineScope()
     val shape = RoundedCornerShape(50)
     val color = if (glass.lightGlass(Surfaces.Drawer, lightBackground)) Color(0xFF16181C) else Color.White
+    val density = LocalDensity.current
+    // Many tabs share the screen width; below a comfortable width the icons are dropped.
+    val available = with(density) { controller.screenWidth.toDp() } - 40.dp
+    val tabWidth = minOf(TabWidth, available / labels.size.coerceAtLeast(1))
+    val showIcons = tabWidth >= 96.dp
     Box(
         modifier
             .height(44.dp)
-            .width(TabWidth * labels.size + 8.dp)
+            .width(tabWidth * labels.size + 8.dp)
             .drawBehind { controller.drawer.value }
             .liquidGlass(backdrop, shape, glass.style(Surfaces.Drawer, lightBackground))
             .clip(shape)
@@ -310,15 +315,15 @@ internal fun DrawerTabs(
     ) {
         Box(
             Modifier
-                .offset { IntOffset(((pager.currentPage + pager.currentPageOffsetFraction) * TabWidth.toPx()).roundToInt(), 0) }
-                .size(TabWidth, 36.dp)
+                .offset { IntOffset(((pager.currentPage + pager.currentPageOffsetFraction) * tabWidth.toPx()).roundToInt(), 0) }
+                .size(tabWidth, 36.dp)
                 .background(color.copy(alpha = 0.16f), shape)
         )
         Row(Modifier.fillMaxSize()) {
             labels.forEachIndexed { index, (label, icon) ->
                 Row(
                     Modifier
-                        .width(TabWidth)
+                        .width(tabWidth)
                         .fillMaxHeight()
                         .then(
                             if (!interactive) Modifier else Modifier.pointerInput(index) {
@@ -334,9 +339,16 @@ internal fun DrawerTabs(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    LauncherIcon(icon, contentDescription = null, tint = color, size = 18.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Text(label, style = TextStyle(color = color, fontSize = 14.sp, fontWeight = FontWeight.Medium))
+                    if (showIcons) {
+                        LauncherIcon(icon, contentDescription = null, tint = color, size = 18.dp)
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(
+                        label,
+                        style = TextStyle(color = color, fontSize = 14.sp, fontWeight = FontWeight.Medium),
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
@@ -386,6 +398,10 @@ internal fun TabQuickMenu(
                 }
             }
             Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(color.copy(alpha = 0.12f)))
+            MenuRow("Edit tabs and tags", LauncherIcons.Label, color) {
+                onDismiss()
+                controller.openSection(LauncherSettings.Sections.Tags.id)
+            }
             MenuRow("Drawer settings", LauncherIcons.Settings, color) {
                 onDismiss()
                 controller.openSection(LauncherSettings.Sections.Drawer.id)

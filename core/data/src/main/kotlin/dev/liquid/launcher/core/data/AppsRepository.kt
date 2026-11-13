@@ -41,6 +41,8 @@ data class AppEntry(
     val isWorkProfile: Boolean,
     val hidden: Boolean,
     val installedAt: Long,
+    /** Ids of the tags given to this app. */
+    val tags: List<String> = emptyList(),
 ) {
     val key: String get() = ref.key
 }
@@ -71,7 +73,7 @@ class AppsRepository(
         val collator = Collator.getInstance()
         list.map { app ->
             val change = changes[app.key]
-            if (change == null) app else app.copy(label = change.label ?: app.systemLabel, hidden = change.hidden)
+            if (change == null) app else app.copy(label = change.label ?: app.systemLabel, hidden = change.hidden, tags = change.tags)
         }.sortedWith { a, b -> collator.compare(a.label, b.label) }
     }.stateIn(loadScope, SharingStarted.Eagerly, emptyList())
 
@@ -169,6 +171,10 @@ class AppsRepository(
     fun rename(ref: AppRef, label: String?) = changeMeta(ref) { it.copy(label = label?.trim()?.ifEmpty { null }) }
 
     fun setHidden(ref: AppRef, hidden: Boolean) = changeMeta(ref) { it.copy(hidden = hidden) }
+
+    fun setTag(ref: AppRef, tagId: String, on: Boolean) = changeMeta(ref) { meta ->
+        meta.copy(tags = if (on) (meta.tags + tagId).distinct() else meta.tags - tagId)
+    }
 
     private fun changeMeta(ref: AppRef, change: (AppMeta) -> AppMeta) {
         meta.update { all ->

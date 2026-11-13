@@ -28,6 +28,8 @@ data class AppRef(
 data class AppMeta(
     val label: String? = null,
     val hidden: Boolean = false,
+    /** Ids of [Tag]s. */
+    val tags: List<String> = emptyList(),
 )
 
 @Serializable

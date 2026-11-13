@@ -242,6 +242,7 @@ internal fun SectionScreen(store: SettingsStore, sectionId: String, onBack: () -
             when (sectionId) {
                 "pill" -> PillItemsEditor(store)
                 "menu" -> MenuEntriesEditor(store)
+                "tags" -> TabsAndTagsEditor()
             }
             settings.forEach { setting ->
                 if (SettingDependencies.isVisible(setting, store)) SettingRow(setting, store)

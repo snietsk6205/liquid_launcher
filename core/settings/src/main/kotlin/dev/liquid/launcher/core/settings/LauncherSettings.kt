@@ -12,6 +12,7 @@ object LauncherSettings {
         val Gestures = SettingsSection("gestures", "Gestures", "What swipes, taps and presses on the home screen do")
         val Pill = SettingsSection("pill", "Pill", "The glass bar: its items, size, position and gestures")
         val Drawer = SettingsSection("drawer", "App drawer", "Layout, sorting, search, tabs and the work profile")
+        val Tags = SettingsSection("tags", "Drawer tabs and tags", "Your own drawer pages built from tags; rename, reorder, remove")
         val DrawerMotion = SettingsSection("drawerMotion", "Drawer motion", "Opening transition, scroll bar and scroll effects")
         val Menu = SettingsSection("menu", "Long-press menu", "Which entries appear and in what order")
         val Search = SettingsSection("search", "Search", "Swipe-down search and web search")
@@ -23,7 +24,7 @@ object LauncherSettings {
         val Handover = SettingsSection("handover", "Hand-over", "How the launcher appears after a redirect", "Redirect")
         val Log = SettingsSection("log", "Debug log", "What is recorded", "Redirect")
 
-        val all = listOf(Home, Clock, Gestures, Pill, Drawer, DrawerMotion, Menu, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
+        val all = listOf(Home, Clock, Gestures, Pill, Drawer, Tags, DrawerMotion, Menu, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
     }
 
     // ---- Redirect engine ----
@@ -425,8 +426,8 @@ object LauncherSettings {
         key = "drawer.tabsPosition", default = "top",
         options = listOf("top" to "Top", "bottom" to "Bottom, above the search field"),
         title = "Tabs position",
-        summary = "The glass pill with Apps and Work. Tap a tab to switch, tap it again to jump to the start, hold it for quick options",
-        section = "drawer", keywords = "tabs pill work apps position top bottom",
+        summary = "The glass pill with your tabs. Tap a tab to switch, tap it again to jump to the start, hold it for quick options",
+        section = "tags", keywords = "tabs pill work apps position top bottom",
     )
 
     // ---- Drawer motion ----
@@ -513,7 +514,7 @@ object LauncherSettings {
 
     /** Entry ids in display order; see MenuEntry in feature/home. Edited with the menu editor. */
     val MenuEntries = StringListSetting(
-        key = "menu.entries", default = listOf("info", "home", "rename", "hide", "uninstall"),
+        key = "menu.entries", default = listOf("info", "home", "rename", "tags", "hide", "uninstall"),
         title = "Menu entries", section = "menu", hidden = true,
     )
 

@@ -97,6 +97,9 @@ import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import dev.liquid.launcher.core.data.AppEntry
+import dev.liquid.launcher.core.data.DrawerTabDef
+import dev.liquid.launcher.core.data.Organisation
+import dev.liquid.launcher.core.data.OrganisationOps
 import dev.liquid.launcher.core.data.Fuzzy
 import dev.liquid.launcher.core.data.Usage
 import dev.liquid.launcher.core.designsystem.LauncherIcon
@@ -117,7 +120,22 @@ fun usageBoost(app: AppEntry, usage: Map<String, Usage>): Int =
     (ln(1.0 + (usage[app.key]?.count ?: 0)) * 20).toInt()
 
 /** One page of the drawer: its pill label, icon and apps. */
-private class DrawerTab(val label: String, val icon: Int, val apps: List<AppEntry>)
+private class DrawerTab(val id: String, val label: String, val icon: Int, val apps: List<AppEntry>)
+
+private fun tabIcon(def: DrawerTabDef): Int = when {
+    def.source == "personal" -> LauncherIcons.Apps
+    def.source == "work" -> LauncherIcons.Work
+    def.source.startsWith("tag:") -> LauncherIcons.Label
+    else -> LauncherIcons.CircleOutline
+}
+
+/** "#study" lists the apps tagged Study (any tag starting with what was typed). */
+private fun tagResults(query: String, apps: List<AppEntry>, org: Organisation): List<AppEntry>? {
+    if (!query.startsWith("#")) return null
+    val name = query.drop(1).trim()
+    val ids = org.tags.filter { it.name.startsWith(name, ignoreCase = true) }.map { it.id }.toSet()
+    return apps.filter { app -> app.tags.any { it in ids } }
+}
 
 /** Space the floating search field takes at the bottom (54 dp and its margins). */
 internal val SearchZone = 90.dp
@@ -168,30 +186,36 @@ fun AppDrawer(
     val color = if (light) Color(0xFF16181C) else Color.White
     val query = controller.drawerQuery
 
+    val org by controller.data.organisation.value.collectAsState()
     val visible = remember(apps) { apps.filter { !it.hidden } }
-    val personal = remember(visible, config.sort, usage, config.work) {
-        sortApps(visible.filter { config.work == "merged" || !it.isWorkProfile }, config.sort, usage)
-    }
-    val work = remember(visible, config.sort, usage) { sortApps(visible.filter { it.isWorkProfile }, config.sort, usage) }
-    val results = remember(query, visible, usage) {
-        if (query.isBlank()) emptyList() else Fuzzy.rank(query, visible, { it.label }, { usageBoost(it, usage) })
+    val results = remember(query, visible, usage, org) {
+        when {
+            query.isBlank() -> emptyList()
+            else -> tagResults(query, visible, org) ?: Fuzzy.rank(query, visible, { it.label }, { usageBoost(it, usage) })
+        }
     }
     SideEffect { controller.drawerFirstResult = results.firstOrNull() }
 
-    val tabs = remember(personal, work, config.work) {
-        buildList {
-            add(DrawerTab("Apps", LauncherIcons.Apps, personal))
-            if (config.work == "tab" && work.isNotEmpty()) add(DrawerTab("Work", LauncherIcons.Work, work))
+    // Pages from the user's tab list: the main list, work, and tabs built from tags.
+    val tabs = remember(visible, org, config.work, config.sort, usage) {
+        val known = org.tags.map { it.id }.toSet()
+        val built = org.tabs.mapNotNull { def ->
+            val list = OrganisationOps.filter(def, visible, config.work, { it.isWorkProfile }, { it.tags }, known)
+            if (def.source == "work" && list.isEmpty()) null
+            else DrawerTab(def.id, def.name, tabIcon(def), sortApps(list, config.sort, usage))
         }
+        built.ifEmpty { listOf(DrawerTab("apps", "Apps", LauncherIcons.Apps, sortApps(visible, config.sort, usage))) }
     }
     val searching = query.isNotBlank()
     val showTabs = tabs.size > 1 && !searching
     val pager = rememberPagerState { tabs.size }
-    // Two fixed states (Apps, Work): the number of remember calls must not change between compositions.
-    val tabStates = listOf(rememberLazyGridState(), rememberLazyGridState())
+    // One list state per tab, kept across recompositions and tab edits.
+    val tabStates = remember { HashMap<String, LazyGridState>() }
+    fun stateFor(id: String) = tabStates.getOrPut(id) { LazyGridState() }
     val resultsState = rememberLazyGridState()
-    val active: LazyGridState = if (searching) resultsState else tabStates[pager.currentPage.coerceIn(0, tabs.lastIndex)]
-    val activeApps = if (searching) results else tabs.getOrNull(pager.currentPage)?.apps ?: personal
+    val currentTab = tabs[pager.currentPage.coerceIn(0, tabs.lastIndex)]
+    val active: LazyGridState = if (searching) resultsState else stateFor(currentTab.id)
+    val activeApps = if (searching) results else currentTab.apps
 
     val density = LocalDensity.current
     val keyboardOrNav = WindowInsets.ime.union(WindowInsets.navigationBars)
@@ -250,9 +274,10 @@ fun AppDrawer(
                     ) {
                         when {
                             searching -> AppGrid(results, resultsState, padding, config, motion, fx, color, controller, interactive)
-                            tabs.size == 1 -> AppGrid(personal, tabStates[0], padding, config, motion, fx, color, controller, interactive)
-                            else -> HorizontalPager(pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
-                                AppGrid(tabs[page].apps, tabStates[page], padding, config, motion, fx, color, controller, interactive)
+                            tabs.size == 1 -> AppGrid(tabs[0].apps, stateFor(tabs[0].id), padding, config, motion, fx, color, controller, interactive)
+                            else -> HorizontalPager(pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { tabs.getOrNull(it)?.id ?: it }) { page ->
+                                val tab = tabs.getOrNull(page) ?: return@HorizontalPager
+                                AppGrid(tab.apps, stateFor(tab.id), padding, config, motion, fx, color, controller, interactive)
                             }
                         }
                     }
@@ -296,7 +321,7 @@ fun AppDrawer(
                     backdrop = glassBackdrop,
                     controller = controller,
                     interactive = interactive,
-                    onReselect = { page -> controller.scope.launchScrollToStart(tabStates[page]) },
+                    onReselect = { page -> tabs.getOrNull(page)?.let { controller.scope.launchScrollToStart(stateFor(it.id)) } },
                     onLongPress = { tabMenu = true },
                     modifier = if (config.tabsTop) {
                         Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = (HeaderHeight - TabsHeight) / 2)

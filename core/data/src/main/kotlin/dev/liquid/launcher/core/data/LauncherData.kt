@@ -25,6 +25,9 @@ class LauncherData private constructor(context: Context) {
     )
     val apps = AppsRepository(context, metaStore, usage, scope)
     val layout = LayoutRepository(JsonStore(File(dir, "layout.json"), HomeLayout.serializer(), HomeLayout(), scope))
+    val organisation = OrganisationRepository(
+        JsonStore(File(dir, "organisation.json"), Organisation.serializer(), Organisation(), scope),
+    )
 
     init {
         layout.ensureDefault(settings.get(LauncherSettings.HomeColumns), settings.get(LauncherSettings.HomeRows))

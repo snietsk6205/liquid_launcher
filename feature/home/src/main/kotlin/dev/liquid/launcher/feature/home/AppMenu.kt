@@ -21,6 +21,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -61,6 +62,7 @@ private fun rowsFor(target: MenuTarget, entries: List<MenuEntry>, controller: Ho
                 MenuRow(LauncherIcons.AddCircle, "Add to home") { controller.addToHome(app.ref) }
             }
             MenuEntry.Rename -> MenuRow(LauncherIcons.Edit, "Rename") { controller.renaming = app }
+            MenuEntry.Tags -> MenuRow(LauncherIcons.Label, "Tags") { controller.tagging = app }
             MenuEntry.Hide -> if (app.hidden) {
                 MenuRow(LauncherIcons.Visibility, "Show in drawer") { apps.setHidden(app.ref, false) }
             } else {
@@ -192,3 +194,71 @@ fun RenameDialog(app: AppEntry, controller: HomeController) {
         },
     )
 }
+
+/**
+ * Tags of one app: tick existing tags, or type a new one. A new tag can become a drawer tab
+ * at once, which is the quickest way to build pages such as Study, Media or Tools.
+ */
+@Composable
+fun TagsDialog(app: AppEntry, controller: HomeController) {
+    val org by controller.data.organisation.value.collectAsState()
+    val apps by controller.data.apps.apps.collectAsState()
+    val current = apps.firstOrNull { it.ref == app.ref } ?: app
+    var newName by remember(app) { mutableStateOf("") }
+    var asTab by remember(app) { mutableStateOf(true) }
+    fun addNew() {
+        val tag = controller.data.organisation.tagNamed(newName) ?: return
+        controller.data.apps.setTag(app.ref, tag.id, true)
+        if (asTab) {
+            controller.data.organisation.update { dev.liquid.launcher.core.data.OrganisationOps.addTab(it, tag.name, "tag:${tag.id}") }
+        }
+        newName = ""
+    }
+    AlertDialog(
+        onDismissRequest = { controller.tagging = null },
+        title = { Text("Tags for ${app.label}") },
+        text = {
+            Column {
+                if (org.tags.isEmpty()) {
+                    Text("No tags yet. Type one below, for example Study, Media or Tools.")
+                }
+                for (tag in org.tags) {
+                    val on = tag.id in current.tags
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { controller.data.apps.setTag(app.ref, tag.id, !on) }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        androidx.compose.material3.Checkbox(checked = on, onCheckedChange = { controller.data.apps.setTag(app.ref, tag.id, it) })
+                        Text(tag.name)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    singleLine = true,
+                    label = { Text("New tag") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { addNew() }),
+                )
+                Row(
+                    Modifier.fillMaxWidth().clickable { asTab = !asTab },
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    androidx.compose.material3.Checkbox(checked = asTab, onCheckedChange = { asTab = it })
+                    Text("Also add it as a drawer tab")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                if (newName.isNotBlank()) addNew()
+                controller.tagging = null
+            }) { Text(if (newName.isNotBlank()) "Add and close" else "Done") }
+        },
+    )
+}
+
