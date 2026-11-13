@@ -309,7 +309,7 @@ class RedirectEngine(private val host: EngineHost) {
         val now = host.now()
         val due = maxOf(dueAt(probe), nextAttemptAt)
         if (now < due) {
-            if (needsSignature() && !probe.homeSignature && !waitingLogged && now >= enteredHomeAt + baseDelayMs) {
+            if (needsSignature() && !probe.homeSignature && !waitingLogged && launchAttempts == 0 && now >= enteredHomeAt + baseDelayMs) {
                 waitingLogged = true
                 host.log(LogLevel.DECISION, "waiting for the home screen to become visible")
             }

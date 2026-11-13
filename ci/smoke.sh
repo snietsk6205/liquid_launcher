@@ -265,6 +265,9 @@ if ! on_screen 06-drawer "Search apps"; then
   dump 06-drawer
 fi
 peek 06-drawer
+echo "      bottom of the screen (search pill area):"
+python3 -W ignore ci/ascii_shot.py "$OUT/06-drawer.png" 0.85
+python3 ci/describe_ui.py "$OUT/06-drawer.xml" 8 bottom
 if on_screen 06-drawer "Search apps"; then pass "swipe up opens the drawer"; else fail "swipe up opens the drawer"; fi
 show_drawer_log
 if on_screen 06-drawer "Settings" exact || on_screen 06-drawer "Chrome" exact; then pass "drawer lists apps"; else fail "drawer lists apps"; fi

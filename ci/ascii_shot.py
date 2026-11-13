@@ -12,7 +12,13 @@ RAMP = " .:-=+*#%@"
 COLUMNS, ROWS = 46, 30
 
 try:
-    image = Image.open(sys.argv[1]).convert("L").resize((COLUMNS, ROWS))
+    image = Image.open(sys.argv[1]).convert("L")
+    # Optional: only the part below this fraction of the height, at more detail.
+    if len(sys.argv) > 2:
+        top = int(image.height * float(sys.argv[2]))
+        image = image.crop((0, top, image.width, image.height))
+        ROWS = 12
+    image = image.resize((COLUMNS, ROWS))
 except Exception as error:
     print(f"  (no screenshot: {error})")
     sys.exit(0)

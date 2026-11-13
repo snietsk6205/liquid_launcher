@@ -6,6 +6,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -60,6 +63,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -234,12 +239,14 @@ private fun AppGrid(
     reverse: Boolean,
 ) {
     val state = rememberLazyGridState()
+    // Room for the floating search pill (54 dp + margins) above the navigation bar.
+    val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 90.dp
     LazyVerticalGrid(
         columns = GridCells.Fixed(config.columns),
         state = state,
         reverseLayout = reverse,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 96.dp),
+        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = bottom),
         verticalArrangement = Arrangement.spacedBy(10.dp, if (reverse) Alignment.Bottom else Alignment.Top),
     ) {
         items(apps, key = { it.key }, contentType = { 0 }) { app ->
@@ -361,7 +368,10 @@ private fun DrawerSearchPill(
                 cursorBrush = SolidColor(color),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = { first()?.let { controller.launch(it, fromDrawer = true) } }),
-                modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focus)
+                    .semantics { contentDescription = "Search apps" },
             )
         }
         if (controller.drawerQuery.isNotEmpty()) {
