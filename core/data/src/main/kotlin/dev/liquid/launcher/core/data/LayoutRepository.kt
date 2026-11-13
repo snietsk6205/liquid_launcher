@@ -69,7 +69,36 @@ object LayoutOps {
 
     fun removePage(layout: HomeLayout, index: Int): HomeLayout? {
         if (layout.pages.size <= 1 || index !in layout.pages.indices) return null
-        return layout.copy(pages = layout.pages.filterIndexed { i, _ -> i != index })
+        val removed = layout.pages[index]
+        return layout.copy(
+            pages = layout.pages.filterIndexed { i, _ -> i != index },
+            defaultPage = layout.defaultPage.takeIf { it != removed.id },
+        )
+    }
+
+    /** Moves the page at [from] to position [to]; the default page stays the same page. */
+    fun movePage(layout: HomeLayout, from: Int, to: Int): HomeLayout? {
+        if (from !in layout.pages.indices || to !in layout.pages.indices || from == to) return null
+        val pages = layout.pages.toMutableList()
+        pages.add(to, pages.removeAt(from))
+        return layout.copy(pages = pages)
+    }
+
+    fun setDefaultPage(layout: HomeLayout, index: Int): HomeLayout? {
+        val page = layout.pages.getOrNull(index) ?: return null
+        if (layout.defaultIndex == index) return null
+        return layout.copy(defaultPage = page.id)
+    }
+
+    /** Gives a widget a new position and size, if that area is free. */
+    fun resizeItem(layout: HomeLayout, itemId: String, x: Int, y: Int, w: Int, h: Int, columns: Int, rows: Int): HomeLayout? {
+        val (pageIndex, item) = layout.find(itemId) ?: return null
+        if (w < 1 || h < 1) return null
+        if (item.x == x && item.y == y && item.w == w && item.h == h) return null
+        val page = layout.pages[pageIndex]
+        if (!isFree(page, x, y, w, h, columns, rows, ignoreId = itemId)) return null
+        val resized = item.copy(x = x, y = y, w = w, h = h)
+        return layout.replacePage(pageIndex, page.copy(items = page.items.map { if (it.id == itemId) resized else it }))
     }
 
     private fun HomeLayout.replacePage(index: Int, page: HomePage): HomeLayout =

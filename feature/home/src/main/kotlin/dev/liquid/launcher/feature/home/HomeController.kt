@@ -50,6 +50,9 @@ sealed interface DragSource {
     data class NewApp(val ref: AppRef) : DragSource
 }
 
+/** A widget's new area while one of its edges is being dragged. */
+data class ResizePreview(val itemId: String, val x: Int, val y: Int, val w: Int, val h: Int)
+
 /** An item being dragged by the finger. */
 @Stable
 class DragState(
@@ -82,6 +85,11 @@ class HomeController(
     var menu by mutableStateOf<MenuTarget?>(null)
     var drag by mutableStateOf<DragState?>(null)
     var renaming by mutableStateOf<AppEntry?>(null)
+
+    /** Widget showing resize handles in edit mode. */
+    var selectedItem by mutableStateOf<String?>(null)
+    var resizing by mutableStateOf<ResizePreview?>(null)
+    var pagesSheet by mutableStateOf(false)
     var drawerQuery by mutableStateOf("")
 
     /** Best match for the drawer query, launched by the keyboard's Go key. */
@@ -174,6 +182,8 @@ class HomeController(
             menu != null -> menu = null
             searchOpen -> searchOpen = false
             drawerOpen -> closeDrawer()
+            pagesSheet -> pagesSheet = false
+            selectedItem != null -> selectedItem = null
             editMode -> exitEdit()
             else -> return false
         }
@@ -182,7 +192,59 @@ class HomeController(
 
     fun exitEdit() {
         editMode = false
+        selectedItem = null
+        resizing = null
+        pagesSheet = false
         tidyPages()
+    }
+
+    /** Edit mode with [itemId] selected, for example after holding the clock. */
+    fun editItem(itemId: String) {
+        if (!editMode) run(LauncherAction.EditHome)
+        selectedItem = itemId
+    }
+
+    fun commitResize(preview: ResizePreview) {
+        val (columns, rows) = gridSize()
+        val resized = LayoutOps.resizeItem(
+            data.layout.layout.value, preview.itemId, preview.x, preview.y, preview.w, preview.h, columns, rows,
+        )
+        if (resized != null) data.layout.commit(resized) else if (preview != currentArea(preview.itemId)) toast("Not enough room there")
+    }
+
+    private fun currentArea(itemId: String): ResizePreview? =
+        data.layout.layout.value.find(itemId)?.second?.let { ResizePreview(it.id, it.x, it.y, it.w, it.h) }
+
+    // ---- pages ----
+
+    fun goToPage(index: Int) {
+        scope.launch { pager.animateScrollToPage(index) }
+    }
+
+    fun movePage(from: Int, to: Int) {
+        val moved = LayoutOps.movePage(data.layout.layout.value, from, to) ?: return
+        data.layout.commit(moved)
+        scope.launch {
+            kotlinx.coroutines.delay(32)
+            pager.scrollToPage(to)
+        }
+    }
+
+    fun setDefaultPage(index: Int) {
+        LayoutOps.setDefaultPage(data.layout.layout.value, index)?.let {
+            data.layout.commit(it)
+            toast("Home goes to page ${index + 1}")
+        }
+    }
+
+    fun removePage(index: Int) {
+        val removed = LayoutOps.removePage(data.layout.layout.value, index)
+        if (removed == null) {
+            toast("The last page cannot be removed")
+            return
+        }
+        data.layout.commit(removed)
+        toast("Page removed. Undo brings it back")
     }
 
     // ---- apps ----
@@ -244,17 +306,6 @@ class HomeController(
         scope.launch { pager.animateScrollToPage(data.layout.layout.value.pages.size - 1) }
     }
 
-    fun removeCurrentPage() {
-        val index = pager.currentPage
-        val removed = LayoutOps.removePage(data.layout.layout.value, index)
-        if (removed == null) {
-            toast("The last page cannot be removed")
-            return
-        }
-        data.layout.commit(removed)
-        toast("Page removed. Undo brings it back")
-    }
-
     private fun gridSize(): Pair<Int, Int> =
         data.settings.get(LauncherSettings.HomeColumns) to data.settings.get(LauncherSettings.HomeRows)
 
@@ -262,6 +313,8 @@ class HomeController(
 
     fun startDrag(state: DragState) {
         menu = null
+        selectedItem = null
+        pagesSheet = false
         drag = state
         editMode = true
         if (state.source is DragSource.NewApp) closeDrawer(immediately = false)

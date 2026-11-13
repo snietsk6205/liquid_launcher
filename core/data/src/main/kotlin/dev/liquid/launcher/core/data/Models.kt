@@ -62,7 +62,11 @@ data class HomePage(
 data class HomeLayout(
     val version: Int = 1,
     val pages: List<HomePage> = emptyList(),
+    /** Id of the page Home returns to; the first page when null or gone. */
+    val defaultPage: String? = null,
 ) {
+    val defaultIndex: Int get() = pages.indexOfFirst { it.id == defaultPage }.coerceAtLeast(0)
+
     fun find(itemId: String): Pair<Int, HomeItem>? {
         pages.forEachIndexed { index, page ->
             page.items.firstOrNull { it.id == itemId }?.let { return index to it }

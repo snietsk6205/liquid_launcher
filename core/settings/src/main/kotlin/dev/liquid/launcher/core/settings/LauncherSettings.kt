@@ -8,6 +8,7 @@ object LauncherSettings {
 
     object Sections {
         val Home = SettingsSection("home", "Home screen", "Grid, icons, labels and the clock")
+        val Clock = SettingsSection("clock", "Clock", "Time format, size, date line and glass plate. Resize it in edit mode; more styles come with widgets")
         val Gestures = SettingsSection("gestures", "Gestures", "What swipes, taps and presses on the home screen do")
         val Pill = SettingsSection("pill", "Pill", "The glass bar: its items, size, position and gestures")
         val Drawer = SettingsSection("drawer", "App drawer", "Layout, sorting, search, tabs and the work profile")
@@ -22,7 +23,7 @@ object LauncherSettings {
         val Handover = SettingsSection("handover", "Hand-over", "How the launcher appears after a redirect", "Redirect")
         val Log = SettingsSection("log", "Debug log", "What is recorded", "Redirect")
 
-        val all = listOf(Home, Gestures, Pill, Drawer, DrawerMotion, Menu, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
+        val all = listOf(Home, Clock, Gestures, Pill, Drawer, DrawerMotion, Menu, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
     }
 
     // ---- Redirect engine ----
@@ -269,18 +270,18 @@ object LauncherSettings {
     )
     val Clock24h = BoolSetting(
         key = "home.clock24h", default = true,
-        title = "Clock: 24-hour time",
-        section = "home", keywords = "clock time format",
+        title = "24-hour time",
+        section = "clock", keywords = "clock time format",
     )
     val ClockSize = IntSetting(
         key = "home.clockSize", default = 100, min = 40, max = 160, step = 5, unit = "%",
-        title = "Clock: size",
-        section = "home", keywords = "clock size font",
+        title = "Text size",
+        section = "clock", keywords = "clock size font",
     )
     val ClockDate = BoolSetting(
         key = "home.clockDate", default = false,
-        title = "Clock: show the date",
-        section = "home", keywords = "clock date",
+        title = "Show the date",
+        section = "clock", keywords = "clock date",
     )
 
     // ---- Gestures ----
@@ -584,8 +585,8 @@ object LauncherSettings {
 
     val ClockGlass = BoolSetting(
         key = "home.clockGlass", default = false,
-        title = "Clock: glass plate behind it",
-        section = "home", keywords = "clock glass background plate",
+        title = "Glass plate behind it",
+        section = "clock", keywords = "clock glass background plate",
     )
 
     // ---- Search ----

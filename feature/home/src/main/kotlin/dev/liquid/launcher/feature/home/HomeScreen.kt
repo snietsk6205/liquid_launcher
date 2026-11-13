@@ -152,7 +152,7 @@ fun HomeScreen(
 
     val density0 = LocalDensity.current
     val currentLayout by rememberUpdatedState(layout)
-    controller.pager = rememberPagerState { currentLayout.pages.size.coerceAtLeast(1) }
+    controller.pager = rememberPagerState(initialPage = layout.defaultIndex) { currentLayout.pages.size.coerceAtLeast(1) }
 
     if (live) {
         StatusBarIcons(lightBackground)
@@ -175,7 +175,8 @@ fun HomeScreen(
             val wasOpen = controller.anyOverlay
             controller.closeAll()
             if (controller.editMode) controller.exitEdit()
-            if (!wasOpen && controller.pager.currentPage != 0) controller.pager.animateScrollToPage(0)
+            val home = data.layout.layout.value.defaultIndex
+            if (!wasOpen && controller.pager.currentPage != home) controller.pager.animateScrollToPage(home)
         }
     }
     if (live) {
@@ -311,6 +312,21 @@ fun HomeScreen(
                 translationY = p * 40.dp.toPx() * (if (pill.top) -1 else 1)
             }
         if (controller.editMode && live) {
+            if (controller.pagesSheet) {
+                PagesSheet(
+                    layout = layout,
+                    grid = grid,
+                    current = controller.pager.currentPage,
+                    controller = controller,
+                    glass = glass,
+                    lightBackground = lightBackground,
+                    backdrop = homeBackdrop,
+                    modifier = Modifier
+                        .align(if (pill.top) Alignment.TopCenter else Alignment.BottomCenter)
+                        .then(if (pill.top) Modifier.statusBarsPadding() else Modifier.navigationBarsPadding())
+                        .padding(vertical = (pill.offsetDp + maxOf(pill.heightDp, 54) + 12).dp),
+                )
+            }
             EditToolbar(controller, glass, lightBackground, homeBackdrop, pill, barModifier)
         } else if (pill.enabled && !morph) {
             Pill(pill, glass, lightBackground, homeBackdrop, appIndex, controller, live, barModifier)
@@ -438,8 +454,7 @@ private fun EditToolbar(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ToolButton(LauncherIcons.Add, "Add page", color) { controller.addPage() }
-        ToolButton(LauncherIcons.Delete, "Remove page", color) { controller.removeCurrentPage() }
+        ToolButton(LauncherIcons.Recents, "Pages", color) { controller.pagesSheet = !controller.pagesSheet }
         ToolButton(LauncherIcons.Schedule, "Add clock", color) { controller.addClock() }
         ToolButton(LauncherIcons.Undo, "Undo", color, enabled = canUndo) { controller.data.layout.undo() }
         ToolButton(LauncherIcons.Redo, "Redo", color, enabled = canRedo) { controller.data.layout.redo() }

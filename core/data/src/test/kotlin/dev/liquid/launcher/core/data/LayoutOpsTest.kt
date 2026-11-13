@@ -113,4 +113,36 @@ class LayoutOpsTest {
         assertEquals(LauncherAction.OpenDrawer, LauncherAction.decode("drawer"))
         assertEquals(LauncherAction.None, LauncherAction.decode("???"))
     }
+
+    @Test
+    fun pagesCanBeReorderedAndTheDefaultFollowsItsPage() {
+        var layout = HomeLayout(pages = listOf(HomePage("a"), HomePage("b"), HomePage("c")))
+        layout = LayoutOps.setDefaultPage(layout, 1)!!
+        assertEquals(1, layout.defaultIndex)
+        layout = LayoutOps.movePage(layout, 1, 2)!!
+        assertEquals(listOf("a", "c", "b"), layout.pages.map { it.id })
+        assertEquals(2, layout.defaultIndex)
+        assertNull(LayoutOps.movePage(layout, 0, 3))
+    }
+
+    @Test
+    fun removingTheDefaultPageFallsBackToTheFirst() {
+        var layout = HomeLayout(pages = listOf(HomePage("a"), HomePage("b")))
+        layout = LayoutOps.setDefaultPage(layout, 1)!!
+        layout = LayoutOps.removePage(layout, 1)!!
+        assertEquals(null, layout.defaultPage)
+        assertEquals(0, layout.defaultIndex)
+    }
+
+    @Test
+    fun widgetsResizeOnlyIntoFreeSpace() {
+        var layout = LayoutOps.defaultLayout(5, 9)
+        val clock = layout.pages[0].items.single()
+        layout = LayoutOps.addApp(layout, 0, app1, 5, 9)!! // lands at (0, 3)
+        assertNotNull(LayoutOps.resizeItem(layout, clock.id, 0, 0, 5, 2, 5, 9))
+        assertNull(LayoutOps.resizeItem(layout, clock.id, 0, 0, 5, 4, 5, 9))
+        assertNull(LayoutOps.resizeItem(layout, clock.id, 0, 0, 6, 3, 5, 9))
+        val wider = LayoutOps.resizeItem(layout, clock.id, 1, 0, 4, 3, 5, 9)!!
+        assertEquals(1, wider.find(clock.id)!!.second.x)
+    }
 }

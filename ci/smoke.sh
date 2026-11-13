@@ -336,6 +336,16 @@ sleep 1.5
 peek 11-edit
 dump 11-edit
 if on_screen 11-edit "Done" exact; then pass "long press on empty space opens edit mode"; else fail "long press on empty space opens edit mode"; fi
+if tap_text 11-edit "Pages" exact; then
+  sleep 1
+  dump 12-pages
+  if on_screen 12-pages "Add page" exact && on_screen 12-pages "Home page" exact; then pass "edit mode shows the pages overview"; else fail "edit mode shows the pages overview"; fi
+  tap_text 12-pages "Pages" exact || true
+  sleep 0.5
+  dump 11-edit
+else
+  fail "edit mode has a Pages button"
+fi
 tap_text 11-edit "Done" exact || adb shell input keyevent KEYCODE_BACK
 sleep 1
 # Wait for the service to be back after the screen dumps before the crash check.

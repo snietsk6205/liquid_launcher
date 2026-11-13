@@ -81,7 +81,15 @@ fun HomePageView(index: Int, page: HomePage, env: PageEnv, controller: HomeContr
             val taps = remember(gestures, editMode, controller) {
                 Modifier.pointerInput(gestures, editMode) {
                     detectTapGestures(
-                        onTap = { if (editMode) controller.exitEdit() },
+                        onTap = {
+                            if (!editMode) return@detectTapGestures
+                            if (controller.selectedItem != null || controller.pagesSheet) {
+                                controller.selectedItem = null
+                                controller.pagesSheet = false
+                            } else {
+                                controller.exitEdit()
+                            }
+                        },
                         onDoubleTap = if (editMode || gestures.doubleTap == LauncherAction.None) {
                             null
                         } else {
@@ -98,7 +106,7 @@ fun HomePageView(index: Int, page: HomePage, env: PageEnv, controller: HomeContr
         Layout(
             content = {
                 for (item in page.items) {
-                    key(item.id) { ItemView(item, env, controller) }
+                    key(item.id) { ItemView(item, index, env, controller) }
                 }
             },
             modifier = Modifier
@@ -115,6 +123,15 @@ fun HomePageView(index: Int, page: HomePage, env: PageEnv, controller: HomeContr
                                 CornerRadius(14.dp.toPx()), style = Stroke(1.dp.toPx()),
                             )
                         }
+                    }
+                    controller.resizing?.let { r ->
+                        if (page.items.none { it.id == r.itemId }) return@let
+                        drawRoundRect(
+                            env.contentColor.copy(alpha = 0.22f),
+                            Offset(r.x * cellW + 4, r.y * cellH + 4),
+                            Size(r.w * cellW - 8, r.h * cellH - 8),
+                            CornerRadius(18.dp.toPx()),
+                        )
                     }
                     val drag = controller.drag ?: return@drawBehind
                     val target = controller.previewCell() ?: return@drawBehind
@@ -146,7 +163,7 @@ fun HomePageView(index: Int, page: HomePage, env: PageEnv, controller: HomeContr
 }
 
 @Composable
-private fun ItemView(item: HomeItem, env: PageEnv, controller: HomeController) {
+private fun ItemView(item: HomeItem, pageIndex: Int, env: PageEnv, controller: HomeController) {
     val holder = remember { CoordinatesHolder() }
     val beingDragged = (controller.drag?.source as? DragSource.Home)?.itemId == item.id
     val base = Modifier
@@ -183,9 +200,12 @@ private fun ItemView(item: HomeItem, env: PageEnv, controller: HomeController) {
         }
 
         ItemKind.WIDGET -> {
-            Box(base.iconGestures({ holder.value }, dragOnly(item, null, holder, controller), env.interactive)) {
+            Box(base.iconGestures({ holder.value }, widgetHandler(item, holder, controller), env.interactive)) {
                 if (item.widget == "clock") {
                     ClockWidget(env.clock, env.contentColor, env.shadow, env.glass, env.lightBackground, env.wallpaperBackdrop)
+                }
+                if (env.editMode && env.interactive && controller.selectedItem == item.id) {
+                    ResizeFrame(item, pageIndex, env, controller)
                 }
             }
         }
@@ -262,6 +282,23 @@ private fun appHandler(item: HomeItem, app: AppEntry, holder: CoordinatesHolder,
         }
     }
 }
+
+/** Widgets: hold to edit with this widget selected; tap while editing selects it; drag moves it. */
+@Composable
+private fun widgetHandler(item: HomeItem, holder: CoordinatesHolder, controller: HomeController): IconGestureHandler =
+    remember(item, controller) {
+        object : IconGestureHandler {
+            override fun onTap() {
+                if (controller.editMode) controller.selectedItem = if (controller.selectedItem == item.id) null else item.id
+            }
+
+            override fun onLongPress() = controller.editItem(item.id)
+            override fun onDragStart(grab: Offset, finger: Offset) = startHomeDrag(item, null, grab, finger, holder, controller)
+            override fun onDrag(finger: Offset) = controller.moveDrag(finger)
+            override fun onDragEnd() = controller.endDrag()
+            override fun onDragCancel() = controller.cancelDrag()
+        }
+    }
 
 @Composable
 private fun dragOnly(item: HomeItem, icon: ImageBitmap?, holder: CoordinatesHolder, controller: HomeController): IconGestureHandler =
