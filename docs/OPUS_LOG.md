@@ -360,7 +360,7 @@ Not done / limits: two-finger gestures and edge swipes cannot be driven from adb
 
 ## Session summary (2026-11-14, Opus, updated for 0.5.0)
 
-**State:** 0.4.2 (entry 10) followed the user's notes on 0.4.1; its first CI run hung on an overloaded emulator and the release build includes a fix that records the transition snapshot only on demand. 0.5.0 (entry 11) completes Phase 2 with gestures, double tap per icon, the screen picker, motion and haptics settings and the in-app updater. Unit tests pass; see the releases for the CI runs. Neither 0.4.2 nor 0.5.0 is tested on the phone yet.
+**State:** 0.4.2 (entry 10) followed the user's notes on 0.4.1; its first CI run hung on an overloaded emulator and the release build includes a fix that records the transition snapshot only on demand. 0.5.0 (entry 11) completes Phase 2 with gestures, double tap per icon, the screen picker, motion and haptics settings and the in-app updater. Released: 0.4.2 as build 32 (run 32: all 29 emulator checks passed, no dialogs to dismiss) and 0.5.0 as build 34 (run 34, all checks passed after the swipe-speed fix). Unit tests pass. Neither 0.4.2 nor 0.5.0 is tested on the phone yet.
 
 **Next step:** the user tests 0.4.2 and 0.5.0; then Phase 3 (widgets).
 
