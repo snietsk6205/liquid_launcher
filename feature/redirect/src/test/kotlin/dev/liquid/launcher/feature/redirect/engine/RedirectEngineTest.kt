@@ -30,7 +30,10 @@ private class FakeHost : EngineHost {
         scheduleCalls[timer] = (scheduleCalls[timer] ?: 0) + 1
     }
     override fun cancel(timer: EngineTimer) { timers.remove(timer) }
-    override fun probe() = probe
+    override fun probe(): Probe {
+        time += probeTakesMs
+        return probe
+    }
     /** How long the exclusion check blocks (it asks the system for the window list). */
     var exclusionTakesMs = 0L
     override fun exclusionReason(): String? {
@@ -43,6 +46,12 @@ private class FakeHost : EngineHost {
     override fun launchLauncher(reason: String, triggerAt: Long) { launches += reason }
     var reopened = 0
     override fun reopenRecents() { reopened++ }
+    var bounceExpected = false
+    override fun homeBounceExpected() = bounceExpected
+    var afterglowUntil = 0L
+    override fun onAfterglow(untilMs: Long) { afterglowUntil = untilMs }
+    /** How long a look at the window blocks. */
+    var probeTakesMs = 0L
     override fun setTracking(on: Boolean) { trackingOn = on }
     override fun onRecentsConfirmed() { recentsConfirmed++ }
     override fun onStateChanged(state: EngineState) = Unit
@@ -73,8 +82,8 @@ private class FakeHost : EngineHost {
         time = end
     }
 
-    fun showHome(signature: Boolean = false, drawer: Boolean = false) {
-        show(Probe(SYSTEM, isSystemLauncher = true, recents = false, homeSignature = signature, drawerSignature = drawer))
+    fun showHome(signature: Boolean = false, drawer: Boolean = false, animating: Boolean = false) {
+        show(Probe(SYSTEM, isSystemLauncher = true, recents = false, homeSignature = signature, drawerSignature = drawer, homeAnimating = animating))
     }
     fun showRecents() { show(Probe(SYSTEM, isSystemLauncher = true, recents = true, detail = "id")) }
     fun showOtherApp() { show(Probe(OTHER, isSystemLauncher = false, recents = false)) }
@@ -336,11 +345,9 @@ class RedirectEngineTest {
         host.advance(1000)
         assertEquals(4, host.launches.size)
 
-        // After the pause the next event redirects again.
-        host.advance(30_000)
+        // When the pause is over the engine looks again by itself and redirects.
+        host.advance(29_000 + 50)
         assertFalse(host.engine.isPaused)
-        host.engine.onSystemLauncherWindow()
-        host.advance(50)
         assertEquals(5, host.launches.size)
     }
 
@@ -504,26 +511,158 @@ class RedirectEngineTest {
     }
 
     @Test
-    fun fastMode_redirectsQuicklyWhenTheHomeScreenIsVisible() {
-        val host = setup(signatureConfig.copy(fastMode = true, fastDelayMs = 30))
+    fun goingHomeAnimation_redirectsAtOnce() {
+        val host = setup(signatureConfig.copy(onHomeDelayMs = 260, fastDelayMs = 0))
+        host.showHome(signature = true, animating = true)
+        host.engine.onSystemLauncherWindow()
+        assertEquals(1, host.launches.size)
+        host.confirmLaunch()
+        // A certain "home" is not listened after.
+        assertEquals(0L, host.afterglowUntil)
+    }
+
+    @Test
+    fun goingHomeAnimation_seenLater_endsTheWait() {
+        val host = setup(signatureConfig.copy(onHomeDelayMs = 260, fastDelayMs = 20))
         host.showHome(signature = true)
         host.engine.onSystemLauncherWindow()
-        host.advance(29)
+        host.advance(60)
+        assertTrue(host.launches.isEmpty())
+        host.showHome(signature = true, animating = true)
+        host.engine.onContentChanged()
+        host.advance(RedirectEngine.COALESCE_MS + 19)
         assertTrue(host.launches.isEmpty())
         host.advance(1)
         assertEquals(1, host.launches.size)
     }
 
     @Test
-    fun fastMode_stillWaitsWhileTheHomeScreenIsNotVisible() {
-        val host = setup(signatureConfig.copy(fastMode = true, fastDelayMs = 30))
-        host.showHome(signature = false)
+    fun goingHomeAnimation_canBeSwitchedOff() {
+        val host = setup(signatureConfig.copy(onHomeDelayMs = 260, fastOnHomeAnimation = false))
+        host.showHome(signature = true, animating = true)
         host.engine.onSystemLauncherWindow()
-        host.advance(300)
+        host.advance(259)
+        assertTrue(host.launches.isEmpty())
+        host.advance(1)
+        assertEquals(1, host.launches.size)
+    }
+
+    @Test
+    fun withoutTheAnimation_theFullDelayApplies_andRecentsInThatTimeIsLeftAlone() {
+        val host = setup(signatureConfig.copy(onHomeDelayMs = 260))
+        host.showHome(signature = true)
+        host.engine.onSystemLauncherWindow()
+        host.advance(240)
         assertTrue(host.launches.isEmpty())
         host.showRecents()
+        host.engine.onContentChanged()
         host.advance(1000)
         assertTrue(host.launches.isEmpty())
+        assertEquals(EngineState.RECENTS, host.engine.state)
+    }
+
+    @Test
+    fun systemLauncherAfterOwnWallpaperChange_redirectsAtOnce() {
+        val host = setup(signatureConfig.copy(onHomeDelayMs = 260))
+        host.bounceExpected = true
+        host.showHome(signature = true)
+        host.engine.onSystemLauncherWindow()
+        assertEquals(1, host.launches.size)
+    }
+
+    // ---- recents that opens after the launcher is already in front ----
+
+    private fun redirectAndConfirm(host: FakeHost) {
+        host.showHome(signature = true)
+        host.engine.onSystemLauncherWindow()
+        host.advance(160)
+        assertEquals(1, host.launches.size)
+        host.advance(100)
+        host.confirmLaunch()
+    }
+
+    @Test
+    fun recentsSeenBehindTheLauncher_isReopened() {
+        val host = setup(signatureConfig)
+        redirectAndConfirm(host)
+        assertTrue(host.engine.inAfterglow)
+        host.advance(200)
+        host.engine.onActivityBehindLauncher(recentsSeen = true)
+        assertEquals(1, host.reopened)
+        assertFalse(host.engine.inAfterglow)
+        assertEquals("recents+sig+late", host.episodes.last())
+    }
+
+    @Test
+    fun windowChangeBehindTheLauncher_isAHint_unlessSwitchedOff() {
+        val host = setup(signatureConfig)
+        redirectAndConfirm(host)
+        host.advance(200)
+        host.engine.onActivityBehindLauncher(recentsSeen = null)
+        assertEquals(1, host.reopened)
+
+        val strict = setup(signatureConfig.copy(reopenOnHint = false))
+        redirectAndConfirm(strict)
+        strict.advance(200)
+        strict.engine.onActivityBehindLauncher(recentsSeen = null)
+        assertEquals(0, strict.reopened)
+    }
+
+    @Test
+    fun activityBehindTheLauncher_withoutRecents_orTooLate_changesNothing() {
+        val host = setup(signatureConfig)
+        redirectAndConfirm(host)
+        host.advance(100)
+        host.engine.onActivityBehindLauncher(recentsSeen = false)
+        assertEquals(0, host.reopened)
+        host.advance(RedirectEngine.AFTERGLOW_MS)
+        host.engine.onActivityBehindLauncher(recentsSeen = true)
+        assertEquals(0, host.reopened)
+    }
+
+    @Test
+    fun afterAnUnlock_nothingBehindTheLauncherCountsAsRecents() {
+        val host = setup(signatureConfig)
+        host.engine.onUserPresent()
+        host.advance(300)
+        redirectAndConfirm(host)
+        assertFalse(host.engine.inAfterglow)
+        host.engine.onActivityBehindLauncher(recentsSeen = null)
+        assertEquals(0, host.reopened)
+    }
+
+    // ---- a look that took too long ----
+
+    @Test
+    fun staleWindowCheck_isRepeatedBeforeDeciding() {
+        val host = setup(signatureConfig)
+        host.showHome(signature = true)
+        host.engine.onSystemLauncherWindow()
+        // The user opens an app; the check that should have seen it hangs for three seconds
+        // and comes back with the old picture.
+        host.probeTakesMs = 3000
+        host.engine.onContentChanged()
+        host.advance(RedirectEngine.COALESCE_MS)
+        host.probeTakesMs = 0
+        host.showOtherApp()
+        host.advance(4000)
+        assertTrue(host.launches.isEmpty())
+        assertEquals(EngineState.IDLE, host.engine.state)
+        assertTrue(host.logs.any { it.contains("out of date") })
+    }
+
+    // ---- pause ----
+
+    @Test
+    fun pauseEnding_whileTheSystemLauncherIsInFront_redirects() {
+        val host = setup(signatureConfig)
+        host.engine.pause(5 * 60_000, "test")
+        host.showHome(signature = true)
+        host.engine.onSystemLauncherWindow()
+        host.advance(5 * 60_000 - 1)
+        assertTrue(host.launches.isEmpty())
+        host.advance(1 + 160)
+        assertEquals(1, host.launches.size)
     }
 
     @Test

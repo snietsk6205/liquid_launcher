@@ -65,11 +65,20 @@ import kotlin.math.roundToInt
  * phase, so paging and placing redraw without recomposing.
  */
 @Composable
-internal fun WallpaperImage(image: ImageBitmap, frame: () -> Frame?, offset: () -> Float, modifier: Modifier) {
+internal fun WallpaperImage(
+    image: ImageBitmap,
+    frame: () -> Frame?,
+    offset: () -> Float,
+    modifier: Modifier,
+    /** Opacity, read while drawing (the blurred copy that fades in over the wallpaper). */
+    alpha: () -> Float = { 1f },
+) {
     Spacer(
         modifier
             .fillMaxSize()
             .drawBehind {
+                val a = alpha()
+                if (a <= 0.003f) return@drawBehind
                 val f = frame() ?: Frame(0f, 0f, image.width.toFloat(), image.height.toFloat())
                 if (size.width <= 0f || size.height <= 0f || f.width <= 0f || f.height <= 0f) return@drawBehind
                 val aspect = size.width / size.height
@@ -96,6 +105,7 @@ internal fun WallpaperImage(image: ImageBitmap, frame: () -> Frame?, offset: () 
                         srcSize = IntSize(srcW, srcH),
                         dstOffset = IntOffset(dx.roundToInt(), dy.roundToInt()),
                         dstSize = IntSize((srcW * scale).roundToInt(), (srcH * scale).roundToInt()),
+                        alpha = a.coerceAtMost(1f),
                         filterQuality = FilterQuality.Medium,
                     )
                 }
@@ -177,7 +187,7 @@ internal fun WallpaperStrip(
                     alpha = p.coerceIn(0f, 1f)
                     translationY = (1f - p) * 40.dp.toPx()
                 }
-                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground))
+                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground, large = true))
                 .clip(shape)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .padding(vertical = 12.dp),

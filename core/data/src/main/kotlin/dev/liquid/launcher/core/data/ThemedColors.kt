@@ -15,17 +15,19 @@ import android.os.Build
 import androidx.core.graphics.ColorUtils
 import dev.liquid.launcher.core.common.WallpaperTones
 
-/** Themed icons: on which surfaces, and in which colours. [epoch] changes when the wallpaper does. */
+/**
+ * Themed icons: which icons take part and on which surfaces. The colours are not in here on
+ * purpose: icons take them from the palette when they are drawn, so a new wallpaper never
+ * touches the list of apps.
+ */
 data class ThemedIcons(
     val home: Boolean,
     val drawer: Boolean,
     /** Apps without a monochrome icon: true = two-tone in the colours, false = unchanged. */
     val tintUncovered: Boolean,
-    val background: Int,
-    val foreground: Int,
-) {
-    val key: String get() = "t${background.toUInt().toString(16)}${foreground.toUInt().toString(16)}$tintUncovered"
-}
+    /** Icons an icon pack draws follow the colours too. */
+    val packs: Boolean = true,
+)
 
 /** Colours for themed icons, from the wallpaper or from the system palette. */
 object ThemedColors {

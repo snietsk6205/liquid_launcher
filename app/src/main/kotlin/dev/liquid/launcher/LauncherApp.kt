@@ -79,6 +79,8 @@ class LauncherApp : Application() {
         val receiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
                 if (intent.action != android.content.Intent.ACTION_SCREEN_OFF) return
+                // A wallpaper still waiting to be handed to the system goes now: nobody is looking.
+                wallpaper.flushSystemWrite()
                 if (settings.get(LauncherSettings.WallpaperRotation) == "off") return
                 val pending = goAsync()
                 appScope.launch(kotlinx.coroutines.Dispatchers.Default) {

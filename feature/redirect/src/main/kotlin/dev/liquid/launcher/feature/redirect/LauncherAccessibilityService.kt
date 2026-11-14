@@ -79,6 +79,10 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
     private var wakeLock: PowerManager.WakeLock? = null
     private var recheckAttempts = 0
     private var lastSlowLogAt = 0L
+
+    /** Until when (uptime) the engine listens to what the system launcher does behind the launcher. */
+    @Volatile private var afterglowUntil = 0L
+    private var lastBehindLookAt = 0L
     private val launcherRecheck = Runnable { refreshSystemLauncher() }
 
     private val screenReceiver = object : BroadcastReceiver() {
@@ -245,8 +249,6 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
             STATS.forEach { store.reset(it) }
             store.set(LauncherSettings.StatsKey, statsKey)
         }
-        val reliable = signatureReliable()
-        RedirectStatus.signatureReliable.value = reliable
 
         engine.config = EngineConfig(
             enabled = store.get(LauncherSettings.RedirectEnabled),
@@ -267,23 +269,13 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
             guardPauseMs = store.get(LauncherSettings.GuardPause) * 1000L,
             requireHomeSignature = store.get(LauncherSettings.RequireHomeScreen) && homeIds.isNotEmpty(),
             signatureFallbackMs = store.get(LauncherSettings.HomeScreenFallback).toLong(),
-            fastMode = store.get(LauncherSettings.FastWhenProven) && reliable,
+            fastOnHomeAnimation = store.get(LauncherSettings.FastOnHomeAnimation),
             fastDelayMs = store.get(LauncherSettings.FastDelay).toLong(),
+            reopenOnHint = store.get(LauncherSettings.ReopenOnHint),
             reopenRecents = store.get(LauncherSettings.ReopenRecents),
             reopenWindowMs = store.get(LauncherSettings.ReopenWindow).toLong(),
         )
         updateServiceInfo()
-    }
-
-    /**
-     * True once this phone has shown, often enough, that recents never opens while the home
-     * screen views are visible. Only then is the short delay used.
-     */
-    private fun signatureReliable(): Boolean {
-        val homeSeen = store.get(LauncherSettings.StatsHomeSeen)
-        val recentsSeen = store.get(LauncherSettings.StatsRecentsSeen)
-        val recentsUnseen = store.get(LauncherSettings.StatsRecentsUnseen)
-        return homeSeen >= 10 && recentsUnseen >= 5 && recentsSeen * 20 <= recentsUnseen
     }
 
     private fun resolveSystemLauncher() {
@@ -369,12 +361,20 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.packageName?.toString() != systemLauncher) return
         RedirectStatus.lastEventWall = System.currentTimeMillis()
+        // Just after an uncertain redirect the event itself is kept, to look at the window it came from.
+        val listening = SystemClock.uptimeMillis() <= afterglowUntil
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 val className = event.className?.toString().orEmpty()
+                val kept = if (listening) AccessibilityEvent(event) else null
                 onEngine {
                     val home = isHomeClass(className)
                     DebugLog.event(TAG, "window: ${className.substringAfterLast('.')}${if (home) " (home)" else ""}")
+                    if (engine.inAfterglow) {
+                        val seen = recentsBehind(kept)
+                        // A home window alone says nothing; any other window change is a hint.
+                        engine.onActivityBehindLauncher(if (home) seen ?: false else seen)
+                    }
                     if (home) {
                         refreshSplitScreen()
                         engine.onSystemLauncherWindow()
@@ -388,6 +388,15 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
                 // Dropped here while idle, so animations in the system launcher cost nothing.
                 if (RedirectStatus.engineState.value != EngineState.IDLE) {
                     onEngine { engine.onContentChanged() }
+                } else if (listening) {
+                    val kept = AccessibilityEvent(event)
+                    onEngine {
+                        val now = SystemClock.uptimeMillis()
+                        if (engine.inAfterglow && now - lastBehindLookAt >= BEHIND_LOOK_MS) {
+                            lastBehindLookAt = now
+                            if (recentsBehind(kept) == true) engine.onActivityBehindLauncher(true)
+                        }
+                    }
                 }
             }
         }
@@ -397,6 +406,29 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         userHomeClasses.isNotEmpty() -> userHomeClasses.any { className == it || className.endsWith(".$it") }
         autoHomeClasses.isNotEmpty() -> className in autoHomeClasses
         else -> true
+    }
+
+    /**
+     * Whether the window [event] came from shows recents: true or false when its views could be
+     * read, null when they could not (the launcher covers it and the system gives nothing).
+     */
+    private fun recentsBehind(event: AccessibilityEvent?): Boolean? {
+        event ?: return null
+        val start = SystemClock.uptimeMillis()
+        return try {
+            val source = event.source ?: return null
+            var root: AccessibilityNodeInfo = source.window?.root ?: source
+            var depth = 0
+            while (depth < 40) {
+                root = root.parent ?: break
+                depth++
+            }
+            if (root.packageName?.toString() != systemLauncher) null else RecentsDetector.probe(root, detectConfig).recents
+        } catch (e: Exception) {
+            null
+        } finally {
+            noteIfSlow("look behind the launcher", start)
+        }
     }
 
     private fun activeRoot(): AccessibilityNodeInfo? = try {
@@ -547,6 +579,13 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         }
     }
 
+    override fun homeBounceExpected(): Boolean =
+        dev.liquid.launcher.core.common.WallpaperTones.ownWriteActive && RedirectStatus.isLauncherResumed(graceMs = 1500)
+
+    override fun onAfterglow(untilMs: Long) {
+        afterglowUntil = untilMs
+    }
+
     override fun reopenRecents() {
         store.set(LauncherSettings.StatsReopened, store.get(LauncherSettings.StatsReopened) + 1)
         // Give the launcher's own window a moment to settle before asking for recents.
@@ -625,6 +664,7 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         const val TAG = "Redirect"
         const val SLOW_MS = 40L
         const val REOPEN_DELAY_MS = 60L
+        const val BEHIND_LOOK_MS = 60L
         const val RECHECK_MS = 5000L
         const val MAX_RECHECKS = 24
         val STATS = listOf(

@@ -45,7 +45,12 @@ data class WallpaperItem(
 
 /** A folder on the phone the library shows live (through the system file picker's permission). */
 @Serializable
-data class LinkedFolder(val uri: String, val name: String)
+data class LinkedFolder(
+    val uri: String,
+    val name: String,
+    /** Also show the pictures in its sub-folders. */
+    val deep: Boolean = false,
+)
 
 @Serializable
 data class WallpaperLibraryState(
@@ -219,11 +224,17 @@ class WallpaperLibrary(
         store.update { s -> s.copy(folders = s.folders.filter { it.uri != uri }) }
     }
 
-    /** The pictures in a linked folder (not its sub-folders), newest first. */
+    /** Shows or hides the pictures in a linked folder's sub-folders. */
+    fun setFolderDeep(uri: String, deep: Boolean) =
+        store.update { s -> s.copy(folders = s.folders.map { if (it.uri == uri) it.copy(deep = deep) else it }) }
+
+    /**
+     * The pictures in a linked folder, newest first; with [LinkedFolder.deep] also those in its
+     * sub-folders (at most [MAX_FOLDER_DEPTH] levels down and [MAX_FOLDER_IMAGES] pictures).
+     */
     suspend fun folderImages(folder: LinkedFolder): List<FolderImage> = withContext(Dispatchers.IO) {
         try {
             val tree = Uri.parse(folder.uri)
-            val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
             val columns = arrayOf(
                 DocumentsContract.Document.COLUMN_DOCUMENT_ID,
                 DocumentsContract.Document.COLUMN_DISPLAY_NAME,
@@ -231,11 +242,22 @@ class WallpaperLibrary(
                 DocumentsContract.Document.COLUMN_LAST_MODIFIED,
             )
             val result = ArrayList<FolderImage>()
-            context.contentResolver.query(children, columns, null, null, null)?.use { c ->
-                while (c.moveToNext()) {
-                    val mime = c.getString(2) ?: continue
-                    if (!mime.startsWith("image/")) continue
-                    result += FolderImage(DocumentsContract.buildDocumentUriUsingTree(tree, c.getString(0)), c.getString(1) ?: "", c.getLong(3))
+            // Folders still to read, with how deep they are.
+            val queue = ArrayDeque<Pair<String, Int>>()
+            queue.addLast(DocumentsContract.getTreeDocumentId(tree) to 0)
+            while (queue.isNotEmpty() && result.size < MAX_FOLDER_IMAGES) {
+                val (documentId, depth) = queue.removeFirst()
+                val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, documentId)
+                context.contentResolver.query(children, columns, null, null, null)?.use { c ->
+                    while (c.moveToNext() && result.size < MAX_FOLDER_IMAGES) {
+                        val mime = c.getString(2) ?: continue
+                        if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
+                            if (folder.deep && depth < MAX_FOLDER_DEPTH) queue.addLast(c.getString(0) to depth + 1)
+                            continue
+                        }
+                        if (!mime.startsWith("image/")) continue
+                        result += FolderImage(DocumentsContract.buildDocumentUriUsingTree(tree, c.getString(0)), c.getString(1) ?: "", c.getLong(3))
+                    }
                 }
             }
             result.sortedByDescending { it.modified }
@@ -305,5 +327,7 @@ class WallpaperLibrary(
 
     private companion object {
         const val THUMB_PX = 280
+        const val MAX_FOLDER_DEPTH = 6
+        const val MAX_FOLDER_IMAGES = 3000
     }
 }

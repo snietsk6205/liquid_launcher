@@ -45,10 +45,46 @@ internal object RecentsDetector {
                 return Probe(pkg, isSystemLauncher = true, recents = true, detail = "~" + hit.substringAfter(":id/"))
             }
         }
-        val home = config.homeIds.isNotEmpty() && config.homeIds.all { has(root, it) }
+        var home = config.homeIds.isNotEmpty()
+        var animating = false
+        for ((index, id) in config.homeIds.withIndex()) {
+            val node = first(root, id)
+            if (node == null) {
+                home = false
+                break
+            }
+            // The first home id is the home screen itself: is it drawn smaller than its window?
+            if (index == 0) animating = isShrunk(root, node)
+        }
         val drawer = !home && config.drawerIds.any { has(root, it) }
-        return Probe(pkg, isSystemLauncher = true, recents = false, homeSignature = home, drawerSignature = drawer)
+        return Probe(
+            pkg, isSystemLauncher = true, recents = false,
+            homeSignature = home, drawerSignature = drawer, homeAnimating = home && animating,
+        )
     }
+
+    private fun first(root: AccessibilityNodeInfo, id: String): AccessibilityNodeInfo? = try {
+        root.findAccessibilityNodeInfosByViewId(id)?.firstOrNull()
+    } catch (e: Exception) {
+        null
+    }
+
+    /**
+     * True when [node] is narrower than the window by more than [SHRINK]: the system launcher
+     * draws its home screen at 0.9 scale and lets it grow while its "going home" animation
+     * runs. At rest, during a recents gesture and in recents it fills the window.
+     */
+    private fun isShrunk(root: AccessibilityNodeInfo, node: AccessibilityNodeInfo): Boolean {
+        val window = android.graphics.Rect()
+        val view = android.graphics.Rect()
+        root.getBoundsInScreen(window)
+        node.getBoundsInScreen(view)
+        if (window.width() <= 0 || view.width() <= 0) return false
+        return view.width() < window.width() * (1f - SHRINK) && view.height() < window.height() * (1f - SHRINK)
+    }
+
+    /** Fraction of the window the home screen must be smaller by to count as animating. */
+    private const val SHRINK = 0.012f
 
     private fun has(root: AccessibilityNodeInfo, id: String): Boolean = try {
         !root.findAccessibilityNodeInfosByViewId(id).isNullOrEmpty()

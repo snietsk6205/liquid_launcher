@@ -292,7 +292,7 @@ class HomeController(
             },
             after = { switch ->
                 val bitmap = switch.wallpaper ?: return@changeScreen
-                store.persist(bitmap, data.settings.get(LauncherSettings.WallpaperLockToo), switch.file)
+                store.persist(bitmap, data.settings.get(LauncherSettings.WallpaperLockToo), switch.file, Wallpapers.systemWrite(data))
                 switch.wallpaperId?.let { wid -> data.wallpapers.find(wid)?.let { data.wallpapers.markUsed(it.id, null) } }
             },
         )

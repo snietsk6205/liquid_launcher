@@ -150,7 +150,6 @@ internal object Diagnostics {
             val interrupted = store.get(LauncherSettings.StatsInterrupted)
             val fallbacks = store.get(LauncherSettings.StatsFallbacks)
             val reopened = store.get(LauncherSettings.StatsReopened)
-            val reliable = RedirectStatus.signatureReliable.value
             val status = when {
                 !store.get(LauncherSettings.RequireHomeScreen) -> DiagStatus.INFO
                 fallbacks > seen && fallbacks >= 3 -> DiagStatus.WARN
@@ -160,14 +159,8 @@ internal object Diagnostics {
                 "redirects: $seen with the home screen visible, $unseen without\n" +
                 "recents openings: $recentsUnseen with it not visible, $recentsSeen although it was visible\n" +
                 "recents interrupted by a redirect: $interrupted, reopened afterwards: $reopened, fallbacks: $fallbacks\n" +
-                "proven reliable: ${yesNo(reliable)}" +
-                when {
-                    reliable && store.get(LauncherSettings.FastWhenProven) ->
-                        " (short delay of ${store.get(LauncherSettings.FastDelay)} ms in use)"
-                    recentsSeen * 20 > recentsUnseen && recentsSeen >= 3 ->
-                        " (recents opens while the home screen is visible on this phone, so the short delay stays off)"
-                    else -> " (needs 10 redirects and 5 recents openings)"
-                }
+                "timing: ${if (store.get(LauncherSettings.FastOnHomeAnimation)) "at once (${store.get(LauncherSettings.FastDelay)} ms) when the system launcher animates home, else " else ""}" +
+                "${store.get(LauncherSettings.OnHomeDelay)} ms"
         }
 
         check("Recents detection") {
@@ -199,7 +192,11 @@ internal object Diagnostics {
             } catch (e: Throwable) {
                 "refused (${e.javaClass.simpleName})"
             }
-            DiagStatus.INFO to "managed by launcher: ${yesNo(WallpaperStore.get(context).hasManagedWallpaper)}\n" +
+            val managed = WallpaperStore.get(context).hasManagedWallpaper
+            // Without its own copy of the wallpaper, glass has nothing to refract.
+            (if (managed) DiagStatus.OK else DiagStatus.WARN) to "managed by launcher: ${yesNo(managed)}" +
+                (if (managed) "" else " (glass cannot refract the wallpaper: choose it in the launcher's wallpaper screen)") + "\n" +
+                "hand-over to the system: ${store.get(LauncherSettings.WallpaperSystemWrite)}\n" +
                 "live wallpaper: ${live ?: "no"}\n" +
                 "colors available: ${yesNo(colors != null)}\n" +
                 "reading the system wallpaper: $read\n" +
@@ -255,7 +252,8 @@ internal object Diagnostics {
                 val full = results.firstOrNull { it.quality == GlassQuality.Full }
                 val status = if (full != null && !full.holdsFrameRate) DiagStatus.WARN else DiagStatus.OK
                 status to results.joinToString("\n") { it.line() } +
-                    "\nbest tier that holds the frame rate: ${store.get(LauncherSettings.GlassCap)}"
+                    "\nbest tier that holds the frame rate: ${store.get(LauncherSettings.GlassCap)}" +
+                    "\nused for: large sheets only (pills, chips and menus keep the chosen quality: ${store.get(LauncherSettings.GlassQuality)})"
             }
         }
 

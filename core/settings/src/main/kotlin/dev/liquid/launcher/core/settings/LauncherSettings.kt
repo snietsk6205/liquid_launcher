@@ -64,10 +64,12 @@ object LauncherSettings {
         section = "redirect", keywords = "trigger home honor",
     )
     val OnHomeDelay = IntSetting(
-        key = "redirect.onHomeDelay", default = 160, min = 0, max = 1000, step = 10, unit = "ms",
-        title = "Delay after the system launcher appears",
-        summary = "Recents is checked again when the delay ends. Lower is faster; too low can interrupt opening recents",
-        section = "redirect", keywords = "delay latency flash",
+        // A new key in 0.5.1 (was redirect.onHomeDelay, 160 ms): most arrivals no longer wait for it, so it can be safer.
+        key = "redirect.unsureDelay", default = 260, min = 0, max = 1000, step = 10, unit = "ms",
+        title = "Delay while it could still be recents",
+        summary = "Used only when the system launcher shows no going-home animation, so a recents gesture could still be " +
+            "under way. On this phone the recents panel showed up within 250 ms; lower is faster but can interrupt recents",
+        section = "redirect", keywords = "delay latency flash recents unsure",
     )
     val RequireHomeScreen = BoolSetting(
         key = "redirect.requireHomeScreen", default = true,
@@ -76,16 +78,16 @@ object LauncherSettings {
             "When leaving recents this is strict: closing recents into an app, a lock screen or anything else never redirects",
         section = "redirect", keywords = "home screen signature workspace recents interrupt",
     )
-    val FastWhenProven = BoolSetting(
-        key = "redirect.fastWhenProven", default = true,
-        title = "Shorten the delay once proven safe",
-        summary = "After enough redirects and recents openings have shown that the home screen check is " +
-            "reliable on this phone, the short delay below is used instead. Diagnostics shows the counts",
-        section = "redirect", keywords = "fast adaptive learn delay",
+    val FastOnHomeAnimation = BoolSetting(
+        key = "redirect.fastOnHomeAnimation", default = true,
+        title = "Redirect at once when the system launcher animates home",
+        summary = "The system launcher draws its home screen smaller and lets it grow when a gesture ends towards home. " +
+            "Recents never follows that, so there is nothing to wait for",
+        section = "redirect", keywords = "fast animation scale home certain delay",
     )
     val FastDelay = IntSetting(
-        key = "redirect.fastDelay", default = 30, min = 0, max = 200, step = 10, unit = "ms",
-        title = "Short delay",
+        key = "redirect.fastDelay", default = 0, min = 0, max = 200, step = 10, unit = "ms",
+        title = "Delay once that animation is seen",
         section = "redirect", keywords = "fast delay",
     )
     val HomeScreenFallback = IntSetting(
@@ -106,6 +108,13 @@ object LauncherSettings {
         title = "Counts as covered within",
         summary = "How soon after the redirect recents must open",
         section = "redirect", keywords = "recents interrupted window",
+    )
+    val ReopenOnHint = BoolSetting(
+        key = "redirect.reopenOnHint", default = true,
+        title = "Also reopen on a sign of recents behind the launcher",
+        summary = "If the system launcher changes its window just after an uncertain redirect and its views cannot be read, " +
+            "treat that as recents. Switch off if recents ever opens by itself after going home",
+        section = "redirect", keywords = "recents interrupted recovery reopen hint",
     )
     val OnRecentsExit = BoolSetting(
         key = "redirect.onRecentsExit", default = true,
@@ -447,9 +456,9 @@ object LauncherSettings {
     val ThemedIcons = BoolSetting(
         key = "icons.themed", default = false,
         title = "Icons follow the wallpaper colours",
-        summary = "Apps with a themed (monochrome) icon get it in your wallpaper's colours and change together with the wallpaper. " +
-            "Icons you picked for one app follow too, as a two-tone version (\"Change icon\" can keep one app's own colours). " +
-            "Icon packs that use the system colours are reloaded when the system's colours change. Off: icons stay as they are",
+        summary = "Every icon takes your wallpaper's colours and changes in the same moment as the wallpaper: apps with a themed " +
+            "(monochrome) icon use it, line icons are tinted, everything else becomes a two-tone version of itself. " +
+            "\"Change icon\" can keep one app's own colours. Off: icons stay as they are",
         section = "icons", keywords = "themed icons monochrome material you dynamic colour wallpaper tint",
     )
     val ThemedIconsWhere = ChoiceSetting(
@@ -462,8 +471,15 @@ object LauncherSettings {
         key = "icons.themedUncovered", default = "tint",
         options = listOf("tint" to "Two-tone in the wallpaper colours", "keep" to "Keep their own colours"),
         title = "Apps without a themed icon",
-        summary = "Also applies to icons fitted to an icon pack's style. Icons the pack itself draws are never changed",
+        summary = "Also applies to icons fitted to an icon pack's style",
         section = "icons", keywords = "themed icons uncovered legacy tint duotone",
+    )
+    val ThemedIconsPacks = ChoiceSetting(
+        key = "icons.themedPacks", default = "follow",
+        options = listOf("follow" to "Follow the wallpaper too", "keep" to "Keep the pack's colours"),
+        title = "Icons drawn by an icon pack",
+        summary = "Line icons are tinted in one colour, full icons become two-tone",
+        section = "icons", keywords = "themed icons icon pack recolour tint follow wallpaper",
     )
     val ThemedIconsColors = ChoiceSetting(
         key = "icons.themedColors", default = "wallpaper",
@@ -901,9 +917,15 @@ object LauncherSettings {
     val DrawerHomeBlur = IntSetting(
         key = "drawer.homeBlur", default = 14, min = 0, max = 40, step = 2, unit = "dp",
         title = "Blur behind the drawer",
-        summary = "Blurs the wallpaper and home screen while the drawer is open. 0 is the lightest on the battery. " +
-            "Off automatically when the glass benchmark found the phone only manages tint glass",
+        summary = "The wallpaper melts into a blurred copy of itself as the drawer opens. The copy is made once, so this costs nothing while moving",
         section = "drawerMotion", keywords = "blur background wallpaper depth",
+    )
+    val DrawerBlurLive = BoolSetting(
+        key = "drawer.blurLive", default = false,
+        title = "Blur the icons too (heavy)",
+        summary = "Blurs the whole home screen live in every frame instead of melting the wallpaper. Looks slightly richer, " +
+            "but it is the most expensive effect in the launcher and drops frames on this phone",
+        section = "drawerMotion", keywords = "blur live icons heavy performance",
     )
     val DrawerScrollbar = ChoiceSetting(
         key = "drawer.scrollbar", default = "index",
@@ -1055,8 +1077,9 @@ object LauncherSettings {
     )
     val GlassAuto = BoolSetting(
         key = "glass.auto", default = true,
-        title = "Lower quality automatically",
-        summary = "Never use a tier the glass benchmark showed this phone cannot hold at full frame rate",
+        title = "Spare the phone on large surfaces",
+        summary = "If the glass benchmark found full glass too heavy for this phone, large sheets (folders, lists, the wallpaper " +
+            "screen) are drawn frosted. Pills, chips, menus and the clock always stay liquid; only \"Quality\" above turns that off",
         section = "glass", keywords = "performance fallback benchmark automatic",
     )
     val GlassCap = ChoiceSetting(
@@ -1182,6 +1205,19 @@ object LauncherSettings {
         key = "wallpaper.lockToo", default = false,
         title = "Also set it as the lock screen wallpaper",
         section = "wallpaper", keywords = "wallpaper lock screen",
+    )
+    val WallpaperSystemWrite = ChoiceSetting(
+        key = "wallpaper.systemWrite", default = "soon",
+        options = listOf(
+            "soon" to "A few seconds after a change",
+            "screenoff" to "When the screen turns off",
+            "never" to "Never (the launcher's wallpaper stays inside the launcher)",
+        ),
+        title = "Hand the wallpaper to the system",
+        summary = "The launcher shows a new wallpaper at once. Giving it to the phone as well (so it is behind closing apps " +
+            "and in recents) takes MagicOS several seconds, in which the phone is sluggish and the system launcher can flash by. " +
+            "Quick switches cost one hand-over, a picture the phone already has costs none",
+        section = "wallpaper", keywords = "wallpaper system set lag slow layout switch lock screen",
     )
     val WallpaperHistory = IntSetting(
         key = "wallpaper.history", default = 12, min = 4, max = 40, step = 2,
@@ -1318,8 +1354,8 @@ object LauncherSettings {
     )
 
     val all: List<Setting<*>> = listOf(
-        RedirectEnabled, OnHome, OnHomeDelay, RequireHomeScreen, FastWhenProven, FastDelay, HomeScreenFallback,
-        ReopenRecents, ReopenWindow, OnRecentsExit, OnRecentsExitDelay,
+        RedirectEnabled, OnHome, FastOnHomeAnimation, FastDelay, OnHomeDelay, RequireHomeScreen, HomeScreenFallback,
+        ReopenRecents, ReopenWindow, ReopenOnHint, OnRecentsExit, OnRecentsExitDelay,
         ScreenOffMode, ScreenOffDelay, UnlockCheck,
         SystemLauncherPackage, HomeClasses, RecentsIds, RecentsIdSubstrings, HomeIds, DrawerIds, LearnedIds, PollInterval,
         ExcludeInCall, ExcludeSplitScreen, SystemHomePause, GuardCount, GuardWindow, GuardPause,
@@ -1330,7 +1366,7 @@ object LauncherSettings {
         FolderPreview, FolderBackground, FolderShape, FolderTapFirst, FolderColumns,
         DockEnabled, DockSlots, DockBackground, DockLabels,
         IconPack, IconPackHome, IconPackDrawer, IconMask,
-        ThemedIcons, ThemedIconsWhere, ThemedIconsUncovered, ThemedIconsColors, ThemedIconsStyle,
+        ThemedIcons, ThemedIconsWhere, ThemedIconsUncovered, ThemedIconsPacks, ThemedIconsColors, ThemedIconsStyle,
         HomeMarginSide, HomeMarginTop, HomeMarginBottom, Clock24h, ClockSize, ClockDate, ClockGlass,
         GestureSwipeUp, GestureSwipeDown, GestureDoubleTap, GestureLongPress,
         GesturePinchIn, GesturePinchOut, GestureTwoUp, GestureTwoDown, GestureEdgeLeftUp, GestureEdgeLeftDown, GestureEdgeRightUp, GestureEdgeRightDown, GestureEdgeWidth,
@@ -1339,7 +1375,7 @@ object LauncherSettings {
         PillHint, PillTap, PillLongPress, PillSwipeUp, PillSwipeDown,
         DrawerColumns, DrawerIconSize, DrawerLabels, DrawerFromBottom, DrawerAutoKeyboard, DrawerSort,
         DrawerWork, DrawerCloseOnLaunch, DrawerSideMargin, DrawerDim, DrawerTabsPosition,
-        DrawerTransition, DrawerPillMorph, DrawerSpeed, DrawerBounce, DrawerRise, DrawerHomeScale, DrawerHomeBlur,
+        DrawerTransition, DrawerPillMorph, DrawerSpeed, DrawerBounce, DrawerRise, DrawerHomeScale, DrawerHomeBlur, DrawerBlurLive,
         DrawerScrollbar, DrawerScrollBubble, DrawerScrollEffect, DrawerScrollStrength, DrawerOverscroll,
         IndexVisibility, IndexSide, IndexCurve, IndexLetterSize, IndexSpacing, IndexBubble, IndexHaptics, IndexFollow, IndexTrack, IndexSpring, IndexHideDelay, IndexFocus, DrawerTopSections,
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
@@ -1347,7 +1383,7 @@ object LauncherSettings {
         MenuEntries,
         SearchEngine, SearchOpenKeyboard, SearchDim, SearchBlur,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
-        WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
+        WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
         GlassQuality, GlassAuto, GlassCap, GlassTintMode,
     ) + GlassDefault.settings + glassSurfaces.flatMap { it.settings } + listOf(

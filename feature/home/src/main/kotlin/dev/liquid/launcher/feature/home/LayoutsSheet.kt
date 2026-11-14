@@ -96,7 +96,7 @@ internal fun LayoutsSheet(
                     alpha = appear.value.coerceIn(0f, 1f)
                     translationY = (1f - appear.value) * 40.dp.toPx()
                 }
-                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground))
+                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground, large = true))
                 .clip(shape)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .padding(vertical = 16.dp),

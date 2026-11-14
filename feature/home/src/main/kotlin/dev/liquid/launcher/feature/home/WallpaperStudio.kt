@@ -322,7 +322,7 @@ internal fun WallpaperStudio(
                         translationY = (1f - shown) * (size.height + 40.dp.toPx())
                         alpha = shown
                     }
-                    .liquidGlass(backdrop, sheetShape, glass.style(Surfaces.Menu, lightBackground))
+                    .liquidGlass(backdrop, sheetShape, glass.style(Surfaces.Menu, lightBackground, large = true))
                     .clip(sheetShape)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                     .padding(horizontal = 16.dp, vertical = 14.dp),
@@ -424,11 +424,28 @@ private fun PicturesPage(
         for (folder in library.folders) TabChip(folder.name, state.tab == folder.uri, color) { state.tab = folder.uri }
         TabChip("+ Folder", false, color) { linkFolder() }
     }
-    Spacer(Modifier.height(10.dp))
     val folder = library.folders.firstOrNull { it.uri == state.tab }
+    if (folder != null) {
+        // What can be done with the linked folder, in plain sight above its pictures.
+        Row(
+            Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TabChip(if (folder.deep) "Sub-folders: shown" else "Sub-folders: hidden", folder.deep, color) {
+                data.wallpapers.setFolderDeep(folder.uri, !folder.deep)
+            }
+            TabChip("Remove folder", false, color) {
+                data.wallpapers.removeFolder(folder.uri)
+                state.tab = "recent"
+                controller.toast("\"${folder.name}\" is no longer linked. Its pictures stay on the phone")
+            }
+        }
+    }
+    Spacer(Modifier.height(10.dp))
     val pickedId = (state.pick as? WallpaperPick.Library)?.item?.id ?: library.current.takeIf { state.pick == null }
     val pickedUri = (state.pick as? WallpaperPick.External)?.uri
-    Box(Modifier.fillMaxWidth().height(232.dp)) {
+    Box(Modifier.fillMaxWidth().height(if (folder != null) 188.dp else 232.dp)) {
         if (folder != null) {
             FolderGrid(folder, pickedUri, color, controller, choose)
         } else {
@@ -458,28 +475,21 @@ private fun PicturesPage(
             }
         }
     }
-    if (folder != null) {
-        Text(
-            "Remove this folder",
-            modifier = Modifier.padding(top = 6.dp).clickable {
-                data.wallpapers.removeFolder(folder.uri)
-                state.tab = "recent"
-            },
-            style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.7f), fontSize = 12.sp),
-        )
-    }
 }
 
 @Composable
 private fun FolderGrid(folder: LinkedFolder, picked: android.net.Uri?, color: Color, controller: HomeController, choose: (WallpaperPick) -> Unit) {
-    val images by produceState<List<FolderImage>?>(null, folder.uri) { value = controller.data.wallpapers.folderImages(folder) }
+    val images by produceState<List<FolderImage>?>(null, folder.uri, folder.deep) {
+        value = null
+        value = controller.data.wallpapers.folderImages(folder)
+    }
     val list = images
     if (list == null) {
         Text("Reading the folder…", style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.75f), fontSize = 13.sp))
         return
     }
     if (list.isEmpty()) {
-        Text("No pictures in this folder (sub-folders are not read).", style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.75f), fontSize = 13.sp))
+        Text(if (folder.deep) "No pictures in this folder or its sub-folders." else "No pictures in this folder. \"Sub-folders\" above also looks inside its folders.", style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.75f), fontSize = 13.sp))
         return
     }
     LazyVerticalGrid(
@@ -623,12 +633,6 @@ private fun LookPage(state: StudioState, glass: GlassConfig, color: Color) {
             ValueSlider("Blur", state.searchBlur, 0, 40, "dp", color) { state.searchBlur = it }
             ValueSlider("Dim", state.searchDim, 0, 90, "%", color) { state.searchDim = it }
         }
-    }
-    if (glass.quality == GlassQuality.Tint && state.surface != "home") {
-        Text(
-            "Blur here is off on this phone (the glass benchmark capped glass to tint).",
-            style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.7f), fontSize = 12.sp),
-        )
     }
     ToggleRow("Also on the lock screen", state.lockToo, color) { state.lockToo = it }
 }

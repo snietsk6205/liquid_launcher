@@ -261,6 +261,21 @@ fun HomeScreen(
             null
         }
     }
+    // The blur behind the drawer and behind search: a blurred copy of the wallpaper, made once,
+    // that fades in over the sharp one. Costs two textured quads per frame. Up to 0.5.0 the whole
+    // home screen went through a live blur whose radius changed every frame, the most expensive
+    // thing in the transition (now an option, "Blur the icons too").
+    val deepBlurDp = maxOf(motionShown.homeBlurDp, searchBlurDp)
+    val deepWallpaper by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, image, homeBlurDp, deepBlurDp, motionShown.liveBlur) {
+        val source = image
+        value = if (source != null && deepBlurDp > 0 && !motionShown.liveBlur) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                dev.liquid.launcher.core.designsystem.WallpaperBlur.blur(source.asAndroidBitmap(), (homeBlurDp + deepBlurDp) * density1.density).asImageBitmap()
+            }
+        } else {
+            null
+        }
+    }
     if (studio != null) {
         // Preview the screen being adjusted.
         LaunchedEffect(studio.surface) {
@@ -275,6 +290,7 @@ fun HomeScreen(
         // A wallpaper being tried out decides the text colour of the preview too.
         studio?.rendered?.let { dev.liquid.launcher.core.common.WallpaperTones.fromBitmap(it)?.light } ?: wallpaperIsLight(context)
     }
+    SideEffect { IconPaint.lightWallpaper = lightBackground }
     val contentColor = theme.textColor ?: if (lightBackground) Color(0xFF16181C) else Color.White
     val shadow = if (lightBackground) null else Shadow(Color.Black.copy(alpha = 0.45f), Offset(0f, 1f), 4f)
 
@@ -406,12 +422,11 @@ fun HomeScreen(
               Modifier
                   .fillMaxSize()
                   .graphicsLayer {
+                      if (!motionShown.liveBlur) return@graphicsLayer
                       val p = controller.drawer.value.coerceIn(0f, 1f)
                       val searchP = if (studio?.surface == "search") 1f else controller.searchAmount
-                      // A phone that only holds the frame rate with tint glass (glass benchmark) gets no blur here either.
-                      val tint = glass.quality == GlassQuality.Tint
-                      val drawerRadius = if (tint) 0f else motionShown.homeBlurDp.dp.toPx() * p
-                      val searchRadius = if (tint) 0f else searchBlurDp.dp.toPx() * searchP
+                      val drawerRadius = motionShown.homeBlurDp.dp.toPx() * p
+                      val searchRadius = searchBlurDp.dp.toPx() * searchP
                       val radius = maxOf(drawerRadius, searchRadius)
                       renderEffect = if (radius >= 0.5f) BlurEffect(radius, radius, TileMode.Clamp) else null
                   }
@@ -430,6 +445,24 @@ fun HomeScreen(
                     },
                     modifier = Modifier.layerBackdrop(wallpaperBackdrop),
                 )
+                val deep = deepWallpaper
+                if (deep != null && placing == null) {
+                    WallpaperImage(
+                        image = deep,
+                        frame = { null },
+                        offset = {
+                            val pages = controller.pager.pageCount
+                            if (pages <= 1) 0.5f else (controller.pager.currentPage + controller.pager.currentPageOffsetFraction) / (pages - 1)
+                        },
+                        modifier = Modifier,
+                        alpha = {
+                            val p = controller.drawer.value.coerceIn(0f, 1f)
+                            val searchP = if (studio?.surface == "search") 1f else controller.searchAmount
+                            val depth = deepBlurDp.coerceAtLeast(1).toFloat()
+                            maxOf(p * motionShown.homeBlurDp / depth, searchP * searchBlurDp / depth)
+                        },
+                    )
+                }
             }
             if (homeDim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = homeDim)))
             val pillSpace = (if (pill.enabled || controller.editMode) pill.heightDp + pill.offsetDp + 12 else 0) +

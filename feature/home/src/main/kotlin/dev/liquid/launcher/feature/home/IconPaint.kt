@@ -48,6 +48,25 @@ object IconPaint {
     var duotone by mutableStateOf<ColorFilter?>(null)
         private set
 
+    /** For line icons, which sit on the wallpaper without a plate: the tone of the palette that reads on it. */
+    var tint by mutableStateOf<ColorFilter?>(null)
+        private set
+
+    /** Set by the home screen: dark content reads better on the wallpaper. */
+    var lightWallpaper: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            if (ready) tint = tintFor(background, foreground)
+        }
+
+    private fun tintFor(first: Int, second: Int): ColorFilter {
+        val firstLighter = ColorUtils.calculateLuminance(first) > ColorUtils.calculateLuminance(second)
+        val lighter = if (firstLighter) first else second
+        val darker = if (firstLighter) second else first
+        return ColorFilter.tint(androidx.compose.ui.graphics.Color(if (lightWallpaper) darker else lighter), androidx.compose.ui.graphics.BlendMode.SrcIn)
+    }
+
     /** Counts finished colour changes, for the "icons redrawn" timing line. */
     var settled by mutableIntStateOf(0)
         private set
@@ -65,6 +84,7 @@ object IconPaint {
         background = colours.first
         foreground = colours.second
         duotone = ColorFilter.colorMatrix(ColorMatrix(ThemedColors.duotoneMatrix(colours.first, colours.second)))
+        tint = tintFor(colours.first, colours.second)
         ready = true
     }
 
@@ -138,7 +158,8 @@ fun AppIcon(app: AppEntry?, home: Boolean, modifier: Modifier, description: Stri
 
 /**
  * Draws [art] in the current [IconPaint] colours, or [icon] as it is. Two small bitmap draws
- * (shape and glyph masks) or one colour-filtered draw; the colours are read while drawing.
+ * (shape and glyph masks) or one colour-filtered draw (two-tone, or a tint for line icons);
+ * the colours are read while drawing.
  */
 @Composable
 fun ArtIcon(icon: ImageBitmap?, art: IconArt?, modifier: Modifier, description: String?) {
@@ -165,8 +186,10 @@ fun ArtIcon(icon: ImageBitmap?, art: IconArt?, modifier: Modifier, description: 
                         canvas.nativeCanvas.drawBitmap(art.plate, null, rect, paint)
                         paint.color = IconPaint.foreground
                         canvas.nativeCanvas.drawBitmap(art.glyph, null, rect, paint)
+                        art.badge?.let { drawImage(it, dstSize = IntSize(w, h), filterQuality = FilterQuality.Medium) }
                     }
                     is IconArt.Duotone -> drawImage(art.source, dstSize = IntSize(w, h), colorFilter = IconPaint.duotone, filterQuality = FilterQuality.Medium)
+                    is IconArt.Tint -> drawImage(art.source, dstSize = IntSize(w, h), colorFilter = IconPaint.tint, filterQuality = FilterQuality.Medium)
                 }
             }
     )

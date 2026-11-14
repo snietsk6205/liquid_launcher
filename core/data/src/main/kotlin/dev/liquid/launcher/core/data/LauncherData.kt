@@ -30,7 +30,7 @@ import java.io.File
 class LauncherData private constructor(private val context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** Bumped when the palette changes: only icons rendered in colour (fitted to a pack, work badge) are redrawn. */
+    /** Bumped when the wallpaper's colours may have changed: the themed icon palette is worked out again. */
     private val themeTick = MutableStateFlow(0)
 
     /** Bumped when the system's colours change: icon packs that follow them are loaded again. */
@@ -83,13 +83,17 @@ class LauncherData private constructor(private val context: Context) {
         scope.launch {
             settings.values.map { settings.get(LauncherSettings.ThemeIconShape) }.distinctUntilChanged().collect { apps.iconShape = it }
         }
+        // Which icons the apps get: changes with the icon settings and packs, never with the colours.
         scope.launch {
-            combine(settings.values, themeTick, packTick) { _, _, pack -> iconConfig(pack) }
+            combine(settings.values, packTick) { _, pack -> iconConfig(pack) }
                 .distinctUntilChanged()
-                .collect { config ->
-                    _iconPalette.value = config.themed?.let { it.background to it.foreground }
-                    apps.iconConfig.value = config
-                }
+                .collect { config -> apps.iconConfig.value = config }
+        }
+        // The colours themed icons are drawn in: a new wallpaper only changes these two numbers.
+        scope.launch {
+            combine(settings.values, themeTick) { _, _ -> if (settings.get(LauncherSettings.ThemedIcons)) palette() else null }
+                .distinctUntilChanged()
+                .collect { _iconPalette.value = it }
         }
         // A wallpaper the launcher sets itself brings its colours along: recolour at once.
         WallpaperTones.load(context)
@@ -180,14 +184,12 @@ class LauncherData private constructor(private val context: Context) {
         val main = settings.get(LauncherSettings.IconPack)
         fun pick(value: String) = if (value == LauncherSettings.SAME_AS_MAIN) main else value
         val themed = if (settings.get(LauncherSettings.ThemedIcons)) {
-            val (background, foreground) = palette()
             val where = settings.get(LauncherSettings.ThemedIconsWhere)
             ThemedIcons(
                 home = where != "drawer",
                 drawer = where != "home",
                 tintUncovered = settings.get(LauncherSettings.ThemedIconsUncovered) == "tint",
-                background = background,
-                foreground = foreground,
+                packs = settings.get(LauncherSettings.ThemedIconsPacks) == "follow",
             )
         } else {
             null

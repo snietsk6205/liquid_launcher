@@ -12,8 +12,10 @@ import kotlinx.coroutines.flow.StateFlow
  * it was set. The system works these out again on its own, but MagicOS can report them late
  * or not at all, so themed icons, the accent and light / dark text read these first.
  *
- * [systemId] is the system's wallpaper id after the launcher set it; when the system reports a
- * different id, the wallpaper was changed outside the launcher and these colours no longer apply.
+ * [systemId] is the system's wallpaper id these colours were last known to belong to: the id
+ * after the launcher's own write, or the id that was current when the launcher showed a
+ * picture it has not handed to the system yet. -1 = not known yet. A different id later on,
+ * with no write of the launcher's own under way, means the wallpaper was changed elsewhere.
  */
 data class WallpaperTone(
     val primary: Int,
@@ -88,21 +90,120 @@ object WallpaperTones {
         -1
     }
 
+    // ---- the launcher's own writes to the system wallpaper ----
+
+    private val lock = Any()
+    private var writesInFlight = 0
+    private var lastOwnWriteAt = -1_000_000L
+    private val ownIds = ArrayDeque<Int>()
+
+    /** A system id that differs from the tone's, and when it was first seen (uptime). */
+    private var strangerId = -1
+    private var strangerSince = 0L
+
+    /** The launcher starts handing a wallpaper to the system: id changes are its own until [endOwnWrite] and a little after. */
+    fun beginOwnWrite() = synchronized(lock) { writesInFlight++ }
+
     /**
-     * The launcher's colours if the system wallpaper is still the one the launcher set, else
-     * null (and they are dropped, so the system's colours take over).
+     * The launcher's write finished and the system now reports [id]. With [applies] (the picture
+     * written is still the one shown) the colours are tied to that id.
+     */
+    fun endOwnWrite(context: Context, id: Int, applies: Boolean) {
+        synchronized(lock) {
+            writesInFlight = (writesInFlight - 1).coerceAtLeast(0)
+            lastOwnWriteAt = android.os.SystemClock.uptimeMillis()
+            if (id > 0) {
+                ownIds.addLast(id)
+                while (ownIds.size > OWN_IDS) ownIds.removeFirst()
+            }
+            strangerId = -1
+        }
+        if (applies && id > 0) _tone.value?.let { if (it.systemId != id) set(context, it.copy(systemId = id)) }
+    }
+
+    /** The system wallpaper with [id] is the launcher's (found unchanged, nothing was written). */
+    fun adopt(context: Context, id: Int, applies: Boolean) {
+        if (id <= 0) return
+        synchronized(lock) {
+            ownIds.addLast(id)
+            while (ownIds.size > OWN_IDS) ownIds.removeFirst()
+            strangerId = -1
+        }
+        if (applies) _tone.value?.let { if (it.systemId != id) set(context, it.copy(systemId = id)) }
+    }
+
+    /**
+     * True while the launcher is writing the system wallpaper and for a few seconds after. In
+     * that time the system is busy, its wallpaper id moves, and MagicOS can bring the system
+     * launcher to the front by itself.
+     */
+    val ownWriteActive: Boolean
+        get() = synchronized(lock) {
+            writesInFlight > 0 || android.os.SystemClock.uptimeMillis() - lastOwnWriteAt < OWN_WRITE_GRACE_MS
+        }
+
+    /**
+     * The launcher shows a picture it has not handed to the system (yet): remember the id the
+     * system has now, so a later change made elsewhere is still noticed.
+     */
+    fun rebase(context: Context) {
+        if (ownWriteActive) return
+        val now = systemId(context)
+        val tone = _tone.value ?: return
+        if (now > 0 && tone.systemId != now) set(context, tone.copy(systemId = now))
+    }
+
+    /**
+     * The launcher's colours if the system wallpaper is still the launcher's, else null (and
+     * they are dropped, so the system's colours take over).
+     *
+     * 0.4.1 to 0.5.0 treated any other id as "changed elsewhere". With two of the launcher's
+     * own writes under way (each takes seconds on MagicOS and they could finish out of order)
+     * the stored id was an older write's, so the launcher dropped its own wallpaper, and with
+     * it the picture glass refracts. Now an id only counts as someone else's when no write of
+     * the launcher's is running or just finished, it is not one the launcher wrote, and it has
+     * been seen twice, [CONFIRM_MS] apart.
      */
     fun current(context: Context): WallpaperTone? {
         load(context)
         val tone = _tone.value ?: return null
         if (tone.systemId <= 0) return tone
         val now = systemId(context)
-        if (now <= 0 || now == tone.systemId) return tone
+        if (now <= 0 || now == tone.systemId) {
+            synchronized(lock) { strangerId = -1 }
+            return tone
+        }
+        val uptime = android.os.SystemClock.uptimeMillis()
+        val verdict = synchronized(lock) {
+            when {
+                writesInFlight > 0 || uptime - lastOwnWriteAt < OWN_WRITE_GRACE_MS -> 0
+                now in ownIds -> 1
+                strangerId != now -> {
+                    strangerId = now
+                    strangerSince = uptime
+                    0
+                }
+                uptime - strangerSince < CONFIRM_MS -> 0
+                else -> 2
+            }
+        }
+        when (verdict) {
+            0 -> return tone
+            1 -> {
+                // One of the launcher's own writes: the colours shown are the newest, keep them.
+                set(context, tone.copy(systemId = now))
+                return _tone.value
+            }
+        }
         DebugLog.event("Wallpaper", "wallpaper changed outside the launcher (id ${tone.systemId} -> $now), showing the system's")
         clear(context)
         _outsideChanges.value++
         return null
     }
+
+    private const val OWN_IDS = 12
+    private const val OWN_WRITE_GRACE_MS = 8000L
+    private const val CONFIRM_MS = 1500L
 
     /** The system wallpaper is no longer the launcher's: fall back to the system's colours. */
     fun clear(context: Context) {

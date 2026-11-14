@@ -25,15 +25,26 @@ data class EngineConfig(
     val requireHomeSignature: Boolean = false,
     /** Redirect anyway after this long without the home screen views (ids renamed, odd layout). */
     val signatureFallbackMs: Long = 700,
-    /** The home screen views have proven reliable on this phone: use [fastDelayMs] when they are visible. */
-    val fastMode: Boolean = false,
-    val fastDelayMs: Long = 30,
+    /**
+     * Redirect after [fastDelayMs] when the system launcher is seen playing its own "going
+     * home" animation (its home screen drawn smaller, [Probe.homeAnimating]). That animation
+     * only starts once the gesture has ended towards home, so recents cannot follow it; on the
+     * phone it was seen in 20 of 34 home arrivals and in none of 24 recents openings.
+     */
+    val fastOnHomeAnimation: Boolean = true,
+    val fastDelayMs: Long = 0,
     /**
      * When recents opens within [reopenWindowMs] of a redirect and the launcher then covers it,
      * open recents again: the redirect interrupted a slow recents gesture.
      */
     val reopenRecents: Boolean = true,
     val reopenWindowMs: Long = 600,
+    /**
+     * Also reopen recents when, just after a redirect that was not certain to be "home", the
+     * system launcher reports a window change of its own behind the launcher but its views
+     * cannot be read to make sure.
+     */
+    val reopenOnHint: Boolean = true,
 )
 
 /** What is on screen right now, as far as the engine needs to know. */
@@ -47,6 +58,8 @@ data class Probe(
     val homeSignature: Boolean = false,
     /** The system launcher's own app drawer is visible. */
     val drawerSignature: Boolean = false,
+    /** The home screen views are drawn smaller than the window: the "going home" animation is running. */
+    val homeAnimating: Boolean = false,
 ) {
     /** Home screen or app drawer: what a redirect may replace. */
     val homeVisible: Boolean get() = homeSignature || drawerSignature
@@ -63,7 +76,7 @@ enum class EngineState {
     RECENTS,
 }
 
-enum class EngineTimer { EVALUATE, POLL, REDIRECT, SCREEN_OFF }
+enum class EngineTimer { EVALUATE, POLL, REDIRECT, SCREEN_OFF, PAUSE_END }
 
 /** Everything the engine needs from Android, so the logic itself runs in plain unit tests. */
 interface EngineHost {
@@ -85,6 +98,16 @@ interface EngineHost {
 
     /** Opens recents again (a redirect covered it). */
     fun reopenRecents()
+
+    /**
+     * The system launcher is expected to come to the front by itself right now (MagicOS does
+     * that when the launcher has just changed the system wallpaper) while the launcher was in
+     * front: nothing to wait for.
+     */
+    fun homeBounceExpected(): Boolean = false
+
+    /** Until [untilMs] (0 = no longer) the engine wants to hear what the system launcher does behind the launcher. */
+    fun onAfterglow(untilMs: Long) = Unit
 
     /** The engine starts (true) or stops (false) watching the system launcher closely. */
     fun setTracking(on: Boolean)
@@ -147,6 +170,18 @@ class RedirectEngine(private val host: EngineHost) {
     private var redirectDueAt = 0L
     private var contentEvents = 0
 
+    /** The "going home" animation was seen in this stay, and when. */
+    private var animationSeen = false
+    private var animationSeenAt = 0L
+
+    /** The system launcher came to the front by itself after the launcher's own wallpaper change. */
+    private var bounce = false
+    private var staleProbes = 0
+
+    /** After a redirect that could have covered recents: until when to listen behind the launcher. */
+    private var afterglowUntil = 0L
+    private var lastUserPresentAt = -1_000_000L
+
     // Recents interrupted by a redirect.
     private var lastLaunchAt = -1_000_000L
     private var reopenUntil = 0L
@@ -163,13 +198,17 @@ class RedirectEngine(private val host: EngineHost) {
         host.log(LogLevel.DECISION, "paused for ${durationMs / 1000} s ($reason)")
         host.onPausedChanged(durationMs)
         toIdle("paused")
+        host.schedule(EngineTimer.PAUSE_END, durationMs)
     }
 
+    /** Ends a pause; if the system launcher is in front right now, the redirect picks it up. */
     fun resume() {
         if (pausedUntil == 0L) return
         pausedUntil = 0L
+        host.cancel(EngineTimer.PAUSE_END)
         host.log(LogLevel.DECISION, "resumed")
         host.onPausedChanged(0)
+        onSystemLauncherWindow()
     }
 
     /** A home activity of the system launcher reported a window change. */
@@ -211,6 +250,7 @@ class RedirectEngine(private val host: EngineHost) {
     }
 
     fun onUserPresent() {
+        lastUserPresentAt = host.now()
         host.cancel(EngineTimer.SCREEN_OFF)
         if (config.unlockCheck) onSystemLauncherWindow()
     }
@@ -242,7 +282,46 @@ class RedirectEngine(private val host: EngineHost) {
                 evaluate()
             }
             EngineTimer.SCREEN_OFF -> fireScreenOff()
+            EngineTimer.PAUSE_END -> if (pausedUntil != 0L) {
+                pausedUntil = 0L
+                host.log(LogLevel.DECISION, "pause over")
+                host.onPausedChanged(0)
+                onSystemLauncherWindow()
+            }
         }
+    }
+
+    /** True while a redirect that might have covered recents is being listened after. */
+    val inAfterglow: Boolean get() = afterglowUntil != 0L && host.now() <= afterglowUntil
+
+    /**
+     * The launcher is in front just after a redirect, and the system launcher did something
+     * behind it. [recentsSeen]: its recents views were found (true), were not there (false),
+     * or could not be looked at (null; then the event alone is the hint).
+     *
+     * This is the case recovery missed up to 0.5.0: recents that opens after the launcher has
+     * already come to the front was never looked for.
+     */
+    fun onActivityBehindLauncher(recentsSeen: Boolean?) {
+        val now = host.now()
+        if (!inAfterglow || recentsSeen == false || !host.isLauncherInFront()) return
+        if (recentsSeen == null && (!config.reopenOnHint || now - lastLaunchAt < HINT_MIN_MS)) return
+        endAfterglow()
+        if (!config.reopenRecents || now - lastReopenAt <= REOPEN_GUARD_MS) return
+        lastReopenAt = now
+        host.onEpisode(recentsFollowed = true, signatureSeen = true, afterLaunch = true)
+        host.log(
+            LogLevel.DECISION,
+            "recents opened behind the launcher ${now - lastLaunchAt} ms after the redirect " +
+                "(${if (recentsSeen == true) "its views were seen" else "window change, views not readable"}): opening recents again",
+        )
+        host.reopenRecents()
+    }
+
+    private fun endAfterglow() {
+        if (afterglowUntil == 0L) return
+        afterglowUntil = 0L
+        host.onAfterglow(0L)
     }
 
     private fun evaluate() {
@@ -256,7 +335,19 @@ class RedirectEngine(private val host: EngineHost) {
             finishInFront()
             return
         }
+        val probeStart = host.now()
         val probe = host.probe()
+        val probeTook = host.now() - probeStart
+        if (probeTook >= STALE_MS && staleProbes < MAX_STALE) {
+            // The look waited on the system: what it saw may be seconds old (0.5.0 redirected over
+            // an app that way). Look again before deciding anything.
+            staleProbes++
+            host.log(LogLevel.DECISION, "window check took $probeTook ms: its answer is out of date, checking again")
+            evaluateQueued = true
+            host.schedule(EngineTimer.EVALUATE, 0)
+            return
+        }
+        staleProbes = 0
         if (!probe.isSystemLauncher) {
             // While idle there is nothing to leave; a watch after a window event keeps running.
             if (probe.activePackage != null && state != EngineState.IDLE) {
@@ -301,6 +392,9 @@ class RedirectEngine(private val host: EngineHost) {
         nextAttemptAt = 0L
         lastExclusion = null
         contentEvents = 0
+        animationSeen = false
+        bounce = fromIdle && triggerOn && host.homeBounceExpected()
+        endAfterglow()
         unreadableLogged = false
         watchFastUntil = 0L
         watchUntil = 0L
@@ -314,11 +408,14 @@ class RedirectEngine(private val host: EngineHost) {
             host.log(LogLevel.DECISION, "$reason; not redirecting: this trigger is switched off")
             return
         }
+        noteAnimation(probe)
         val due = dueAt(probe)
         val wait = due - enteredHomeAt
         host.log(
             LogLevel.DECISION,
             when {
+                bounce -> "$reason after the launcher's own wallpaper change, redirect at once"
+                animationSeen -> "$reason, its going-home animation is running, redirect in $wait ms"
                 !needsSignature() -> "$reason, redirect in $wait ms"
                 probe.homeVisible -> "$reason, ${visibleName(probe)} visible, redirect in $wait ms"
                 due == NEVER -> "$reason, home screen not visible: waiting for it (no redirect over anything else)"
@@ -336,10 +433,21 @@ class RedirectEngine(private val host: EngineHost) {
      */
     private fun needsSignature() = config.requireHomeSignature
 
+    /** Remembers the first sight of the system launcher's "going home" animation in this stay. */
+    private fun noteAnimation(probe: Probe) {
+        if (!animationSeen && fromIdle && config.fastOnHomeAnimation && probe.homeAnimating) {
+            animationSeen = true
+            animationSeenAt = host.now()
+        }
+    }
+
     /** When the redirect for the current HOME stay is due, given what is on screen now. */
     private fun dueAt(probe: Probe): Long = when {
+        bounce -> enteredHomeAt
+        // Certain to be "home": no need to wait and see whether recents follows.
+        animationSeen -> minOf(animationSeenAt + config.fastDelayMs, enteredHomeAt + baseDelayMs)
         !needsSignature() -> enteredHomeAt + baseDelayMs
-        probe.homeVisible -> enteredHomeAt + if (config.fastMode && fromIdle) minOf(config.fastDelayMs, baseDelayMs) else baseDelayMs
+        probe.homeVisible -> enteredHomeAt + baseDelayMs
         fromIdle -> enteredHomeAt + maxOf(baseDelayMs, config.signatureFallbackMs)
         else -> NEVER
     }
@@ -351,6 +459,12 @@ class RedirectEngine(private val host: EngineHost) {
             if (waitingLogged) host.log(LogLevel.DECISION, "${visibleName(probe)} visible")
         }
         if (declined) return
+        if (!animationSeen && probe.homeAnimating) {
+            noteAnimation(probe)
+            if (animationSeen && launchAttempts == 0) {
+                host.log(LogLevel.DECISION, "going-home animation seen ${animationSeenAt - enteredHomeAt} ms in: no need to wait for recents")
+            }
+        }
         val now = host.now()
         val due = maxOf(dueAt(probe), nextAttemptAt)
         if (now < due) {
@@ -380,6 +494,7 @@ class RedirectEngine(private val host: EngineHost) {
             host.onEpisode(recentsFollowed = true, signatureSeen = signatureSeen, afterLaunch = interrupted)
         }
         episodeOpen = false
+        endAfterglow()
         host.cancel(EngineTimer.REDIRECT)
         val wasIdle = state == EngineState.IDLE
         state = EngineState.RECENTS
@@ -466,13 +581,21 @@ class RedirectEngine(private val host: EngineHost) {
         if (episodeOpen && state == EngineState.HOME && launchAttempts > 0) {
             host.onEpisode(recentsFollowed = false, signatureSeen = signatureSeen, afterLaunch = true)
         }
-        val reopen = reopenUntil != 0L && host.now() <= reopenUntil
+        val now = host.now()
+        val reopen = reopenUntil != 0L && now <= reopenUntil
+        // A redirect that was certain (going-home animation, own wallpaper change) or that
+        // followed an unlock cannot have covered a recents gesture.
+        val listen = state == EngineState.HOME && launchAttempts > 0 && fromIdle && config.reopenRecents &&
+            !animationSeen && !bounce && now - lastUserPresentAt > UNLOCK_QUIET_MS
         reopenUntil = 0L
         toIdle("launcher in front")
         if (reopen) {
-            lastReopenAt = host.now()
+            lastReopenAt = now
             host.log(LogLevel.DECISION, "the redirect covered recents: opening recents again")
             host.reopenRecents()
+        } else if (listen && lastLaunchAt + AFTERGLOW_MS > now) {
+            afterglowUntil = lastLaunchAt + AFTERGLOW_MS
+            host.onAfterglow(afterglowUntil)
         }
     }
 
@@ -484,6 +607,7 @@ class RedirectEngine(private val host: EngineHost) {
         reopenUntil = 0L
         redirectDueAt = 0L
         declined = false
+        staleProbes = 0
         launchAttempts = 0
         nextAttemptAt = 0L
         lastExclusion = null
@@ -523,6 +647,19 @@ class RedirectEngine(private val host: EngineHost) {
 
         /** At most one reopen in this time, so a misreading can never loop. */
         const val REOPEN_GUARD_MS = 5000L
+
+        /** A look at the system launcher that took this long says nothing about now. */
+        const val STALE_MS = 400L
+        const val MAX_STALE = 3
+
+        /** After a redirect: how long recents appearing behind the launcher is still that gesture. */
+        const val AFTERGLOW_MS = 900L
+
+        /** A bare window change this soon after the redirect is still the going-home hand-over. */
+        const val HINT_MIN_MS = 120L
+
+        /** Right after an unlock the system launcher rearranges itself; nothing then is a recents gesture. */
+        const val UNLOCK_QUIET_MS = 2500L
 
         /** No redirect until the home screen becomes visible. */
         private const val NEVER = Long.MAX_VALUE

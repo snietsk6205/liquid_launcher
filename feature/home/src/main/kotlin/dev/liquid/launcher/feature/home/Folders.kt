@@ -198,7 +198,7 @@ internal fun FolderOverlay(
                         scaleY = 0.88f + 0.12f * p
                     }
                 }
-                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground))
+                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground, large = true))
                 .clip(shape)
                 // Taps inside the card do not close it.
                 .pointerInput(Unit) { detectTapGestures { } }

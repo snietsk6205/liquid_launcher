@@ -9,10 +9,11 @@ object SettingDependencies {
             listOf(surface.blur, surface.refraction, surface.tint).forEach { map[it.key] = custom }
         }
         map[LauncherSettings.HomeLabelSize.key] = LauncherSettings.HomeLabels
-        map[LauncherSettings.FastDelay.key] = LauncherSettings.FastWhenProven
+        map[LauncherSettings.FastDelay.key] = LauncherSettings.FastOnHomeAnimation
         map[LauncherSettings.HomeScreenFallback.key] = LauncherSettings.RequireHomeScreen
         map[LauncherSettings.ReopenWindow.key] = LauncherSettings.ReopenRecents
-        for (s in listOf(LauncherSettings.ThemedIconsWhere, LauncherSettings.ThemedIconsUncovered, LauncherSettings.ThemedIconsColors, LauncherSettings.ThemedIconsStyle)) {
+        map[LauncherSettings.ReopenOnHint.key] = LauncherSettings.ReopenRecents
+        for (s in listOf(LauncherSettings.ThemedIconsWhere, LauncherSettings.ThemedIconsUncovered, LauncherSettings.ThemedIconsPacks, LauncherSettings.ThemedIconsColors, LauncherSettings.ThemedIconsStyle)) {
             map[s.key] = LauncherSettings.ThemedIcons
         }
         for (s in listOf(LauncherSettings.HapticsStrength, LauncherSettings.HapticDrawer, LauncherSettings.HapticPickUp)) {

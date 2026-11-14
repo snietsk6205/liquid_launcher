@@ -42,6 +42,13 @@ class PreparedWallpaper(
 object Wallpapers {
     fun defaultParallax(data: LauncherData): Float = data.settings.get(LauncherSettings.WallpaperParallax) / 100f
 
+    /** When the system gets a wallpaper the launcher shows (setting "Hand the wallpaper to the system"). */
+    fun systemWrite(data: LauncherData): WallpaperStore.SystemWrite = when (data.settings.get(LauncherSettings.WallpaperSystemWrite)) {
+        "screenoff" -> WallpaperStore.SystemWrite.ScreenOff
+        "never" -> WallpaperStore.SystemWrite.Never
+        else -> WallpaperStore.SystemWrite.Soon
+    }
+
     /** The picture behind [pick], decoded for placing. */
     suspend fun source(context: Context, data: LauncherData, pick: WallpaperPick): Bitmap? {
         val store = WallpaperStore.get(context)
@@ -71,8 +78,14 @@ object Wallpapers {
      * a phone folder are copied in when [keepFolderPicture] (picked by hand), not when an
      * automatic change used them.
      */
-    suspend fun persist(context: Context, data: LauncherData, prepared: PreparedWallpaper, keepFolderPicture: Boolean = true): String? {
-        val error = WallpaperStore.get(context).persist(prepared.bitmap, data.settings.get(LauncherSettings.WallpaperLockToo))
+    suspend fun persist(
+        context: Context,
+        data: LauncherData,
+        prepared: PreparedWallpaper,
+        keepFolderPicture: Boolean = true,
+        system: WallpaperStore.SystemWrite = systemWrite(data),
+    ): String? {
+        val error = WallpaperStore.get(context).persist(prepared.bitmap, data.settings.get(LauncherSettings.WallpaperLockToo), system = system)
         val item = when (val pick = prepared.pick) {
             is WallpaperPick.Library -> pick.item
             is WallpaperPick.External -> if (keepFolderPicture) data.wallpapers.importUri(pick.uri, pick.folder) else null
@@ -120,7 +133,9 @@ object Wallpapers {
         val pick = next(data) ?: return
         val prepared = prepare(context, data, pick) ?: return
         WallpaperStore.get(context).show(prepared.bitmap, prepared.tone)
-        persist(context, data, prepared, keepFolderPicture = false)
+        // The screen is off: nobody waits, so the system gets the picture right away (unless it never does).
+        val system = if (systemWrite(data) == WallpaperStore.SystemWrite.Never) WallpaperStore.SystemWrite.Never else WallpaperStore.SystemWrite.Now
+        persist(context, data, prepared, keepFolderPicture = false, system = system)
         DebugLog.event("Wallpaper", "changed automatically ($mode)")
     }
 

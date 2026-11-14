@@ -160,7 +160,8 @@ private fun StatusCard(store: SettingsStore) {
                 if (paused) {
                     OutlinedButton(onClick = { RedirectStatus.resume() }) { Text("Resume") }
                 } else {
-                    OutlinedButton(onClick = { RedirectStatus.pause(5 * 60_000L, "paused from settings") }) {
+                    // Pausing is for using the system launcher, so it opens it; the redirect comes back by itself.
+                    OutlinedButton(onClick = { RedirectStatus.openSystemLauncher(context, 5 * 60_000L) }) {
                         Text("Pause 5 min")
                     }
                 }

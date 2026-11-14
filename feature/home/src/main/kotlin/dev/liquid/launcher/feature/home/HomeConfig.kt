@@ -173,6 +173,8 @@ data class DrawerMotion(
     /** Fraction the home screen shrinks by. */
     val homeScale: Float,
     val homeBlurDp: Int,
+    /** Blur the whole home screen live in every frame (heavy) instead of melting the wallpaper into a blurred copy. */
+    val liveBlur: Boolean = false,
     /** "glass", "line" or "off". */
     val scrollbar: String,
     val bubble: Boolean,
@@ -193,6 +195,11 @@ data class GlassConfig(
     val surfaces: Map<String, SurfaceValues>,
     /** Theme glass colour; null tints with white or black. */
     val tintColor: Color? = null,
+    /**
+     * Quality of large sheets (folders, lists, the wallpaper screen). The glass benchmark may
+     * lower it to frosted; pills, chips, menus and the clock always keep [quality].
+     */
+    val largeQuality: GlassQuality = quality,
 ) {
     private fun values(surface: String) = surfaces[surface] ?: surfaces.getValue(S.GlassDefault.id)
 
@@ -206,7 +213,8 @@ data class GlassConfig(
         }
     }
 
-    fun style(surface: String, lightBackground: Boolean): GlassStyle {
+    /** [large]: a sheet that covers a good part of the screen (see [largeQuality]). */
+    fun style(surface: String, lightBackground: Boolean, large: Boolean = false): GlassStyle {
         val v = values(surface)
         val light = when (tintMode) {
             "light" -> true
@@ -214,7 +222,7 @@ data class GlassConfig(
             else -> lightBackground
         }
         val base = tintColor ?: if (light) Color.White else Color.Black
-        return GlassStyle(quality, v.blurDp.dp, v.refraction / 100f, base.copy(alpha = v.tint / 100f))
+        return GlassStyle(if (large) largeQuality else quality, v.blurDp.dp, v.refraction / 100f, base.copy(alpha = v.tint / 100f))
     }
 }
 
@@ -319,6 +327,7 @@ fun SettingsStore.drawerMotion(): DrawerMotion {
         rise = get(S.DrawerRise) / 100f,
         homeScale = get(S.DrawerHomeScale) / 100f,
         homeBlurDp = get(S.DrawerHomeBlur),
+        liveBlur = get(S.DrawerBlurLive),
         scrollbar = get(S.DrawerScrollbar),
         bubble = get(S.DrawerScrollBubble),
         scrollEffect = get(S.DrawerScrollEffect),
@@ -328,8 +337,13 @@ fun SettingsStore.drawerMotion(): DrawerMotion {
 }
 
 fun SettingsStore.glassConfig(): GlassConfig {
-    val requested = GlassQuality.fromSetting(get(S.GlassQuality))
-    val quality = if (get(S.GlassAuto)) requested.cappedAt(GlassQuality.fromSetting(get(S.GlassCap))) else requested
+    // The user's choice decides how glass looks. Up to 0.5.0 the benchmark's result capped every
+    // surface, so one benchmark run that measured "tint" turned all liquid glass into flat fills.
+    // Still glass costs nothing per frame, and small glass is cheap while it moves; the benchmark
+    // now only takes the refraction off large sheets.
+    val quality = GlassQuality.fromSetting(get(S.GlassQuality))
+    val capped = get(S.GlassAuto) && GlassQuality.fromSetting(get(S.GlassCap)) != GlassQuality.Full
+    val large = if (capped && quality == GlassQuality.Full) GlassQuality.Frosted else quality
     fun values(surface: S.GlassSurface) = SurfaceValues(get(surface.blur), get(surface.refraction), get(surface.tint))
     val default = values(S.GlassDefault)
     val surfaces = HashMap<String, SurfaceValues>()
@@ -338,7 +352,7 @@ fun SettingsStore.glassConfig(): GlassConfig {
         val custom = surface.custom
         surfaces[surface.id] = if (custom != null && get(custom)) values(surface) else default
     }
-    return GlassConfig(quality, get(S.GlassTintMode), surfaces, dev.liquid.launcher.core.settings.ColorSetting.parse(get(S.ThemeGlassColor))?.let { Color(it) })
+    return GlassConfig(quality, get(S.GlassTintMode), surfaces, dev.liquid.launcher.core.settings.ColorSetting.parse(get(S.ThemeGlassColor))?.let { Color(it) }, large)
 }
 
 data class SearchConfig(val engine: String, val keyboard: Boolean, val dim: Float, val blurDp: Int)

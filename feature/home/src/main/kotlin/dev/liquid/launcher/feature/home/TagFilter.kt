@@ -201,10 +201,18 @@ internal fun TagStrip(
             Spacer(Modifier.width(14.dp))
             TagsButton(controller, color, Modifier.liquidGlass(backdrop, CircleShape, glass.style(Surfaces.Drawer, lightBackground)), interactive)
         }
+        // One glass surface for the whole row. Up to 0.5.0 every chip was its own glass (a
+        // shader pass each, redrawn whenever the list under them scrolled), against D8.
+        val rowShape = RoundedCornerShape(50)
         LazyRow(
-            modifier = Modifier.weight(1f).height(TagStripHeight),
-            contentPadding = PaddingValues(horizontal = if (config.button.startsWith("row")) 8.dp else 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = if (config.button.startsWith("row")) 8.dp else 14.dp)
+                .height(40.dp)
+                .liquidGlass(backdrop, rowShape, glass.style(Surfaces.Drawer, lightBackground))
+                .clip(rowShape),
+            contentPadding = PaddingValues(horizontal = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             item(key = "all") {
@@ -292,8 +300,7 @@ private fun StripChip(
     val textColor = if (on) readableOn(accent) else color
     Row(
         Modifier
-            .height(36.dp)
-            .liquidGlass(backdrop, shape, glass.style(Surfaces.Drawer, lightBackground))
+            .height(34.dp)
             .clip(shape)
             .background(if (on) accent.copy(alpha = 0.9f) else Color.Transparent)
             .then(if (interactive) Modifier.combinedClickable(onClick = onTap, onLongClick = onHold) else Modifier)
@@ -446,7 +453,7 @@ internal fun TagSheet(
       Layout(
         modifier = Modifier.fillMaxSize(),
         content = {
-          Box(Modifier.liquidGlass(backdrop, RoundedCornerShape(radiusDp), glass.style(Surfaces.Menu, lightBackground)))
+          Box(Modifier.liquidGlass(backdrop, RoundedCornerShape(radiusDp), glass.style(Surfaces.Menu, lightBackground, large = true)))
           Column(
             Modifier
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
