@@ -350,10 +350,26 @@ fun HomeScreen(
     val density = LocalDensity.current
     val settle = handover.first
 
-    // Everything on screen is recorded once more, so a layout or wallpaper change can lay a
-    // picture of the old screen over the new one and melt it away.
+    // For a layout or wallpaper change, the screen is recorded into a layer for one frame, so
+    // a picture of the old screen can lie over the new one and melt away. Only while a picture
+    // is wanted: recording every frame would cost each frame an extra full-screen layer.
     val shotLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
-    if (live) SideEffect { controller.captureHome = { shotLayer.toImageBitmap() } }
+    var capturing by remember { mutableStateOf(false) }
+    if (live) {
+        SideEffect {
+            controller.captureHome = {
+                capturing = true
+                try {
+                    // One frame drawn through the layer, then its picture.
+                    androidx.compose.runtime.withFrameNanos { }
+                    androidx.compose.runtime.withFrameNanos { }
+                    shotLayer.toImageBitmap()
+                } finally {
+                    capturing = false
+                }
+            }
+        }
+    }
     val transitionStyle by store.derive { get(LauncherSettings.WallpaperTransition) }
     if (live) SystemWallpaperOffsets(controller)
 
@@ -366,8 +382,12 @@ fun HomeScreen(
             }
             .then(
                 if (live) Modifier.drawWithContent {
-                    shotLayer.record { this@drawWithContent.drawContent() }
-                    drawLayer(shotLayer)
+                    if (capturing) {
+                        shotLayer.record { this@drawWithContent.drawContent() }
+                        drawLayer(shotLayer)
+                    } else {
+                        drawContent()
+                    }
                 } else Modifier
             )
     ) {

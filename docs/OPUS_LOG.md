@@ -322,6 +322,8 @@ Not done / limits: albums you make yourself (folders on the phone stand in); no 
 | `TagFilter.kt`, `Drawer.kt`, `HomeController.kt`, settings | Round tag list button (row end / row start / in the search field), list grows out of the button and shrinks back | D65 |
 | `ScrollIndex.kt`, `Drawer.kt`, `DrawerParts.kt`, settings | Letter column follows the finger on a spring; list bend removed; highlight by list position; settings "Letters follow the finger", "Spring", "Hide after" (removed "List follows the finger") | D66 |
 
+CI note: the first 0.4.2 run (30) failed 9 emulator checks with "Liquid Launcher isn't responding": the runner was overloaded (system load 24; the passing 0.4.1 run had load 0 but also multi-second frames on the emulator's software GPU). Fix in the same release: the home screen is recorded into the transition layer only for the frame a snapshot is taken (0.4.1 recorded it every frame).
+
 Not done / limits: icons fitted to a pack (and work-profile apps) with themed icons on are still rendered once per colour set (cached); the "system" source can still shift slightly when the phone's palette arrives (eased); I could not measure timings on the phone, the log lines are there for that.
 
 ### For Fable to review
