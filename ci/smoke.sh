@@ -49,6 +49,29 @@ wait_log() {
   return 1
 }
 
+ANR_DIALOGS=0
+
+# A slow emulator (software GPU on a busy runner) can miss the system's 5-second input
+# timeout, and the "isn't responding" dialog then covers the screen for every later step.
+# Dismiss it with "Wait", as a user would, and count it; crashes are still checked strictly.
+clear_anr() {
+  local i pos
+  for i in 1 2 3; do
+    adb shell rm -f /sdcard/anr.xml >/dev/null 2>&1
+    adb shell uiautomator dump /sdcard/anr.xml >/dev/null 2>&1
+    adb exec-out cat /sdcard/anr.xml > "$OUT/anr-check.xml" 2>/dev/null || return 0
+    if grep -q "isn&apos;t responding\|isn't responding" "$OUT/anr-check.xml"; then
+      pos=$(python3 ci/find_text.py "$OUT/anr-check.xml" "Wait" exact) || return 0
+      echo "      (dismissed a 'not responding' dialog: the emulator is running slowly)"
+      ANR_DIALOGS=$((ANR_DIALOGS + 1))
+      adb shell input tap $pos
+      sleep 2
+    else
+      return 0
+    fi
+  done
+}
+
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; echo "      top: $(top_activity)"; FAILS=$((FAILS + 1)); }
 redirect_count() { grep -c 'REDIRECT (' "$LOG" || true; }
@@ -213,11 +236,13 @@ fi
 # Android 13 shows the launcher itself as the live card here, so recents is confirmed by the
 # thumbnail above (a scaled card with margins), not by a view id.
 
+clear_anr
 echo "== 5c. Leaving those recents to home redirects"
 adb shell input keyevent KEYCODE_HOME
 if wait_top "$HOME_ACTIVITY" 8; then pass "recents -> home redirected"; else fail "recents -> home redirected"; fi
 sleep 1
 
+clear_anr
 echo "== 6. Screen off places the launcher in front"
 adb shell am start -a android.settings.SETTINGS >/dev/null
 wait_top "com.android.settings" 10 || true
@@ -242,6 +267,7 @@ for screen in "" setup diagnostics log; do
   fi
   if wait_top "SettingsActivity" 8; then pass "settings screen '${screen:-main}'"; else fail "settings screen '${screen:-main}'"; fi
   sleep 3
+  clear_anr
   adb exec-out screencap -p > "$OUT/04-settings-${screen:-main}.png" 2>/dev/null || true
   case "$screen" in
     "") texts 04-settings-main 12 ;;
@@ -249,6 +275,7 @@ for screen in "" setup diagnostics log; do
   esac
 done
 
+clear_anr
 echo "== 7b. Glass benchmark runs through all three quality tiers"
 adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen glass >/dev/null
 wait_top "SettingsActivity" 8 || fail "glass benchmark opens"
@@ -258,6 +285,7 @@ sleep 12
 texts 05-glass-finished 12
 if top_activity | grep -q "SettingsActivity"; then pass "glass benchmark finished without leaving the screen"; else fail "glass benchmark finished without leaving the screen"; fi
 
+clear_anr
 echo "== 9. Launcher UI: drawer, search, long-press menu, edit mode"
 adb shell am start -n "$HOME_ACTIVITY" >/dev/null
 wait_top "$HOME_ACTIVITY" 8 || true
@@ -275,6 +303,7 @@ tap_text() {
   adb shell input tap $pos
 }
 
+clear_anr
 # Drawer: swipe up on the home screen (a second, slower try if the first does not open it).
 show_drawer_log() { grep -E "Home: (swipe|drawer)" "$LOG" | tail -6 | sed 's/^/        /'; }
 # 450 ms: on a slow emulator a faster swipe arrives as two or three points.
@@ -327,6 +356,7 @@ if on_screen 09-after-back "Search apps"; then fail "back closes the drawer"; el
 wait_top "$HOME_ACTIVITY" 3 || fail "launcher still in front after back"
 
 # Search: swipe down, type a calculation.
+clear_anr
 adb shell input swipe 540 900 540 1700 250
 sleep 1.5
 adb shell input text "12+30"
@@ -339,6 +369,7 @@ sleep 0.5
 adb shell input keyevent KEYCODE_BACK
 sleep 1
 
+clear_anr
 # Home menu: long press on empty space shows the two glass pills.
 adb shell input swipe 540 1250 540 1250 1000
 sleep 1.5
@@ -373,6 +404,7 @@ else
   fail "home menu has a Wallpaper item"
 fi
 
+clear_anr
 # Edit mode from the home menu shows the edit toolbar.
 adb shell input swipe 540 1250 540 1250 1000
 sleep 1.5
@@ -397,6 +429,7 @@ sleep 1
 # Wait for the service to be back after the screen dumps before the crash check.
 for i in $(seq 1 40); do service_up && break; sleep 0.5; done
 
+if [ "$ANR_DIALOGS" -gt 0 ]; then echo "NOTE: dismissed $ANR_DIALOGS 'not responding' dialog(s); the emulator was slow (see logcat for ANR reasons)"; fi
 echo "== 8. No crashes"
 adb logcat -d > "$OUT/logcat.txt" 2>/dev/null
 if grep -A3 "FATAL EXCEPTION" "$OUT/logcat.txt" | grep -q "$PKG"; then
