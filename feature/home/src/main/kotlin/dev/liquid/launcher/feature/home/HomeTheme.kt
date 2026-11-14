@@ -48,8 +48,15 @@ object HomeTheme {
     var clockFont by mutableStateOf<FontFamily?>(null)
     var clockWeight by mutableStateOf(FontWeight.Light)
     var accent by mutableStateOf(Color(0xFF8AB4F8))
+    private var automaticAccent = true
+
+    /** The wallpaper just changed (its colours are known): an automatic accent follows in this frame. */
+    fun refreshAccent(context: Context) {
+        if (automaticAccent) accent = autoAccent(context)
+    }
 
     fun apply(context: Context, theme: ThemeConfig) {
+        automaticAccent = theme.accent == null
         val fontDir = File(context.filesDir, "fonts")
         font = family(theme.font, fontDir, theme.fontFile)
         clockFont = if (theme.clockFont == "same") font else family(theme.clockFont, fontDir, theme.fontFile)

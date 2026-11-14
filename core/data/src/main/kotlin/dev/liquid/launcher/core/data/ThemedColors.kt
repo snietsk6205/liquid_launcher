@@ -30,12 +30,14 @@ data class ThemedIcons(
 /** Colours for themed icons, from the wallpaper or from the system palette. */
 object ThemedColors {
     /** Background and foreground colours. [source] is "wallpaper" or "system", [style] "auto", "light" or "dark". */
-    fun palette(context: Context, source: String, style: String): Pair<Int, Int> {
+    fun palette(context: Context, source: String, style: String, seed: Int? = null): Pair<Int, Int> {
         val dark = when (style) {
             "dark" -> true
             "light" -> false
             else -> (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         }
+        // A known seed (a wallpaper about to be shown) gives its tones now; the system palette follows later.
+        if (seed != null) return fromSeed(seed, dark)
         if (source == "system" && Build.VERSION.SDK_INT >= 31) {
             return try {
                 if (dark) {
@@ -130,6 +132,14 @@ object ThemedColors {
      * light parts the lighter one, so the icon keeps its shapes and contrast.
      */
     fun duotone(icon: Bitmap, background: Int, foreground: Int): Bitmap {
+        val matrix = ColorMatrix(duotoneMatrix(background, foreground))
+        val out = Bitmap.createBitmap(icon.width, icon.height, Bitmap.Config.ARGB_8888)
+        Canvas(out).drawBitmap(icon, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG).apply { colorFilter = ColorMatrixColorFilter(matrix) })
+        return out
+    }
+
+    /** The 4 × 5 colour matrix of [duotone], also used to draw two-tone icons without rendering them. */
+    fun duotoneMatrix(background: Int, foreground: Int): FloatArray {
         val lightFirst = ColorUtils.calculateLuminance(background) > ColorUtils.calculateLuminance(foreground)
         val lo = if (lightFirst) foreground else background
         val hi = if (lightFirst) background else foreground
@@ -145,16 +155,11 @@ object ThemedColors {
         val wr = 0.2126f
         val wg = 0.7152f
         val wb = 0.0722f
-        val matrix = ColorMatrix(
-            floatArrayOf(
-                rd * wr / 255f, rd * wg / 255f, rd * wb / 255f, 0f, r0,
-                gd * wr / 255f, gd * wg / 255f, gd * wb / 255f, 0f, g0,
-                bd * wr / 255f, bd * wg / 255f, bd * wb / 255f, 0f, b0,
-                0f, 0f, 0f, 1f, 0f,
-            )
+        return floatArrayOf(
+            rd * wr / 255f, rd * wg / 255f, rd * wb / 255f, 0f, r0,
+            gd * wr / 255f, gd * wg / 255f, gd * wb / 255f, 0f, g0,
+            bd * wr / 255f, bd * wg / 255f, bd * wb / 255f, 0f, b0,
+            0f, 0f, 0f, 1f, 0f,
         )
-        val out = Bitmap.createBitmap(icon.width, icon.height, Bitmap.Config.ARGB_8888)
-        Canvas(out).drawBitmap(icon, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG).apply { colorFilter = ColorMatrixColorFilter(matrix) })
-        return out
     }
 }

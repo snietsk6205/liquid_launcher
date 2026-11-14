@@ -32,6 +32,8 @@ data class AppMeta(
     val tags: List<String> = emptyList(),
     /** Own icon: "iconPackPackage|drawableName". */
     val icon: String? = null,
+    /** Keep the icon's own colours while icons follow the wallpaper. */
+    val keepColours: Boolean = false,
 )
 
 @Serializable

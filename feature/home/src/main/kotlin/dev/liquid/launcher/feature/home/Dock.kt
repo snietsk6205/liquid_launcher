@@ -101,7 +101,7 @@ internal fun Dock(
                                 .iconGestures({ holder.value }, appHandler(item, app, holder, controller), interactive),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            AppIconImage(app.homeIcon, Modifier.size(50.dp), app.label)
+                            AppIcon(app, true, Modifier.size(50.dp), app.label)
                             if (config.labels) {
                                 Text(
                                     app.label,

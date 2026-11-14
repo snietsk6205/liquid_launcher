@@ -99,7 +99,7 @@ internal fun MainScreen(
 
         SectionHeader("Tools")
         NavRow("Calibrate recents detection", "Only needed if recents is not recognised") { open(Screen.Calibration) }
-        NavRow("Debug log", "What the redirect saw and decided") { open(Screen.Log) }
+        NavRow("Debug log", "What the redirect saw and decided, and how long wallpaper changes took") { open(Screen.Log) }
         NavRow("About", "Version and credits") { open(Screen.About) }
     }
 }

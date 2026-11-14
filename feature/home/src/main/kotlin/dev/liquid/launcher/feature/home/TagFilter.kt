@@ -66,12 +66,26 @@ import dev.liquid.launcher.core.designsystem.liquidGlass
 import dev.liquid.launcher.core.settings.LauncherSettings
 import dev.liquid.launcher.core.settings.SettingsStore
 import kotlin.math.abs
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Constraints
+import kotlin.math.roundToInt
 import kotlin.math.ln
 
 /** How filtering the drawer by tag looks and behaves. */
 data class TagFilterConfig(
     /** "above", "top" or "hidden". */
     val position: String,
+    /** Where the full tag list's button sits: "rowEnd", "rowStart", "fieldRight" or "fieldLeft". */
+    val button: String,
     /** "used", "az" or "pinned". */
     val order: String,
     /** Chips shown; 0 = all. */
@@ -88,6 +102,10 @@ data class TagFilterConfig(
 
 fun SettingsStore.tagFilterConfig() = TagFilterConfig(
     position = get(LauncherSettings.TagStripPosition),
+    button = get(LauncherSettings.TagButtonPosition).let { b ->
+        // Without the chip row, the button moves into the search field so it is always there.
+        if (get(LauncherSettings.TagStripPosition) == "hidden" && b.startsWith("row")) "fieldRight" else b
+    },
     order = get(LauncherSettings.TagStripOrder),
     count = get(LauncherSettings.TagStripCount),
     counts = get(LauncherSettings.TagStripCounts),
@@ -177,36 +195,79 @@ internal fun TagStrip(
     val color = if (glass.lightGlass(Surfaces.Drawer, lightBackground)) Color(0xFF16181C) else Color.White
     val filter = controller.tagFilter
     val shown = if (config.count > 0) tags.take(config.count) else tags
-    LazyRow(
-        modifier = modifier.fillMaxWidth().height(TagStripHeight),
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Row(modifier.fillMaxWidth().height(TagStripHeight), verticalAlignment = Alignment.CenterVertically) {
+        // The list button is fixed at one end, so it never scrolls away with the chips.
+        if (config.button == "rowStart") {
+            Spacer(Modifier.width(14.dp))
+            TagsButton(controller, color, Modifier.liquidGlass(backdrop, CircleShape, glass.style(Surfaces.Drawer, lightBackground)), interactive)
+        }
+        LazyRow(
+            modifier = Modifier.weight(1f).height(TagStripHeight),
+            contentPadding = PaddingValues(horizontal = if (config.button.startsWith("row")) 8.dp else 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            item(key = "all") {
+                StripChip("All apps", null, filter.isEmpty(), color, glass, lightBackground, backdrop, interactive, onTap = { controller.filterByTags(emptySet()) }, onHold = null)
+            }
+            items(shown, key = { it.id }) { tag ->
+                val on = tag.id in filter
+                StripChip(
+                    tag.name, counts[tag.id]?.takeIf { config.counts }, on, color, glass, lightBackground, backdrop, interactive,
+                    onTap = {
+                        controller.filterByTags(
+                            when {
+                                config.tap == "multi" -> if (on) filter - tag.id else filter + tag.id
+                                on && filter.size == 1 -> emptySet()
+                                else -> setOf(tag.id)
+                            }
+                        )
+                    },
+                    onHold = {
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        controller.filterByTags(if (on) filter - tag.id else filter + tag.id)
+                    },
+                )
+            }
+        }
+        if (config.button == "rowEnd") {
+            TagsButton(controller, color, Modifier.liquidGlass(backdrop, CircleShape, glass.style(Surfaces.Drawer, lightBackground)), interactive)
+            Spacer(Modifier.width(14.dp))
+        }
+    }
+}
+
+/**
+ * The round button that opens the full tag list. A dot shows when a filter is on. The list
+ * grows out of the button, so its place on screen is remembered at the tap.
+ */
+@Composable
+internal fun TagsButton(controller: HomeController, color: Color, surface: Modifier, interactive: Boolean, size: androidx.compose.ui.unit.Dp = 36.dp) {
+    val holder = remember { CoordinatesHolder() }
+    val active = controller.tagFilter.isNotEmpty()
+    Box(
+        Modifier
+            .size(size)
+            .onPlaced { holder.value = it }
+            .then(surface)
+            .clip(CircleShape)
+            .then(
+                if (interactive) {
+                    Modifier.clickable { controller.openTagSheet(holder.value?.takeIf { it.isAttached }?.boundsInRoot()) }
+                } else Modifier
+            ),
+        contentAlignment = Alignment.Center,
     ) {
-        item(key = "all") {
-            StripChip("All apps", null, filter.isEmpty(), color, glass, lightBackground, backdrop, interactive, onTap = { controller.filterByTags(emptySet()) }, onHold = null)
-        }
-        items(shown, key = { it.id }) { tag ->
-            val on = tag.id in filter
-            StripChip(
-                tag.name, counts[tag.id]?.takeIf { config.counts }, on, color, glass, lightBackground, backdrop, interactive,
-                onTap = {
-                    controller.filterByTags(
-                        when {
-                            config.tap == "multi" -> if (on) filter - tag.id else filter + tag.id
-                            on && filter.size == 1 -> emptySet()
-                            else -> setOf(tag.id)
-                        }
-                    )
-                },
-                onHold = {
-                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                    controller.filterByTags(if (on) filter - tag.id else filter + tag.id)
-                },
+        LauncherIcon(LauncherIcons.Filter, contentDescription = "All tags", tint = color, size = 18.dp)
+        if (active) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 7.dp, end = 7.dp)
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(HomeTheme.accent)
             )
-        }
-        item(key = "more") {
-            StripChip("All tags", null, false, color, glass, lightBackground, backdrop, interactive, icon = LauncherIcons.Filter, onTap = { controller.tagSheet = true }, onHold = null)
         }
     }
 }
@@ -261,6 +322,7 @@ internal fun readableOn(background: Color): Color =
  */
 @Composable
 internal fun ActiveTagChip(controller: HomeController, label: String, interactive: Boolean) {
+    val holder = remember { CoordinatesHolder() }
     val accent = HomeTheme.accent
     val text = readableOn(accent)
     Row(
@@ -268,7 +330,8 @@ internal fun ActiveTagChip(controller: HomeController, label: String, interactiv
             .height(32.dp)
             .clip(RoundedCornerShape(50))
             .background(accent.copy(alpha = 0.9f))
-            .then(if (interactive) Modifier.clickable { controller.tagSheet = true } else Modifier)
+            .onPlaced { holder.value = it }
+            .then(if (interactive) Modifier.clickable { controller.openTagSheet(holder.value?.takeIf { it.isAttached }?.boundsInRoot()) } else Modifier)
             .padding(start = 12.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -334,12 +397,11 @@ internal fun TagSheet(
     glass: GlassConfig,
     lightBackground: Boolean,
     backdrop: Backdrop,
+    progress: Float,
 ) {
     val settings = controller.data.settings
     val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
     var query by remember { mutableStateOf("") }
-    val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 520f)) }
     val pinned = config.pinned
     val filter = controller.tagFilter
     val now = remember { System.currentTimeMillis() }
@@ -359,35 +421,37 @@ internal fun TagSheet(
             )
         }
     }
-    val shape = RoundedCornerShape(30.dp)
-
     fun togglePin(tag: Tag) {
         val current = settings.get(LauncherSettings.TagPinned)
         settings.set(LauncherSettings.TagPinned, if (tag.id in current) current - tag.id else current + tag.id)
     }
 
+    val density = LocalDensity.current
+    val insets = WindowInsets.navigationBars.union(WindowInsets.ime)
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    val p = progress
+    val from = controller.tagSheetOrigin
+    // The glass grows from the button's rounded shape into the sheet's.
+    val startRadius = with(density) { (from?.height ?: 56.dp.toPx()) / 2f }
+    val endRadius = with(density) { 30.dp.toPx() }
+    val radiusDp = with(density) { (startRadius + (endRadius - startRadius) * p.coerceIn(0f, 1f)).toDp() }
+
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.25f * appear.value.coerceIn(0f, 1f)))
+            .onPlaced { origin = it.positionInRoot() }
+            .background(Color.Black.copy(alpha = 0.25f * p.coerceIn(0f, 1f)))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { controller.tagSheet = false },
     ) {
-        Column(
+      Layout(
+        modifier = Modifier.fillMaxSize(),
+        content = {
+          Box(Modifier.liquidGlass(backdrop, RoundedCornerShape(radiusDp), glass.style(Surfaces.Menu, lightBackground)))
+          Column(
             Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .imePadding()
-                .padding(12.dp)
-                .graphicsLayer {
-                    val p = appear.value
-                    alpha = p.coerceIn(0f, 1f)
-                    translationY = (1f - p) * 60.dp.toPx()
-                }
-                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground))
-                .clip(shape)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .padding(top = 14.dp, bottom = 10.dp),
-        ) {
+          ) {
             // Search field of its own: with many tags, typing two letters is faster than scrolling.
             Row(
                 Modifier
@@ -461,8 +525,51 @@ internal fun TagSheet(
                 SheetPill("Clear", color, Modifier.weight(0.7f)) { controller.filterByTags(emptySet()) }
                 SheetPill("Done", color, Modifier.weight(0.7f), filled = true) { controller.tagSheet = false }
             }
+          }
+        },
+      ) { measurables, constraints ->
+        val margin = 12.dp.roundToPx()
+        val bottom = insets.getBottom(this) + margin
+        val top = 48.dp.roundToPx()
+        val width = constraints.maxWidth - margin * 2
+        val content = measurables[1].measure(
+            Constraints(minWidth = width, maxWidth = width, maxHeight = (constraints.maxHeight - bottom - top).coerceAtLeast(0))
+        )
+        val end = androidx.compose.ui.geometry.Rect(
+            margin.toFloat(), (constraints.maxHeight - bottom - content.height).toFloat(),
+            (margin + width).toFloat(), (constraints.maxHeight - bottom).toFloat(),
+        )
+        val start = from?.translate(-origin) ?: androidx.compose.ui.geometry.Rect(
+            end.center.x - 28.dp.toPx(), end.bottom - 56.dp.toPx(), end.center.x + 28.dp.toPx(), end.bottom,
+        )
+        val rect = lerpRect(start, end, p)
+        val glassPlaceable = measurables[0].measure(
+            Constraints.fixed(rect.width.roundToInt().coerceAtLeast(1), rect.height.roundToInt().coerceAtLeast(1))
+        )
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            glassPlaceable.place(rect.left.roundToInt(), rect.top.roundToInt())
+            content.placeWithLayer(end.left.roundToInt(), end.top.roundToInt()) {
+                // The list appears once the glass has mostly grown, and never outside it.
+                alpha = ((p - 0.45f) / 0.55f).coerceIn(0f, 1f)
+                clip = true
+                shape = LocalRect(rect.translate(-end.topLeft), radiusDp.toPx())
+            }
         }
+      }
     }
+}
+
+private fun lerpRect(a: androidx.compose.ui.geometry.Rect, b: androidx.compose.ui.geometry.Rect, t: Float) = androidx.compose.ui.geometry.Rect(
+    a.left + (b.left - a.left) * t,
+    a.top + (b.top - a.top) * t,
+    maxOf(a.left + (b.left - a.left) * t + 1f, a.right + (b.right - a.right) * t),
+    maxOf(a.top + (b.top - a.top) * t + 1f, a.bottom + (b.bottom - a.bottom) * t),
+)
+
+/** Clips a layer to [rect] (in the layer's own coordinates) with rounded corners. */
+private class LocalRect(private val rect: androidx.compose.ui.geometry.Rect, private val radius: Float) : androidx.compose.ui.graphics.Shape {
+    override fun createOutline(size: androidx.compose.ui.geometry.Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection, density: androidx.compose.ui.unit.Density) =
+        androidx.compose.ui.graphics.Outline.Rounded(androidx.compose.ui.geometry.RoundRect(rect, androidx.compose.ui.geometry.CornerRadius(radius)))
 }
 
 @Composable

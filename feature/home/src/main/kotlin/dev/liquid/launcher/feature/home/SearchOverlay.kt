@@ -176,7 +176,7 @@ fun SearchOverlay(
                                 Modifier.width(64.dp).clip(RoundedCornerShape(16.dp)).clickable { open(SearchResult.App(app)) }.padding(4.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                AppIconImage(app.icon, Modifier.size(48.dp), app.label)
+                                AppIcon(app, false, Modifier.size(48.dp), app.label)
                                 Text(
                                     app.label,
                                     style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 11.sp, textAlign = TextAlign.Center),
@@ -231,7 +231,7 @@ private fun ResultRow(result: SearchResult, onClick: () -> Unit) {
     ) {
         when (result) {
             is SearchResult.App -> {
-                AppIconImage(result.app.icon, Modifier.size(40.dp), null)
+                AppIcon(result.app, false, Modifier.size(40.dp), null)
                 Spacer(Modifier.width(14.dp))
                 Text(result.app.label, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (result.app.isWorkProfile) {

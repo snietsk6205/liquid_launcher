@@ -100,6 +100,10 @@ internal class StudioState(store: SettingsStore) {
 
     /** The wallpaper as it will be applied (placed and rendered), once ready. */
     var rendered by mutableStateOf<Bitmap?>(null)
+
+    /** Its colours, worked out as soon as it is rendered (before Apply), and the themed icon palette from them. */
+    var tone: dev.liquid.launcher.core.common.WallpaperTone? = null
+    var palette: Pair<Int, Int>? = null
     var candidateImage by mutableStateOf<ImageBitmap?>(null)
 
     /** Placing mode: pinch and drag on the screen. */
@@ -138,6 +142,8 @@ internal class StudioState(store: SettingsStore) {
         this.parallax = parallax
         rendered = null
         candidateImage = null
+        tone = null
+        palette = null
     }
 
     /** The part of the picture the wallpaper canvas covers, for a screen of [w] × [h]. */
@@ -177,20 +183,32 @@ internal fun WallpaperStudio(
     fun close() {
         controller.wallpaperStudio = false
     }
-    // However the screen closes (Cancel, Apply, back, Home), the drawer preview goes away with it.
+    // However the screen closes (Cancel, Apply, back, Home), the drawer preview goes away with it,
+    // and icons go back to the colours of the wallpaper actually set.
     androidx.compose.runtime.DisposableEffect(Unit) {
-        onDispose { if (controller.drawer.value > 0f) controller.closeDrawer() }
+        onDispose {
+            if (controller.drawer.value > 0f) controller.closeDrawer()
+            IconPaint.endPreview(controller.scope)
+        }
     }
     // The placed picture is rendered once it stops moving, so blur and dim can be judged on it.
     LaunchedEffect(state.source, state.crop, state.parallax, state.adjusting) {
         val source = state.source ?: return@LaunchedEffect
         if (state.adjusting) return@LaunchedEffect
         val bitmap = store.render(source, state.crop, state.parallax)
+        dev.liquid.launcher.core.common.ColourTiming.mark("picture placed")
+        // Colours now, before Apply: the preview's icons already show them, and Apply has nothing left to wait for.
+        val tone = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { dev.liquid.launcher.core.common.WallpaperTones.fromBitmap(bitmap) }
+        state.tone = tone
+        state.palette = tone?.let { data.paletteFor(it.primary) }
         state.rendered = bitmap
         state.candidateImage = bitmap.asImageBitmap()
+        IconPaint.preview(state.palette)
+        dev.liquid.launcher.core.common.ColourTiming.mark("palette ready, shown in the preview")
     }
 
     fun choose(pick: WallpaperPick) {
+        dev.liquid.launcher.core.common.ColourTiming.begin("wallpaper screen")
         scope.launch {
             state.busy = true
             val source = Wallpapers.source(context, data, pick)
@@ -256,8 +274,11 @@ internal fun WallpaperStudio(
             val source = state.source
             if (pick != null && source != null) {
                 val bitmap = state.rendered ?: store.render(source, state.crop, state.parallax)
-                store.show(bitmap)
-                error = Wallpapers.persist(context, data, PreparedWallpaper(bitmap, pick, state.crop, state.parallax))
+                store.show(bitmap, state.tone)
+                IconPaint.now(state.palette ?: state.tone?.let { data.paletteFor(it.primary) })
+                HomeTheme.refreshAccent(context)
+                dev.liquid.launcher.core.common.ColourTiming.mark("applied: wallpaper and colours on screen")
+                error = Wallpapers.persist(context, data, PreparedWallpaper(bitmap, pick, state.crop, state.parallax, state.tone, state.palette))
                 val layoutId = layouts.current
                 if (error == null && state.forLayout && layoutId != null) {
                     data.layouts.setWallpaper(layoutId, store.currentFile, data.wallpapers.get().current)

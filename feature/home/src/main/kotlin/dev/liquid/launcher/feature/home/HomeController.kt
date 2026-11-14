@@ -74,6 +74,8 @@ class DragState(
     /** On-screen size of the item when it was picked up. */
     val size: Size,
     start: Offset,
+    /** The icon's themed art, drawn in the current colours while dragging. */
+    val art: dev.liquid.launcher.core.data.IconArt? = null,
 ) {
     var finger by mutableStateOf(start)
     var overRemove by mutableStateOf(false)
@@ -114,6 +116,17 @@ class HomeController(
 
     /** The full list of tags (with its own search), over the drawer. */
     var tagSheet by mutableStateOf(false)
+
+    /** Where the tag list grows from (the button or chip that opened it), in root coordinates. */
+    var tagSheetOrigin: Rect? = null
+
+    fun openTagSheet(from: Rect?) {
+        tagSheetOrigin = from
+        tagSheet = true
+    }
+
+    /** "left", "right" or null: the tag list button inside the search field (set by the drawer). */
+    var tagButtonInField by mutableStateOf<String?>(null)
 
     /** Set by the drawer: the filter's name, the chip order sideways swipes step through, and whether they may. */
     var tagFilterLabel by mutableStateOf("")
@@ -245,21 +258,35 @@ class HomeController(
         }
     }
 
-    /** A saved layout's wallpaper, loaded before switching so it arrives with the icons. */
-    private class LayoutSwitch(val wallpaper: android.graphics.Bitmap?, val file: java.io.File?, val wallpaperId: String?)
+    /** A saved layout's wallpaper and its colours, worked out before switching so they arrive with the icons. */
+    private class LayoutSwitch(
+        val wallpaper: android.graphics.Bitmap?,
+        val file: java.io.File?,
+        val wallpaperId: String?,
+        val tone: dev.liquid.launcher.core.common.WallpaperTone?,
+        val palette: Pair<Int, Int>?,
+    )
 
     fun switchLayout(id: String) {
         val peek = data.layouts.peek(id) ?: return toast("That layout no longer exists")
         val store = WallpaperStore.get(context)
+        dev.liquid.launcher.core.common.ColourTiming.begin("layout switch")
         changeScreen(
             prepare = {
                 val bitmap = peek.wallpaper?.let { store.decodeFile(it) }
-                LayoutSwitch(bitmap, peek.wallpaper, peek.wallpaperId)
+                val tone = bitmap?.let { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { dev.liquid.launcher.core.common.WallpaperTones.fromBitmap(it) } }
+                dev.liquid.launcher.core.common.ColourTiming.mark("wallpaper loaded, palette ready")
+                LayoutSwitch(bitmap, peek.wallpaper, peek.wallpaperId, tone, tone?.let { data.paletteFor(it.primary) })
             },
             commit = { switch ->
                 data.layouts.switchTo(id, data.settings.get(LauncherSettings.LayoutsAutoSave))
                 data.layouts.find(id)?.let { flash(it.name) }
-                switch.wallpaper?.let { store.show(it) }
+                switch.wallpaper?.let {
+                    store.show(it, switch.tone)
+                    IconPaint.now(switch.palette)
+                    HomeTheme.refreshAccent(context)
+                    dev.liquid.launcher.core.common.ColourTiming.mark("wallpaper and colours on screen")
+                }
                 val home = data.layout.layout.value.defaultIndex
                 runCatching { scope.launch { pager.scrollToPage(home) } }
             },
@@ -273,9 +300,15 @@ class HomeController(
 
     /** Makes [pick] the wallpaper with the transition (wallpaper strip, shuffle). */
     fun applyWallpaper(pick: WallpaperPick) {
+        dev.liquid.launcher.core.common.ColourTiming.begin("wallpaper switch")
         changeScreen(
             prepare = { Wallpapers.prepare(context, data, pick) ?: run { toast("Could not read that picture"); null } },
-            commit = { prepared -> WallpaperStore.get(context).show(prepared.bitmap) },
+            commit = { prepared ->
+                WallpaperStore.get(context).show(prepared.bitmap, prepared.tone)
+                IconPaint.now(prepared.palette)
+                HomeTheme.refreshAccent(context)
+                dev.liquid.launcher.core.common.ColourTiming.mark("wallpaper and colours on screen")
+            },
             after = { prepared -> Wallpapers.persist(context, data, prepared)?.let { toast("Could not set the wallpaper: $it") } },
         )
     }
@@ -761,7 +794,7 @@ class HomeController(
                 closeAll()
                 if (editMode) exitEdit()
                 openDrawer()
-                tagSheet = true
+                openTagSheet(null)
             }
             LauncherAction.AddPage -> addPage()
             LauncherAction.Pages -> {

@@ -49,6 +49,12 @@ data class AppEntry(
     val customIcon: Boolean = false,
     /** The app's themed (monochrome) icon as an alpha mask, Android 13+; null when it has none. */
     val monochrome: android.graphics.Bitmap? = null,
+    /** Drawer icon coloured when drawn (themed icons); null = draw [icon] as it is. */
+    val art: IconArt? = null,
+    /** Home screen icon coloured when drawn; null = draw [homeIcon] as it is. */
+    val homeArt: IconArt? = null,
+    /** The user keeps this app's icon out of the wallpaper colours. */
+    val keepColours: Boolean = false,
 ) {
     val key: String get() = ref.key
 }
@@ -93,8 +99,12 @@ class AppsRepository(
         icons.prepare(config)
         list.map { app ->
             val change = changes[app.key]
-            val themed = icons.apply(app, config, change?.icon)
-            if (change == null) themed else themed.copy(label = change.label ?: app.systemLabel, hidden = change.hidden, tags = change.tags)
+            val themed = icons.apply(app, config, change?.icon, change?.keepColours == true)
+            if (change == null) {
+                themed
+            } else {
+                themed.copy(label = change.label ?: app.systemLabel, hidden = change.hidden, tags = change.tags, keepColours = change.keepColours)
+            }
         }.sortedWith { a, b -> collator.compare(a.label, b.label) }
     }.stateIn(loadScope, SharingStarted.Eagerly, emptyList())
 
@@ -211,6 +221,9 @@ class AppsRepository(
 
     /** [icon] is "iconPackPackage|drawableName", or null for the pack's or the app's own icon. */
     fun setIcon(ref: AppRef, icon: String?) = changeMeta(ref) { it.copy(icon = icon) }
+
+    /** Keeps this app's icon in its own colours while icons follow the wallpaper. */
+    fun setKeepColours(ref: AppRef, keep: Boolean) = changeMeta(ref) { it.copy(keepColours = keep) }
 
     fun setTag(ref: AppRef, tagId: String, on: Boolean) = changeMeta(ref) { meta ->
         meta.copy(tags = if (on) (meta.tags + tagId).distinct() else meta.tags - tagId)

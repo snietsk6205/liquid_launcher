@@ -446,8 +446,9 @@ object LauncherSettings {
     val ThemedIcons = BoolSetting(
         key = "icons.themed", default = false,
         title = "Icons follow the wallpaper colours",
-        summary = "Apps with a themed (monochrome) icon get it in your wallpaper's colours and change with it. Icon packs that use the " +
-            "system colours (Material You packs) are reloaded when the wallpaper changes. Off: icons stay as they are",
+        summary = "Apps with a themed (monochrome) icon get it in your wallpaper's colours and change together with the wallpaper. " +
+            "Icons you picked for one app follow too, as a two-tone version (\"Change icon\" can keep one app's own colours). " +
+            "Icon packs that use the system colours are reloaded when the system's colours change. Off: icons stay as they are",
         section = "icons", keywords = "themed icons monochrome material you dynamic colour wallpaper tint",
     )
     val ThemedIconsWhere = ChoiceSetting(
@@ -695,11 +696,23 @@ object LauncherSettings {
         options = listOf(
             "above" to "Above the search field",
             "top" to "At the top, under the tabs",
-            "hidden" to "Hidden (use the pill's tag button or swipe)",
+            "hidden" to "Hidden (the tag button and swipes still work)",
         ),
         title = "Tag chips in the drawer",
-        summary = "A row of your tags: tap one to show only its apps, hold to add more tags. \"All apps\" at the start clears the filter",
+        summary = "A row of your tags: tap one to show only its apps, hold to add more tags. \"All apps\" clears the filter",
         section = "tags", keywords = "tag filter chips strip row position quick",
+    )
+    val TagButtonPosition = ChoiceSetting(
+        key = "tags.button", default = "rowEnd",
+        options = listOf(
+            "rowEnd" to "Fixed at the end of the chip row",
+            "rowStart" to "Fixed at the start of the chip row",
+            "fieldRight" to "In the search field, on the right",
+            "fieldLeft" to "In the search field, on the left",
+        ),
+        title = "Button for the full tag list",
+        summary = "A round button that opens the list of all your tags, growing out of the button. In the chip row it never scrolls away",
+        section = "tags", keywords = "tag list button all tags position search field",
     )
     val TagStripOrder = ChoiceSetting(
         key = "tags.stripOrder", default = "used",
@@ -887,20 +900,34 @@ object LauncherSettings {
     )
     val IndexFollow = IntSetting(
         key = "index.follow", default = 45, min = 0, max = 150, step = 15, unit = "ms",
-        title = "Glide",
-        summary = "How softly the list catches up with your finger. 0 follows instantly; higher values glide over big jumps",
+        title = "List glide",
+        summary = "How softly the list scrolls to the letter under your finger. 0 jumps instantly; higher values glide over big jumps",
         section = "drawerIndex", keywords = "index smooth glide follow lag animation",
     )
-    val IndexWave = IntSetting(
-        key = "index.wave", default = 50, min = 0, max = 100, step = 10, unit = "%",
-        title = "List follows the finger",
-        summary = "While you drag along the letters, the apps near your finger bend towards it and make room for the curve, then spring back. 0 turns it off",
-        section = "drawerIndex", keywords = "index wave bend list follow finger niagara intensity",
+    val IndexTrack = IntSetting(
+        key = "index.track", default = 100, min = 0, max = 100, step = 10, unit = "%",
+        title = "Letters follow the finger",
+        summary = "While you hold the index, the letter column slides towards your finger and tracks it, curving around the letter you are on; " +
+            "it springs back when you let go. 0 keeps it at the edge. The app list never moves sideways",
+        section = "drawerIndex", keywords = "index follow finger slide track column niagara",
+    )
+    val IndexSpring = ChoiceSetting(
+        key = "index.spring", default = "medium",
+        options = listOf("soft" to "Soft", "medium" to "Medium", "snappy" to "Snappy"),
+        title = "Spring",
+        summary = "How quickly the column catches up with your finger and springs back",
+        section = "drawerIndex", keywords = "index spring stiffness bounce speed",
+    )
+    val IndexHideDelay = IntSetting(
+        key = "index.hideDelay", default = 500, min = 0, max = 2500, step = 100, unit = "ms",
+        title = "Hide after",
+        summary = "How long the letters stay after you let go or stop scrolling (not with \"Always\")",
+        section = "drawerIndex", keywords = "index hide delay fade time",
     )
     val IndexFocus = BoolSetting(
         key = "index.focus", default = true,
         title = "Highlight the letter's apps",
-        summary = "Other apps fade a little while you hold a letter",
+        summary = "While you hold a letter, its apps stay bright and lift slightly; the other apps fade",
         section = "drawerIndex", keywords = "index focus highlight dim fade letter",
     )
 
@@ -1217,9 +1244,9 @@ object LauncherSettings {
         DrawerWork, DrawerCloseOnLaunch, DrawerSideMargin, DrawerDim, DrawerTabsPosition,
         DrawerTransition, DrawerPillMorph, DrawerSpeed, DrawerBounce, DrawerRise, DrawerHomeScale, DrawerHomeBlur,
         DrawerScrollbar, DrawerScrollBubble, DrawerScrollEffect, DrawerScrollStrength, DrawerOverscroll,
-        IndexVisibility, IndexSide, IndexCurve, IndexLetterSize, IndexSpacing, IndexBubble, IndexHaptics, IndexFollow, IndexWave, IndexFocus, DrawerTopSections,
+        IndexVisibility, IndexSide, IndexCurve, IndexLetterSize, IndexSpacing, IndexBubble, IndexHaptics, IndexFollow, IndexTrack, IndexSpring, IndexHideDelay, IndexFocus, DrawerTopSections,
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
-        TagStripPosition, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
+        TagStripPosition, TagButtonPosition, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
         MenuEntries,
         SearchEngine, SearchOpenKeyboard, SearchDim, SearchBlur,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,

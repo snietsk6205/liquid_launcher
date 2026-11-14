@@ -116,8 +116,8 @@ class WallpaperStore private constructor(private val context: Context) {
      * Shows [bitmap] as the wallpaper right away: the home screen draws it and themed icons,
      * accent and text colour follow its colours at once. Nothing is written yet.
      */
-    fun show(bitmap: Bitmap) {
-        WallpaperTones.fromBitmap(bitmap, -1)?.let { WallpaperTones.set(context, it) }
+    fun show(bitmap: Bitmap, tone: dev.liquid.launcher.core.common.WallpaperTone? = null) {
+        (tone?.copy(systemId = -1) ?: WallpaperTones.fromBitmap(bitmap, -1))?.let { WallpaperTones.set(context, it) }
         _image.value = bitmap.asImageBitmap()
     }
 
@@ -144,6 +144,7 @@ class WallpaperStore private constructor(private val context: Context) {
             val systemId = if (id > 0) id else WallpaperTones.systemId(context)
             WallpaperTones.tone.value?.let { WallpaperTones.set(context, it.copy(systemId = systemId)) }
             DebugLog.event("Wallpaper", "managed wallpaper set, ${bitmap.width}x${bitmap.height}, id $systemId${if (lockToo) ", lock screen too" else ""}")
+            dev.liquid.launcher.core.common.ColourTiming.mark("system wallpaper set")
             null
         } catch (e: Throwable) {
             DebugLog.error("Wallpaper", "set failed: $e")

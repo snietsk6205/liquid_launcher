@@ -307,13 +307,39 @@ Not done / limits: albums you make yourself (folders on the phone stand in); no 
 
 ---
 
-## Session summary (2026-11-13, Opus, updated for 0.4.1)
+## Entry 10: 0.4.2, adjustments after 0.4.1 (2026-11-14, Opus 5.5)
+
+**Goal:** the user's three points on 0.4.1, released before Phase 2 part 3.
+
+| File | Change | Why |
+|---|---|---|
+| `core/data/IconArt.kt` (new), `IconThemer.kt`, `AppsRepository.kt`, `ThemedColors.kt` | Themed icons as `IconArt` (glyph mask on a shared shape mask, or two-tone filter on the original); only pack-fitted and work-badged themed icons are still rendered; `duotoneMatrix`; palette with a known seed | D63 |
+| `core/data/LauncherData.kt` | `iconPalette` flow; colour changes (`themeTick`) separated from pack reloads (`packTick`); `paletteFor(seed)`; "system" source holds the new wallpaper's tones until the phone palette changes | D63 |
+| `feature/home/IconPaint.kt` (new), every icon call site, `DragState` | `IconPaint` (palette read while drawing; now / preview / eased), `AppIcon` and `ArtIcon` | D63 |
+| `HomeController.kt`, `Wallpapers.kt`, `WallpaperStudio.kt`, `WallpaperStore.kt`, `HomeTheme.kt` | Palette worked out before a switch and set with the wallpaper in one frame; the wallpaper screen previews the colours of a picked picture before Apply; automatic accent follows in the same frame | D63 |
+| `core/common/ColourTiming.kt` (new) | "Timing" lines in the debug log for each wallpaper change | Feedback: see where the time goes |
+| `Models.kt`, `IconPicker.kt` | Picked icons follow as two-tone; per-app "Keep this icon's own colours" | D64 |
+| `TagFilter.kt`, `Drawer.kt`, `HomeController.kt`, settings | Round tag list button (row end / row start / in the search field), list grows out of the button and shrinks back | D65 |
+| `ScrollIndex.kt`, `Drawer.kt`, `DrawerParts.kt`, settings | Letter column follows the finger on a spring; list bend removed; highlight by list position; settings "Letters follow the finger", "Spring", "Hide after" (removed "List follows the finger") | D66 |
+
+Not done / limits: icons fitted to a pack (and work-profile apps) with themed icons on are still rendered once per colour set (cached); the "system" source can still shift slightly when the phone's palette arrives (eased); I could not measure timings on the phone, the log lines are there for that.
+
+### For Fable to review
+1. Drawing `ALPHA_8` masks with a paint colour on the hardware canvas (`ArtIcon`).
+2. `IconPaint` as a global object written from three places (data flow, switches, wallpaper screen).
+3. The tag list's morph (`Layout` placing the glass at an interpolated rectangle, content clipped with a layer shape).
+
+---
+
+## Session summary (2026-11-14, Opus, updated for 0.4.2)
 
 **State:** the user tested 0.4.0 (with 0.2.2 and 0.3.0) and sent five points. 0.4.1 fixes them (index symmetry and list wave, tag filtering, themed icon recolouring, layout wallpaper transition, wallpaper library with placing and parallax) plus a final pass. Unit tests pass; released as build 28 (CI run 28: unit tests, release APK, emulator smoke test all passed, including the new wallpaper strip → wallpaper screen → blur and dim checks), then build 29 with one fix found while writing the hand-over (a wallpaper set in another app kept the launcher's old picture on screen with the new colours). Not tested on the phone yet.
 
-**Next step:** the user tests 0.4.1; then Phase 2 part 3 (0.5: gestures, double tap per icon, motion and haptics settings, in-app updater).
+0.4.2 (entry 10) follows the user's notes on 0.4.1: themed icon colours applied while drawing and set together with the wallpaper, custom icons following, the tag list button with a morph, and the letter column following the finger instead of the list bending.
+
+**Next step:** Phase 2 part 3 (0.5: gestures, double tap per icon, activity picker, motion and haptics settings, in-app updater), as the user asked, without waiting for a test of 0.4.2.
 
 ### For Fable to review (overall)
-1. Entries 6–9 and decisions D43–D62.
+1. Entries 6–10 and decisions D43–D66.
 2. The roadmap changes (plan as of 0.4.1): tag filtering moved from Phase 4 into 0.4.1, wallpaper library added; the user's later wallpaper and tag ideas are placed in Phases 4, 6 and 7.
 3. Earlier items still open: D37–D39 redirect changes, the drawer rewrite, `IconThemer` with real packs, the home-press heuristic, emulator on API 34.

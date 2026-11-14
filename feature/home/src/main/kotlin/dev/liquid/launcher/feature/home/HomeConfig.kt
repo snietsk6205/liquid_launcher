@@ -117,9 +117,13 @@ data class IndexConfig(
     val haptics: String,
     /** Time constant of the list catching up with the finger, in milliseconds. */
     val followMs: Int,
-    /** How strongly the list bends with the finger, 0..1. */
-    val wave: Float,
-    /** Other apps fade while a letter is held. */
+    /** How far the letter column slides towards the finger, 0..1. */
+    val track: Float,
+    /** Stiffness of the column's spring. */
+    val stiffness: Float,
+    /** Delay before the letters hide after the finger lifts or scrolling stops, ms. */
+    val hideMs: Int,
+    /** The held letter's apps stay bright, others fade. */
     val focus: Boolean,
 )
 
@@ -251,7 +255,13 @@ fun SettingsStore.indexConfig() = IndexConfig(
     bubble = get(S.IndexBubble),
     haptics = get(S.IndexHaptics),
     followMs = get(S.IndexFollow),
-    wave = get(S.IndexWave) / 100f,
+    track = get(S.IndexTrack) / 100f,
+    stiffness = when (get(S.IndexSpring)) {
+        "soft" -> 220f
+        "snappy" -> 1100f
+        else -> 520f
+    },
+    hideMs = get(S.IndexHideDelay),
     focus = get(S.IndexFocus),
 )
 

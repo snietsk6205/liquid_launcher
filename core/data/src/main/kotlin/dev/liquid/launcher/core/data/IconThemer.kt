@@ -23,33 +23,41 @@ data class IconConfig(
 )
 
 /**
- * Turns the apps' own icons into themed ones. Results are cached per pack and app, so a
- * rename or a new tag does not redraw every icon. Runs on the apps loading thread.
+ * Turns the apps' own icons into themed ones. Themed icons are not rendered in colour: they
+ * come out as [IconArt] (an alpha mask on the icon shape, or the full-colour icon for a
+ * two-tone filter) and take the palette's colours when drawn, so a new wallpaper costs a
+ * redraw, not a render. Only icons fitted to a pack or badged for the work profile are still
+ * rendered in colour (cached for the last few colour sets). Runs on the apps loading thread.
  */
 internal class IconThemer(private val context: Context) {
     private val packs = HashMap<String, IconPack?>()
     private val cache = HashMap<String, ImageBitmap?>()
+    private val arts = HashMap<String, IconArt>()
     private var lastConfig: IconConfig? = null
     private val sizePx = (AppsRepository.ICON_DP * context.resources.displayMetrics.density).toInt()
 
     fun pack(pkg: String): IconPack? = packs.getOrPut(pkg) { IconPacks.load(context, pkg) }
 
-    /** Theme keys of the last few colour sets, newest last: their icons stay cached. */
+    /** Theme keys of the last few colour sets, newest last: their rendered icons stay cached. */
     private val recentThemes = ArrayDeque<String>()
 
     /**
      * Drops cached icons when the packs, the masking or the shape change. A new colour set
-     * keeps the icons of the last [KEEP_THEMES] sets, so switching back to an earlier
-     * wallpaper (a layout's, for example) recolours instantly.
+     * only touches the few icons rendered in colour; it keeps those of the last
+     * [KEEP_THEMES] sets, so switching back to an earlier wallpaper costs nothing.
      */
     fun prepare(config: IconConfig) {
         val last = lastConfig
         if (config == last) return
-        if (config.packEpoch != last?.packEpoch) packs.clear()
+        if (config.packEpoch != last?.packEpoch) {
+            packs.clear()
+            cache.keys.removeAll { it.startsWith("pack|") || it.startsWith("baked|") }
+        }
         val sameIcons = last != null && config.homePack == last.homePack && config.drawerPack == last.drawerPack &&
             config.mask == last.mask && config.shape == last.shape
         if (!sameIcons) {
             cache.clear()
+            arts.clear()
             recentThemes.clear()
         }
         val key = config.themed?.key ?: "null"
@@ -62,46 +70,72 @@ internal class IconThemer(private val context: Context) {
         lastConfig = config
     }
 
-    fun apply(app: AppEntry, config: IconConfig, override: String?): AppEntry {
+    /**
+     * The app with its icons for this configuration. [override] is the user's own icon for it;
+     * [keepColours] keeps its icon out of the wallpaper colours.
+     */
+    fun apply(app: AppEntry, config: IconConfig, override: String?, keepColours: Boolean = false): AppEntry {
+        val themed = config.themed?.takeIf { !keepColours }
         if (override != null) {
             val own = cached("own|$override|${app.key}") { forOverride(app, override) }
-            if (own != null) return app.copy(icon = own, homeIcon = own, customIcon = true)
+            if (own != null) {
+                // An icon chosen for this app follows the wallpaper too, as a two-tone version of itself.
+                val art = if (themed != null) arts.getOrPut("own|$override|${app.key}") { IconArt.Duotone(own) } else null
+                return app.copy(
+                    icon = own, homeIcon = own, customIcon = true,
+                    art = art.takeIf { themed?.drawer == true }, homeArt = art.takeIf { themed?.home == true },
+                )
+            }
         }
-        val themed = config.themed
         if (config.homePack.isBlank() && config.drawerPack.isBlank() && themed == null) return app
         val drawerTheme = themed?.takeIf { it.drawer }
         val homeTheme = themed?.takeIf { it.home }
-        val drawer = forSurface(app, config.drawerPack, config.mask, drawerTheme)
-        val home = if (config.homePack == config.drawerPack && homeTheme == drawerTheme) drawer else forSurface(app, config.homePack, config.mask, homeTheme)
-        return app.copy(icon = drawer, homeIcon = home)
+        val (drawer, drawerArt) = forSurface(app, config.drawerPack, config.mask, drawerTheme)
+        val (home, homeArt) = if (config.homePack == config.drawerPack && homeTheme == drawerTheme) {
+            drawer to drawerArt
+        } else {
+            forSurface(app, config.homePack, config.mask, homeTheme)
+        }
+        return app.copy(icon = drawer, homeIcon = home, art = drawerArt, homeArt = homeArt)
     }
 
     /**
      * The icon on one surface: the pack's own icon if it has one (never recoloured), otherwise
-     * the app's icon, themed in the wallpaper colours if [theme] is set, then fitted to the pack.
+     * the app's icon, themed in the palette if [theme] is set, and fitted to the pack.
      */
-    private fun forSurface(app: AppEntry, packPkg: String, mask: Boolean, theme: ThemedIcons?): ImageBitmap? {
-        if (packPkg.isBlank() && theme == null) return app.icon
-        return cached("$packPkg|${theme?.key}|${app.key}") {
-            val pack = if (packPkg.isBlank()) null else pack(packPkg)
-            pack?.iconFor(app.component, sizePx)?.let { return@cached badge(it, app) }
-            val fit = pack != null && mask && pack.canMask
-            val mono = app.monochrome
-            if (theme != null && mono != null) {
-                // A pack with a background of its own gets just the glyph on that background.
-                return@cached if (fit && pack!!.hasBack) {
+    private fun forSurface(app: AppEntry, packPkg: String, mask: Boolean, theme: ThemedIcons?): Pair<ImageBitmap?, IconArt?> {
+        if (packPkg.isBlank() && theme == null) return app.icon to null
+        val pack = if (packPkg.isBlank()) null else pack(packPkg)
+        if (pack != null) {
+            val own = cached("pack|$packPkg|${app.key}") { pack.iconFor(app.component, sizePx)?.let { badge(it, app) } }
+            if (own != null) return own to null
+        }
+        val fit = pack != null && mask && pack.canMask
+        val mono = app.monochrome
+        if (theme != null && mono != null) {
+            if (!fit && !app.isWorkProfile) {
+                val art = arts.getOrPut("mono|${lastConfig?.shape}|${app.key}") { IconArt.Mono(IconPlates.plate(lastConfig?.shape ?: "system", sizePx), mono) }
+                return app.icon to art
+            }
+            // Fitted to a pack, or with the work badge: rendered in colour, cached per colour set.
+            val baked = cached("baked|$packPkg|${theme.key}|${app.key}") {
+                if (fit && pack!!.hasBack) {
                     badge(pack.masked(ThemedColors.glyph(mono, sizePx, theme.foreground), app.key, sizePx), app)
                 } else {
                     val shaped = ThemedColors.themed(mono, sizePx, theme.background, theme.foreground, lastConfig?.shape ?: "system")
                     badge(if (fit) pack!!.masked(shaped, app.key, sizePx) else shaped, app)
                 }
             }
-            val original = app.icon ?: return@cached null
-            var bitmap = original.asAndroidBitmap()
-            if (theme != null && theme.tintUncovered) bitmap = ThemedColors.duotone(bitmap, theme.background, theme.foreground)
-            if (fit) bitmap = pack!!.masked(bitmap, app.key, sizePx)
-            if (bitmap === original.asAndroidBitmap()) original else bitmap.asImageBitmap()
+            return baked to null
         }
+        val original = app.icon ?: return null to null
+        val base = if (fit) {
+            cached("fit|$packPkg|${app.key}") { pack!!.masked(original.asAndroidBitmap(), app.key, sizePx).asImageBitmap() } ?: original
+        } else {
+            original
+        }
+        val art = if (theme != null && theme.tintUncovered) arts.getOrPut("duo|$packPkg|${app.key}") { IconArt.Duotone(base) } else null
+        return base to art
     }
 
     private fun forOverride(app: AppEntry, override: String): ImageBitmap? {

@@ -22,6 +22,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import dev.liquid.launcher.core.data.AppEntry
 import dev.liquid.launcher.core.data.IconPack
 import dev.liquid.launcher.core.data.IconPacks
+import dev.liquid.launcher.core.settings.observe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -64,6 +66,26 @@ fun IconPickerDialog(app: AppEntry, controller: HomeController) {
         title = { Text("Icon for ${app.label}") },
         text = {
             Column {
+                // With themed icons on, this app's icon (its own or the one picked here) follows the wallpaper unless kept.
+                val themed by controller.data.settings.observe(dev.liquid.launcher.core.settings.LauncherSettings.ThemedIcons)
+                if (themed) {
+                    // The dialog's copy of the app does not change; read the switch from the live list.
+                    val all by controller.data.apps.apps.collectAsState()
+                    val keep = all.firstOrNull { it.ref == app.ref }?.keepColours ?: app.keepColours
+                    Row(
+                        Modifier.fillMaxWidth().clickable { controller.data.apps.setKeepColours(app.ref, !keep) }.padding(bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Keep this icon's own colours")
+                            Text(
+                                "Off: it follows the wallpaper like the other icons (a picked icon becomes two-tone in the wallpaper's colours)",
+                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        androidx.compose.material3.Switch(checked = keep, onCheckedChange = { controller.data.apps.setKeepColours(app.ref, it) })
+                    }
+                }
                 if (packs.isEmpty()) {
                     Text("No icon packs are installed. Install one from the Play Store (any pack made for Nova or ADW works), then come back here.")
                     return@Column

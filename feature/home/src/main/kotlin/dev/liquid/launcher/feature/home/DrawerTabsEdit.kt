@@ -166,7 +166,7 @@ internal fun TabDialogView(dialog: TabDialog, controller: HomeController, onChan
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Checkbox(checked = on, onCheckedChange = { controller.data.apps.setTag(app.ref, tag.id, it) })
-                                    AppIconImage(app.icon, Modifier.size(28.dp), null)
+                                    AppIcon(app, false, Modifier.size(28.dp), null)
                                     Spacer(Modifier.width(10.dp))
                                     Text(app.label, maxLines = 1)
                                 }

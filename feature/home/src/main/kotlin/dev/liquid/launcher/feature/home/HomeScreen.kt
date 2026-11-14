@@ -223,6 +223,11 @@ fun HomeScreen(
     val dock by store.derive { dockConfig() }
     SideEffect { controller.folderConfig = folderConfig }
     val colourTick by data.colourTick.collectAsState()
+    // Themed icon colours: icons read them while drawing (see IconPaint).
+    val iconPalette by data.iconPalette.collectAsState()
+    remember { IconPaint.init(data.iconPalette.value) }
+    LaunchedEffect(iconPalette) { IconPaint.fromData(iconPalette, this) }
+    if (live) IconPaintTiming()
     LaunchedEffect(theme, colourTick, savedImageKey(wallpaper)) { HomeTheme.apply(context, theme) }
     val glass by store.derive { glassConfig() }
     val search by store.derive { searchConfig() }
@@ -752,7 +757,7 @@ private fun DragGhost(drag: DragState) {
         contentAlignment = Alignment.Center,
     ) {
         if (drag.icon != null) {
-            AppIconImage(drag.icon, Modifier.squareFraction(0.75f), null)
+            ArtIcon(drag.icon, drag.art, Modifier.squareFraction(0.75f), null)
         } else {
             Box(Modifier.fillMaxSize().padding(6.dp).background(Color.White.copy(alpha = 0.25f), RoundedCornerShape(24.dp)))
         }

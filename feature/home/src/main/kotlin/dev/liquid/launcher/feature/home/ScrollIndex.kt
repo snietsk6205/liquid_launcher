@@ -99,59 +99,35 @@ private class IndexTouch {
 }
 
 /**
- * How the drawer list bends with a finger on the index. Written by [ScrollIndex], read by
- * every drawer item in its graphics layer, so the bend costs no recomposition.
+ * Which apps the index is pointing at, for the highlight. Written by [ScrollIndex], read by
+ * every drawer item in its graphics layer. It depends only on list positions (never on where
+ * an item is on screen), so an item that scrolls in during the glide is highlighted at once.
  */
 @Stable
-internal class IndexWave {
-    /** 0 = no bend, 1 = full bend; springs in on touch and back on release. */
+internal class IndexHighlight {
+    /** 0 = no highlight, 1 = full; springs in on touch and out on release. */
     val pop = Animatable(0f)
 
-    /** The finger's height, in root coordinates. */
-    var fingerY by mutableFloatStateOf(0f)
-
-    /** Items (list indices) of the entry under the finger: they stay bright while others fade. */
-    var focusFrom by mutableIntStateOf(-1)
-    var focusTo by mutableIntStateOf(-1)
-
-    var strength = 0.5f
-    var focus = true
-    var right = true
-
-    /** Reach of the bend above and below the finger, in pixels. */
-    var radius = 1f
-
-    /** Largest sideways move, in pixels (at full strength). */
-    var shift = 0f
-    var screenWidth = 1f
+    /** Items (list positions) of the entry under the finger. */
+    var from by mutableIntStateOf(-1)
+    var to by mutableIntStateOf(-1)
+    var enabled = true
 }
 
 /**
- * Applies [wave] to one list item: items near the finger move away from the index edge (so
- * the bulging letters never cover them) and gather slightly towards the finger's height, the
- * closer to the edge the more, like a liquid surface pressed by the finger.
+ * The highlight on one list item: apps of the held letter stay bright and lift slightly, the
+ * others fade. The list itself does not move.
  */
-internal fun GraphicsLayerScope.applyIndexWave(wave: IndexWave, coords: LayoutCoordinates?, itemIndex: Int) {
-    val p = wave.pop.value
-    if (p <= 0.002f || coords == null || !coords.isAttached) return
-    val centre = coords.localToRoot(Offset(coords.size.width / 2f, coords.size.height / 2f))
-    if (wave.focus && wave.focusFrom >= 0) {
-        val inside = itemIndex in wave.focusFrom until wave.focusTo
-        if (!inside) alpha = 1f - 0.4f * p.coerceIn(0f, 1f)
+internal fun GraphicsLayerScope.applyIndexHighlight(highlight: IndexHighlight, itemIndex: Int) {
+    val p = highlight.pop.value.coerceIn(0f, 1f)
+    if (p <= 0.002f || !highlight.enabled || highlight.from < 0) return
+    if (itemIndex in highlight.from until highlight.to) {
+        val scale = 1f + 0.05f * p
+        scaleX = scale
+        scaleY = scale
+    } else {
+        alpha = 1f - 0.62f * p
     }
-    val strength = wave.strength
-    if (strength <= 0f) return
-    val dy = centre.y - wave.fingerY
-    val d = dy / wave.radius
-    if (abs(d) >= 1f) return
-    val profile = (1f + cos(PI.toFloat() * d)) / 2f
-    val toEdge = (centre.x / wave.screenWidth).coerceIn(0f, 1f).let { if (wave.right) it else 1f - it }
-    val amount = profile * p * strength
-    translationX = (if (wave.right) -1f else 1f) * wave.shift * amount * (0.3f + 0.7f * toEdge)
-    translationY = -dy * 0.12f * amount
-    val scale = 1f - 0.06f * amount
-    scaleX = scale
-    scaleY = scale
 }
 
 /**
@@ -170,7 +146,7 @@ internal fun ScrollIndex(
     backdrop: Backdrop,
     controller: HomeController,
     interactive: Boolean,
-    wave: IndexWave,
+    highlight: IndexHighlight,
     modifier: Modifier,
 ) {
     val entries = index.entries
@@ -179,8 +155,10 @@ internal fun ScrollIndex(
     val view = LocalView.current
     val density = LocalDensity.current
     val touch = remember { IndexTouch() }
-    val pop = wave.pop
-    var rootTop by remember { mutableFloatStateOf(0f) }
+    val pop = highlight.pop
+    /** How far the letter column has slid in from its edge, towards the finger (pixels). */
+    val column = remember { Animatable(0f) }
+    val springSpec = spring<Float>(dampingRatio = 0.78f, stiffness = config.stiffness)
     val color = if (glass.lightGlass(Surfaces.Drawer, lightBackground)) Color(0xFF16181C) else Color.White
 
     // ---- visibility ----
@@ -195,8 +173,9 @@ internal fun ScrollIndex(
         if (shown) {
             visibility.animateTo(1f, tween(120))
         } else {
-            if (config.visibility == "scroll") kotlinx.coroutines.delay(900)
-            visibility.animateTo(0f, tween(380))
+            // Letters spring back to the edge first, then hide.
+            kotlinx.coroutines.delay(config.hideMs.toLong())
+            visibility.animateTo(0f, tween(320))
         }
     }
 
@@ -222,7 +201,7 @@ internal fun ScrollIndex(
         touch.position = Float.NaN
     }
 
-    BoxWithConstraints(modifier.fillMaxSize().onPlaced { rootTop = it.positionInRoot().y }) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
         val height = constraints.maxHeight.toFloat()
         val width = constraints.maxWidth.toFloat()
         val n = entries.size
@@ -231,18 +210,23 @@ internal fun ScrollIndex(
         val edge = with(density) { EdgeInset.toPx() }
         val bulgeMax = with(density) { MaxBulge.toPx() } * config.curve
         val radius = maxOf(spacing * 4.5f, with(density) { 96.dp.toPx() })
-        SideEffect {
-            wave.strength = config.wave
-            wave.focus = config.focus
-            wave.right = config.right
-            wave.radius = maxOf(radius * 1.5f, with(density) { 170.dp.toPx() })
-            wave.shift = with(density) { 44.dp.toPx() }
-            wave.screenWidth = controller.screenWidth
-        }
+        SideEffect { highlight.enabled = config.focus }
         /** Items of entry [i], for the highlight. */
         fun focusOn(i: Int) {
-            wave.focusFrom = entries.getOrNull(i)?.firstItem ?: -1
-            wave.focusTo = entries.getOrNull(i + 1)?.firstItem ?: Int.MAX_VALUE
+            highlight.from = entries.getOrNull(i)?.firstItem ?: -1
+            highlight.to = entries.getOrNull(i + 1)?.firstItem ?: Int.MAX_VALUE
+        }
+        val stripWidth = with(density) { IndexStrip.toPx() }
+        val maxTravel = width * 0.62f
+        /**
+         * The column slides towards a finger at [x] (in this box): with "Letters follow the
+         * finger" at 100 % the letters' base line sits at the finger, and the curve pushes the
+         * letters next to it out from under the finger.
+         */
+        fun slideTowards(x: Float) {
+            val fromEdge = if (config.right) width - x else x
+            val target = ((fromEdge - edge) * config.track).coerceIn(0f, maxTravel)
+            scope.launch { column.animateTo(target, springSpec) }
         }
 
         /** Visual slot of entry [i]: entries run bottom to top when the list starts at the bottom. */
@@ -271,7 +255,6 @@ internal fun ScrollIndex(
         }
         fun follow(y: Float) {
             touch.fingerY = y.coerceIn(0f, height)
-            wave.fingerY = rootTop + touch.fingerY
             val position = positionAt(touch.fingerY)
             touch.target = index.rowAt(position)
             val entry = position.roundToInt().coerceIn(0, n - 1)
@@ -304,7 +287,8 @@ internal fun ScrollIndex(
                     // Down and up the letters, easing at the ends.
                     val swing = (1f - cos(t * 2f * PI.toFloat())) / 2f
                     touch.fingerY = top + spacing * (0.5f + swing * (n - 1))
-                    wave.fingerY = rootTop + touch.fingerY
+                    // The pretend finger also wanders inwards a little, so the column's slide shows.
+                    column.snapTo(((1f - cos(t * 3f * PI.toFloat())) / 2f) * with(density) { 48.dp.toPx() } * config.track)
                     touch.active = positionAt(touch.fingerY).roundToInt().coerceIn(0, n - 1)
                     focusOn(touch.active)
                 }
@@ -324,7 +308,8 @@ internal fun ScrollIndex(
                     for (i in 0 until n) {
                         val y = centreY(i)
                         val bend = bulgeAt(y)
-                        val x = if (config.right) width - edge - bend else edge + bend
+                        val slide = column.value
+                        val x = if (config.right) width - edge - slide - bend else edge + slide + bend
                         val on = i == highlighted
                         val layout: TextLayoutResult = if (on) bold[i] else normal[i]
                         val w = layout.size.width.toFloat()
@@ -352,7 +337,7 @@ internal fun ScrollIndex(
                 Modifier
                     .align(if (config.right) Alignment.TopEnd else Alignment.TopStart)
                     .offset {
-                        val gap = 18.dp.toPx() + edge + bulgeMax * pop.value
+                        val gap = 18.dp.toPx() + edge + column.value + bulgeMax * pop.value
                         val y = (touch.fingerY - BubbleSize.toPx() / 2f).coerceIn(0f, (height - BubbleSize.toPx()).coerceAtLeast(0f))
                         IntOffset((if (config.right) -gap else gap).roundToInt(), y.roundToInt())
                     }
@@ -389,13 +374,16 @@ internal fun ScrollIndex(
                     .align(if (config.right) Alignment.TopEnd else Alignment.TopStart)
                     .fillMaxHeight()
                     .width(IndexStrip)
-                    .pointerInput(index, reverse, spacing, top) {
+                    .pointerInput(index, reverse, spacing, top, width, config.track, config.stiffness) {
+                        // The strip's own x in the index box, to turn finger positions into box positions.
+                        val stripLeft = if (config.right) width - stripWidth else 0f
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
                             down.consume()
                             touch.active = -1
                             touch.touching = true
                             follow(down.position.y)
+                            slideTowards(stripLeft + down.position.x)
                             scope.launch { pop.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 700f)) }
                             while (true) {
                                 val event = awaitPointerEvent()
@@ -403,8 +391,11 @@ internal fun ScrollIndex(
                                 change.consume()
                                 if (!change.pressed) break
                                 follow(change.position.y)
+                                slideTowards(stripLeft + change.position.x)
                             }
                             touch.touching = false
+                            // Back to the edge with a spring, then the letters hide (see visibility).
+                            scope.launch { column.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = config.stiffness)) }
                             scope.launch { pop.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = 500f)) }
                         }
                     }

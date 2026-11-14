@@ -89,8 +89,8 @@ internal fun FolderIcon(item: HomeItem, env: PageEnv, config: FolderConfig, modi
                     // Up to three icons fanned out, the first on top.
                     apps.take(3).reversed().forEachIndexed { i, app ->
                         val pos = apps.take(3).size - 1 - i
-                        AppIconImage(
-                            app.homeIcon,
+                        AppIcon(
+                            app, true,
                             Modifier.fillMaxSize(0.62f).graphicsLayer {
                                 rotationZ = (pos - 1) * -10f
                                 translationX = (pos - 1) * size.width * -0.16f
@@ -101,9 +101,9 @@ internal fun FolderIcon(item: HomeItem, env: PageEnv, config: FolderConfig, modi
                     }
                 }
                 "first" -> Box(tile.padding(6.dp)) {
-                    apps.firstOrNull()?.let { AppIconImage(it.homeIcon, Modifier.fillMaxSize(0.74f).align(Alignment.TopStart), null) }
+                    apps.firstOrNull()?.let { AppIcon(it, true, Modifier.fillMaxSize(0.74f).align(Alignment.TopStart), null) }
                     Row(Modifier.align(Alignment.BottomEnd), horizontalArrangement = Arrangement.spacedBy((-6).dp)) {
-                        for (app in apps.drop(1).take(3)) AppIconImage(app.homeIcon, Modifier.fillMaxSize(0.3f), null)
+                        for (app in apps.drop(1).take(3)) AppIcon(app, true, Modifier.fillMaxSize(0.3f), null)
                     }
                 }
                 else -> Box(tile.padding(6.dp)) {
@@ -113,7 +113,7 @@ internal fun FolderIcon(item: HomeItem, env: PageEnv, config: FolderConfig, modi
                                 for (col in 0 until 2) {
                                     val app = apps.getOrNull(row * 2 + col)
                                     Box(Modifier.weight(1f).fillMaxSize(), contentAlignment = Alignment.Center) {
-                                        if (app != null) AppIconImage(app.homeIcon, Modifier.fillMaxSize(), null)
+                                        if (app != null) AppIcon(app, true, Modifier.fillMaxSize(), null)
                                     }
                                 }
                             }
@@ -253,6 +253,7 @@ private fun FolderApp(app: AppEntry, folderId: String, color: Color, grid: GridC
                     DragState(
                         source = DragSource.FolderApp(folderId, app.ref),
                         icon = app.homeIcon,
+                        art = app.homeArt,
                         widget = null,
                         cells = androidx.compose.ui.unit.IntSize(1, 1),
                         grab = grab,
@@ -273,7 +274,7 @@ private fun FolderApp(app: AppEntry, folderId: String, color: Color, grid: GridC
             .iconGestures({ holder.value }, handler),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        AppIconImage(app.homeIcon, Modifier.size(52.dp), app.label)
+        AppIcon(app, true, Modifier.size(52.dp), app.label)
         Text(
             app.label,
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),

@@ -4,7 +4,10 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import dev.liquid.launcher.core.common.CropSpec
+import dev.liquid.launcher.core.common.ColourTiming
 import dev.liquid.launcher.core.common.DebugLog
+import dev.liquid.launcher.core.common.WallpaperTone
+import dev.liquid.launcher.core.common.WallpaperTones
 import dev.liquid.launcher.core.data.LauncherData
 import dev.liquid.launcher.core.data.WallpaperItem
 import dev.liquid.launcher.core.data.WallpaperLibraryOps
@@ -19,8 +22,18 @@ sealed interface WallpaperPick {
     data class External(val uri: Uri, val folder: String?) : WallpaperPick
 }
 
-/** A wallpaper ready to show, and what it was made from. */
-class PreparedWallpaper(val bitmap: Bitmap, val pick: WallpaperPick, val crop: CropSpec, val parallax: Float)
+/**
+ * A wallpaper ready to show, what it was made from, and its colours (worked out before it is
+ * shown, so themed icons change in the same frame as the wallpaper).
+ */
+class PreparedWallpaper(
+    val bitmap: Bitmap,
+    val pick: WallpaperPick,
+    val crop: CropSpec,
+    val parallax: Float,
+    val tone: WallpaperTone? = null,
+    val palette: Pair<Int, Int>? = null,
+)
 
 /**
  * Choosing, placing and applying wallpapers: shared by the wallpaper screen, the wallpaper
@@ -46,7 +59,11 @@ object Wallpapers {
         val useParallax = parallax ?: item?.parallax?.takeIf { it >= 0f } ?: defaultParallax(data)
         val bitmap = WallpaperStore.get(context).render(source, useCrop, useParallax)
         source.recycle()
-        return PreparedWallpaper(bitmap, pick, useCrop, useParallax)
+        ColourTiming.mark("wallpaper decoded and placed")
+        val tone = WallpaperTones.fromBitmap(bitmap)
+        val palette = tone?.let { data.paletteFor(it.primary) }
+        ColourTiming.mark("palette ready (from the picture)")
+        return PreparedWallpaper(bitmap, pick, useCrop, useParallax, tone, palette)
     }
 
     /**
@@ -102,7 +119,7 @@ object Wallpapers {
         if (mode == "daily" && sameDay(data.wallpapers.get().lastRotation, System.currentTimeMillis())) return
         val pick = next(data) ?: return
         val prepared = prepare(context, data, pick) ?: return
-        WallpaperStore.get(context).show(prepared.bitmap)
+        WallpaperStore.get(context).show(prepared.bitmap, prepared.tone)
         persist(context, data, prepared, keepFolderPicture = false)
         DebugLog.event("Wallpaper", "changed automatically ($mode)")
     }

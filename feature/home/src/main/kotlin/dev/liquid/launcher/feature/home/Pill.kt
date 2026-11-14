@@ -222,7 +222,7 @@ internal fun RowScope.PillSlotView(
                     .press { if (app != null) controller.launch(app) },
                 contentAlignment = Alignment.Center,
             ) {
-                AppIconImage(app?.homeIcon, Modifier.size((config.iconSizeDp + 6).dp), app?.label)
+                AppIcon(app, true, Modifier.size((config.iconSizeDp + 6).dp), app?.label)
             }
         }
     }

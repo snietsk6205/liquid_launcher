@@ -127,7 +127,7 @@ fun AppMenu(
                         .padding(vertical = 8.dp)
                 ) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        AppIconImage(target.app.icon, Modifier.size(28.dp), null)
+                        AppIcon(target.app, false, Modifier.size(28.dp), null)
                         Spacer(Modifier.width(12.dp))
                         Text(
                             target.app.label,

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
 import dev.liquid.launcher.core.common.WallpaperTones
+import dev.liquid.launcher.core.common.ColourTiming
 import kotlinx.coroutines.flow.combine
 import dev.liquid.launcher.core.settings.LauncherSettings
 import dev.liquid.launcher.core.settings.SettingsStore
@@ -29,16 +30,35 @@ import java.io.File
 class LauncherData private constructor(private val context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** Bumped when the wallpaper colours change, so themed icons and colour-following packs are redrawn. */
+    /** Bumped when the palette changes: only icons rendered in colour (fitted to a pack, work badge) are redrawn. */
     private val themeTick = MutableStateFlow(0)
+
+    /** Bumped when the system's colours change: icon packs that follow them are loaded again. */
+    private val packTick = MutableStateFlow(0)
     private val _colourTick = MutableStateFlow(0)
+    private val _iconPalette = MutableStateFlow<Pair<Int, Int>?>(null)
 
     /** Changes whenever the wallpaper's colours may have changed (accent, light or dark text, themed icons). */
     val colourTick: StateFlow<Int> = _colourTick
 
+    /**
+     * Background and foreground colour of themed icons, or null when they are off. Icons take
+     * these when they are drawn, so a change here is only a redraw.
+     */
+    val iconPalette: StateFlow<Pair<Int, Int>?> = _iconPalette
+
     /** What the colours looked like at the last check: seed, light flag and themed palette. */
     @Volatile
     private var lastColours: Triple<Int, Boolean, Pair<Int, Int>?>? = null
+
+    /**
+     * With the "system" colour source, after the launcher set a wallpaper: the system palette
+     * it had before ([stale]); until it changes (or [until]), the new wallpaper's own tones are used.
+     */
+    private class SystemHold(val stale: Pair<Int, Int>, val until: Long)
+
+    @Volatile
+    private var systemHold: SystemHold? = null
     private val dir = File(context.filesDir, "data")
 
     val settings: SettingsStore = SettingsStore.get(context)
@@ -64,9 +84,12 @@ class LauncherData private constructor(private val context: Context) {
             settings.values.map { settings.get(LauncherSettings.ThemeIconShape) }.distinctUntilChanged().collect { apps.iconShape = it }
         }
         scope.launch {
-            combine(settings.values, themeTick) { _, tick -> iconConfig(tick) }
+            combine(settings.values, themeTick, packTick) { _, _, pack -> iconConfig(pack) }
                 .distinctUntilChanged()
-                .collect { apps.iconConfig.value = it }
+                .collect { config ->
+                    _iconPalette.value = config.themed?.let { it.background to it.foreground }
+                    apps.iconConfig.value = config
+                }
         }
         // A wallpaper the launcher sets itself brings its colours along: recolour at once.
         WallpaperTones.load(context)
@@ -80,7 +103,8 @@ class LauncherData private constructor(private val context: Context) {
         // Wallpapers set elsewhere: the system's colours, which can arrive late, so look again a little later too.
         WallpaperManager.getInstance(context).addOnColorsChangedListener({ _, which ->
             if (which and WallpaperManager.FLAG_SYSTEM != 0) {
-                checkWallpaperColours()
+                ColourTiming.mark("system reported new wallpaper colours")
+                checkWallpaperColours(reloadPacks = true)
                 scope.launch {
                     delay(2000)
                     checkWallpaperColours()
@@ -90,48 +114,67 @@ class LauncherData private constructor(private val context: Context) {
             }
         }, Handler(Looper.getMainLooper()))
         context.registerComponentCallbacks(object : ComponentCallbacks {
-            override fun onConfigurationChanged(newConfig: Configuration) = checkWallpaperColours()
+            override fun onConfigurationChanged(newConfig: Configuration) = checkWallpaperColours(reloadPacks = true)
             @Deprecated("Deprecated in Java")
             override fun onLowMemory() = Unit
         })
     }
 
     /**
-     * Redraws what follows the wallpaper colours if they changed (or always with [force], which
-     * also reloads icon packs that use the system colours). Cheap when nothing changed.
+     * Updates what follows the wallpaper colours if they changed (or always with [force]).
+     * [reloadPacks] also loads icon packs again that may follow the system colours. Cheap
+     * when nothing changed.
      */
-    fun checkWallpaperColours(force: Boolean = false) {
+    fun checkWallpaperColours(force: Boolean = false, reloadPacks: Boolean = false) {
         scope.launch {
             val themed = settings.get(LauncherSettings.ThemedIcons)
-            val colours = Triple(ThemedColors.seed(context), ThemedColors.isLight(context), if (themed) palette() else null)
-            if (force || colours != lastColours) {
+            val palette = if (themed) palette() else null
+            val colours = Triple(ThemedColors.seed(context), ThemedColors.isLight(context), palette)
+            val changed = colours != lastColours
+            if (force || changed) {
                 lastColours = colours
                 _colourTick.value++
-                if (themed) {
-                    DebugLog.event("Icons", "wallpaper colours changed, redrawing themed icons")
-                    themeTick.value++
-                }
+                if (themed) themeTick.value++
+                if (changed && palette != null) ColourTiming.mark("palette from the data layer")
             }
+            if (themed && reloadPacks && settings.get(LauncherSettings.IconPack).isNotBlank()) packTick.value++
         }
     }
 
     /**
-     * Called right after the launcher sets a wallpaper the system may still be working on: the
-     * system palette ("system" colour source) follows a few seconds later, so check again then.
+     * Called when the launcher has just shown a wallpaper of its own (its colours are known).
+     * With the "system" colour source the phone's palette follows only later, so until it
+     * changes the new wallpaper's own tones are used instead of the old palette.
      */
     fun afterOwnWallpaper() {
-        checkWallpaperColours(force = true)
-        if (settings.get(LauncherSettings.ThemedIconsColors) != "system") return
-        scope.launch {
-            for (wait in listOf(1500L, 3000L, 6000L)) {
-                delay(wait)
-                checkWallpaperColours()
-            }
+        if (settings.get(LauncherSettings.ThemedIconsColors) == "system") {
+            val stale = ThemedColors.palette(context, "system", settings.get(LauncherSettings.ThemedIconsStyle))
+            systemHold = SystemHold(stale, android.os.SystemClock.uptimeMillis() + 20_000)
         }
+        checkWallpaperColours(force = true)
     }
 
-    private fun palette(): Pair<Int, Int> =
-        ThemedColors.palette(context, settings.get(LauncherSettings.ThemedIconsColors), settings.get(LauncherSettings.ThemedIconsStyle))
+    /** Themed icon colours for a wallpaper whose main colour is [seed] (one about to be shown), or null when themed icons are off. */
+    fun paletteFor(seed: Int): Pair<Int, Int>? {
+        if (!settings.get(LauncherSettings.ThemedIcons)) return null
+        return ThemedColors.palette(context, settings.get(LauncherSettings.ThemedIconsColors), settings.get(LauncherSettings.ThemedIconsStyle), seed)
+    }
+
+    private fun palette(): Pair<Int, Int> {
+        val source = settings.get(LauncherSettings.ThemedIconsColors)
+        val style = settings.get(LauncherSettings.ThemedIconsStyle)
+        val hold = systemHold
+        if (source == "system" && hold != null) {
+            val tone = WallpaperTones.current(context)
+            val system = ThemedColors.palette(context, "system", style)
+            if (tone != null && system == hold.stale && android.os.SystemClock.uptimeMillis() < hold.until) {
+                return ThemedColors.palette(context, source, style, tone.primary)
+            }
+            systemHold = null
+            return system
+        }
+        return ThemedColors.palette(context, source, style)
+    }
 
     private fun iconConfig(tick: Int): IconConfig {
         val main = settings.get(LauncherSettings.IconPack)

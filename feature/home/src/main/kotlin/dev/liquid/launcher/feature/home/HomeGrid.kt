@@ -238,7 +238,7 @@ fun AppIconView(
 ) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            AppIconImage(app.homeIcon, Modifier.squareFraction(iconFraction), app.label)
+            AppIcon(app, true, Modifier.squareFraction(iconFraction), app.label)
         }
         if (label != null) {
             Text(
@@ -288,7 +288,7 @@ internal fun appHandler(item: HomeItem, app: AppEntry, holder: CoordinatesHolder
                 controller.menu = MenuTarget(app, item.id, bounds)
             }
 
-            override fun onDragStart(grab: Offset, finger: Offset) = startHomeDrag(item, app.homeIcon, grab, finger, holder, controller)
+            override fun onDragStart(grab: Offset, finger: Offset) = startHomeDrag(item, app.homeIcon, grab, finger, holder, controller, app.homeArt)
 
             override fun hasSwipe(up: Boolean): Boolean =
                 !controller.editMode && (if (up) item.swipeUp else item.swipeDown) != null
@@ -374,12 +374,14 @@ private fun startHomeDrag(
     finger: Offset,
     holder: CoordinatesHolder,
     controller: HomeController,
+    art: dev.liquid.launcher.core.data.IconArt? = null,
 ) {
     val size = holder.value?.size ?: IntSize.Zero
     controller.startDrag(
         DragState(
             source = DragSource.Home(item.id),
             icon = icon,
+            art = art,
             widget = item.widget,
             cells = IntSize(item.w, item.h),
             grab = grab,

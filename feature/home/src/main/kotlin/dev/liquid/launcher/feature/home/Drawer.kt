@@ -306,10 +306,19 @@ fun AppDrawer(
             makeTab(null, "filter", TagFilterOps.label(tagFilter, org), LauncherIcons.Label, sortApps(list, config.sort, usage), config.sort, emptyList(), config.columns)
         }
     }
+    val stripShown = tagConfig.position != "hidden" && org.tags.isNotEmpty() && (tagConfig.order != "pinned" || tagConfig.pinned.isNotEmpty())
     SideEffect {
         controller.tagFilterLabel = TagFilterOps.label(tagFilter, org)
         controller.tagSwipeOrder = (if (tagConfig.count > 0) chipTags.take(tagConfig.count) else chipTags).map { it.id }
         controller.tagSwipeEnabled = tagConfig.swipe && org.tags.isNotEmpty()
+        controller.tagButtonInField = when {
+            org.tags.isEmpty() -> null
+            tagConfig.button == "fieldLeft" -> "left"
+            tagConfig.button == "fieldRight" -> "right"
+            // No chip row to hold it (hidden, or only pinned tags and none pinned): the button moves into the search field.
+            !stripShown -> "right"
+            else -> null
+        }
     }
     // A tag that was deleted drops out of the filter.
     LaunchedEffect(org, tagFilter) {
@@ -398,13 +407,12 @@ fun AppDrawer(
 
     val useIndex = motion.scrollbar == "index" && !searching && currentTab.sort == "az"
     // The index floats over the list, so both sides keep the same margin whether it shows or not.
-    val wave = remember { IndexWave() }
+    val highlight = remember { IndexHighlight() }
     val density = LocalDensity.current
     val keyboardOrNav = WindowInsets.ime.union(WindowInsets.navigationBars)
     val tabsTop = showTabs && config.tabsTop
     val tabsBottom = showTabs && config.tabsBottom
     val tabsH = tabsHeight(config.tabsSize)
-    val stripShown = tagConfig.position != "hidden" && org.tags.isNotEmpty() && (tagConfig.order != "pinned" || tagConfig.pinned.isNotEmpty())
     val stripTop = stripShown && tagConfig.position == "top"
     val stripAbove = stripShown && !stripTop
     val baseHeader = if (tabsTop) maxOf(HandleHeight, tabsH + 16.dp) else HandleHeight
@@ -465,11 +473,11 @@ fun AppDrawer(
                 ) {
                     when {
                         searching -> AppGrid(resultCells, resultsState, padding, config, motion, fx, null, color, controller, interactive)
-                        filteredTab != null -> AppGrid(filteredTab.cells, filterState, padding, config, motion, fx, wave, color, controller, interactive)
-                        tabs.size == 1 -> AppGrid(tabs[0].cells, stateFor(tabs[0].id), padding, config, motion, fx, wave, color, controller, interactive)
+                        filteredTab != null -> AppGrid(filteredTab.cells, filterState, padding, config, motion, fx, highlight, color, controller, interactive)
+                        tabs.size == 1 -> AppGrid(tabs[0].cells, stateFor(tabs[0].id), padding, config, motion, fx, highlight, color, controller, interactive)
                         else -> HorizontalPager(pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { tabs.getOrNull(it)?.id ?: it }) { page ->
                             val tab = tabs.getOrNull(page) ?: return@HorizontalPager
-                            AppGrid(tab.cells, stateFor(tab.id), padding, config, motion, fx, wave.takeIf { page == pager.currentPage }, color, controller, interactive)
+                            AppGrid(tab.cells, stateFor(tab.id), padding, config, motion, fx, highlight.takeIf { page == pager.currentPage }, color, controller, interactive)
                         }
                     }
                 }
@@ -512,7 +520,7 @@ fun AppDrawer(
                     backdrop = glassBackdrop,
                     controller = controller,
                     interactive = interactive,
-                    wave = wave,
+                    highlight = highlight,
                     modifier = sideArea,
                 )
             } else if (motion.scrollbar != "off") {
@@ -601,16 +609,18 @@ fun AppDrawer(
         }
     }
     tabDialog?.let { dialog -> TabDialogView(dialog, controller) { tabDialog = null } }
-    if (controller.tagSheet && interactive) {
-        TagSheet(org, counts, usage, tagConfig, controller, glass, light, glassBackdrop)
+    // The tag list grows out of its button and shrinks back into it.
+    val sheetProgress = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(controller.tagSheet) {
+        if (controller.tagSheet) {
+            sheetProgress.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.78f, stiffness = 360f))
+        } else {
+            sheetProgress.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 520f))
+        }
     }
-}
-
-/** Section headers bend with the list too. */
-@Composable
-private fun Modifier.headerWave(wave: IndexWave, index: Int): Modifier {
-    val holder = remember { CoordinatesHolder() }
-    return onPlaced { holder.value = it }.graphicsLayer { applyIndexWave(wave, holder.value, index) }
+    if (interactive && (controller.tagSheet || sheetProgress.value > 0.001f)) {
+        TagSheet(org, counts, usage, tagConfig, controller, glass, light, glassBackdrop, sheetProgress.value)
+    }
 }
 
 /** Fades the list out under the status bar, so app labels do not run into the clock and icons. */
@@ -696,7 +706,7 @@ private fun AppGrid(
     config: DrawerConfig,
     motion: DrawerMotion,
     fx: ScrollFx,
-    wave: IndexWave?,
+    highlight: IndexHighlight?,
     color: Color,
     controller: HomeController,
     interactive: Boolean,
@@ -718,12 +728,12 @@ private fun AppGrid(
             contentType = { _, cell -> if (cell is HeaderCell) 1 else 0 },
         ) { i, cell ->
             when (cell) {
-                is AppCell -> DrawerItem(cell.app, config, color, controller, interactive, fx, state, wave, i)
+                is AppCell -> DrawerItem(cell.app, config, color, controller, interactive, fx, state, highlight, i)
                 is HeaderCell -> Text(
                     cell.title,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .then(if (wave != null) Modifier.headerWave(wave, i) else Modifier)
+                        .then(if (highlight != null) Modifier.graphicsLayer { applyIndexHighlight(highlight, i) } else Modifier)
                         .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 2.dp),
                     style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.7f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
                     maxLines = 1,
@@ -743,7 +753,7 @@ private fun DrawerItem(
     interactive: Boolean,
     fx: ScrollFx,
     state: LazyGridState,
-    wave: IndexWave?,
+    highlight: IndexHighlight?,
     index: Int,
 ) {
     val holder = remember { CoordinatesHolder() }
@@ -768,6 +778,7 @@ private fun DrawerItem(
                     DragState(
                         source = DragSource.NewApp(app.ref),
                         icon = app.icon,
+                        art = app.art,
                         widget = null,
                         cells = IntSize(1, 1),
                         grab = grab,
@@ -786,12 +797,12 @@ private fun DrawerItem(
         Modifier
             .fillMaxWidth()
             .onPlaced { holder.value = it }
-            .scrollEffect(fx, state, holder, wave, index)
+            .scrollEffect(fx, state, holder, highlight, index)
             .iconGestures({ holder.value }, handler, interactive)
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        AppIconImage(app.icon, Modifier.size(config.iconSizeDp.dp), app.label)
+        AppIcon(app, false, Modifier.size(config.iconSizeDp.dp), app.label)
         if (config.labels) {
             Text(
                 text = app.label,
@@ -876,6 +887,10 @@ internal fun DrawerSearchField(
             .padding(start = if (filtering) 10.dp else 18.dp, end = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (controller.tagButtonInField == "left") {
+            TagsButton(controller, color, Modifier.background(color.copy(alpha = 0.1f), RoundedCornerShape(50)), interactive, size = 34.dp)
+            Spacer(Modifier.width(8.dp))
+        }
         if (filtering) {
             // The active tag filter, with one tap to clear it.
             ActiveTagChip(controller, controller.tagFilterLabel, interactive)
@@ -911,6 +926,10 @@ internal fun DrawerSearchField(
             Box(Modifier.size(36.dp).clip(RoundedCornerShape(50)).clickable { controller.drawerQuery = "" }, contentAlignment = Alignment.Center) {
                 LauncherIcon(LauncherIcons.Close, contentDescription = "Clear", tint = color, size = 20.dp)
             }
+        }
+        if (controller.tagButtonInField == "right") {
+            Spacer(Modifier.width(6.dp))
+            TagsButton(controller, color, Modifier.background(color.copy(alpha = 0.1f), RoundedCornerShape(50)), interactive, size = 34.dp)
         }
     }
 }
