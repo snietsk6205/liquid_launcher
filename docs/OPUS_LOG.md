@@ -347,6 +347,8 @@ Not done / limits: icons fitted to a pack (and work-profile apps) with themed ic
 | `feature/settings/Updater.kt`, `UpdatesScreen.kt` (new) + test, `SettingsActivity.kt`, `MainScreen.kt`, `AboutScreen.kt`, app manifest, `res/xml/update_paths.xml` | In-app updater with daily opt-in and a banner on the settings main screen; About text updated (phase, network use) | D71 |
 | `ci/smoke.sh` | Opens the Updates screen and checks for the check button | |
 
+CI note: the first 0.5.0 run (33) failed "swipe up opens the drawer": the new detector fed the velocity tracker only each event's last position, so moves the system batched into one event were lost and the swipe's speed came out as 0 px/s (the drawer was released at 0.37 and closed). Fixed by feeding whole pointer changes, as the old detector did.
+
 Not done / limits: two-finger gestures and edge swipes cannot be driven from adb, so the emulator test does not cover them; large folders and per-folder glass stay for Phase 7; the updater cannot check a private repository.
 
 ### For Fable to review

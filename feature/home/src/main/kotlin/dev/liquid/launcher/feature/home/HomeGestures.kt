@@ -10,6 +10,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.unit.dp
 import dev.liquid.launcher.core.common.DebugLog
 import dev.liquid.launcher.core.data.LauncherAction
@@ -62,8 +63,9 @@ internal fun Modifier.homeGestures(gestures: GestureConfig, controller: HomeCont
         val edgeWidth = gestures.edgeWidthDp.dp.toPx()
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
+            // Fed with whole pointer changes, so moves the system batched into one event still count.
             val tracker = VelocityTracker()
-            tracker.addPosition(down.uptimeMillis, down.position)
+            tracker.addPointerInputChange(down)
             // A swipe from a side edge uses that edge's actions, when they do something.
             val edge = when {
                 down.position.x < edgeWidth -> -1
@@ -119,7 +121,7 @@ internal fun Modifier.homeGestures(gestures: GestureConfig, controller: HomeCont
                             continue
                         }
                         total += change.positionChange()
-                        tracker.addPosition(change.uptimeMillis, change.position)
+                        tracker.addPointerInputChange(change)
                         if (total.getDistance() > slop) {
                             mode = if (abs(total.y) > abs(total.x)) HomeTouch.Vertical else HomeTouch.Other
                             if (mode == HomeTouch.Vertical) {
@@ -132,7 +134,7 @@ internal fun Modifier.homeGestures(gestures: GestureConfig, controller: HomeCont
                         val change = event.changes.firstOrNull { it.id == down.id } ?: break
                         val dy = change.positionChange().y
                         total += change.positionChange()
-                        tracker.addPosition(change.uptimeMillis, change.position)
+                        tracker.addPointerInputChange(change)
                         change.consume()
                         if (follow && (total.y < 0 || controller.drawer.value > 0f)) {
                             val delta = -dy / controller.screenHeight
