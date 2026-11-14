@@ -175,7 +175,7 @@ internal fun WallpaperStudio(
     val toggled by animateFloatAsState(if (state.peek || state.adjusting) 0f else 1f, label = "sheet")
     // Rises in like the other glass sheets when the screen opens.
     val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { appear.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.82f, stiffness = 420f)) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.82f, stiffness = MotionScale.stiffness(420f))) }
     val shown = toggled * appear.value.coerceIn(0f, 1.05f)
     val currentLayout = layouts.layouts.firstOrNull { it.id == layouts.current }
     LaunchedEffect(currentLayout?.id) { state.forLayout = currentLayout?.wallpaper != null }

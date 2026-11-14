@@ -246,7 +246,7 @@ class HomeController(
                     transitionProgress.animateTo(
                         1f,
                         androidx.compose.animation.core.tween(
-                            data.settings.get(LauncherSettings.WallpaperTransitionMs),
+                            MotionScale.ms(data.settings.get(LauncherSettings.WallpaperTransitionMs)),
                             easing = androidx.compose.animation.core.FastOutSlowInEasing,
                         ),
                     )
@@ -368,8 +368,27 @@ class HomeController(
      */
     private var dragPosition: Float? = null
 
+    /** How an app opens from an icon at [rect] (root coordinates), per the Motion settings. */
+    fun launchOptions(view: android.view.View, rect: android.graphics.Rect?): android.os.Bundle? {
+        if (rect == null) return null
+        val options = when (motionConfig.launch) {
+            "scale" -> android.app.ActivityOptions.makeScaleUpAnimation(view, rect.left, rect.top, rect.width(), rect.height())
+            "fade" -> android.app.ActivityOptions.makeCustomAnimation(context, android.R.anim.fade_in, android.R.anim.fade_out)
+            "system" -> return null
+            else -> android.app.ActivityOptions.makeClipRevealAnimation(view, rect.left, rect.top, rect.width(), rect.height())
+        }
+        return options.toBundle()
+    }
+
+    /** The home screen's view, for haptic ticks; set by the live home screen. */
+    var view: android.view.View? = null
+    var motionConfig = MotionConfig()
+
     fun dragDrawerBy(deltaFraction: Float) {
-        val next = ((dragPosition ?: drawer.value) + deltaFraction).coerceIn(0f, 1f)
+        val before = dragPosition ?: drawer.value
+        val next = (before + deltaFraction).coerceIn(0f, 1f)
+        // A tick where letting go starts to open the drawer (see settleDrawer).
+        if (motionConfig.drawerTick && (before > OPEN_POINT) != (next > OPEN_POINT)) Haptics.tick(view)
         dragPosition = next
         scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { drawer.snapTo(next) }
     }
@@ -381,7 +400,7 @@ class HomeController(
         val open = when {
             velocityPxPerSec < -800f -> true
             velocityPxPerSec > 800f -> false
-            else -> position > 0.4f
+            else -> position > OPEN_POINT
         }
         // Upward finger speed is negative on screen and positive for the drawer.
         val velocity = (-velocityPxPerSec / screenHeight).coerceIn(-8f, 8f)
@@ -611,6 +630,7 @@ class HomeController(
     // ---- drag and drop ----
 
     fun startDrag(state: DragState) {
+        Haptics.confirm(view)
         menu = null
         selectedItem = null
         pagesSheet = false
@@ -771,6 +791,15 @@ class HomeController(
             LauncherAction.OpenCalendar -> start(
                 Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALENDAR),
             )
+            is LauncherAction.LaunchActivity -> try {
+                LaunchClock.mark()
+                context.startActivity(Intent().setClassName(action.pkg, action.cls).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (e: SecurityException) {
+                toast("That screen can only be opened from inside its app")
+            } catch (e: Exception) {
+                DebugLog.error("Home", "activity failed: $e")
+                toast("That screen is not there any more")
+            }
             is LauncherAction.LaunchApp -> {
                 val app = data.apps.find(action.ref)
                 if (app != null) launch(app) else toast("That app is not installed")
@@ -848,6 +877,9 @@ class HomeController(
 }
 
 private const val EDGE_DWELL_MS = 650L
+
+/** Past this fraction a released drawer opens. */
+private const val OPEN_POINT = 0.4f
 
 /** What the home screen asks the activity to do. */
 class HomeCallbacks(

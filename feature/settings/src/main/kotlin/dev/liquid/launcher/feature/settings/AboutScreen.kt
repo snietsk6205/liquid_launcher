@@ -23,12 +23,12 @@ internal fun AboutScreen(onBack: () -> Unit) {
     ScreenScaffold(title = "About", onBack = onBack) {
         InfoCard {
             Text("Liquid Launcher", style = MaterialTheme.typography.titleMedium)
-            BodyText("Version $version\nPhase 1A: redirect engine and device checks", Modifier.padding(top = 4.dp))
+            BodyText("Version $version\nPhase 2: customisation (home setup, look, touch and motion)", Modifier.padding(top = 4.dp))
         }
         SectionHeader("Privacy")
         BodyText(
-            "This build makes no network connections and collects nothing. The accessibility service " +
-                "only receives events from the system launcher.",
+            "The launcher collects nothing. Its only network use is checking GitHub for a new build and downloading it, when you ask " +
+                "(or once a day if you switch that on in Updates). The accessibility service only receives events from the system launcher.",
             Modifier.padding(horizontal = 20.dp),
         )
         SectionHeader("Credits")

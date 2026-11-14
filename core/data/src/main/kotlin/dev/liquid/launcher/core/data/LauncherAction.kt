@@ -32,6 +32,9 @@ sealed interface LauncherAction {
     data class Section(val id: String) : LauncherAction
     data class LaunchApp(val ref: AppRef) : LauncherAction
 
+    /** One screen of an app, opened directly ([label] is kept for showing it). */
+    data class LaunchActivity(val pkg: String, val cls: String, val label: String) : LauncherAction
+
     fun encode(): String = when (this) {
         None -> "none"
         OpenDrawer -> "drawer"
@@ -57,6 +60,7 @@ sealed interface LauncherAction {
         is SwitchLayout -> "layout:$id"
         is Section -> "section:$id"
         is LaunchApp -> "app:${ref.key}"
+        is LaunchActivity -> "activity:$pkg/$cls|$label"
     }
 
     companion object {
@@ -100,6 +104,14 @@ sealed interface LauncherAction {
             if (text.startsWith("app:")) {
                 return AppRef.parse(text.removePrefix("app:"))?.let { LaunchApp(it) } ?: None
             }
+            if (text.startsWith("activity:")) {
+                val body = text.removePrefix("activity:")
+                val component = body.substringBefore('|')
+                val pkg = component.substringBefore('/')
+                val cls = component.substringAfter('/', "")
+                if (pkg.isBlank() || cls.isBlank()) return None
+                return LaunchActivity(pkg, cls, body.substringAfter('|', cls.substringAfterLast('.')))
+            }
             if (text.startsWith("layout:")) return text.removePrefix("layout:").takeIf { it.isNotBlank() }?.let { SwitchLayout(it) } ?: None
             if (text.startsWith("section:")) return text.removePrefix("section:").takeIf { it.isNotBlank() }?.let { Section(it) } ?: None
             return builtIns.firstOrNull { it.first.encode() == text }?.first ?: None
@@ -107,6 +119,7 @@ sealed interface LauncherAction {
 
         fun label(action: LauncherAction, layoutName: (String) -> String? = { null }, appLabel: (AppRef) -> String?): String = when (action) {
             is LaunchApp -> appLabel(action.ref) ?: action.ref.pkg
+            is LaunchActivity -> "Open: ${action.label}"
             is SwitchLayout -> "Layout: " + (layoutName(action.id) ?: "deleted")
             is Section -> sections.firstOrNull { it.first == action.id }?.second ?: "Settings"
             else -> builtIns.firstOrNull { it.first == action }?.second ?: "Nothing"

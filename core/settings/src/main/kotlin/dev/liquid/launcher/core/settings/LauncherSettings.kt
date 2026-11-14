@@ -26,11 +26,12 @@ object LauncherSettings {
         val Dock = SettingsSection("dock", "Dock", "A row of apps above the pill that stays on every page")
         val Icons = SettingsSection("icons", "Icons", "Icon packs for home and drawer, and icons the pack does not cover")
         val Clock = SettingsSection("clock", "Clock", "Time format, size, date line and glass plate. Resize it in edit mode; more styles come with widgets")
-        val Gestures = SettingsSection("gestures", "Gestures", "What swipes, taps and presses on the home screen do")
+        val Gestures = SettingsSection("gestures", "Gestures", "Swipes, taps, presses, pinches, two-finger swipes and edge swipes on the home screen")
         val Pill = SettingsSection("pill", "Pill", "The glass bar: its items, size, position and gestures")
         val Drawer = SettingsSection("drawer", "App drawer", "Layout, sorting, search, tabs and the work profile")
         val Tags = SettingsSection("tags", "Drawer tabs and tags", "Your own drawer pages built from tags, and filtering the drawer by tag in one tap")
         val DrawerMotion = SettingsSection("drawerMotion", "Drawer motion", "Opening transition, scroll bar and scroll effects")
+        val Motion = SettingsSection("motion", "Motion and haptics", "Opening apps and search, animation speed, haptic ticks")
         val DrawerIndex = SettingsSection("drawerIndex", "Scroll index", "Letters at the edge of the drawer: curve, side, size, bubble, haptics, sections at the top")
         val Menu = SettingsSection("menu", "Long-press menu", "Which entries appear and in what order")
         val HomeMenu = SettingsSection("homeMenu", "Home menu", "The two glass pills from holding empty space: items, order, labels")
@@ -45,7 +46,7 @@ object LauncherSettings {
         val Handover = SettingsSection("handover", "Hand-over", "How the launcher appears after a redirect", "Redirect")
         val Log = SettingsSection("log", "Debug log", "What is recorded", "Redirect")
 
-        val all = listOf(Home, Theme, Icons, Folders, Dock, Clock, Gestures, Pill, Drawer, Tags, DrawerMotion, DrawerIndex, Menu, HomeMenu, Wallpaper, Layouts, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
+        val all = listOf(Home, Theme, Icons, Folders, Dock, Clock, Gestures, Motion, Pill, Drawer, Tags, DrawerMotion, DrawerIndex, Menu, HomeMenu, Wallpaper, Layouts, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
     }
 
     // ---- Redirect engine ----
@@ -514,6 +515,100 @@ object LauncherSettings {
     val GestureLongPress = ActionSetting(
         key = "gesture.longPress", default = "home_menu",
         title = "Long press on empty space", section = "gestures", keywords = "gesture long press edit",
+    )
+
+    val GesturePinchIn = ActionSetting(
+        key = "gesture.pinchIn", default = "pages",
+        title = "Pinch in (two fingers together)", section = "gestures", keywords = "gesture pinch in zoom out two fingers pages",
+    )
+    val GesturePinchOut = ActionSetting(
+        key = "gesture.pinchOut", default = "none",
+        title = "Pinch out (two fingers apart)", section = "gestures", keywords = "gesture pinch out zoom in two fingers",
+    )
+    val GestureTwoUp = ActionSetting(
+        key = "gesture.twoUp", default = "none",
+        title = "Two-finger swipe up", section = "gestures", keywords = "gesture two fingers swipe up",
+    )
+    val GestureTwoDown = ActionSetting(
+        key = "gesture.twoDown", default = "quick_settings",
+        title = "Two-finger swipe down", section = "gestures", keywords = "gesture two fingers swipe down quick settings",
+    )
+    val GestureEdgeLeftUp = ActionSetting(
+        key = "gesture.edgeLeftUp", default = "none",
+        title = "Swipe up along the left edge", section = "gestures", keywords = "gesture edge left side swipe up zone",
+    )
+    val GestureEdgeLeftDown = ActionSetting(
+        key = "gesture.edgeLeftDown", default = "none",
+        title = "Swipe down along the left edge", section = "gestures", keywords = "gesture edge left side swipe down zone",
+    )
+    val GestureEdgeRightUp = ActionSetting(
+        key = "gesture.edgeRightUp", default = "none",
+        title = "Swipe up along the right edge", section = "gestures", keywords = "gesture edge right side swipe up zone",
+    )
+    val GestureEdgeRightDown = ActionSetting(
+        key = "gesture.edgeRightDown", default = "none",
+        title = "Swipe down along the right edge", section = "gestures", keywords = "gesture edge right side swipe down zone",
+    )
+    val GestureEdgeWidth = IntSetting(
+        key = "gesture.edgeWidth", default = 24, min = 12, max = 48, step = 4, unit = "dp",
+        title = "Edge zone width",
+        summary = "Swipes that start this close to a side edge use the edge gestures (when they do something; otherwise the normal swipe)",
+        section = "gestures", keywords = "gesture edge zone width",
+    )
+
+    /** Daily update check when settings opens; edited on the Updates screen. */
+    val UpdatesDaily = BoolSetting(
+        key = "updates.daily", default = false,
+        title = "Check for updates once a day", section = "updates", hidden = true,
+    )
+
+    // ---- Motion and haptics ----
+
+    val HapticsEnabled = BoolSetting(
+        key = "motion.haptics", default = true,
+        title = "Haptic feedback",
+        summary = "Short ticks for the launcher's own gestures. Also needs vibration for touches on in MagicOS",
+        section = "motion", keywords = "haptic vibration feedback tick",
+    )
+    val HapticsStrength = ChoiceSetting(
+        key = "motion.hapticsStrength", default = "light",
+        options = listOf("light" to "Light", "strong" to "Strong"),
+        title = "Haptic strength",
+        section = "motion", keywords = "haptic strength vibration",
+    )
+    val HapticDrawer = BoolSetting(
+        key = "motion.hapticDrawer", default = true,
+        title = "Tick when the drawer passes the open point",
+        summary = "While you drag it: past this point it opens when you let go",
+        section = "motion", keywords = "haptic drawer tick open point",
+    )
+    val HapticPickUp = BoolSetting(
+        key = "motion.hapticPickUp", default = true,
+        title = "Tick when an item is picked up or a gesture is recognised",
+        section = "motion", keywords = "haptic drag pick up gesture recognised",
+    )
+    val LaunchAnimation = ChoiceSetting(
+        key = "motion.launch", default = "reveal",
+        options = listOf(
+            "reveal" to "Reveal from the icon",
+            "scale" to "Grow from the icon",
+            "fade" to "Fade",
+            "system" to "The system's own",
+        ),
+        title = "Opening an app",
+        section = "motion", keywords = "launch animation open app icon reveal scale grow fade",
+    )
+    val SearchTransition = ChoiceSetting(
+        key = "motion.search", default = "depth",
+        options = listOf("depth" to "Depth (home sinks back, like the drawer)", "fade" to "Fade"),
+        title = "Opening search",
+        section = "motion", keywords = "search transition depth fade animation",
+    )
+    val MotionSpeed = IntSetting(
+        key = "motion.speed", default = 100, min = 50, max = 200, step = 10, unit = "%",
+        title = "Speed of the launcher's animations",
+        summary = "Menus, sheets, transitions and springs. The drawer has its own speed in Drawer motion",
+        section = "motion", keywords = "animation speed duration fast slow motion",
     )
 
     // ---- Pill ----
@@ -1238,6 +1333,8 @@ object LauncherSettings {
         ThemedIcons, ThemedIconsWhere, ThemedIconsUncovered, ThemedIconsColors, ThemedIconsStyle,
         HomeMarginSide, HomeMarginTop, HomeMarginBottom, Clock24h, ClockSize, ClockDate, ClockGlass,
         GestureSwipeUp, GestureSwipeDown, GestureDoubleTap, GestureLongPress,
+        GesturePinchIn, GesturePinchOut, GestureTwoUp, GestureTwoDown, GestureEdgeLeftUp, GestureEdgeLeftDown, GestureEdgeRightUp, GestureEdgeRightDown, GestureEdgeWidth,
+        HapticsEnabled, HapticsStrength, HapticDrawer, HapticPickUp, LaunchAnimation, SearchTransition, MotionSpeed, UpdatesDaily,
         PillEnabled, PillSlots, PillPosition, PillOffset, PillWidth, PillHeight, PillCorner, PillIconSize,
         PillHint, PillTap, PillLongPress, PillSwipeUp, PillSwipeDown,
         DrawerColumns, DrawerIconSize, DrawerLabels, DrawerFromBottom, DrawerAutoKeyboard, DrawerSort,

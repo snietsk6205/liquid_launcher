@@ -23,4 +23,5 @@ dependencies {
     implementation(project(":feature:redirect"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
+    testImplementation(libs.junit)
 }

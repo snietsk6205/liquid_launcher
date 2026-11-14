@@ -58,6 +58,8 @@ data class HomeItem(
     /** Encoded [LauncherAction]s run by swiping up or down on the item. */
     val swipeUp: String? = null,
     val swipeDown: String? = null,
+    /** Encoded [LauncherAction] run by double-tapping the item (a single tap then waits a moment). */
+    val doubleTap: String? = null,
 ) {
     fun covers(cx: Int, cy: Int): Boolean = cx in x until x + w && cy in y until y + h
 

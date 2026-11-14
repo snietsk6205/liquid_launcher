@@ -277,9 +277,7 @@ internal fun appHandler(item: HomeItem, app: AppEntry, holder: CoordinatesHolder
                 if (controller.editMode) return
                 val bounds = holder.value?.takeIf { it.isAttached }?.boundsInRoot()
                 val rect = bounds?.let { AndroidRect(it.left.toInt(), it.top.toInt(), it.right.toInt(), it.bottom.toInt()) }
-                val options = rect?.let {
-                    ActivityOptions.makeClipRevealAnimation(view, it.left, it.top, it.width(), it.height()).toBundle()
-                }
+                val options = controller.launchOptions(view, rect)
                 controller.launch(app, rect, options)
             }
 
@@ -295,6 +293,14 @@ internal fun appHandler(item: HomeItem, app: AppEntry, holder: CoordinatesHolder
 
             override fun onSwipe(up: Boolean) {
                 val encoded = (if (up) item.swipeUp else item.swipeDown) ?: return
+                controller.run(LauncherAction.decode(encoded))
+            }
+
+            override fun hasDoubleTap(): Boolean = !controller.editMode && item.doubleTap != null
+
+            override fun onDoubleTap() {
+                val encoded = item.doubleTap ?: return
+                Haptics.confirm(controller.view)
                 controller.run(LauncherAction.decode(encoded))
             }
             override fun onDrag(finger: Offset) = controller.moveDrag(finger)

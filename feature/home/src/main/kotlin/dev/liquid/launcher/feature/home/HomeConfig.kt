@@ -32,6 +32,40 @@ data class GestureConfig(
     val swipeDown: LauncherAction,
     val doubleTap: LauncherAction,
     val longPress: LauncherAction,
+    val pinchIn: LauncherAction = LauncherAction.None,
+    val pinchOut: LauncherAction = LauncherAction.None,
+    val twoUp: LauncherAction = LauncherAction.None,
+    val twoDown: LauncherAction = LauncherAction.None,
+    val edgeLeftUp: LauncherAction = LauncherAction.None,
+    val edgeLeftDown: LauncherAction = LauncherAction.None,
+    val edgeRightUp: LauncherAction = LauncherAction.None,
+    val edgeRightDown: LauncherAction = LauncherAction.None,
+    val edgeWidthDp: Int = 24,
+) {
+    val anyTwoFinger: Boolean get() = listOf(pinchIn, pinchOut, twoUp, twoDown).any { it != LauncherAction.None }
+}
+
+/** Haptics, opening apps and search, and the speed of the launcher's own animations. */
+data class MotionConfig(
+    val haptics: Boolean = true,
+    val strong: Boolean = false,
+    val drawerTick: Boolean = true,
+    val pickUpTick: Boolean = true,
+    /** "reveal", "scale", "fade" or "system". */
+    val launch: String = "reveal",
+    val searchDepth: Boolean = true,
+    /** 1 = normal; 2 = twice as fast. */
+    val speed: Float = 1f,
+)
+
+fun SettingsStore.motionConfig() = MotionConfig(
+    haptics = get(S.HapticsEnabled),
+    strong = get(S.HapticsStrength) == "strong",
+    drawerTick = get(S.HapticDrawer),
+    pickUpTick = get(S.HapticPickUp),
+    launch = get(S.LaunchAnimation),
+    searchDepth = get(S.SearchTransition) == "depth",
+    speed = get(S.MotionSpeed) / 100f,
 )
 
 data class PillConfig(
@@ -207,6 +241,15 @@ fun SettingsStore.gestureConfig() = GestureConfig(
     swipeDown = LauncherAction.decode(get(S.GestureSwipeDown)),
     doubleTap = LauncherAction.decode(get(S.GestureDoubleTap)),
     longPress = LauncherAction.decode(get(S.GestureLongPress)),
+    pinchIn = LauncherAction.decode(get(S.GesturePinchIn)),
+    pinchOut = LauncherAction.decode(get(S.GesturePinchOut)),
+    twoUp = LauncherAction.decode(get(S.GestureTwoUp)),
+    twoDown = LauncherAction.decode(get(S.GestureTwoDown)),
+    edgeLeftUp = LauncherAction.decode(get(S.GestureEdgeLeftUp)),
+    edgeLeftDown = LauncherAction.decode(get(S.GestureEdgeLeftDown)),
+    edgeRightUp = LauncherAction.decode(get(S.GestureEdgeRightUp)),
+    edgeRightDown = LauncherAction.decode(get(S.GestureEdgeRightDown)),
+    edgeWidthDp = get(S.GestureEdgeWidth),
 )
 
 fun SettingsStore.pillConfig() = PillConfig(

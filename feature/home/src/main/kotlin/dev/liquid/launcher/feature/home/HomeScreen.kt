@@ -220,6 +220,14 @@ fun HomeScreen(
     val theme by store.derive { themeConfig() }
     val pageTransition by store.derive { get(LauncherSettings.HomePageTransition) }
     val folderConfig by store.derive { folderConfig() }
+    val motionConfig by store.derive { motionConfig() }
+    val rootView = LocalView.current
+    SideEffect {
+        Haptics.config = motionConfig
+        MotionScale.speed = motionConfig.speed
+        if (live) controller.view = rootView
+        controller.motionConfig = motionConfig
+    }
     val dock by store.derive { dockConfig() }
     SideEffect { controller.folderConfig = folderConfig }
     val colourTick by data.colourTick.collectAsState()
@@ -427,7 +435,8 @@ fun HomeScreen(
             val pillSpace = (if (pill.enabled || controller.editMode) pill.heightDp + pill.offsetDp + 12 else 0) +
                 (if (dock.enabled) dock.height.value.toInt() + 8 else 0)
             // Remembered: a new gesture lambda would restart the detector and cancel a swipe in progress.
-            val swipes = remember(gestures, controller.editMode) { Modifier.homeSwipes(gestures, controller) }
+            val homeView = LocalView.current
+            val swipes = remember(gestures, controller.editMode) { Modifier.homeGestures(gestures, controller, homeView) }
             Box(
                 Modifier
                     .fillMaxSize()
@@ -439,6 +448,11 @@ fun HomeScreen(
                         if (settle == "scale") scale *= 0.94f + 0.06f * back
                         if (controller.editMode) scale *= 0.9f
                         scale *= 1f - 0.06f * menuSink
+                        // Search opening with depth: home sinks back a little, as it does for the drawer.
+                        if (motionConfig.searchDepth) {
+                            scale *= 1f - 0.07f * controller.searchAmount
+                            alpha *= 1f - 0.35f * controller.searchAmount
+                        }
                         scaleX = scale
                         scaleY = scale
                     }
@@ -647,41 +661,6 @@ private fun SystemWallpaperOffsets(controller: HomeController) {
         }
     }
 }
-
-/** Swipes on the home screen. A swipe up that opens the drawer moves it with the finger. */
-private fun Modifier.homeSwipes(gestures: GestureConfig, controller: HomeController): Modifier =
-    pointerInput(gestures, controller.editMode) {
-        if (controller.editMode) return@pointerInput
-        val tracker = VelocityTracker()
-        var total = 0f
-        val follow = gestures.swipeUp == LauncherAction.OpenDrawer
-        detectVerticalDragGestures(
-            onDragStart = {
-                tracker.resetTracking()
-                total = 0f
-                controller.menu = null
-            },
-            onVerticalDrag = { change, dy ->
-                tracker.addPointerInputChange(change)
-                total += dy
-                change.consume()
-                if (follow && (total < 0 || controller.drawer.value > 0f)) {
-                    controller.dragDrawerBy(-dy / controller.screenHeight)
-                }
-            },
-            onDragEnd = {
-                val velocity = tracker.calculateVelocity().y
-                val threshold = 48.dp.toPx()
-                DebugLog.event("Home", "swipe: " + total.toInt() + " px, " + velocity.toInt() + " px/s")
-                when {
-                    follow && controller.drawer.value > 0f -> controller.settleDrawer(velocity)
-                    total < -threshold || velocity < -1200f -> controller.run(gestures.swipeUp)
-                    total > threshold || velocity > 1200f -> controller.run(gestures.swipeDown)
-                }
-            },
-            onDragCancel = { if (follow) controller.settleDrawer(0f) },
-        )
-    }
 
 @Composable
 private fun PageDots(count: Int, current: Int, color: Color, modifier: Modifier) {

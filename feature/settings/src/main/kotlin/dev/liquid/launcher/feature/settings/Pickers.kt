@@ -53,11 +53,27 @@ internal fun ActionPickerDialog(
     onPick: (LauncherAction) -> Unit,
 ) {
     var pickingApp by remember { mutableStateOf(false) }
+    var pickingScreenApp by remember { mutableStateOf(false) }
+    var screensOf by remember { mutableStateOf<AppEntry?>(null) }
     val savedLayouts = LauncherData.get(LocalContext.current).layouts.state.collectAsState().value.layouts
     if (pickingApp) {
         AppPickerDialog(title = "Open which app?", onDismiss = { pickingApp = false }) { app ->
             pickingApp = false
             onPick(LauncherAction.LaunchApp(app.ref))
+        }
+        return
+    }
+    screensOf?.let { app ->
+        ScreenPickerDialog(app, onDismiss = { screensOf = null }) { screen ->
+            screensOf = null
+            onPick(LauncherAction.LaunchActivity(screen.pkg, screen.cls, screen.label))
+        }
+        return
+    }
+    if (pickingScreenApp) {
+        AppPickerDialog(title = "A screen of which app?", onDismiss = { pickingScreenApp = false }) { app ->
+            pickingScreenApp = false
+            screensOf = app
         }
         return
     }
@@ -82,6 +98,12 @@ internal fun ActionPickerDialog(
                         if (current is LauncherAction.LaunchApp) "Open an app (${actionLabel(current)})" else "Open an app…",
                         selected = current is LauncherAction.LaunchApp,
                     ) { pickingApp = true }
+                }
+                item {
+                    ChoiceLine(
+                        if (current is LauncherAction.LaunchActivity) "Open a screen of an app (${current.label})" else "Open a screen of an app…",
+                        selected = current is LauncherAction.LaunchActivity,
+                    ) { pickingScreenApp = true }
                 }
             }
         },
@@ -136,5 +158,34 @@ internal fun AppPickerDialog(title: String, onDismiss: () -> Unit, onPick: (AppE
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/** The screens of one app that can be opened directly, its launch screen first. */
+@Composable
+internal fun ScreenPickerDialog(app: AppEntry, onDismiss: () -> Unit, onPick: (dev.liquid.launcher.core.data.AppActivity) -> Unit) {
+    val context = LocalContext.current
+    val screens by androidx.compose.runtime.produceState<List<dev.liquid.launcher.core.data.AppActivity>?>(null, app.ref) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { dev.liquid.launcher.core.data.Activities.of(context, app.component.packageName) }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Screens of ${app.label}") },
+        text = {
+            val list = screens
+            when {
+                list == null -> Text("Reading…")
+                list.isEmpty() -> Text("This app lets other apps open none of its screens directly.")
+                else -> LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                    items(list, key = { it.cls }) { screen ->
+                        Column(Modifier.fillMaxWidth().clickable { onPick(screen) }.padding(vertical = 8.dp)) {
+                            Text(screen.label, style = MaterialTheme.typography.bodyLarge)
+                            Text(screen.shortName, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Back") } },
     )
 }

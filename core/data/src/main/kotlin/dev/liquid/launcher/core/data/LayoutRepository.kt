@@ -237,10 +237,18 @@ object LayoutOps {
         return layout.replacePage(index, page.copy(columns = columns, rows = rows, labels = labels, name = name?.trim()?.ifEmpty { null }))
     }
 
-    fun setSwipe(layout: HomeLayout, itemId: String, up: Boolean, action: String?): HomeLayout? {
+    fun setSwipe(layout: HomeLayout, itemId: String, up: Boolean, action: String?): HomeLayout? =
+        setIconAction(layout, itemId, if (up) "up" else "down", action)
+
+    /** Sets what a gesture on one home icon does: [which] is "up", "down" or "double"; "none" or null clears it. */
+    fun setIconAction(layout: HomeLayout, itemId: String, which: String, action: String?): HomeLayout? {
         val (pageIndex, item) = layout.find(itemId) ?: return null
         val value = action?.takeIf { it != "none" }
-        val updated = if (up) item.copy(swipeUp = value) else item.copy(swipeDown = value)
+        val updated = when (which) {
+            "up" -> item.copy(swipeUp = value)
+            "down" -> item.copy(swipeDown = value)
+            else -> item.copy(doubleTap = value)
+        }
         if (updated == item) return null
         val page = layout.pages[pageIndex]
         return layout.replacePage(pageIndex, page.copy(items = page.items.map { if (it.id == itemId) updated else it }))

@@ -63,6 +63,8 @@ internal fun MainScreen(
                 .padding(horizontal = 16.dp, vertical = 4.dp),
         )
 
+        UpdateBanner(store) { open(Screen.Updates) }
+
         if (query.isNotBlank()) {
             val results = remember(query) { LauncherSettings.search(query) }
             if (results.isEmpty()) {
@@ -100,6 +102,7 @@ internal fun MainScreen(
         SectionHeader("Tools")
         NavRow("Calibrate recents detection", "Only needed if recents is not recognised") { open(Screen.Calibration) }
         NavRow("Debug log", "What the redirect saw and decided, and how long wallpaper changes took") { open(Screen.Log) }
+        NavRow("Updates", "Check GitHub for a new build and install it over this one") { open(Screen.Updates) }
         NavRow("About", "Version and credits") { open(Screen.About) }
     }
 }

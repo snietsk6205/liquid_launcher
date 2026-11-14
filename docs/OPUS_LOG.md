@@ -333,15 +333,36 @@ Not done / limits: icons fitted to a pack (and work-profile apps) with themed ic
 
 ---
 
-## Session summary (2026-11-14, Opus, updated for 0.4.2)
+## Entry 11: 0.5.0, Phase 2 part 3: touch and motion (2026-11-14, Opus 5.5)
 
-**State:** the user tested 0.4.0 (with 0.2.2 and 0.3.0) and sent five points. 0.4.1 fixes them (index symmetry and list wave, tag filtering, themed icon recolouring, layout wallpaper transition, wallpaper library with placing and parallax) plus a final pass. Unit tests pass; released as build 28 (CI run 28: unit tests, release APK, emulator smoke test all passed, including the new wallpaper strip → wallpaper screen → blur and dim checks), then build 29 with one fix found while writing the hand-over (a wallpaper set in another app kept the launcher's old picture on screen with the new colours). Not tested on the phone yet.
+**Goal:** the last part of Phase 2, built right after 0.4.2 as the user asked.
 
-0.4.2 (entry 10) follows the user's notes on 0.4.1: themed icon colours applied while drawing and set together with the wallpaper, custom icons following, the tag list button with a morph, and the letter column following the finger instead of the list bending.
+| File | Change | Why |
+|---|---|---|
+| `feature/home/HomeGestures.kt` (new), `HomeScreen.kt` | One detector for one and two fingers: swipes with the drawer following, edge-zone swipes, pinch in / out, two-finger swipes; replaces `homeSwipes` | D67 |
+| `core/settings`, `HomeConfig.kt` | Gesture settings (pinch, two-finger, four edge swipes, edge width); Motion and haptics section; `GestureConfig` and `MotionConfig` | D67, D70 |
+| `Models.kt`, `LayoutRepository.kt`, `Gestures.kt`, `HomeGrid.kt`, `SwipeActions.kt`, `AppMenu.kt`, `MenuEntry.kt` | Double tap per home icon; "Gestures on this icon" (swipe up, swipe down, double tap); only icons with a double tap wait before a single tap | D68 |
+| `core/data/Activities.kt` (new), `LauncherAction.kt`, `HomeController.kt`, `Pickers.kt`, `SwipeActions.kt` | "Open a screen of an app" action and pickers in settings and on the home screen | D69 |
+| `HomeGestures.kt` (`Haptics`, `MotionScale`), `HomeController.kt`, sheets and menus | Haptic ticks (drawer open point, pick-up, recognised gestures, double tap), launch animation choice, search depth, animation speed | D70 |
+| `feature/settings/Updater.kt`, `UpdatesScreen.kt` (new) + test, `SettingsActivity.kt`, `MainScreen.kt`, `AboutScreen.kt`, app manifest, `res/xml/update_paths.xml` | In-app updater with daily opt-in and a banner on the settings main screen; About text updated (phase, network use) | D71 |
+| `ci/smoke.sh` | Opens the Updates screen and checks for the check button | |
 
-**Next step:** Phase 2 part 3 (0.5: gestures, double tap per icon, activity picker, motion and haptics settings, in-app updater), as the user asked, without waiting for a test of 0.4.2.
+Not done / limits: two-finger gestures and edge swipes cannot be driven from adb, so the emulator test does not cover them; large folders and per-folder glass stay for Phase 7; the updater cannot check a private repository.
+
+### For Fable to review
+1. `homeGestures`: switching to the initial pass once a second finger lands, and undoing the drawer drag if the first finger already moved it.
+2. Double-tap detection inside `iconPointerInput` (second down awaited in the same gesture block).
+3. The updater's trust model: any newer build on the releases page is offered; Android's signature check keeps a differently signed APK from installing over this one.
+
+---
+
+## Session summary (2026-11-14, Opus, updated for 0.5.0)
+
+**State:** 0.4.2 (entry 10) followed the user's notes on 0.4.1; its first CI run hung on an overloaded emulator and the release build includes a fix that records the transition snapshot only on demand. 0.5.0 (entry 11) completes Phase 2 with gestures, double tap per icon, the screen picker, motion and haptics settings and the in-app updater. Unit tests pass; see the releases for the CI runs. Neither 0.4.2 nor 0.5.0 is tested on the phone yet.
+
+**Next step:** the user tests 0.4.2 and 0.5.0; then Phase 3 (widgets).
 
 ### For Fable to review (overall)
-1. Entries 6–10 and decisions D43–D66.
+1. Entries 6–11 and decisions D43–D71.
 2. The roadmap changes (plan as of 0.4.1): tag filtering moved from Phase 4 into 0.4.1, wallpaper library added; the user's later wallpaper and tag ideas are placed in Phases 4, 6 and 7.
 3. Earlier items still open: D37–D39 redirect changes, the drawer rewrite, `IconThemer` with real packs, the home-press heuristic, emulator on API 34.

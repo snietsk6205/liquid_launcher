@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.5.0 (Phase 2, part 3 of 3, the end of Phase 2): pinch and two-finger swipes, swipes along the side edges, double tap per home icon, any screen of an app as an action, a Motion and haptics section (ticks, how apps and search open, animation speed) and an in-app updater from GitHub releases.
+
 0.4.2: themed icons change colour in the same frame as the wallpaper (coloured while drawing, palette worked out before the switch, previewed in the wallpaper screen), icons you picked follow too (or keep their colours), a round button opens the tag list with a liquid morph, and the letter column slides with your finger while the app list stays still.
 
 0.4.1 (fixes after the first phone test of 0.4.0): filter the drawer by tag in one tap (tag chips, a searchable tag list, the filter shown on the search field, sideways swipes); a wallpaper library (recent without duplicates, favourites, linked phone folders) with placing by pinch and drag, parallax, a one-tap wallpaper strip in the home menu, shuffle and automatic changes; layout and wallpaper switches change the whole screen together with a transition; themed icons recolour at once when the launcher sets a wallpaper; the letter index floats over the list with equal margins and the list bends with your finger.

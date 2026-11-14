@@ -68,7 +68,7 @@ private fun rowsFor(target: MenuTarget, entries: List<MenuEntry>, controller: Ho
             MenuEntry.Tags -> MenuRow(LauncherIcons.Label, "Tags") { controller.tagging = app }
             MenuEntry.Icon -> MenuRow(LauncherIcons.Apps, "Change icon") { controller.iconPicking = app }
             MenuEntry.Swipe -> target.itemId?.let { id ->
-                MenuRow(LauncherIcons.ArrowUp, "Swipe actions") { controller.swipeEditing = id }
+                MenuRow(LauncherIcons.ArrowUp, "Gestures on this icon") { controller.swipeEditing = id }
             }
             MenuEntry.Hide -> if (app.hidden) {
                 MenuRow(LauncherIcons.Visibility, "Show in drawer") { apps.setHidden(app.ref, false) }
@@ -102,7 +102,7 @@ fun AppMenu(
     val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
     val shape = RoundedCornerShape(26.dp)
     val appear = remember(target) { Animatable(0f) }
-    LaunchedEffect(target) { appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = 700f)) }
+    LaunchedEffect(target) { appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = MotionScale.stiffness(700f))) }
     var above by remember(target) { mutableStateOf(true) }
 
     Box(

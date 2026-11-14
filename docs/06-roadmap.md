@@ -1,6 +1,6 @@
 # 6. Roadmap
 
-## Plan as of 0.4.2 (2026-11-14, Opus)
+## Plan as of 0.5.0 (2026-11-14, Opus)
 
 | Phase | Content | Release | State |
 |---|---|---|---|
@@ -12,8 +12,8 @@
 | 2, part 2: look | Theme (text, accent and glass colours, fonts incl. an imported file, clock font and weight, icon shapes), presets and `.lltheme` files; folder preview / background / shape / tap-first / columns / drag out; dock; per-page grid, labels and name; page transitions | 0.4.0 | Tested on the phone |
 | 2, fixes after the 0.4.0 test | Index floats with equal margins and bends the list; filtering by tag (moved from Phase 4); themed icons recolour at once; wallpaper library, placing, parallax, strip, shuffle, automatic changes; layout and wallpaper switches with a transition | 0.4.1 | Released (build 29) |
 | 2, adjustments after 0.4.1 | Themed icons coloured while drawing (with the wallpaper, no delay), picked icons follow, tag list button with a morph, letter column follows the finger | 0.4.2 | Released (see the log) |
-| 2, part 3: touch and motion (next) | Two-finger / pinch / edge gestures, double tap per icon, activity picker, motion and haptics settings (drawer tick, depth transition for search, launch animation), in-app updater | 0.5 | |
-| 3 | Widgets: other apps' widgets, clock gallery, built-in widgets, panels; "Widgets" joins the home menu | 2–3 builds | |
+| 2, part 3: touch and motion | Two-finger / pinch / edge gestures, double tap per icon, screens of apps as actions, motion and haptics settings (drawer tick, depth transition for search, launch animation, animation speed), in-app updater | 0.5.0 | Released (see the log) |
+| 3 (next) | Widgets: other apps' widgets, clock gallery, built-in widgets, panels; "Widgets" joins the home menu | 2–3 builds | |
 | 4 | Search sources (contacts, calendar, files, settings pages), suggested apps, notification badges, drawer folders and rule-based tabs; the rest of tag organisation (see below) | 2 builds | |
 | 5 | Study companion: GitHub task sync, calendar blocks, Now card, study widgets | 2–3 builds | |
 | 6 | Profiles (Study / Free / Night), study mode, friction; automatic layout switching; wallpaper per profile and per page | 2 builds | |
@@ -60,7 +60,7 @@ Your thoughts for later, so they are built your way:
 | D. Page customisation and search | Done in 0.2.2 | Hold a tab: rename, icon, which apps it shows (several tags combined), choose apps for its tag, sort order, move, new tag, remove. While searching, tapping a tab limits results to it; `#name` highlights that tag's tab. |
 | D. Folder from the pill | Phase 4 | Drawer folders belong with the rest of drawer organisation (rule-based tabs, groups). |
 
-Left for later from Phase 2 part 2 (0.4): large folders (a 2 × 2 folder whose apps open directly) and folder glass per folder (Phase 2 part 3 or 7); wallpaper per page (Phase 6 with profiles); fonts downloaded from the internet (not planned: offline-first).
+Left for later from Phase 2 part 2 (0.4): large folders (a 2 × 2 folder whose apps open directly) and folder glass per folder (Phase 7, not built in 0.5); wallpaper per page (Phase 6 with profiles); fonts downloaded from the internet (not planned: offline-first).
 
 Recommendations for later (D):
 - Swipe along the tabs pill to scrub between tabs (Phase 2 part 3, with the gesture work).

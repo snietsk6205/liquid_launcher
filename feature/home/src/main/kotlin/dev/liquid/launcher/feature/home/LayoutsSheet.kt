@@ -78,7 +78,7 @@ internal fun LayoutsSheet(
     val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
     val shape = RoundedCornerShape(32.dp)
     val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 520f)) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = MotionScale.stiffness(520f))) }
     var holding by remember { mutableStateOf<SavedLayout?>(null) }
     var renaming by remember { mutableStateOf<SavedLayout?>(null) }
 

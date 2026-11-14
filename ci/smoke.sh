@@ -258,7 +258,7 @@ if wait_top "$HOME_ACTIVITY" 10; then pass "launcher in front after screen off/o
 fi
 
 echo "== 7. Settings screens open"
-for screen in "" setup diagnostics log; do
+for screen in "" setup diagnostics log updates; do
   # --activity-clear-task recreates the activity so the new start screen is used.
   if [ -z "$screen" ]; then
     adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" >/dev/null
@@ -426,6 +426,15 @@ else
 fi
 tap_text 11-edit "Done" exact || adb shell input keyevent KEYCODE_BACK
 sleep 1
+clear_anr
+# The updates screen (in-app updater) opens and offers a check; no network is used here.
+adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen updates >/dev/null
+sleep 3
+dump 13-updates
+if on_screen 13-updates "Check for updates" exact; then pass "updates screen shows the check button"; else fail "updates screen shows the check button"; fi
+adb shell input keyevent KEYCODE_BACK
+sleep 1
+
 # Wait for the service to be back after the screen dumps before the crash check.
 for i in $(seq 1 40); do service_up && break; sleep 0.5; done
 

@@ -24,6 +24,7 @@ internal sealed interface Screen {
     data object GlassBench : Screen
     data object Log : Screen
     data object About : Screen
+    data object Updates : Screen
 }
 
 class SettingsActivity : ComponentActivity() {
@@ -47,6 +48,7 @@ class SettingsActivity : ComponentActivity() {
         const val SCREEN_DIAGNOSTICS = "diagnostics"
         const val SCREEN_LOG = "log"
         const val SCREEN_GLASS = "glass"
+        const val SCREEN_UPDATES = "updates"
         const val SECTION_PREFIX = "section:"
 
         fun intent(context: Context, screen: String? = null): Intent =
@@ -70,6 +72,7 @@ private fun SettingsApp(
                 SettingsActivity.SCREEN_SETUP -> add(Screen.Setup)
                 SettingsActivity.SCREEN_DIAGNOSTICS -> add(Screen.Diagnostics)
                 SettingsActivity.SCREEN_LOG -> add(Screen.Log)
+                SettingsActivity.SCREEN_UPDATES -> add(Screen.Updates)
                 SettingsActivity.SCREEN_GLASS -> {
                     add(Screen.Diagnostics)
                     add(Screen.GlassBench)
@@ -93,5 +96,6 @@ private fun SettingsApp(
         Screen.GlassBench -> GlassBenchScreen(store, window, wallpaper, back)
         Screen.Log -> LogScreen(back)
         Screen.About -> AboutScreen(back)
+        Screen.Updates -> UpdatesScreen(store, back)
     }
 }

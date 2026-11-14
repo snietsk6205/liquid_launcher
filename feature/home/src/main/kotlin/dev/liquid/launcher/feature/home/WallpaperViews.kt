@@ -159,7 +159,7 @@ internal fun WallpaperStrip(
     }
     val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
     val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = 480f)) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = MotionScale.stiffness(480f))) }
     val shape = RoundedCornerShape(30.dp)
 
     Box(

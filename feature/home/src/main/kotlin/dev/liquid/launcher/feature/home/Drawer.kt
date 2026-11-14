@@ -613,9 +613,9 @@ fun AppDrawer(
     val sheetProgress = remember { androidx.compose.animation.core.Animatable(0f) }
     LaunchedEffect(controller.tagSheet) {
         if (controller.tagSheet) {
-            sheetProgress.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.78f, stiffness = 360f))
+            sheetProgress.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.78f, stiffness = MotionScale.stiffness(360f)))
         } else {
-            sheetProgress.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 520f))
+            sheetProgress.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = MotionScale.stiffness(520f)))
         }
     }
     if (interactive && (controller.tagSheet || sheetProgress.value > 0.001f)) {
@@ -763,7 +763,7 @@ private fun DrawerItem(
             override fun onTap() {
                 val bounds = holder.value?.takeIf { it.isAttached }?.boundsInRoot()
                 val rect = bounds?.let { AndroidRect(it.left.toInt(), it.top.toInt(), it.right.toInt(), it.bottom.toInt()) }
-                val options = rect?.let { ActivityOptions.makeClipRevealAnimation(view, it.left, it.top, it.width(), it.height()).toBundle() }
+                val options = controller.launchOptions(view, rect)
                 controller.launch(app, rect, options, fromDrawer = true)
             }
 

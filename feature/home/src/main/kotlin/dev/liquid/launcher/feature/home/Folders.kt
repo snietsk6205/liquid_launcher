@@ -151,7 +151,7 @@ internal fun FolderOverlay(
     val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
     val shape = RoundedCornerShape(32.dp)
     val appear = remember(folder.id) { Animatable(0f) }
-    LaunchedEffect(folder.id) { appear.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 600f)) }
+    LaunchedEffect(folder.id) { appear.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = MotionScale.stiffness(600f))) }
     var name by remember(folder.id) { mutableStateOf(folder.name ?: "Folder") }
     // However the folder closes (back, outside tap, opening an app), keep the typed name.
     val latestName by androidx.compose.runtime.rememberUpdatedState(name)
@@ -234,7 +234,7 @@ private fun FolderApp(app: AppEntry, folderId: String, color: Color, grid: GridC
             override fun onTap() {
                 val bounds = holder.value?.takeIf { it.isAttached }?.boundsInRoot()
                 val rect = bounds?.let { AndroidRect(it.left.toInt(), it.top.toInt(), it.right.toInt(), it.bottom.toInt()) }
-                val options = rect?.let { ActivityOptions.makeClipRevealAnimation(view, it.left, it.top, it.width(), it.height()).toBundle() }
+                val options = controller.launchOptions(view, rect)
                 controller.openFolder = null
                 controller.launch(app, rect, options)
             }

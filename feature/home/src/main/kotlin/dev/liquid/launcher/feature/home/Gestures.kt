@@ -28,6 +28,10 @@ interface IconGestureHandler {
     /** True when a vertical swipe on the item does something of its own ([up] or down). */
     fun hasSwipe(up: Boolean): Boolean = false
     fun onSwipe(up: Boolean) = Unit
+
+    /** True when a double tap does something of its own; a single tap then waits to tell them apart. */
+    fun hasDoubleTap(): Boolean = false
+    fun onDoubleTap() = Unit
 }
 
 /**
@@ -88,6 +92,18 @@ private fun Modifier.iconPointerInput(
             }
             when (early) {
                 Early.Tap -> {
+                    if (handler().hasDoubleTap()) {
+                        // Wait briefly for a second tap close to the first.
+                        val second = withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) {
+                            awaitFirstDown(requireUnconsumed = false)
+                        }
+                        if (second != null && (second.position - down.position).getDistance() < slop * 4) {
+                            second.consume()
+                            waitForUpOrCancellation()?.consume()
+                            handler().onDoubleTap()
+                            return@awaitEachGesture
+                        }
+                    }
                     handler().onTap()
                     return@awaitEachGesture
                 }
