@@ -331,6 +331,16 @@ fun HomeScreen(
         }
     }
     if (live) {
+        // A wallpaper set in another app: the launcher cannot read it, so glass has nothing to refract. Say so once.
+        LaunchedEffect(Unit) {
+            var seen = dev.liquid.launcher.core.common.WallpaperTones.outsideChanges.value
+            dev.liquid.launcher.core.common.WallpaperTones.outsideChanges.collect { count ->
+                if (count > seen) controller.flash("Wallpaper changed in another app. Choose it in the launcher for liquid glass")
+                seen = count
+            }
+        }
+    }
+    if (live) {
         val dragging = controller.drag != null
         LaunchedEffect(dragging) {
             if (dragging) controller.edgeScrollWhileDragging(with(density0) { 28.dp.toPx() })
