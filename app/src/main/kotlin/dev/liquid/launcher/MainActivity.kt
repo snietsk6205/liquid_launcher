@@ -77,6 +77,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // A second creation in one process means Android rebuilt the home screen: every icon, the wallpaper and the glass again.
+        screensCreated++
+        DebugLog.event("Home", if (screensCreated == 1) "screen created" else "screen created again (#$screensCreated in this process): everything is drawn anew")
+        lastConfiguration = android.content.res.Configuration(resources.configuration)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         @Suppress("DEPRECATION")
         overridePendingTransition(0, 0)
@@ -242,12 +246,29 @@ class MainActivity : ComponentActivity() {
         super.onPause()
     }
 
+    /**
+     * Changes the launcher handles without being rebuilt (0.7.1, D106). The one that matters: when the
+     * system wallpaper changes, Android 12+ recolours the system theme (Material You), an "assets
+     * paths" change, and used to restart this screen 3 to 8 s after every wallpaper change.
+     */
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val changes = lastConfiguration?.diff(newConfig) ?: 0
+        lastConfiguration = android.content.res.Configuration(newConfig)
+        if (changes and android.content.pm.ActivityInfo.CONFIG_ASSETS_PATHS != 0) {
+            DebugLog.event("Home", "system theme colours changed: the screen is kept (not rebuilt)")
+        }
+    }
+
+    private var lastConfiguration: android.content.res.Configuration? = null
+
     override fun onStop() {
         super.onStop()
         (application as LauncherApp).data.widgets.listen(false)
     }
 
     companion object {
+        private var screensCreated = 0
         private const val HOME_PRESS_WINDOW_MS = 1500L
         private const val REQUEST_WIDGET_SET_UP = 0x5717
 

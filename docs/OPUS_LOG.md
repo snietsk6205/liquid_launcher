@@ -624,4 +624,12 @@ and fast like the drawer, with zoom or something customisable. They liked the Ri
 Changed in Fable's `PillMorph.kt`: the progress it reads (drawer or search), the content in search, and the drag on
 the open field. The drawer's own behaviour is unchanged.
 
+**Icons lagging after several wallpaper changes (reported with a log, same night).** The log showed the transition
+shaders' warm-up, which runs once per screen, again a few seconds after each system wallpaper hand-over: the home
+activity was being rebuilt. On Android 12+ a new system wallpaper recolours the system theme (Material You) through
+a resource overlay, an "assets paths" configuration change the activity did not declare, so Android restarted it and
+everything (icons, wallpaper, glass) was drawn anew, often while the next wallpaper change was running. 0.7.1
+declares `assetsPaths|colorMode` (D106) and logs "screen created again" / "system theme colours changed: the screen
+is kept". Not changed: the second recolouring when the system reports its colours (Fable's D63 path).
+
 **Result:** see below (CI).

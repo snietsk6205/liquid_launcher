@@ -147,8 +147,13 @@ internal object WallpaperTransitions {
         return shader
     }
 
-    /** Compiles every shader ahead of the first change (off the main thread) and says which work. */
+    private var warmed = false
+
+    /** Compiles every shader ahead of the first change (off the main thread) and says which work, once per process. */
+    @Synchronized
     fun warmUp() {
+        if (warmed) return
+        warmed = true
         val ok = sources.keys.filter { shader(it) != null }
         val failed = sources.keys - ok.toSet()
         dev.liquid.launcher.core.common.DebugLog.event(
