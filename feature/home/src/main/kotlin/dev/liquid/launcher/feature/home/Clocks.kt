@@ -325,7 +325,11 @@ fun ClockFace(
         onGlass -> if (glass.lightGlass(Surfaces.Clock, lightBackground)) Color(0xFF16181C) else Color.White
         else -> contentColor
     }
-    val tone = if (IconPaint.ready) Color(if (lightBackground) minOfLuminance(IconPaint.background, IconPaint.foreground) else maxOfLuminance(IconPaint.background, IconPaint.foreground)) else HomeTheme.accent
+    // The icons' colours are read only by a clock that uses them ("tone"). They ease over 260 ms on every
+    // wallpaper change; reading them here made every clock recompose and re-measure on each frame of that
+    // easing, competing with the icons' own redraw (0.6.3, D90).
+    val usesTone = style.color == "tone" || style.color2 == "tone"
+    val tone = if (usesTone && IconPaint.ready) Color(if (lightBackground) minOfLuminance(IconPaint.background, IconPaint.foreground) else maxOfLuminance(IconPaint.background, IconPaint.foreground)) else HomeTheme.accent
     val ink = ClockInk(
         family = ClockFonts.family(context, style.font),
         weight = if (style.weight in 100..900) FontWeight(style.weight) else HomeTheme.clockWeight,
