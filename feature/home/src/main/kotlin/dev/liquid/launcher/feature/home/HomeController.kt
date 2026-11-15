@@ -872,12 +872,19 @@ class HomeController(
         }
         fun setUpThenPlace() {
             if (!widgets.needsSetUp(info)) return place()
-            callbacks.setUpWidget(id) { ok -> if (ok) place() else widgets.delete(id) }
+            DebugLog.event("Widgets", "\"$label\": opening its set-up screen")
+            callbacks.setUpWidget(id) { ok ->
+                DebugLog.event("Widgets", "\"$label\": set-up " + if (ok) "done" else "cancelled")
+                if (ok) place() else widgets.delete(id)
+            }
         }
         if (widgets.bindIfAllowed(id, info)) {
+            DebugLog.event("Widgets", "\"$label\": allowed already")
             setUpThenPlace()
         } else {
+            DebugLog.event("Widgets", "\"$label\": asking the system for permission")
             callbacks.bindWidget(widgets.bindIntent(id, info)) { ok ->
+                DebugLog.event("Widgets", "\"$label\": permission " + if (ok) "given" else "refused")
                 if (ok) setUpThenPlace() else {
                     widgets.delete(id)
                     toast("The widget was not added")

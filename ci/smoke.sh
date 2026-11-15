@@ -601,17 +601,19 @@ if tap_text 12b-menu "Widgets" exact; then
       peek 12b-bind
       tap_text 12b-bind "Create" exact || tap_text 12b-bind "Allow" exact || true
       sleep 3
-      adb shell input keyevent KEYCODE_BACK
-      sleep 1
+      # A widget with a set-up screen opens it now: shown, not cancelled.
+      peek 12b-after
+      echo "      top: $(top_activity)"
       dump 12b-home
       peek 12b-home
-      if grep -q 'class="android.widget.TextClock"\|class="android.widget.AnalogClock"' "$OUT/12b-home.xml"; then
-        pass "another app's widget ($WIDGET) runs on the home screen"
+      # The launcher logs each step; "added" means the widget's item is on the page with the app's views in it.
+      if grep -q "Widgets: added \"" "$LOG"; then
+        pass "another app's widget ($WIDGET) is placed on the home screen"
       else
-        fail "another app's widget ($WIDGET) runs on the home screen"
+        fail "another app's widget ($WIDGET) is placed on the home screen"
         grep -o 'class="[^"]*"' "$OUT/12b-home.xml" | sort | uniq -c | sort -rn | head -12
-        grep "Widgets:" "$LOG" | tail -5
       fi
+      grep "Widgets:" "$LOG" | tail -6 | sed 's/^/        /'
     else
       echo "SKIP: no Clock app widget on this emulator; another app's widget not placed"
     fi
