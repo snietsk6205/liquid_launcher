@@ -428,7 +428,7 @@ fi
 if tap_text 11-edit "Widgets" exact; then
   sleep 1
   dump 12-widgets
-  if on_screen 12-widgets "Add a widget to this page" exact; then pass "edit mode lists the widgets"; else fail "edit mode lists the widgets"; fi
+  if on_screen 12-widgets "Tap one to add it to this page" exact; then pass "edit mode lists the widgets"; else fail "edit mode lists the widgets"; fi
   adb shell input keyevent KEYCODE_BACK
   sleep 1
   dump 11-edit
@@ -437,6 +437,7 @@ else
 fi
 tap_text 11-edit "Done" exact || adb shell input keyevent KEYCODE_BACK
 sleep 1
+
 
 clear_anr
 # Study companion: the home menu's Today item opens the panel; on a fresh install it offers to switch on.
@@ -561,6 +562,58 @@ sleep 1.6
 peek 14c-index
 wait "$SWIPE_PID" 2>/dev/null
 sleep 1
+adb shell input keyevent KEYCODE_HOME
+sleep 1
+
+clear_anr
+# 0.7.0: another app's widget (last, so the widget it places cannot be under a later check's long press). The picker lists the apps that offer widgets; searching "clock" opens the Clock app's
+# widgets; the system asks once whether the launcher may add widgets ("Create"); the clock widget then runs on the home
+# screen as the app's own views (a TextClock or an AnalogClock in the screen tree).
+echo "== 12b. Another app's widget"
+adb shell input swipe 540 1250 540 1250 1000
+sleep 1.5
+dump 12b-menu
+if tap_text 12b-menu "Widgets" exact; then
+  sleep 2
+  dump 12b-picker
+  peek 12b-picker
+  if tap_text 12b-picker "Search widgets and apps" exact; then
+    sleep 0.5
+    adb shell input text clock
+    sleep 2
+    dump 12b-search
+    peek 12b-search
+    WIDGET=""
+    for name in "Digital clock" "Analog clock" "Clock"; do
+      if [ "$name" != "Clock" ] && on_screen 12b-search "$name" exact; then WIDGET="$name"; break; fi
+    done
+    if [ -n "$WIDGET" ]; then
+      tap_text 12b-search "$WIDGET" exact
+      sleep 3
+      dump 12b-bind
+      peek 12b-bind
+      tap_text 12b-bind "Create" exact || tap_text 12b-bind "Allow" exact || true
+      sleep 3
+      adb shell input keyevent KEYCODE_BACK
+      sleep 1
+      dump 12b-home
+      peek 12b-home
+      if grep -q 'class="android.widget.TextClock"\|class="android.widget.AnalogClock"' "$OUT/12b-home.xml"; then
+        pass "another app's widget ($WIDGET) runs on the home screen"
+      else
+        fail "another app's widget ($WIDGET) runs on the home screen"
+        grep -o 'class="[^"]*"' "$OUT/12b-home.xml" | sort | uniq -c | sort -rn | head -12
+        grep "Widgets:" "$LOG" | tail -5
+      fi
+    else
+      echo "SKIP: no Clock app widget on this emulator; another app's widget not placed"
+    fi
+  else
+    fail "the widget picker has a search field"
+  fi
+else
+  fail "the home menu has a Widgets item"
+fi
 adb shell input keyevent KEYCODE_HOME
 sleep 1
 

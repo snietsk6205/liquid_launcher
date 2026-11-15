@@ -1,6 +1,7 @@
 package dev.liquid.launcher.feature.home
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -70,11 +71,17 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** Built-in widgets beyond the clock: their type, name and default size in cells (width 0 = the whole row). */
+/** A built-in widget type: its id, name, a line about it, and its default size in cells (width 0 = the whole row). */
+internal data class WidgetType(val type: String, val name: String, val about: String, val w: Int, val h: Int)
+
+/** Built-in widgets (Phase 3; 0.7.0 adds date, battery and the next block). */
 internal val WidgetTypes = listOf(
-    Triple("clock", "Clock", 3),
-    Triple("now", "Now: the study block running, its tasks, quick actions", 3),
-    Triple("today", "Today: blocks and tasks of the day", 4),
+    WidgetType("clock", "Clock", "Six designs, each with its own font, colours and glass", 0, 3),
+    WidgetType("date", "Date", "The day and date in the clock's font", 0, 1),
+    WidgetType("next", "Study block", "The block now or next, as under the clock", 0, 1),
+    WidgetType("now", "Now card", "The study block running, its tasks, quick actions", 0, 3),
+    WidgetType("today", "Today", "Blocks and tasks of the day", 0, 4),
+    WidgetType("battery", "Battery", "Level as a ring, charging state", 2, 2),
 )
 
 private val clockTime = DateTimeFormatter.ofPattern("H:mm", Locale.getDefault())
@@ -135,17 +142,33 @@ private fun StudySetup(surface: StudySurface, controller: HomeController) {
     }
 }
 
-/** A round tick box. */
+/** A round tick box; ticking fills it and the check pops in with a small overshoot (0.7.0). */
 @Composable
 private fun Tick(done: Boolean, color: Color, size: Dp = 18.dp) {
+    val fill by animateFloatAsState(if (done) 1f else 0f, spring(dampingRatio = 0.9f, stiffness = 700f), label = "tickFill")
+    val pop by animateFloatAsState(if (done) 1f else 0f, spring(dampingRatio = 0.45f, stiffness = 600f), label = "tickPop")
     Box(
         Modifier
             .size(size)
+            .graphicsLayer {
+                val s = 1f + 0.12f * (pop - fill).coerceIn(-1f, 1f)
+                scaleX = s
+                scaleY = s
+            }
             .clip(CircleShape)
-            .background(if (done) color.copy(alpha = 0.9f) else color.copy(alpha = 0.14f)),
+            .background(color.copy(alpha = 0.14f + (0.9f - 0.14f) * fill)),
         contentAlignment = Alignment.Center,
     ) {
-        if (done) LauncherIcon(LauncherIcons.Check, contentDescription = "Done", tint = readableOn(color), size = size * 0.72f)
+        if (done || fill > 0.01f) {
+            LauncherIcon(
+                LauncherIcons.Check, contentDescription = if (done) "Done" else null, tint = readableOn(color), size = size * 0.72f,
+                modifier = Modifier.graphicsLayer {
+                    scaleX = pop.coerceAtLeast(0f)
+                    scaleY = pop.coerceAtLeast(0f)
+                    alpha = fill
+                },
+            )
+        }
     }
 }
 
@@ -633,56 +656,6 @@ private fun SectionLabel(text: String, color: Color) {
     Text(text, style = label(color, 12, FontWeight.SemiBold, alpha = 0.7f), modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))
 }
 
-/** The list of built-in widgets to add to the current page. */
-@Composable
-internal fun WidgetPicker(glass: GlassConfig, lightBackground: Boolean, backdrop: Backdrop, controller: HomeController) {
-    val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
-    val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
-    val shape = RoundedCornerShape(30.dp)
-    Box(
-        Modifier
-            .fillMaxSize()
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { controller.widgetPicker = false }
-    ) {
-        Column(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(start = 12.dp, end = 12.dp, bottom = 84.dp)
-                .graphicsLayer {
-                    val p = appear.value
-                    alpha = p.coerceIn(0f, 1f)
-                    translationY = (1f - p) * 40.dp.toPx()
-                }
-                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground))
-                .clip(shape)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
-                .padding(horizontal = 8.dp, vertical = 10.dp),
-        ) {
-            Text("Add a widget to this page", style = label(color, 13, FontWeight.SemiBold, alpha = 0.75f), modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
-            for ((type, name, _) in WidgetTypes) {
-                Text(
-                    name,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable {
-                            controller.widgetPicker = false
-                            controller.addWidget(type)
-                        }
-                        .padding(horizontal = 12.dp, vertical = 12.dp),
-                    style = label(color, 15),
-                )
-            }
-            Text(
-                "Widgets of other apps are the next step of Phase 3.",
-                style = label(color, 11, alpha = 0.6f), modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-            )
-        }
-    }
-}
-
 /** What "Tell Claude" shares: the day as planned and as done, ready to add a note to. */
 internal fun studyReport(day: StudyDay): String {
     val out = StringBuilder()
@@ -830,6 +803,8 @@ private fun StudyRing(glance: StudyGlance, color: Color, size: Dp) {
         is StudyGlance.Tomorrow -> eventColor(glance.block)
         is StudyGlance.Tasks -> color
     }
+    // The ring grows smoothly from one minute to the next instead of in steps.
+    val shownProgress by animateFloatAsState(if (glance is StudyGlance.Running) glance.progress else 0f, androidx.compose.animation.core.tween(700), label = "ring")
     androidx.compose.foundation.Canvas(Modifier.size(size)) {
         val stroke = this.size.minDimension * 0.14f
         val radius = (this.size.minDimension - stroke) / 2f
@@ -837,7 +812,7 @@ private fun StudyRing(glance: StudyGlance, color: Color, size: Dp) {
             is StudyGlance.Running -> {
                 drawCircle(color.copy(alpha = 0.22f), radius = radius, style = Stroke(stroke))
                 drawArc(
-                    accent, startAngle = -90f, sweepAngle = 360f * glance.progress, useCenter = false,
+                    accent, startAngle = -90f, sweepAngle = 360f * shownProgress, useCenter = false,
                     topLeft = androidx.compose.ui.geometry.Offset(stroke / 2f, stroke / 2f),
                     size = androidx.compose.ui.geometry.Size(radius * 2f, radius * 2f),
                     style = Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round),
@@ -872,8 +847,41 @@ internal fun StudyLine(
 ) {
     val focus by controller.data.study.focus.collectAsState()
     val focusing = glance is StudyGlance.Running && focus?.eventKey == glance.block.key
+    // A new kind of line (the block starts, ends, the next one comes) slides in; the minutes just change (0.7.0).
+    androidx.compose.animation.AnimatedContent(
+        targetState = glance,
+        contentKey = { glanceKey(it) },
+        transitionSpec = {
+            (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(260, delayMillis = 60)) +
+                androidx.compose.animation.slideInVertically(spring(dampingRatio = 0.85f, stiffness = 380f)) { it / 2 }) togetherWith
+                (androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(160)) +
+                    androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(200)) { -it / 2 })
+        },
+        modifier = modifier,
+        label = "clockLine",
+    ) { shown -> StudyLineRow(shown, controller, color, shadow, interactive, focusing && shown is StudyGlance.Running) }
+}
+
+/** What makes two glances "the same line" for the animation: their kind and block. */
+private fun glanceKey(glance: StudyGlance): String = when (glance) {
+    is StudyGlance.Running -> "run:" + glance.block.key
+    is StudyGlance.Next -> "next:" + glance.block.key
+    is StudyGlance.Unmarked -> "unmarked:" + glance.block.key
+    is StudyGlance.Tasks -> "tasks"
+    is StudyGlance.Tomorrow -> "tomorrow:" + glance.block.key
+}
+
+@Composable
+private fun StudyLineRow(
+    glance: StudyGlance,
+    controller: HomeController,
+    color: Color,
+    shadow: androidx.compose.ui.graphics.Shadow?,
+    interactive: Boolean,
+    focusing: Boolean,
+) {
     Row(
-        modifier
+        Modifier
             .height(30.dp)
             .clip(RoundedCornerShape(50))
             .then(

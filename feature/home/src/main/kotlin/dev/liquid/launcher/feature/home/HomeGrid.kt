@@ -243,6 +243,12 @@ private fun ItemView(item: HomeItem, pageIndex: Int, env: PageEnv, controller: H
                         }
                     }
                 }
+                when (item.widget) {
+                    "app" -> AppWidgetItem(item, env, controller)
+                    "date" -> DateWidget(env.contentColor, env.shadow)
+                    "battery" -> BatteryWidget(env.contentColor, env.shadow)
+                    "next" -> NextBlockWidget(controller, env.contentColor, env.shadow, env.interactive && !env.editMode)
+                }
                 if (item.widget == "now" || item.widget == "today") {
                     // Ticks and buttons work on the live home screen, not while editing or in a preview.
                     val surface = StudySurface(env.glass, env.lightBackground, env.wallpaperBackdrop, env.interactive && !env.editMode)

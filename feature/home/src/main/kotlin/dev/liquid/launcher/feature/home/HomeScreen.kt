@@ -300,8 +300,11 @@ private fun HomeScreenBody(
             if (studio.surface == "drawer") controller.openDrawer() else if (controller.drawer.value > 0f) controller.closeDrawer()
         }
     }
+    // The home screen sinks back a little behind the home menu and behind sheets that cover it
+    // (Today, layouts, the widget list), so they read as layers of one space (0.7.0).
     val menuSink by androidx.compose.animation.core.animateFloatAsState(
-        if (controller.homeMenu && homeMenuConfig.sink) 1f else 0f, label = "menuSink",
+        if ((controller.homeMenu || controller.todaySheet || controller.layoutsSheet || controller.widgetPicker) && homeMenuConfig.sink) 1f else 0f,
+        label = "menuSink",
     )
 
     val lightBackground = remember(savedImage, colourTick, studio?.candidateImage) {
@@ -474,7 +477,14 @@ private fun HomeScreenBody(
             val placing = studio?.takeIf { it.drawsSource }
             val shownWallpaper = placing?.sourceImage ?: blurredWallpaper ?: image
             // The wallpaper takes part in the drawer transition (it drifts and grows a little).
-            Box(Modifier.fillMaxSize().graphicsLayer { if (placing == null) wallpaperInDrawerTransition(controller.drawer.value, motionShown) }) {
+            Box(
+                Modifier.fillMaxSize().graphicsLayer {
+                    if (placing == null) {
+                        wallpaperInDrawerTransition(controller.drawer.value, motionShown)
+                        if (motionConfig.searchTransition == "space") wallpaperInSearchTransition(controller.searchAmount)
+                    }
+                }
+            ) {
             if (shownWallpaper != null) {
                 WallpaperImage(
                     image = shownWallpaper,
@@ -526,10 +536,18 @@ private fun HomeScreenBody(
                         if (settle == "scale") scale *= 0.94f + 0.06f * back
                         if (controller.editMode) scale *= 0.9f
                         scale *= 1f - 0.06f * menuSink
-                        // Search opening with depth: home sinks back a little, as it does for the drawer.
-                        if (motionConfig.searchDepth) {
-                            scale *= 1f - 0.07f * controller.searchAmount
-                            alpha *= 1f - 0.35f * controller.searchAmount
+                        // Search: the home screen glides down under the finger ("space", D99) or sinks back ("depth").
+                        val s = controller.searchAmount
+                        if (s > 0f) when (motionConfig.searchTransition) {
+                            "space" -> {
+                                alpha *= (1f - s * 1.7f).coerceIn(0f, 1f)
+                                translationY += s * 0.16f * size.height
+                                scale *= 1f - motion.homeScale * 0.6f * s
+                            }
+                            "depth" -> {
+                                scale *= 1f - 0.07f * s
+                                alpha *= 1f - 0.35f * s
+                            }
                         }
                         scaleX = scale
                         scaleY = scale
@@ -585,7 +603,7 @@ private fun HomeScreenBody(
         // ---- Pill, or the edit toolbar in its place ----
         // A sheet rising from the bottom (Today, layouts, clock gallery) puts the pill away instead of
         // showing it through its glass (0.6.4).
-        val sheetUp = !pill.top && (controller.todaySheet || controller.layoutsSheet || controller.clockStudio != null)
+        val sheetUp = !pill.top && (controller.todaySheet || controller.layoutsSheet || controller.widgetPicker || controller.clockStudio != null)
         val pillAway by androidx.compose.animation.core.animateFloatAsState(if (sheetUp) 1f else 0f, label = "pillAway")
         val barModifier = Modifier
             .align(if (pill.top) Alignment.TopCenter else Alignment.BottomCenter)
@@ -593,8 +611,9 @@ private fun HomeScreenBody(
             .padding(vertical = pill.offsetDp.dp)
             .graphicsLayer {
                 val p = controller.drawer.value
-                alpha = (1f - p * 2f).coerceIn(0f, 1f) * returnState.progress.floatValue * (1f - pillAway)
-                translationY = (p * 40.dp.toPx() + pillAway * 24.dp.toPx()) * (if (pill.top) -1 else 1)
+                val s = controller.searchAmount
+                alpha = (1f - p * 2f).coerceIn(0f, 1f) * (1f - s * 2f).coerceIn(0f, 1f) * returnState.progress.floatValue * (1f - pillAway)
+                translationY = (p * 40.dp.toPx() + pillAway * 24.dp.toPx() + s * 40.dp.toPx()) * (if (pill.top) -1 else 1)
             }
         if (controller.editMode && live) {
             if (controller.pagesSheet) {
@@ -637,7 +656,7 @@ private fun HomeScreenBody(
                     .padding(horizontal = (grid.marginSideDp + 8).dp)
                     .graphicsLayer {
                         val p = controller.drawer.value
-                        alpha = (1f - p * 2f).coerceIn(0f, 1f) * returnState.progress.floatValue
+                        alpha = (1f - p * 2f).coerceIn(0f, 1f) * (1f - controller.searchAmount * 2f).coerceIn(0f, 1f) * returnState.progress.floatValue
                     },
             )
         }
@@ -680,7 +699,7 @@ private fun HomeScreenBody(
                     .imePadding()
                     .graphicsLayer {
                         // Only the closed pill makes way for a sheet; a pill already turned into the drawer's search stays.
-                        val away = pillAway * (1f - controller.drawer.value).coerceIn(0f, 1f)
+                        val away = maxOf(pillAway, (controller.searchAmount * 2f).coerceIn(0f, 1f)) * (1f - controller.drawer.value).coerceIn(0f, 1f)
                         alpha = returnState.progress.floatValue * (1f - away)
                         translationY = away * 24.dp.toPx()
                     },
@@ -689,8 +708,10 @@ private fun HomeScreenBody(
 
         // Each of these keeps its own entrance and leaves through Presence: a quick fade and sink,
         // the same for all of them.
-        Presence(if (live && controller.searchOpen) Unit else null) {
-            SearchOverlay(controller, search, glass, lightBackground, overlayBackdrop, apps)
+        // Search keeps itself on screen while its progress is above 0, so it can follow the finger and close by itself (D99).
+        val searchShown by remember { derivedStateOf { controller.searchOpen || controller.search.value > 0.001f } }
+        if (live && searchShown) {
+            SearchOverlay(controller, search, glass, lightBackground, overlayBackdrop, apps, motionConfig.searchTransition, motion)
         }
         Presence(controller.openFolder?.let { id -> layout.find(id)?.second?.takeIf { it.kind == ItemKind.FOLDER } }) { folder ->
             FolderOverlay(folder, appIndex, controller, glass, lightBackground, overlayBackdrop, grid)

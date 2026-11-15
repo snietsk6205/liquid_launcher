@@ -553,3 +553,54 @@ the Claude app for links, whether MagicOS honours the sync request, the Buttons 
    the phone with many blocks; "Crystal" is the cheap fallback.
 2. `requestSync` is asked of the system; whether MagicOS honours it promptly is not verified.
 3. The letter curve's defaults (64 dp, bubble 32 dp past) are a guess for a thumb; the user can tune both.
+
+## Entry 16: 0.7.0, review of Opus's 0.6.x, search as "One space", other apps' widgets (2026-11-15, Opus 5.5)
+
+**Asked by the user:** check everything Opus made after Fable's 0.6.0 and improve design, transitions and animations
+(not the drawer's transition, which is good); give search the drawer's transition, "that makes you think everything is
+part of one launcher"; give back the liquid glass of the pill and of everything Fable made (0.6.4 changed it); a
+lock-screen problem (below), documented for Fable rather than solved; go to the next phase.
+
+**Review of Opus's work since 0.6.1** (entries 12–15, `git diff v0.6.1..`, about 1 600 lines):
+| Where | Finding | Done |
+|---|---|---|
+| `Glass.kt`, settings (0.6.4) | "Edge light" (a `Highlight` rim) was on for every glass surface by default, so the pill, menus and sheets no longer looked as Fable made them | Off by default (D101); buttons keep their own rim |
+| Clock line (0.6.3) | Went blank when the day's blocks were over | Fixed in 0.6.4 (D93); now also slides between kinds of line, the ring grows smoothly |
+| Today, sheets (0.6.3–0.6.4) | The pill showed through bottom sheets | Fixed in 0.6.4; the home now also sinks back behind sheets (D102) |
+| Search (Fable's, kept by Opus) | Opened with its own fade, unrelated to the drawer | "One space" under the finger (D99) |
+| Study data (0.6.2) | Ticks kept on the phone, focus timer, notices: covered by `StudyLocalTest`, `StudyFormatTest` and the emulator's calendar checks; no bug found | Kept |
+| Ticks | Changed state in one frame | Fill and pop (D102) |
+| Glass buttons (0.6.4) | Sample the sheet's exported layer and redraw while Today scrolls: cost not measured on the phone | Kept; "Crystal" is the cheap style |
+
+**0.7.0**
+| File | Change | Decision |
+|---|---|---|
+| `HomeController.kt`, `HomeGestures.kt`, `SearchOverlay.kt`, `HomeScreen.kt`, `Drawer.kt`, settings | `search` progress dragged by a swipe down, `openSearch` / `closeSearch` / `dragSearchBy` / `settleSearch`; home glides down and fades, wallpaper drifts (`wallpaperInSearchTransition`), pill and dock fade, field and results come from above by layout; "Opening search" gains "One space" (default) | D99 |
+| `core/data/AppWidgets.kt` (new), `LauncherData.kt`, `MainActivity.kt` | Host, providers of every profile, bind (system dialog), set-up screen, ids given back at start | D100 |
+| `feature/home/Widgets.kt` (new), `HomeGrid.kt`, `EditTools.kt`, `Study.kt` | Picker (launcher's widgets, apps with previews and sizes, search); `AppWidgetItem`; Date, Battery, Study block widgets; "Widget settings" and glass plate in edit mode; `placeWidget` shrinks a widget that does not fit | D100 |
+| `Glass.kt` settings | Edge light off by default | D101 |
+| `HomeScreen.kt`, `Study.kt` | Home sinks behind Today, layouts and the picker; clock line `AnimatedContent`; ring and tick animations | D102 |
+| Tests | `AppWidgetsTest` (cell sizes, ids in use) | |
+| `ci/smoke.sh` | 12b: the picker finds the Clock app's widgets by search, the system's "Create" is accepted and the widget's own views (TextClock / AnalogClock) run on the home screen; the picker's new heading | |
+
+**For Fable: the lock-screen wallpaper and glass (not changed, as the user asked).** With "Also on the lock screen" on,
+after changing the wallpaper the glass sometimes turns frosted or flat; with it off, glass stays liquid. Nothing lowers
+the glass quality at run time (only the benchmark writes `GlassCap`), so the quality itself does not change. What
+does make glass look frosted or flat is the launcher no longer drawing its own wallpaper copy: glass then has no
+picture to refract (D73's symptom, "managed by launcher: no"). The likely path: `WallpaperStore.writeSystem` calls
+`setStream(…, FLAG_SYSTEM | FLAG_LOCK)`; on MagicOS the lock-screen part (its magazine or theme engine) may re-set or
+re-number the system wallpaper after the 8 s grace, and `WallpaperTones.current` then sees an id that is neither the
+launcher's nor seen before, confirms it 1.5 s later and declares "wallpaper changed outside the launcher". To check on
+the phone: the debug log for "wallpaper changed outside the launcher (id …)" after a lock-screen write, and Diagnostics
+→ Wallpaper → "managed by launcher". Possible directions: write the lock screen in a separate `setStream(FLAG_LOCK)`
+call before the system one and remember both ids as the launcher's own (`ownIds`), or treat a change of the lock id
+alone as not a change of the home wallpaper.
+
+**Result:** see the next note (CI).
+
+### For the next model (review)
+1. Other apps' widgets were tested with the emulator's Clock widget only; widgets with set-up screens, scrolling lists
+   and the work profile need the phone.
+2. A long press on an app widget starts edit and move through the item's own gesture detector, but the widget may also
+   receive the touch's end as a tap; Launcher3 cancels the view's touch on long press. Worth checking on the phone.
+3. Search follows the finger only when "Swipe down" is "Open search".

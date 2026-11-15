@@ -1,5 +1,12 @@
 # 4. Widgets
 
+**State in 0.7.0 (Opus, D100):** other apps' widgets work (host, permission, set-up screen, placing at their cell
+size, resizing with the size reported, rounded clip, optional glass plate, "Widget settings" in edit mode). The picker
+lists the launcher's widgets and every app's widgets with previews, sizes and a search field. Built-in widgets so far:
+clock (six designs), date, battery, study block, Now card, Today. Not yet: panels (2.5), widget stacks (4.7), the
+other built-in widgets below, common style options per widget (4.2), dragging from the picker (tap places in the first
+free area), colour filters for foreign widgets (4.6).
+
 ## 4.1 Two kinds
 
 | | Built-in widgets | AppWidgets (from other apps) |

@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -88,6 +89,34 @@ internal fun BoxScope.ResizeFrame(item: HomeItem, pageIndex: Int, env: PageEnv, 
             Spacer(Modifier.width(6.dp))
             Text("Customise", style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium))
         }
+    }
+    if (item.widget == "app") {
+        // Another app's widget: its own settings screen (when it has one) and a glass plate behind it (0.7.0, D100).
+        val info = remember(item.options) { dev.liquid.launcher.core.data.AppWidgets.idOf(item)?.let { controller.data.widgets.info(it) } }
+        val glassOn = item.options?.get("plate") == "glass"
+        Row(Modifier.align(Alignment.TopStart).padding(12.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
+            if (info?.configure != null) EditChip("Widget settings", LauncherIcons.Tune) { controller.reconfigureAppWidget(item) }
+            EditChip(if (glassOn) "Glass: on" else "Glass: off", LauncherIcons.Layers) {
+                controller.setItemOption(item.id, "plate", if (glassOn) null else "glass")
+            }
+        }
+    }
+}
+
+/** A small dark chip over a selected widget in edit mode. */
+@Composable
+private fun EditChip(label: String, icon: Int, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color.Black.copy(alpha = 0.55f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LauncherIcon(icon, contentDescription = null, tint = Color.White, size = 16.dp)
+        Spacer(Modifier.width(6.dp))
+        Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium))
     }
 }
 

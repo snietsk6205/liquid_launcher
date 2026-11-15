@@ -81,8 +81,15 @@ class LauncherData private constructor(private val context: Context) {
     /** Study blocks and tasks from the phone's calendar. */
     val study = StudyCalendar(context, settings, scope)
 
+    /** Other apps' widgets (0.7.0, D100). */
+    val widgets = AppWidgets(context)
+
     init {
         layout.ensureDefault(settings.get(LauncherSettings.HomeColumns), settings.get(LauncherSettings.HomeRows))
+        // Widget ids no layout uses (removed, or an addition cancelled) are given back once per start.
+        scope.launch {
+            widgets.cleanUp(AppWidgets.idsIn(layout.layout.value) + layouts.state.value.layouts.flatMap { AppWidgets.idsIn(it.layout) })
+        }
         scope.launch {
             settings.values.map { settings.get(LauncherSettings.ThemeIconShape) }.distinctUntilChanged().collect { apps.iconShape = it }
         }

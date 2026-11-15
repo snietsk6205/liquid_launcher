@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -50,9 +51,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
+import kotlin.math.roundToInt
 import dev.liquid.launcher.core.data.AppEntry
 import dev.liquid.launcher.core.data.Bangs
 import dev.liquid.launcher.core.data.Calculator
@@ -70,7 +73,15 @@ private sealed interface SearchResult {
     data class Web(val query: String, val url: String) : SearchResult
 }
 
-/** Swipe-down search: apps (typo-tolerant, ranked by use), calculator, bangs and the web. */
+/**
+ * Swipe-down search: apps (typo-tolerant, ranked by use), calculator, bangs and the web.
+ *
+ * Since 0.7.0 (D99) it opens like the drawer: its progress is [HomeController.search], which a swipe
+ * down drags under the finger. With "One space" (default) the home screen glides down and fades
+ * while the field and results come down from above and the wallpaper drifts the same way, so
+ * search is the space above the home screen as the drawer is the space below it. The field is
+ * glass, so it moves by layout (not by layer) and keeps refracting what is really behind it.
+ */
 @Composable
 fun SearchOverlay(
     controller: HomeController,
@@ -79,22 +90,25 @@ fun SearchOverlay(
     lightBackground: Boolean,
     backdrop: Backdrop,
     apps: List<AppEntry>,
+    transition: String = "space",
+    motion: DrawerMotion? = null,
 ) {
     val usage by controller.data.usage.usage.collectAsState()
     var query by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
-    val appear = remember { Animatable(0f) }
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val progress = controller.search
     val context = LocalContext.current
-    LaunchedEffect(Unit) {
-        if (config.keyboard) runCatching { focus.requestFocus() }
-        appear.animateTo(1f, Motion.enter())
+    // The keyboard comes once search is opening for good (released past the open point, or the pill tapped),
+    // and goes as soon as it starts to close.
+    LaunchedEffect(controller.searchOpen) {
+        if (controller.searchOpen) {
+            if (config.keyboard) runCatching { focus.requestFocus() }
+        } else {
+            focusManager.clearFocus(force = true)
+        }
     }
-    // The home screen behind blurs and sinks with this, and comes back as search leaves.
-    val presence = LocalPresence.current
-    LaunchedEffect(Unit) {
-        androidx.compose.runtime.snapshotFlow { appear.value.coerceIn(0f, 1f) * presence.value.coerceIn(0f, 1f) }.collect { controller.searchAmount = it }
-    }
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { controller.searchAmount = 0f } }
+    val rise = (motion?.rise ?: 0.12f).coerceIn(0.04f, 0.4f)
 
     val visible = remember(apps) { apps.filter { !it.hidden } }
     val suggestions = remember(visible, usage) {
@@ -116,7 +130,7 @@ fun SearchOverlay(
             is SearchResult.Bang -> controller.openUrl(result.url)
             is SearchResult.Web -> controller.openUrl(result.url)
         }
-        controller.searchOpen = false
+        controller.closeSearch()
     }
 
     val fieldShape = RoundedCornerShape(50)
@@ -125,17 +139,30 @@ fun SearchOverlay(
     Box(
         Modifier
             .fillMaxSize()
-            .graphicsLayer { alpha = appear.value.coerceIn(0f, 1f) }
-            .background(Color.Black.copy(alpha = config.dim))
-            .pointerInput(Unit) { detectTapGestures { controller.searchOpen = false } }
+            .pointerInput(Unit) { detectTapGestures { controller.closeSearch() } }
     ) {
+        // The dim fades in place; the content moves.
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = progress.value.coerceIn(0f, 1f) }.background(Color.Black.copy(alpha = config.dim)))
         Column(
             Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .imePadding()
                 .padding(horizontal = 16.dp)
-                .graphicsLayer { translationY = (1f - appear.value) * -40.dp.toPx() },
+                .offset {
+                    val p = progress.value
+                    val dy = when (transition) {
+                        "fade" -> 0f
+                        "depth" -> (1f - p) * -40.dp.toPx()
+                        // From above, as far as the drawer's apps come from below.
+                        else -> (1f - p) * -rise * controller.screenHeight
+                    }
+                    IntOffset(0, dy.roundToInt())
+                }
+                .graphicsLayer {
+                    val p = progress.value.coerceIn(0f, 1f)
+                    alpha = if (transition == "space") ((p - 0.04f) / 0.72f).coerceIn(0f, 1f) else p
+                },
         ) {
             Spacer(Modifier.height(12.dp))
             Row(

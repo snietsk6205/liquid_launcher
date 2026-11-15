@@ -56,6 +56,25 @@ class MainActivity : ComponentActivity() {
         fontCallback = null
     }
 
+    // Other apps' widgets (0.7.0, D100): the system's "allow" dialog and the widget's own set-up screen.
+    private var widgetBindCallback: ((Boolean) -> Unit)? = null
+    private val bindWidget = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
+        widgetBindCallback?.invoke(result.resultCode == RESULT_OK)
+        widgetBindCallback = null
+    }
+    private var widgetSetUpCallback: ((Boolean) -> Unit)? = null
+
+    @Deprecated("The widget host starts set-up screens with a request code; their result arrives here.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQUEST_WIDGET_SET_UP) {
+            widgetSetUpCallback?.invoke(resultCode == RESULT_OK)
+            widgetSetUpCallback = null
+            return
+        }
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -124,6 +143,27 @@ class MainActivity : ComponentActivity() {
                     callback(null)
                 }
             },
+            bindWidget = { intent, callback ->
+                widgetBindCallback = callback
+                try {
+                    bindWidget.launch(intent)
+                } catch (e: Exception) {
+                    DebugLog.error("Widgets", "the system's widget dialog failed: $e")
+                    widgetBindCallback = null
+                    callback(false)
+                }
+            },
+            setUpWidget = { id, callback ->
+                widgetSetUpCallback = callback
+                try {
+                    app.data.widgets.host.startAppWidgetConfigureActivityForResult(this, id, 0, REQUEST_WIDGET_SET_UP, null)
+                } catch (e: Exception) {
+                    // A set-up screen that cannot be opened from a launcher: place the widget as it is.
+                    DebugLog.error("Widgets", "the widget's set-up screen failed: $e")
+                    widgetSetUpCallback = null
+                    callback(true)
+                }
+            },
             pickFolder = { callback ->
                 folderCallback = callback
                 try {
@@ -173,6 +213,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        (application as LauncherApp).data.widgets.listen(true)
         // Set before the first frame, so the content is never drawn at full size first.
         returnState.onReturn(animate = !firstStart)
         firstStart = false
@@ -201,8 +242,14 @@ class MainActivity : ComponentActivity() {
         super.onPause()
     }
 
+    override fun onStop() {
+        super.onStop()
+        (application as LauncherApp).data.widgets.listen(false)
+    }
+
     companion object {
         private const val HOME_PRESS_WINDOW_MS = 1500L
+        private const val REQUEST_WIDGET_SET_UP = 0x5717
 
         /** Extra naming what to open on the home screen: "wallpaper" or "layouts". */
         const val EXTRA_OPEN = "dev.liquid.launcher.OPEN"

@@ -83,10 +83,13 @@ internal fun Modifier.homeGestures(gestures: GestureConfig, controller: HomeCont
                 else -> LauncherAction.None
             }.takeIf { it != LauncherAction.None } ?: gestures.swipeDown
             val follow = up == LauncherAction.OpenDrawer
+            // Search follows a swipe down the way the drawer follows a swipe up (0.7.0, D99).
+            val followSearch = downAction == LauncherAction.OpenSearch
 
             var mode = HomeTouch.Undecided
             var total = Offset.Zero
             var dragged = 0f
+            var searchDragged = 0f
             var startDistance = 1f
             var startCentroid = Offset.Zero
             var zoom = 1f
@@ -106,6 +109,11 @@ internal fun Modifier.homeGestures(gestures: GestureConfig, controller: HomeCont
                         controller.dragDrawerBy(-dragged)
                         dragged = 0f
                         controller.settleDrawer(0f)
+                    }
+                    if (searchDragged != 0f) {
+                        controller.dragSearchBy(-searchDragged)
+                        searchDragged = 0f
+                        controller.settleSearch(0f)
                     }
                     mode = HomeTouch.TwoFingers
                     startDistance = (pressed[0].position - pressed[1].position).getDistance().coerceAtLeast(1f)
@@ -142,6 +150,10 @@ internal fun Modifier.homeGestures(gestures: GestureConfig, controller: HomeCont
                             val delta = -dy / controller.screenHeight
                             controller.dragDrawerBy(delta)
                             dragged += delta
+                        } else if (followSearch && (total.y > 0 || controller.search.value > 0f)) {
+                            val delta = dy / controller.screenHeight
+                            controller.dragSearchBy(delta)
+                            searchDragged += delta
                         }
                     }
                     HomeTouch.TwoFingers -> {
@@ -169,6 +181,7 @@ internal fun Modifier.homeGestures(gestures: GestureConfig, controller: HomeCont
                     DebugLog.event("Home", "swipe: " + total.y.toInt() + " px, " + velocity.toInt() + " px/s" + if (edge != 0) " (edge)" else "")
                     when {
                         follow && controller.drawer.value > 0f -> controller.settleDrawer(velocity)
+                        followSearch && controller.search.value > 0f -> controller.settleSearch(velocity)
                         total.y < -threshold || velocity < -1200f -> controller.run(up)
                         total.y > threshold || velocity > 1200f -> controller.run(downAction)
                     }

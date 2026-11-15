@@ -338,37 +338,35 @@ class HomeController(
         start(intent)
     }
 
-    /** Adds a built-in widget of [type] to the current page, across its width. */
+    /** Adds a built-in widget of [type] to the current page: across its width, or its own width when it has one. */
     fun addWidget(type: String) {
         val pageIndex = if (::pager.isInitialized) pager.currentPage else 0
         val (columns, rows) = gridFor(pageIndex)
-        val layout = data.layout.layout.value
-        val page = layout.pages.getOrNull(pageIndex) ?: return
-        val wanted = WidgetTypes.firstOrNull { it.first == type }?.third ?: 3
-        // The wanted height if there is room for it, else whatever fits.
-        var h = minOf(wanted, rows)
-        var spot = LayoutOps.firstFree(page, columns, h, columns, rows)
-        while (spot == null && h > 2) {
-            h--
-            spot = LayoutOps.firstFree(page, columns, h, columns, rows)
-        }
-        if (spot == null) {
-            toast("No room for it on this page")
-            return
-        }
-        val item = HomeItem(LayoutOps.newId(), ItemKind.WIDGET, spot.first, spot.second, columns, h, widget = type)
-        data.layout.commit(layout.copy(pages = layout.pages.mapIndexed { i, p -> if (i == pageIndex) p.copy(items = p.items + item) else p }))
+        val kind = WidgetTypes.firstOrNull { it.type == type }
+        val wantedW = kind?.w?.takeIf { it > 0 }?.coerceAtMost(columns) ?: columns
+        val item = placeWidget(pageIndex, columns, rows, wantedW, kind?.h ?: 3) { x, y, w, h ->
+            HomeItem(LayoutOps.newId(), ItemKind.WIDGET, x, y, w, h, widget = type)
+        } ?: return
         when (type) {
             // Straight into the gallery: a new clock is there to be chosen and styled.
             "clock" -> openClockStudio(item.id)
-            else -> if (!data.study.loaded.value) setupStudy()
+            "now", "today", "next" -> if (!data.study.loaded.value) setupStudy()
         }
     }
 
     var savingLayout by mutableStateOf(false)
 
+    /**
+     * How far search is open, 0..1 (0.7.0, D99): like [drawer], it follows the finger of a swipe
+     * down and springs open or closed on release; [searchOpen] is where it is going.
+     */
+    val search = Animatable(0f)
+
     /** How far search is open (0..1), for the blur behind it. */
-    var searchAmount by mutableFloatStateOf(0f)
+    val searchAmount: Float get() = search.value.coerceIn(0f, 1f)
+
+    /** Where the finger has put search, ahead of [search] (see [dragPosition]). */
+    private var searchDragPosition: Float? = null
 
     /** Lets the activity pick an image (photo picker); set by the activity. */
     internal val pickImage: ((android.net.Uri?) -> Unit) -> Unit get() = callbacks.pickImage
@@ -523,7 +521,7 @@ class HomeController(
     fun openDrawer(velocity: Float = 0f) {
         dragPosition = null
         menu = null
-        searchOpen = false
+        if (searchOpen || search.value > 0f) closeSearch(immediately = true)
         DebugLog.event("Home", "drawer: open from " + "%.2f".format(drawer.value))
         scope.launch { drawer.animateTo(1f, drawerSpring(), initialVelocity = velocity) }
     }
@@ -591,9 +589,40 @@ class HomeController(
 
     // ---- other overlays ----
 
-    fun openSearch() {
+    /** Opens search; [velocity] in search heights per second, so a flick keeps its momentum (D99). */
+    fun openSearch(velocity: Float = 0f) {
         menu = null
+        searchDragPosition = null
         searchOpen = true
+        scope.launch { search.animateTo(1f, drawerSpring(), initialVelocity = velocity) }
+    }
+
+    fun closeSearch(immediately: Boolean = false, velocity: Float = 0f) {
+        searchDragPosition = null
+        searchOpen = false
+        scope.launch { if (immediately) search.snapTo(0f) else search.animateTo(0f, drawerSpring(), initialVelocity = velocity) }
+    }
+
+    /** [deltaFraction]: the finger's movement as a fraction of the screen height (down = positive). */
+    fun dragSearchBy(deltaFraction: Float) {
+        val before = searchDragPosition ?: search.value
+        val next = (before + deltaFraction / drawerTravel()).coerceIn(0f, 1f)
+        if (motionConfig.drawerTick && (before > OPEN_POINT) != (next > OPEN_POINT)) Haptics.tick(view)
+        searchDragPosition = next
+        scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { search.snapTo(next) }
+    }
+
+    /** Finger released while moving search: open or close by position and speed, as the drawer does. */
+    fun settleSearch(velocityPxPerSec: Float) {
+        val position = searchDragPosition ?: search.value
+        DebugLog.event("Home", "search: released at " + "%.2f".format(position) + ", " + velocityPxPerSec.toInt() + " px/s")
+        val open = when {
+            velocityPxPerSec > 800f -> true
+            velocityPxPerSec < -800f -> false
+            else -> position > OPEN_POINT
+        }
+        val velocity = (velocityPxPerSec / (screenHeight * drawerTravel())).coerceIn(-14f, 14f)
+        if (open) openSearch(velocity) else closeSearch(velocity = velocity)
     }
 
     fun closeAll(immediately: Boolean = false) {
@@ -607,7 +636,7 @@ class HomeController(
         menu = null
         openFolder = null
         renaming = null
-        searchOpen = false
+        if (searchOpen || search.value > 0f) closeSearch(immediately)
         drag = null
         if (drawerOpen) closeDrawer(immediately)
     }
@@ -630,7 +659,7 @@ class HomeController(
             widgetPicker -> widgetPicker = false
             clockStudio != null -> closeClockStudio(save = true)
             openFolder != null -> openFolder = null
-            searchOpen -> searchOpen = false
+            searchOpen -> closeSearch()
             drawerOpen && tagFilter.isNotEmpty() && drawerQuery.isEmpty() -> tagFilter = emptySet()
             drawerOpen -> closeDrawer()
             pageSettings != null -> pageSettings = null
@@ -756,6 +785,101 @@ class HomeController(
     }
 
     fun addClock() = addWidget("clock")
+
+    /**
+     * Puts an item of [wantedW] × [wantedH] cells on page [pageIndex] at the first free place, giving
+     * up height (to 1) and then width when it does not fit, and commits it. Null when there is no room.
+     */
+    private fun placeWidget(pageIndex: Int, columns: Int, rows: Int, wantedW: Int, wantedH: Int, make: (x: Int, y: Int, w: Int, h: Int) -> HomeItem): HomeItem? {
+        val layout = data.layout.layout.value
+        val page = layout.pages.getOrNull(pageIndex) ?: return null
+        var w = wantedW.coerceIn(1, columns)
+        var h = wantedH.coerceIn(1, rows)
+        var spot = LayoutOps.firstFree(page, w, h, columns, rows)
+        while (spot == null && (h > 1 || w > 1)) {
+            if (h > 1) h-- else w--
+            spot = LayoutOps.firstFree(page, w, h, columns, rows)
+        }
+        if (spot == null) {
+            toast("No room for it on this page")
+            return null
+        }
+        val item = make(spot.first, spot.second, w, h)
+        data.layout.commit(layout.copy(pages = layout.pages.mapIndexed { i, p -> if (i == pageIndex) p.copy(items = p.items + item) else p }))
+        return item
+    }
+
+    /**
+     * Adds another app's widget to the current page (0.7.0, D100): an id from the host, the system's
+     * permission (asked once per app, unless already given), the widget's own set-up screen when it
+     * has one, then the item at its own size. Anything cancelled gives the id back.
+     */
+    fun addAppWidget(info: android.appwidget.AppWidgetProviderInfo) {
+        val widgets = data.widgets
+        val id = try {
+            widgets.allocate()
+        } catch (e: Exception) {
+            DebugLog.error("Widgets", "no widget id: $e")
+            toast("This widget could not be added")
+            return
+        }
+        val pageIndex = if (::pager.isInitialized) pager.currentPage else 0
+        val label = info.loadLabel(context.packageManager).orEmpty()
+        fun place() {
+            val (columns, rows) = gridFor(pageIndex)
+            val (w, h) = dev.liquid.launcher.core.data.AppWidgets.cells(info, screenWidth / columns, screenHeight * 0.8f / rows, columns, rows)
+            val item = placeWidget(pageIndex, columns, rows, w, h) { x, y, cw, ch ->
+                HomeItem(
+                    LayoutOps.newId(), ItemKind.WIDGET, x, y, cw, ch, widget = "app",
+                    options = mapOf("appWidgetId" to id.toString(), "provider" to info.provider.flattenToString(), "label" to label),
+                )
+            }
+            if (item == null) widgets.delete(id) else DebugLog.event("Widgets", "added \"$label\" (${item.w} × ${item.h})")
+        }
+        fun setUpThenPlace() {
+            if (!widgets.needsSetUp(info)) return place()
+            callbacks.setUpWidget(id) { ok -> if (ok) place() else widgets.delete(id) }
+        }
+        if (widgets.bindIfAllowed(id, info)) {
+            setUpThenPlace()
+        } else {
+            callbacks.bindWidget(widgets.bindIntent(id, info)) { ok ->
+                if (ok) setUpThenPlace() else {
+                    widgets.delete(id)
+                    toast("The widget was not added")
+                }
+            }
+        }
+    }
+
+    /** The page the home screen shows, or the first before the pager exists. */
+    fun currentPageIndex(): Int = if (::pager.isInitialized) pager.currentPage else 0
+
+    /** Sets one of a widget's own options ([HomeItem.options]); null removes it. One undo step. */
+    fun setItemOption(itemId: String, key: String, value: String?) {
+        val layout = data.layout.layout.value
+        data.layout.commit(
+            layout.copy(pages = layout.pages.map { page ->
+                page.copy(items = page.items.map { item ->
+                    if (item.id != itemId) item else {
+                        val options = (item.options.orEmpty() - key).let { if (value != null) it + (key to value) else it }
+                        item.copy(options = options.takeIf { it.isNotEmpty() })
+                    }
+                })
+            })
+        )
+    }
+
+    /** Opens the set-up screen of a placed app widget again (its "Customise"), when it has one. */
+    fun reconfigureAppWidget(item: HomeItem) {
+        val id = dev.liquid.launcher.core.data.AppWidgets.idOf(item) ?: return
+        val info = data.widgets.info(id) ?: return
+        if (info.configure == null) {
+            toast("This widget has no settings of its own")
+            return
+        }
+        callbacks.setUpWidget(id) { }
+    }
 
     fun addPage() {
         data.layout.commit(LayoutOps.addPage(data.layout.layout.value))
@@ -1095,4 +1219,8 @@ class HomeCallbacks(
     val requestCalendar: ((Boolean) -> Unit) -> Unit = { it(false) },
     /** Shows the system file picker for a font file; the callback gets it or null. */
     val pickFont: ((android.net.Uri?) -> Unit) -> Unit = { it(null) },
+    /** Shows the system's dialog allowing the launcher to add a widget; the callback gets whether it was allowed. */
+    val bindWidget: (android.content.Intent, (Boolean) -> Unit) -> Unit = { _, done -> done(false) },
+    /** Opens a widget's own set-up screen; the callback gets whether it was completed. */
+    val setUpWidget: (Int, (Boolean) -> Unit) -> Unit = { _, done -> done(true) },
 )

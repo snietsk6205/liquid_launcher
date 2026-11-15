@@ -53,7 +53,8 @@ data class MotionConfig(
     val pickUpTick: Boolean = true,
     /** "reveal", "scale", "fade" or "system". */
     val launch: String = "reveal",
-    val searchDepth: Boolean = true,
+    /** How search opens: "space" (like the drawer, D99), "depth" or "fade". */
+    val searchTransition: String = "space",
     /** 1 = normal; 2 = twice as fast. */
     val speed: Float = 1f,
     /** "calm", "liquid" or "lively" (see Motion). */
@@ -66,7 +67,7 @@ fun SettingsStore.motionConfig() = MotionConfig(
     drawerTick = get(S.HapticDrawer),
     pickUpTick = get(S.HapticPickUp),
     launch = get(S.LaunchAnimation),
-    searchDepth = get(S.SearchTransition) == "depth",
+    searchTransition = get(S.SearchTransition),
     speed = get(S.MotionSpeed) / 100f,
     style = get(S.MotionStyle),
 )

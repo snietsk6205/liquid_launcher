@@ -627,10 +627,15 @@ object LauncherSettings {
         section = "motion", keywords = "launch animation open app icon reveal scale grow fade",
     )
     val SearchTransition = ChoiceSetting(
-        key = "motion.search", default = "depth",
-        options = listOf("depth" to "Depth (home sinks back, like the drawer)", "fade" to "Fade"),
+        key = "motion.search", default = "space",
+        options = listOf(
+            "space" to "One space, like the drawer: the home screen glides down under your finger",
+            "depth" to "Depth (home sinks back)",
+            "fade" to "Fade",
+        ),
         title = "Opening search",
-        section = "motion", keywords = "search transition depth fade animation",
+        summary = "Search follows a swipe down the way the drawer follows a swipe up, and springs open or back when you let go",
+        section = "motion", keywords = "search transition space depth fade animation swipe down follow",
     )
     val MotionStyle = ChoiceSetting(
         key = "motion.style", default = "liquid",
@@ -1156,9 +1161,10 @@ object LauncherSettings {
         title = "Full glass frame rate in the benchmark, percent of the refresh rate", section = "state", hidden = true,
     )
     val GlassRim = IntSetting(
-        key = "glass.rim", default = 45, min = 0, max = 100, step = 5, unit = "%",
+        key = "glass.rim", default = 0, min = 0, max = 100, step = 5, unit = "%",
         title = "Edge light",
-        summary = "A thin bright rim along the edge of every glass surface, like light catching real glass. 0: no rim (as before 0.6.4)",
+        summary = "A thin bright rim along the edge of every glass surface (pill, menus, sheets), like light catching real glass. " +
+            "Off by default since 0.7.0: Fable's glass has none. Buttons have their own edge light (Settings → Buttons)",
         section = "glass", keywords = "glass edge light rim highlight specular shine border",
     )
     val GlassTintMode = ChoiceSetting(
