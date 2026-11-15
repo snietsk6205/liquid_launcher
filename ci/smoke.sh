@@ -455,6 +455,66 @@ else
   adb shell input keyevent KEYCODE_BACK
 fi
 clear_anr
+# Study companion against the emulator's own calendar provider (0.6.3): a local calendar named "Study" with one block
+# running now, written the way the assistant writes them. The line under the clock must show it, a tap must open Today,
+# and a tick and "Done" must be written back into the event. Creating the calendar needs root (userdebug image);
+# without it the checks are skipped, not failed.
+echo "== 14b. Study block from a real calendar: clock line, Today, ticks written back"
+NOW_S=$(adb shell date +%s | tr -d '\r')
+cat > "$OUT/cal.sh" <<CALEOF
+content insert --uri 'content://com.android.calendar/calendars?caller_is_syncadapter=true&account_name=smoke&account_type=LOCAL' \
+  --bind account_name:s:smoke --bind account_type:s:LOCAL --bind name:s:Study --bind calendar_displayName:s:Study \
+  --bind calendar_color:i:-14575885 --bind calendar_access_level:i:700 --bind ownerAccount:s:smoke --bind visible:i:1 --bind sync_events:i:1
+CAL=\$(content query --uri content://com.android.calendar/calendars --projection _id:calendar_displayName | grep 'calendar_displayName=Study' | sed -E 's/.*_id=([0-9]+).*/\1/' | head -1)
+D=\$(printf '[ ] Recall the theorems\n[ ] Serie 1, ex. 1-2\n\nWHAT: smoke test block.\nP2-BLOCK 2026-11-15 smoke-1')
+content insert --uri content://com.android.calendar/events --bind calendar_id:i:\$CAL --bind 'title:s:Proba 2: smoke block' \
+  --bind description:s:"\$D" --bind dtstart:l:$(( (NOW_S - 1800) * 1000 )) --bind dtend:l:$(( (NOW_S + 3600) * 1000 )) --bind eventTimezone:s:UTC
+content query --uri content://com.android.calendar/events --projection _id:title --where "calendar_id=\$CAL"
+CALEOF
+adb push "$OUT/cal.sh" /data/local/tmp/cal.sh >/dev/null 2>&1
+adb shell su 0 sh /data/local/tmp/cal.sh > "$OUT/cal.txt" 2>&1 || adb shell sh /data/local/tmp/cal.sh > "$OUT/cal.txt" 2>&1
+cat "$OUT/cal.txt" | tail -3
+EVENT_ID=$(grep 'title=Proba 2: smoke block' "$OUT/cal.txt" | sed -E 's/.*_id=([0-9]+).*/\1/' | head -1)
+event_text() { adb shell su 0 content query --uri content://com.android.calendar/events --projection title:description --where "_id=$EVENT_ID" 2>/dev/null | tr -d '\r'; }
+if [ -z "$EVENT_ID" ]; then
+  echo "SKIP: could not create a test calendar on this emulator (no root); study calendar checks not run"
+else
+  adb shell pm grant "$PKG" android.permission.READ_CALENDAR 2>/dev/null
+  adb shell pm grant "$PKG" android.permission.WRITE_CALENDAR 2>/dev/null
+  adb shell input swipe 540 1250 540 1250 1000
+  sleep 1.5
+  dump 14b-menu
+  tap_text 14b-menu "Today" exact || true
+  sleep 1.5
+  dump 14b-today
+  tap_text 14b-today "Switch it on" exact || true
+  sleep 3
+  adb shell input keyevent KEYCODE_BACK
+  sleep 2
+  peek 14b-home
+  dump 14b-home
+  if on_screen 14b-home "Proba 2 · " && on_screen 14b-home "min left"; then pass "the clock line shows the running block"; else fail "the clock line shows the running block"; fi
+  if tap_text 14b-home "min left"; then
+    sleep 1.5
+    peek 14b-panel
+    dump 14b-panel
+    if on_screen 14b-panel "Recall the theorems" exact; then pass "the clock line opens Today with the block's tasks"; else fail "the clock line opens Today with the block's tasks"; fi
+    tap_text 14b-panel "Recall the theorems" exact || true
+    sleep 3
+    if event_text | grep -q '\[x\] Recall the theorems'; then pass "a tick is written into the event's description"; else fail "a tick is written into the event's description"; event_text | head -8; fi
+    dump 14b-panel2
+    tap_text 14b-panel2 "Done" exact || true
+    sleep 3
+    if event_text | grep -q 'title=✓ Proba 2: smoke block'; then pass "Done puts ✓ in front of the event's title"; else fail "Done puts ✓ in front of the event's title"; event_text | head -8; fi
+    if event_text | grep -q '— launcher: done'; then pass "the launcher's status line is written"; else fail "the launcher's status line is written"; fi
+    adb shell input keyevent KEYCODE_BACK
+    sleep 1
+  else
+    fail "the clock line can be tapped"
+  fi
+fi
+
+clear_anr
 # The updates screen (in-app updater) opens and offers a check; no network is used here.
 adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen updates >/dev/null
 sleep 3

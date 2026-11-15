@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -570,5 +573,147 @@ internal fun StudyNotices(controller: HomeController) {
             val overdue = day.overdue.size
             Notices.post(NoticeKind.Task, "${day.openTasks} tasks to do today", if (overdue > 0) "$overdue of them from earlier days" else null, LauncherAction.Today.encode())
         }
+    }
+}
+
+// ---- the study glance: the current block on the clock and in the pill, without a page of its own (0.6.3, D92) ----
+
+/** What the clock line and the pill's study item say about the day at one moment. */
+internal sealed interface StudyGlance {
+    /** A block is running and not marked yet. */
+    data class Running(val block: StudyEvent, val minutesLeft: Int, val progress: Float) : StudyGlance
+
+    /** The next unmarked block today. */
+    data class Next(val block: StudyEvent, val minutesUntil: Int) : StudyGlance
+
+    /** No block left today, but [open] tasks (today's and overdue) are not ticked. */
+    data class Tasks(val open: Int) : StudyGlance
+}
+
+/** The glance for [day] at [now]; null when there is nothing to say (no block left, no open task). */
+internal fun studyGlance(day: StudyDay, now: Long): StudyGlance? {
+    val running = day.blocks.lastOrNull { now >= it.begin && now < it.end && it.status == StudyStatus.Open }
+    if (running != null) {
+        val length = (running.end - running.begin).coerceAtLeast(1)
+        return StudyGlance.Running(
+            block = running,
+            minutesLeft = ((running.end - now + 59_999) / 60_000).toInt(),
+            progress = ((now - running.begin).toFloat() / length).coerceIn(0f, 1f),
+        )
+    }
+    val next = day.blocks.firstOrNull { it.begin > now && it.status == StudyStatus.Open }
+    if (next != null) return StudyGlance.Next(next, ((next.begin - now + 59_999) / 60_000).toInt())
+    return if (day.openTasks > 0) StudyGlance.Tasks(day.openTasks) else null
+}
+
+/** The glance as one short line. [short] drops words for the pill. */
+internal fun glanceText(glance: StudyGlance, short: Boolean = false): String = when (glance) {
+    is StudyGlance.Running -> glance.block.title.subject + " · " + minutes(glance.minutesLeft * 60_000L) + if (short) "" else " left"
+    is StudyGlance.Next -> when {
+        glance.minutesUntil <= 60 -> (if (short) "" else "Next: ") + glance.block.title.subject + " in " + minutes(glance.minutesUntil * 60_000L)
+        else -> (if (short) "" else "Next: ") + glance.block.title.subject + " at " + time(glance.block.begin)
+    }
+    is StudyGlance.Tasks -> if (short) "${glance.open}" else if (glance.open == 1) "1 task left today" else "${glance.open} tasks left today"
+}
+
+/** The glance now, or null when the study companion is off, cannot read the calendar, or has nothing to say. */
+@Composable
+internal fun rememberStudyGlance(controller: HomeController): StudyGlance? {
+    val study = controller.data.study
+    val loaded by study.loaded.collectAsState()
+    val day by study.day.collectAsState()
+    val tick = rememberMinuteTick()
+    return remember(loaded, day, tick) { if (loaded) studyGlance(day, System.currentTimeMillis()) else null }
+}
+
+/** A dot in the block's colour with the time gone as a ring around it (a plain dot for a block not started). */
+@Composable
+private fun StudyRing(glance: StudyGlance, color: Color, size: Dp) {
+    val accent = when (glance) {
+        is StudyGlance.Running -> eventColor(glance.block)
+        is StudyGlance.Next -> eventColor(glance.block)
+        is StudyGlance.Tasks -> color
+    }
+    val progress = (glance as? StudyGlance.Running)?.progress
+    androidx.compose.foundation.Canvas(Modifier.size(size)) {
+        val stroke = this.size.minDimension * 0.14f
+        val radius = (this.size.minDimension - stroke) / 2f
+        if (progress != null) {
+            drawCircle(color.copy(alpha = 0.22f), radius = radius, style = Stroke(stroke))
+            drawArc(
+                accent, startAngle = -90f, sweepAngle = 360f * progress, useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(stroke / 2f, stroke / 2f),
+                size = androidx.compose.ui.geometry.Size(radius * 2f, radius * 2f),
+                style = Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round),
+            )
+            drawCircle(accent, radius = radius * 0.42f)
+        } else if (glance is StudyGlance.Tasks) {
+            drawCircle(accent.copy(alpha = 0.8f), radius = radius, style = Stroke(stroke))
+        } else {
+            drawCircle(accent, radius = radius * 0.55f)
+        }
+    }
+}
+
+/**
+ * The line under a clock widget: the block running now with a ring for the time gone, else the
+ * next block, else the tasks left. Tap opens Today (ticks, Done, Skip, Focus); a long press starts
+ * or stops the focus timer. Uses the clock's colour and shadow so it reads as part of the clock.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+internal fun StudyLine(
+    glance: StudyGlance,
+    controller: HomeController,
+    color: Color,
+    shadow: androidx.compose.ui.graphics.Shadow?,
+    interactive: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val focus by controller.data.study.focus.collectAsState()
+    val focusing = glance is StudyGlance.Running && focus?.eventKey == glance.block.key
+    Row(
+        modifier
+            .height(30.dp)
+            .clip(RoundedCornerShape(50))
+            .then(
+                if (interactive) Modifier.combinedClickable(
+                    interactionSource = null,
+                    indication = null,
+                    onClick = { controller.run(LauncherAction.Today) },
+                    onLongClick = { controller.run(LauncherAction.FocusTimer) },
+                ) else Modifier
+            )
+            .padding(horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        StudyRing(glance, color, 15.dp)
+        Spacer(Modifier.width(8.dp))
+        Text(
+            glanceText(glance) + if (focusing) " · focus" else "",
+            style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp, fontWeight = FontWeight.Medium, shadow = shadow),
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** The pill's study item: ring and a few words, or the school icon when there is nothing to show. */
+@Composable
+internal fun PillStudy(controller: HomeController, color: Color, style: TextStyle, iconSize: Dp) {
+    val glance = rememberStudyGlance(controller)
+    if (glance == null || glance is StudyGlance.Tasks) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            LauncherIcon(LauncherIcons.School, contentDescription = "Today", tint = color, size = iconSize)
+            if (glance is StudyGlance.Tasks) {
+                Spacer(Modifier.width(4.dp))
+                Text(glanceText(glance, short = true), style = style, maxLines = 1)
+            }
+        }
+        return
+    }
+    Row(Modifier.widthIn(max = 170.dp), verticalAlignment = Alignment.CenterVertically) {
+        StudyRing(glance, color, (iconSize.value * 0.8f).dp)
+        Spacer(Modifier.width(6.dp))
+        Text(glanceText(glance, short = true), style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

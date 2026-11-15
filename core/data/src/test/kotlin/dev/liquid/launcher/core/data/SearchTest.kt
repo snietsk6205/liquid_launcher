@@ -76,7 +76,7 @@ class SearchTest {
     @Test
     fun pillSlotsRoundTrip() {
         val ref = AppRef("p", "p.Main", 0)
-        val slots = listOf(PillSlot.Search, PillSlot.Date, PillSlot.Time, PillSlot.Spacer,
+        val slots = listOf(PillSlot.Search, PillSlot.Date, PillSlot.Time, PillSlot.Study, PillSlot.Spacer,
             PillSlot.Action(LauncherAction.OpenDrawer), PillSlot.App(ref))
         assertEquals(slots, PillSlot.decodeAll(slots.map { it.encode() }))
         assertNull(PillSlot.decode("action:none"))

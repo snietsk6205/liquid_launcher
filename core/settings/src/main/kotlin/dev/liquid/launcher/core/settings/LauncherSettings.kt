@@ -1341,6 +1341,14 @@ object LauncherSettings {
             "Asks for calendar access when switched on from the home screen (Home menu → Today, or a study widget)",
         section = "study", keywords = "study calendar tasks blocks plan claude assistant",
     )
+    val StudyClockLine = ChoiceSetting(
+        key = "study.clockLine", default = "block",
+        options = listOf("block" to "The block now or next, else tasks left", "off" to "Nothing"),
+        title = "Under the clock",
+        summary = "A line under your clock widget: the block running now with a ring for the time gone, else the next one, " +
+            "else the tasks left today. Tap it for Today, hold it for the focus timer. The pill can show the same: add \"Study block\" to its items",
+        section = "study", keywords = "study clock line now current block next glance pill",
+    )
     val StudyBlockCalendars = TextSetting(
         key = "study.blockCalendars", default = "Study",
         placeholder = "Study",
@@ -1583,7 +1591,7 @@ object LauncherSettings {
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
-        StudyEnabled, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyPlanLink,
+        StudyEnabled, StudyClockLine, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyPlanLink,
         NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,
         NoticeLayout, NoticeWallpaper, NoticeTags, NoticeRedirect, NoticeUpdate, NoticeStudy, NoticeTask, NoticeInfo,
         GlassQuality, GlassAuto, GlassCap, GlassFullPercent, GlassTintMode,

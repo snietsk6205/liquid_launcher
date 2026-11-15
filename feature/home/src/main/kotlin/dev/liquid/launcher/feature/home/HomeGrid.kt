@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -51,6 +52,8 @@ import dev.liquid.launcher.core.data.HomeItem
 import dev.liquid.launcher.core.data.HomePage
 import dev.liquid.launcher.core.data.ItemKind
 import dev.liquid.launcher.core.data.LauncherAction
+import dev.liquid.launcher.core.settings.LauncherSettings
+import dev.liquid.launcher.core.settings.derive
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -219,7 +222,26 @@ private fun ItemView(item: HomeItem, pageIndex: Int, env: PageEnv, controller: H
                     val base = remember(env.clock) { ClockStyle.fromSettings(env.clock) }
                     val saved = remember(item.options, base) { ClockStyle.decode(item.options, base) }
                     val draft = controller.clockStudio?.takeIf { it.itemId == item.id }?.style
-                    ClockFace(draft ?: saved, env.contentColor, env.shadow, env.glass, env.lightBackground, env.wallpaperBackdrop)
+                    val style = draft ?: saved
+                    // The study block running now (or next) as a line under the clock, when the companion is on (0.6.3, D92).
+                    val showStudy by controller.data.settings.derive { get(LauncherSettings.StudyClockLine) != "off" }
+                    val glance = if (showStudy) rememberStudyGlance(controller) else null
+                    Column(
+                        Modifier.fillMaxSize(),
+                        horizontalAlignment = when (style.align) {
+                            "start" -> Alignment.Start
+                            "end" -> Alignment.End
+                            else -> Alignment.CenterHorizontally
+                        },
+                    ) {
+                        ClockFace(style, env.contentColor, env.shadow, env.glass, env.lightBackground, env.wallpaperBackdrop, Modifier.weight(1f))
+                        if (glance != null) {
+                            StudyLine(
+                                glance, controller, env.contentColor, env.shadow, env.interactive && !env.editMode,
+                                Modifier.padding(horizontal = if (style.plate == "none") 0.dp else 10.dp).padding(bottom = 2.dp),
+                            )
+                        }
+                    }
                 }
                 if (item.widget == "now" || item.widget == "today") {
                     // Ticks and buttons work on the live home screen, not while editing or in a preview.

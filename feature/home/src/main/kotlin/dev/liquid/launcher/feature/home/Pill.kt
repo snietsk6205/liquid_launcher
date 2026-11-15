@@ -207,6 +207,13 @@ internal fun RowScope.PillSlotView(
             }
         }
 
+        PillSlot.Study -> Box(
+            Modifier.fillMaxHeight().padding(horizontal = 6.dp).press { controller.run(LauncherAction.Today) },
+            contentAlignment = Alignment.Center,
+        ) {
+            PillStudy(controller, color, textStyle, config.iconSizeDp.dp)
+        }
+
         is PillSlot.Action -> Box(
             Modifier
                 .size((config.iconSizeDp + 16).dp)

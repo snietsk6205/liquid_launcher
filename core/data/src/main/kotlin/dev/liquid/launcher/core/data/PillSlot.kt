@@ -7,6 +7,9 @@ sealed interface PillSlot {
     data object Date : PillSlot
     data object Time : PillSlot
 
+    /** The study block running now (or next), from the study companion; tap opens Today (0.6.3). */
+    data object Study : PillSlot
+
     /** Empty, flexible space. */
     data object Spacer : PillSlot
     data class Action(val action: LauncherAction) : PillSlot
@@ -16,6 +19,7 @@ sealed interface PillSlot {
         Search -> "search"
         Date -> "date"
         Time -> "time"
+        Study -> "study"
         Spacer -> "spacer"
         is Action -> "action:${action.encode()}"
         is App -> "app:${ref.key}"
@@ -26,6 +30,7 @@ sealed interface PillSlot {
             text == "search" -> Search
             text == "date" -> Date
             text == "time" -> Time
+            text == "study" -> Study
             text == "spacer" -> Spacer
             text.startsWith("action:") -> LauncherAction.decode(text.removePrefix("action:"))
                 .takeIf { it != LauncherAction.None }?.let { Action(it) }

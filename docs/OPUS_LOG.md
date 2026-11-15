@@ -441,3 +441,48 @@ released as build 41**: https://github.com/snietsk6205/liquid_launcher/releases/
 3. Fable's open questions for the user (`FABLE_LOG.md` entry 5) are still open: a real phone notification at a block's
    start, ticking the last task marking the block done, the names of the two calendars.
 4. Next by the plan: the rest of Phase 3 (other apps' widgets, more built-in widgets), then Phase 4.
+
+---
+
+## Entry 14: 0.6.3, the study block on the clock, icon colour lag, letter bubble (2026-11-15, Opus 5.5)
+
+**Asked by the user:** move the study blocks into the new "Study" and "Tasks" calendars and update the schedules; say
+whether Fable's code was changed (icons change colour more slowly and sometimes lag since 0.6.1, not in 0.6.0); find a
+better way to see the current block than a Now card on a page; make the letter index's bubble visible (it was under the
+finger); build a new version.
+
+**Was Fable's code changed?** Not in 0.6.1 (his files were released exactly as he left them, entry 12). In 0.6.2 I added
+to his study files (`StudyCalendar.kt`, `Study.kt`, `HomeController.kt`, settings; entry 13, D89), nothing that touches
+icons or the clock. The lag comes from his clock gallery (D85): `ClockFace` read the icons' palette (`IconPaint`) while
+composing, for the "tone" colour option. The palette eases over 260 ms on every wallpaper change, so every clock
+recomposed and re-measured on each frame of that easing while the icons redrew. 0.6.0 had no reader of the palette in
+composition (icons read it while drawing). Fixed in one line of `Clocks.kt` (D90). This is the only change to a file of
+his outside the study companion; it is in a separate `[opus]` commit.
+
+**Outside the repo (done with the user's connectors, not code):**
+| What | Change |
+|---|---|
+| Google Calendar | 12 study blocks (16/11 → 6/12) recreated in "Study" in the launcher format (title "Module: what", colour per module, 2–4 `[ ]` steps, WHAT / WHY NOW / DONE WHEN, `P2-BLOCK` line, 10-min reminder); 5 errands in "Tasks"; the 17 originals deleted from the primary calendar. Fixed dates, exams, checkpoints and school events untouched |
+| "Med evening check-in" task | Writes blocks to "Study" and errands to "Tasks" in the launcher format, reads the launcher's marks as Med's report, looks for `P2-BLOCK` anywhere, never edits today's or past events |
+| "Med weekly supervisor" task | Reads all three calendars; never changes the launcher's marks |
+| Plan doc ("Your companion") | Blocks are ticked on the phone, absences in the P2 plan |
+
+**0.6.3**
+| File | Change | Decision |
+|---|---|---|
+| `feature/home/Clocks.kt` (Fable's) | The palette is read only by a clock whose colour is "tone" | D90 |
+| `feature/home/ScrollIndex.kt`, `HomeConfig.kt`, settings | `bubbleCentre`: beside the finger (52 dp inward, 20 dp higher), above it when there is no room; setting "Bubble position" (beside / above / under the finger) | D91 |
+| `feature/home/Study.kt`, `HomeGrid.kt`, `Pill.kt`, `core/data/PillSlot.kt`, settings editors | `studyGlance` (running block with time left and progress, else next unmarked block, else open tasks); `StudyLine` under every clock widget (tap = Today, hold = focus timer); pill item "Study block"; setting "Under the clock"; the Study settings card explains it | D92 |
+| Tests | `BubblePlaceTest`, `StudyGlanceTest`; the pill round-trip test includes the new item | |
+
+Not changed: the event format, the marks, the Now card and Today widget (still in the widget list), Fable's clock faces
+other than the one line.
+
+Not verified on a device: the colour-change timing on the phone (the emulator has no comparable GPU), how the line looks
+under each of the six clock designs, the bubble's distance for a real thumb.
+
+### For the next model (review)
+1. Fable's clock gallery and study companion are still not reviewed as a whole (entries 12–13).
+2. D90 removes the only composition-time reader of `IconPaint` I found; a profile on the phone would confirm it was the cause.
+3. The clock line shrinks the clock face by 30 dp while it is shown; if that looks wrong under the "stacked" or "words"
+   designs, an overlay might be better.

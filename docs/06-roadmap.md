@@ -12,6 +12,7 @@
 | 3, part 1 | Clock gallery: six designs, each clock with its own font, weight, size, colours, fill, glass plate, date and seconds | 0.6.1 (the code said 0.7.0) | Released as 0.6.1 build 40 (`OPUS_LOG.md` entry 12); Fable's work, not yet reviewed |
 | 3, rest | Widget picker, other apps' widgets, more built-in widgets, panels | 0.7.x | |
 | 5 | Study companion over the calendar: event format for the assistant, Now card, Today panel and widget, notices, focus timer, Tell Claude, study plan (see `05-study-integration.md`) | 0.6.1 (as Fable left it), 0.6.2 (finished) | Fable's unfinished code released in 0.6.1 build 40; the missing parts done in 0.6.2 build 41 (Opus, `OPUS_LOG.md` entries 12–13); waits for the first real day with the assistant |
+| 5, glance | The study block on the home screen without a page: a line under the clock, a "Study block" item for the pill; icon colour changes no longer slowed by the clock; letter bubble beside the finger | 0.6.3 | Opus, `OPUS_LOG.md` entry 14 (D90–D92) |
 | 4 | Search sources (contacts, calendar, files, settings pages), suggested apps, notification badges, drawer folders and rule-based tabs | 2 builds | |
 | 6 | Profiles (Study / Free / Night), study mode, friction; automatic layout switching; wallpaper per profile and per page | 2 builds | |
 | 7 | Performance and polish: per-option settings previews, baseline profiles, large folders, wallpaper albums | 1–2 builds | |
