@@ -102,7 +102,7 @@ fun AppMenu(
     val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
     val shape = RoundedCornerShape(26.dp)
     val appear = remember(target) { Animatable(0f) }
-    LaunchedEffect(target) { appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = MotionScale.stiffness(700f))) }
+    LaunchedEffect(target) { appear.animateTo(1f, Motion.pop()) }
     var above by remember(target) { mutableStateOf(true) }
 
     Box(

@@ -91,3 +91,40 @@ Not verified on a device (only unit tests and the emulator smoke test): the goin
 versions, whether a covered HONOR window can still be read (`recentsBehind`), `setStream` timing on MagicOS, and the look
 of tinted line icons. The debug log has lines for each ("going-home animation", "recents opened behind the launcher",
 "managed wallpaper set … took N ms").
+
+### Entry 2 addendum: releasing 0.5.1
+
+- Run 35: compiled and passed all unit tests at the first attempt; the emulator failed 3 drawer checks. Cause: the
+  emulator has no GPU, and with D72 full glass stayed on, so frames stalled and the test's swipe was read as 0 px/s.
+  Fixed two ways (D84): the swipe falls back to its average speed, and a device whose full glass ran below 45 % of the
+  refresh rate keeps the old cap on everything.
+- Run 36: all checks passed. **0.5.1 build 36 released** (`v0.5.1`).
+- The "service disconnected / connected" lines every few seconds in the emulator log come from the test's own screen
+  dumps (`uiautomator dump` suspends accessibility services); they are not a fault.
+
+---
+
+## Entry 3: 0.6.0, feel, motion and design (2026-11-15)
+
+| File | Change | Why |
+|---|---|---|
+| `feature/home/ScrollIndex.kt` (rewritten body), `HomeConfig.kt`, settings | String model (`stringWeight`, `stringReach`), one spring loop for the apex, bubble at the finger placed in the layout phase, touch strips on the right, left or both edges with `systemGestureExclusion` | D79, request 8 |
+| `feature/home/Drawer.kt` (`contentLayer`, `overlayOffset`, `homeInDrawerTransition`, `wallpaperInDrawerTransition`), `HomeScreen.kt`, `HomeController.kt` (`drawerTravel`) | "One space" transition, finger travel, stiffer spring, wallpaper takes part | D80, request 7 |
+| `core/common/Notices.kt` (+ test), `feature/home/NoticeHost.kt`, settings section "Glass notices" | Notice queue and host; events wired: layout switch, shuffle, wallpaper replaced elsewhere, tag filter, redirect paused / back, update found by the daily check | D81, request 9 |
+| `feature/home/Motion.kt`, overlay call sites in `HomeScreen.kt` | `Motion` presets, `Presence` exits for search, folder, app menu, home menu, layouts sheet, wallpaper strip | D82, request 10 |
+| `core/settings/LauncherSettings.kt` (groups, `advancedKeys`, `search`, `nearly`, `RecentlyChanged`), `SettingsStore.kt`, `feature/settings/MainScreen.kt` | Settings reorganised | D83, request 11 |
+
+Approaches considered for the drawer (request 7), all kept selectable except the last:
+1. **One space** (default): one tall canvas; home leaves upwards, apps arrive from below, wallpaper drifts. Cheapest and the most literal "continuous".
+2. **Depth**: through the home screen into the apps (home grows and fades, apps come into focus from slightly larger).
+3. **Slide**: a sheet under the finger, 1:1.
+4. **Fade**.
+5. Shared elements (home icons flying to their drawer places): not built. It needs every home icon measured in both places each frame and breaks down with folders and tabs; a later experiment at most.
+
+Not verified on a device: everything in this entry is compiled, unit-tested where it is pure logic, and run through the
+emulator smoke test only. Things to look at on the phone: the string's feel and the back gesture at the screen edge
+(Android grants at most 200 dp of edge per side to an app; start the pull with a small vertical move if "back" fires),
+frame rate of the "One space" transition, and the notice position over the clock.
+
+Hooks left for Phase 5: `NoticeKind.Study` and `NoticeKind.Task` exist with their switches; nothing posts them yet.
+

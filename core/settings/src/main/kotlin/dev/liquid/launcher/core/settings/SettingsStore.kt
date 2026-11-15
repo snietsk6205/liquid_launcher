@@ -52,6 +52,7 @@ class SettingsStore internal constructor(
     fun isChanged(setting: Setting<*>): Boolean = _values.value.containsKey(setting.key)
 
     fun <T> set(setting: Setting<T>, value: T) {
+        noteChanged(setting)
         if (value == setting.default) {
             reset(setting)
             return
@@ -65,6 +66,14 @@ class SettingsStore internal constructor(
                 else -> prefs[stringPreferencesKey(setting.key)] = encoded.toString()
             }
         }
+    }
+
+    /** Keeps the keys of the last few options that were changed, newest first, for the settings app. */
+    private fun noteChanged(setting: Setting<*>) {
+        if (setting.hidden || setting.section == "state") return
+        val recent = get(LauncherSettings.RecentlyChanged)
+        if (recent.firstOrNull() == setting.key) return
+        set(LauncherSettings.RecentlyChanged, (listOf(setting.key) + recent.filter { it != setting.key }).take(RECENT_KEPT))
     }
 
     fun reset(setting: Setting<*>) {
@@ -132,6 +141,8 @@ class SettingsStore internal constructor(
     }
 
     companion object {
+        private const val RECENT_KEPT = 8
+
         @Volatile
         private var instance: SettingsStore? = null
 

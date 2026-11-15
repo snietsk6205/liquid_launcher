@@ -128,7 +128,17 @@ internal fun UpdateBanner(store: SettingsStore, open: () -> Unit) {
     val context = LocalContext.current
     val daily by store.observe(LauncherSettings.UpdatesDaily)
     androidx.compose.runtime.LaunchedEffect(daily) {
-        if (Updater.dueForDailyCheck(context, daily)) UpdateState.result = Updater.check(context)
+        if (Updater.dueForDailyCheck(context, daily)) {
+            val found = Updater.check(context)
+            UpdateState.result = found
+            // Also as a glass notice the next time the home screen is in front.
+            (found as? UpdateCheck.Newer)?.let { newer ->
+                dev.liquid.launcher.core.common.Notices.post(
+                    dev.liquid.launcher.core.common.NoticeKind.Update,
+                    "Update available: ${newer.release.version} build ${newer.release.build}", "Tap to open settings", "settings",
+                )
+            }
+        }
     }
     val newer = UpdateState.result as? UpdateCheck.Newer ?: return
     NavRow("Update available: ${newer.release.version} (build ${newer.release.build})", "Tap to download and install", open)

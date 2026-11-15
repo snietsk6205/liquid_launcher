@@ -169,7 +169,7 @@ internal fun WallpaperStrip(
     }
     val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
     val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = MotionScale.stiffness(480f))) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
     val shape = RoundedCornerShape(30.dp)
 
     Box(
@@ -264,32 +264,5 @@ private fun StripButton(icon: Int, label: String, color: Color, modifier: Modifi
         LauncherIcon(icon, contentDescription = null, tint = color, size = 18.dp)
         Spacer(Modifier.size(8.dp))
         Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1)
-    }
-}
-
-/** The layout's name, briefly, in a small glass pill at the top after a switch. */
-@Composable
-internal fun FlashLabel(controller: HomeController, glass: GlassConfig, lightBackground: Boolean, backdrop: Backdrop, modifier: Modifier) {
-    val text = controller.flashText
-    val shown by androidx.compose.animation.core.animateFloatAsState(if (text != null) 1f else 0f, label = "flash")
-    var last by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
-    if (text != null) last = text
-    if (shown <= 0.01f) return
-    val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
-    val shape = RoundedCornerShape(50)
-    Box(
-        modifier
-            .graphicsLayer {
-                alpha = shown
-                val scale = 0.9f + 0.1f * shown
-                scaleX = scale
-                scaleY = scale
-                translationY = (1f - shown) * -12.dp.toPx()
-            }
-            .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground))
-            .clip(shape)
-            .padding(horizontal = 18.dp, vertical = 9.dp),
-    ) {
-        Text(last, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp, fontWeight = FontWeight.SemiBold), maxLines = 1)
     }
 }

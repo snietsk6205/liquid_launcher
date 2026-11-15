@@ -16,6 +16,9 @@ object SettingDependencies {
         for (s in listOf(LauncherSettings.ThemedIconsWhere, LauncherSettings.ThemedIconsUncovered, LauncherSettings.ThemedIconsPacks, LauncherSettings.ThemedIconsColors, LauncherSettings.ThemedIconsStyle)) {
             map[s.key] = LauncherSettings.ThemedIcons
         }
+        for (s in listOf(LauncherSettings.NoticePosition, LauncherSettings.NoticeDuration, LauncherSettings.NoticeStyle, LauncherSettings.NoticeIcons) + LauncherSettings.noticeKinds.values) {
+            map[s.key] = LauncherSettings.NoticesEnabled
+        }
         for (s in listOf(LauncherSettings.HapticsStrength, LauncherSettings.HapticDrawer, LauncherSettings.HapticPickUp)) {
             map[s.key] = LauncherSettings.HapticsEnabled
         }

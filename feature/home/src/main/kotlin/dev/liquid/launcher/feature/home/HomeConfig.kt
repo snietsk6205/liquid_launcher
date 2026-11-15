@@ -56,6 +56,8 @@ data class MotionConfig(
     val searchDepth: Boolean = true,
     /** 1 = normal; 2 = twice as fast. */
     val speed: Float = 1f,
+    /** "calm", "liquid" or "lively" (see Motion). */
+    val style: String = "liquid",
 )
 
 fun SettingsStore.motionConfig() = MotionConfig(
@@ -66,6 +68,7 @@ fun SettingsStore.motionConfig() = MotionConfig(
     launch = get(S.LaunchAnimation),
     searchDepth = get(S.SearchTransition) == "depth",
     speed = get(S.MotionSpeed) / 100f,
+    style = get(S.MotionStyle),
 )
 
 data class PillConfig(
@@ -141,8 +144,12 @@ fun SettingsStore.folderConfig() = FolderConfig(
 data class IndexConfig(
     /** "always", "scroll" or "touch". */
     val visibility: String,
-    val right: Boolean,
-    val curve: Float,
+    /** "right", "left" or "both": the edges the letters can be pulled from. */
+    val side: String,
+    /** How much of the column the curve spans on each side of the finger, 0.2..1. */
+    val reach: Float,
+    /** The first and last letter stay on the edge. */
+    val pinned: Boolean,
     val letterSp: Int,
     val spacingDp: Int,
     /** "glass", "solid" or "none". */
@@ -151,7 +158,7 @@ data class IndexConfig(
     val haptics: String,
     /** Time constant of the list catching up with the finger, in milliseconds. */
     val followMs: Int,
-    /** How far the letter column slides towards the finger, 0..1. */
+    /** How far the string follows the finger inwards, 0..1 (1 = the letter comes to the finger). */
     val track: Float,
     /** Stiffness of the column's spring. */
     val stiffness: Float,
@@ -163,8 +170,10 @@ data class IndexConfig(
 
 /** How the drawer opens and scrolls. */
 data class DrawerMotion(
-    /** "depth", "slide" or "fade". */
+    /** "space", "depth", "slide" or "fade". */
     val transition: String,
+    /** Fraction of the screen height the finger travels from closed to open. */
+    val travel: Float = 0.36f,
     val pillMorph: Boolean,
     val stiffness: Float,
     val damping: Float,
@@ -299,8 +308,9 @@ fun SettingsStore.drawerConfig() = DrawerConfig(
 
 fun SettingsStore.indexConfig() = IndexConfig(
     visibility = get(S.IndexVisibility),
-    right = get(S.IndexSide) != "left",
-    curve = get(S.IndexCurve) / 100f,
+    side = get(S.IndexSide),
+    reach = get(S.IndexReach) / 100f,
+    pinned = get(S.IndexEnds) == "pinned",
     letterSp = get(S.IndexLetterSize),
     spacingDp = get(S.IndexSpacing),
     bubble = get(S.IndexBubble),
@@ -320,9 +330,11 @@ fun SettingsStore.drawerMotion(): DrawerMotion {
     val speed = get(S.DrawerSpeed) / 100f
     return DrawerMotion(
         transition = get(S.DrawerTransition),
+        // A sheet stays under the finger; the other transitions finish within a comfortable thumb stroke.
+        travel = if (get(S.DrawerTransition) == "slide") 1f else get(S.DrawerTravel) / 100f,
         pillMorph = get(S.DrawerPillMorph),
-        // 100 % is a little softer than Spring.StiffnessMediumLow; the scale is quadratic so both ends feel different.
-        stiffness = 380f * speed * speed,
+        // 100 % settles in about a quarter of a second; the scale is quadratic so both ends feel different.
+        stiffness = 560f * speed * speed,
         damping = 1f - get(S.DrawerBounce) / 100f,
         rise = get(S.DrawerRise) / 100f,
         homeScale = get(S.DrawerHomeScale) / 100f,

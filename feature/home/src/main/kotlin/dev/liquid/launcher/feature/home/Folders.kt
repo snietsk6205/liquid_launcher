@@ -151,7 +151,7 @@ internal fun FolderOverlay(
     val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
     val shape = RoundedCornerShape(32.dp)
     val appear = remember(folder.id) { Animatable(0f) }
-    LaunchedEffect(folder.id) { appear.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = MotionScale.stiffness(600f))) }
+    LaunchedEffect(folder.id) { appear.animateTo(1f, Motion.enter()) }
     var name by remember(folder.id) { mutableStateOf(folder.name ?: "Folder") }
     // However the folder closes (back, outside tap, opening an app), keep the typed name.
     val latestName by androidx.compose.runtime.rememberUpdatedState(name)

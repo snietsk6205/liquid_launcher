@@ -20,25 +20,26 @@ object LauncherSettings {
     )
 
     object Sections {
-        val Home = SettingsSection("home", "Home screen", "Grid, icons, labels and the clock")
-        val Theme = SettingsSection("theme", "Theme", "Colours, fonts and icon shape; presets, export and import")
-        val Folders = SettingsSection("folders", "Folders", "Preview, background, shape, columns and what a tap does")
-        val Dock = SettingsSection("dock", "Dock", "A row of apps above the pill that stays on every page")
-        val Icons = SettingsSection("icons", "Icons", "Icon packs for home and drawer, and icons the pack does not cover")
-        val Clock = SettingsSection("clock", "Clock", "Time format, size, date line and glass plate. Resize it in edit mode; more styles come with widgets")
-        val Gestures = SettingsSection("gestures", "Gestures", "Swipes, taps, presses, pinches, two-finger swipes and edge swipes on the home screen")
-        val Pill = SettingsSection("pill", "Pill", "The glass bar: its items, size, position and gestures")
-        val Drawer = SettingsSection("drawer", "App drawer", "Layout, sorting, search, tabs and the work profile")
-        val Tags = SettingsSection("tags", "Drawer tabs and tags", "Your own drawer pages built from tags, and filtering the drawer by tag in one tap")
-        val DrawerMotion = SettingsSection("drawerMotion", "Drawer motion", "Opening transition, scroll bar and scroll effects")
-        val Motion = SettingsSection("motion", "Motion and haptics", "Opening apps and search, animation speed, haptic ticks")
-        val DrawerIndex = SettingsSection("drawerIndex", "Scroll index", "Letters at the edge of the drawer: curve, side, size, bubble, haptics, sections at the top")
-        val Menu = SettingsSection("menu", "Long-press menu", "Which entries appear and in what order")
-        val HomeMenu = SettingsSection("homeMenu", "Home menu", "The two glass pills from holding empty space: items, order, labels")
-        val Wallpaper = SettingsSection("wallpaper", "Wallpaper", "Your library, placing and parallax, blur and dim per screen, transitions, changing automatically")
-        val Layouts = SettingsSection("layouts", "Saved layouts and backup", "Home setups you can switch between; back up and restore everything")
-        val Search = SettingsSection("search", "Search", "Swipe-down search and web search")
-        val Glass = SettingsSection("glass", "Liquid glass", "Quality, blur, refraction and tint, overall and per surface")
+        val Home = SettingsSection("home", "Home screen", "Grid, icons, labels and the clock", "Home screen")
+        val Theme = SettingsSection("theme", "Theme", "Colours, fonts and icon shape; presets, export and import", "Look")
+        val Folders = SettingsSection("folders", "Folders", "Preview, background, shape, columns and what a tap does", "Home screen")
+        val Dock = SettingsSection("dock", "Dock", "A row of apps above the pill that stays on every page", "Home screen")
+        val Icons = SettingsSection("icons", "Icons", "Icon packs for home and drawer, and icons the pack does not cover", "Look")
+        val Clock = SettingsSection("clock", "Clock", "Time format, size, date line and glass plate. Resize it in edit mode; more styles come with widgets", "Look")
+        val Gestures = SettingsSection("gestures", "Gestures", "Swipes, taps, presses, pinches, two-finger swipes and edge swipes on the home screen", "Home screen")
+        val Pill = SettingsSection("pill", "Pill", "The glass bar: its items, size, position and gestures", "Home screen")
+        val Drawer = SettingsSection("drawer", "App drawer", "Layout, sorting, search, tabs and the work profile", "App drawer")
+        val Tags = SettingsSection("tags", "Drawer tabs and tags", "Your own drawer pages built from tags, and filtering the drawer by tag in one tap", "App drawer")
+        val DrawerMotion = SettingsSection("drawerMotion", "Drawer motion", "Opening transition, scroll bar and scroll effects", "App drawer")
+        val Motion = SettingsSection("motion", "Motion and haptics", "Opening apps and search, animation speed, haptic ticks", "Motion and feedback")
+        val DrawerIndex = SettingsSection("drawerIndex", "Scroll index", "Letters at the edge of the drawer that bend to your finger: side, depth, width, bubble, haptics, sections at the top", "App drawer")
+        val Menu = SettingsSection("menu", "Long-press menu", "Which entries appear and in what order", "Home screen")
+        val HomeMenu = SettingsSection("homeMenu", "Home menu", "The two glass pills from holding empty space: items, order, labels", "Home screen")
+        val Wallpaper = SettingsSection("wallpaper", "Wallpaper", "Your library, placing and parallax, blur and dim per screen, transitions, changing automatically", "Look")
+        val Layouts = SettingsSection("layouts", "Saved layouts and backup", "Home setups you can switch between; back up and restore everything", "Layouts and backup")
+        val Search = SettingsSection("search", "Search", "Swipe-down search and web search", "App drawer")
+        val Notices = SettingsSection("notices", "Glass notices", "Short glass labels for layout switches, wallpapers, tag filters, the redirect, updates and study blocks", "Motion and feedback")
+        val Glass = SettingsSection("glass", "Liquid glass", "Quality, blur, refraction and tint, overall and per surface", "Look")
 
         val Redirect = SettingsSection("redirect", "Redirect engine", "When and how the launcher is brought to the front", "Redirect")
         val Detection = SettingsSection("detection", "Detection", "How the system launcher's home screen and recents are recognised", "Redirect")
@@ -46,7 +47,15 @@ object LauncherSettings {
         val Handover = SettingsSection("handover", "Hand-over", "How the launcher appears after a redirect", "Redirect")
         val Log = SettingsSection("log", "Debug log", "What is recorded", "Redirect")
 
-        val all = listOf(Home, Theme, Icons, Folders, Dock, Clock, Gestures, Motion, Pill, Drawer, Tags, DrawerMotion, DrawerIndex, Menu, HomeMenu, Wallpaper, Layouts, Search, Glass, Redirect, Detection, Exclusions, Handover, Log)
+        // In the order the settings app lists them; sections with the same group sit under one heading.
+        val all = listOf(
+            Theme, Wallpaper, Icons, Glass, Clock,
+            Home, Pill, Dock, Folders, HomeMenu, Menu, Gestures,
+            Drawer, Tags, DrawerMotion, DrawerIndex, Search,
+            Motion, Notices,
+            Layouts,
+            Redirect, Detection, Exclusions, Handover, Log,
+        )
     }
 
     // ---- Redirect engine ----
@@ -620,6 +629,17 @@ object LauncherSettings {
         title = "Opening search",
         section = "motion", keywords = "search transition depth fade animation",
     )
+    val MotionStyle = ChoiceSetting(
+        key = "motion.style", default = "liquid",
+        options = listOf(
+            "calm" to "Calm: everything settles without overshooting",
+            "liquid" to "Liquid: a soft overshoot",
+            "lively" to "Lively: a clear bounce",
+        ),
+        title = "Feel",
+        summary = "One spring for every sheet, menu, folder and label, so they all move alike",
+        section = "motion", keywords = "motion spring bounce feel style calm lively liquid",
+    )
     val MotionSpeed = IntSetting(
         key = "motion.speed", default = 100, min = 50, max = 200, step = 10, unit = "%",
         title = "Speed of the launcher's animations",
@@ -877,14 +897,23 @@ object LauncherSettings {
     // ---- Drawer motion ----
 
     val DrawerTransition = ChoiceSetting(
-        key = "drawer.transition", default = "depth",
+        key = "drawer.transition", default = "space",
         options = listOf(
-            "depth" to "Depth: the home screen sinks back, the drawer rises a little",
+            "space" to "One space: home glides up and away as the apps rise from below, the wallpaper drifts with them",
+            "depth" to "Depth: you move through the home screen into the apps behind it",
             "slide" to "Slide: the drawer is a sheet that follows the finger",
             "fade" to "Fade",
         ),
         title = "Transition",
-        section = "drawerMotion", keywords = "transition animation open drawer style",
+        summary = "In all of them the pill becomes the search field and the wallpaper melts into its blurred copy",
+        section = "drawerMotion", keywords = "transition animation open drawer style continuous space depth",
+    )
+    val DrawerTravel = IntSetting(
+        key = "drawer.travel", default = 36, min = 20, max = 100, step = 2, unit = "%",
+        title = "Finger travel to open",
+        summary = "How far up the screen your finger moves for the drawer to be fully open. Shorter: more of the transition " +
+            "happens under your finger instead of after you let go (the sheet transition always follows the finger 1:1)",
+        section = "drawerMotion", keywords = "drawer travel distance finger follow drag",
     )
     val DrawerPillMorph = BoolSetting(
         key = "drawer.pillMorph", default = true,
@@ -904,9 +933,9 @@ object LauncherSettings {
         section = "drawerMotion", keywords = "bounce spring damping overshoot",
     )
     val DrawerRise = IntSetting(
-        key = "drawer.rise", default = 12, min = 0, max = 50, step = 2, unit = "%",
-        title = "How far the drawer rises",
-        summary = "Depth transition only",
+        key = "drawer.rise", default = 18, min = 0, max = 50, step = 2, unit = "%",
+        title = "How far the apps rise",
+        summary = "\"One space\" and \"Depth\"",
         section = "drawerMotion", keywords = "distance rise translate",
     )
     val DrawerHomeScale = IntSetting(
@@ -981,15 +1010,25 @@ object LauncherSettings {
     )
     val IndexSide = ChoiceSetting(
         key = "index.side", default = "right",
-        options = listOf("right" to "Right", "left" to "Left"),
+        options = listOf("right" to "Right edge", "left" to "Left edge", "both" to "Both edges"),
         title = "Side",
-        section = "drawerIndex", keywords = "index side left right hand",
+        summary = "Touch the edge and pull: the letters come from that side",
+        section = "drawerIndex", keywords = "index side left right both hand edge",
     )
-    val IndexCurve = IntSetting(
-        key = "index.curve", default = 60, min = 0, max = 100, step = 5, unit = "%",
-        title = "Curve strength",
-        summary = "How far the letters near your finger bend out of the edge. 0 keeps them in a straight line",
-        section = "drawerIndex", keywords = "index curve bend arc wave strength",
+    val IndexReach = IntSetting(
+        key = "index.reach", default = 70, min = 20, max = 100, step = 5, unit = "%",
+        title = "Curve width",
+        summary = "How much of the column bends with your finger: low values make a narrow dent, high values a long sweep",
+        section = "drawerIndex", keywords = "index curve bend arc string width reach",
+    )
+    val IndexEnds = ChoiceSetting(
+        key = "index.ends", default = "pinned",
+        options = listOf(
+            "pinned" to "Held at the edge (a string fixed at both ends)",
+            "loose" to "Follow when your finger is near them",
+        ),
+        title = "Top and bottom letters",
+        section = "drawerIndex", keywords = "index ends pinned fixed string loose",
     )
     val IndexLetterSize = IntSetting(
         key = "index.letterSize", default = 12, min = 9, max = 20, unit = "sp",
@@ -1006,7 +1045,7 @@ object LauncherSettings {
         key = "index.bubble", default = "glass",
         options = listOf("glass" to "Liquid glass", "solid" to "Solid", "none" to "None"),
         title = "Bubble",
-        summary = "The letter (or section name) under your finger, shown large next to the curve",
+        summary = "The letter (or section name) you are on, shown large at your finger",
         section = "drawerIndex", keywords = "index bubble popup letter style",
     )
     val IndexHaptics = ChoiceSetting(
@@ -1023,16 +1062,16 @@ object LauncherSettings {
     )
     val IndexTrack = IntSetting(
         key = "index.track", default = 100, min = 0, max = 100, step = 10, unit = "%",
-        title = "Letters follow the finger",
-        summary = "While you hold the index, the letter column slides towards your finger and tracks it, curving around the letter you are on; " +
-            "it springs back when you let go. 0 keeps it at the edge. The app list never moves sideways",
-        section = "drawerIndex", keywords = "index follow finger slide track column niagara",
+        title = "Pull depth",
+        summary = "The letters bend like a string pulled by your finger: at 100 % the letter you are on comes all the way to your finger, " +
+            "lower values keep the curve shallower, 0 leaves the column straight. It springs back when you let go. The app list never moves sideways",
+        section = "drawerIndex", keywords = "index follow finger pull string depth curve track",
     )
     val IndexSpring = ChoiceSetting(
         key = "index.spring", default = "medium",
         options = listOf("soft" to "Soft", "medium" to "Medium", "snappy" to "Snappy"),
         title = "Spring",
-        summary = "How quickly the column catches up with your finger and springs back",
+        summary = "How quickly the string catches up with your finger and snaps back",
         section = "drawerIndex", keywords = "index spring stiffness bounce speed",
     )
     val IndexHideDelay = IntSetting(
@@ -1283,6 +1322,90 @@ object LauncherSettings {
         section = "wallpaper", keywords = "wallpaper rotation shuffle random order",
     )
 
+    // ---- Glass notices ----
+
+    val NoticesEnabled = BoolSetting(
+        key = "notices.enabled", default = true,
+        title = "Show glass notices",
+        summary = "A short label over the home screen when something happens. Tap one to act on it",
+        section = "notices", keywords = "notice notification label toast message",
+    )
+    val NoticePosition = ChoiceSetting(
+        key = "notices.position", default = "top",
+        options = listOf("top" to "Top", "bottom" to "Bottom, above the pill", "centre" to "Centre"),
+        title = "Position",
+        section = "notices", keywords = "notice position top bottom centre",
+    )
+    val NoticeDuration = IntSetting(
+        key = "notices.duration", default = 1800, min = 800, max = 6000, step = 200, unit = "ms",
+        title = "Stays for",
+        summary = "A newer notice replaces it sooner",
+        section = "notices", keywords = "notice duration time length",
+    )
+    val NoticeStyle = ChoiceSetting(
+        key = "notices.style", default = "glass",
+        options = listOf("glass" to "Liquid glass", "solid" to "Solid, in the accent colour", "plain" to "Text only"),
+        title = "Style",
+        section = "notices", keywords = "notice style glass solid plain",
+    )
+    val NoticeIcons = BoolSetting(
+        key = "notices.icons", default = true,
+        title = "Icon next to the text",
+        section = "notices", keywords = "notice icon",
+    )
+    val NoticeLayout = BoolSetting(
+        key = "notices.kind.layout", default = true,
+        title = "Layout switched",
+        section = "notices", keywords = "notice layout switch name",
+    )
+    val NoticeWallpaper = BoolSetting(
+        key = "notices.kind.wallpaper", default = true,
+        title = "Wallpaper changed",
+        summary = "Shuffle and the wallpaper strip; also when another app replaced the launcher's wallpaper",
+        section = "notices", keywords = "notice wallpaper change shuffle",
+    )
+    val NoticeTags = BoolSetting(
+        key = "notices.kind.tags", default = true,
+        title = "Tag filter applied or cleared",
+        section = "notices", keywords = "notice tag filter drawer",
+    )
+    val NoticeRedirect = BoolSetting(
+        key = "notices.kind.redirect", default = true,
+        title = "Redirect paused or back on",
+        section = "notices", keywords = "notice redirect pause resume",
+    )
+    val NoticeUpdate = BoolSetting(
+        key = "notices.kind.update", default = true,
+        title = "Update available",
+        summary = "After the daily check in Updates found a newer build",
+        section = "notices", keywords = "notice update build new version",
+    )
+    val NoticeStudy = BoolSetting(
+        key = "notices.kind.study", default = true,
+        title = "Study block starting or ending",
+        summary = "Arrives with the study companion",
+        section = "notices", keywords = "notice study block calendar start",
+    )
+    val NoticeTask = BoolSetting(
+        key = "notices.kind.task", default = true,
+        title = "Task due",
+        summary = "Arrives with the study companion",
+        section = "notices", keywords = "notice task due deadline",
+    )
+    val NoticeInfo = BoolSetting(
+        key = "notices.kind.info", default = true,
+        title = "Other messages",
+        section = "notices", keywords = "notice info message",
+    )
+
+    /** Notice kind id (NoticeKind.id) to its switch. */
+    val noticeKinds: Map<String, BoolSetting> by lazy {
+        mapOf(
+            "layout" to NoticeLayout, "wallpaper" to NoticeWallpaper, "tags" to NoticeTags, "redirect" to NoticeRedirect,
+            "update" to NoticeUpdate, "study" to NoticeStudy, "task" to NoticeTask, "info" to NoticeInfo,
+        )
+    }
+
     // ---- Saved layouts ----
 
     val LayoutsAutoSave = BoolSetting(
@@ -1317,6 +1440,11 @@ object LauncherSettings {
 
     // ---- Internal state (hidden) ----
 
+    /** Keys of the options changed most recently, newest first (shown at the top of the settings app). */
+    val RecentlyChanged = StringListSetting(
+        key = "state.recentlyChanged", default = emptyList(),
+        title = "Recently changed options", section = "state", hidden = true,
+    )
     val LastSystemLauncherVersion = TextSetting(
         key = "state.systemLauncherVersion", default = "",
         title = "Last seen system launcher version", section = "state", hidden = true,
@@ -1374,14 +1502,14 @@ object LauncherSettings {
         HomeMarginSide, HomeMarginTop, HomeMarginBottom, Clock24h, ClockSize, ClockDate, ClockGlass,
         GestureSwipeUp, GestureSwipeDown, GestureDoubleTap, GestureLongPress,
         GesturePinchIn, GesturePinchOut, GestureTwoUp, GestureTwoDown, GestureEdgeLeftUp, GestureEdgeLeftDown, GestureEdgeRightUp, GestureEdgeRightDown, GestureEdgeWidth,
-        HapticsEnabled, HapticsStrength, HapticDrawer, HapticPickUp, LaunchAnimation, SearchTransition, MotionSpeed, UpdatesDaily,
+        HapticsEnabled, HapticsStrength, HapticDrawer, HapticPickUp, LaunchAnimation, SearchTransition, MotionStyle, MotionSpeed, UpdatesDaily,
         PillEnabled, PillSlots, PillPosition, PillOffset, PillWidth, PillHeight, PillCorner, PillIconSize,
         PillHint, PillTap, PillLongPress, PillSwipeUp, PillSwipeDown,
         DrawerColumns, DrawerIconSize, DrawerLabels, DrawerFromBottom, DrawerAutoKeyboard, DrawerSort,
         DrawerWork, DrawerCloseOnLaunch, DrawerSideMargin, DrawerDim, DrawerTabsPosition,
-        DrawerTransition, DrawerPillMorph, DrawerSpeed, DrawerBounce, DrawerRise, DrawerHomeScale, DrawerHomeBlur, DrawerBlurLive,
+        DrawerTransition, DrawerTravel, DrawerPillMorph, DrawerSpeed, DrawerBounce, DrawerRise, DrawerHomeScale, DrawerHomeBlur, DrawerBlurLive,
         DrawerScrollbar, DrawerScrollBubble, DrawerScrollEffect, DrawerScrollStrength, DrawerOverscroll,
-        IndexVisibility, IndexSide, IndexCurve, IndexLetterSize, IndexSpacing, IndexBubble, IndexHaptics, IndexFollow, IndexTrack, IndexSpring, IndexHideDelay, IndexFocus, DrawerTopSections,
+        IndexVisibility, IndexSide, IndexTrack, IndexReach, IndexEnds, IndexLetterSize, IndexSpacing, IndexBubble, IndexHaptics, IndexFollow, IndexSpring, IndexHideDelay, IndexFocus, DrawerTopSections,
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
         TagStripPosition, TagButtonPosition, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
         MenuEntries,
@@ -1389,10 +1517,12 @@ object LauncherSettings {
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
+        NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,
+        NoticeLayout, NoticeWallpaper, NoticeTags, NoticeRedirect, NoticeUpdate, NoticeStudy, NoticeTask, NoticeInfo,
         GlassQuality, GlassAuto, GlassCap, GlassFullPercent, GlassTintMode,
     ) + GlassDefault.settings + glassSurfaces.flatMap { it.settings } + listOf(
         LogEnabled, LogVerbosity, LogSize,
-        LastSystemLauncherVersion, LastSystemLauncher, DetectorVerified,
+        RecentlyChanged, LastSystemLauncherVersion, LastSystemLauncher, DetectorVerified,
         StatsKey, StatsHomeSeen, StatsHomeUnseen, StatsRecentsSeen, StatsRecentsUnseen, StatsInterrupted, StatsFallbacks, StatsReopened, SetupAppLaunchDone, SetupEmptyHomeDone, SetupMacrosDone,
     )
 
@@ -1420,10 +1550,84 @@ object LauncherSettings {
 
     fun inSection(sectionId: String): List<Setting<*>> = all.filter { it.section == sectionId && !it.hidden }
 
-    /** Simple contains-all-words search; the fuzzy engine arrives with universal search. */
+    /**
+     * Options for people who tune: shown under "Advanced" at the end of their section, so the
+     * first screenful of each section holds what most changes are about. Search finds them all.
+     */
+    val advancedKeys: Set<String> by lazy {
+        setOf(
+            // Redirect timing and recovery
+            FastOnHomeAnimation, FastDelay, OnHomeDelay, RequireHomeScreen, HomeScreenFallback, ReopenWindow, ReopenOnHint,
+            OnRecentsExitDelay, ScreenOffDelay, UnlockCheck,
+            // Fine tuning of motion
+            DrawerTravel, DrawerBounce, DrawerRise, DrawerHomeScale, DrawerBlurLive, DrawerScrollStrength, DrawerOverscroll,
+            IndexReach, IndexEnds, IndexFollow, IndexSpring, IndexHideDelay, IndexSpacing,
+            GestureEdgeWidth, HapticsStrength,
+            // Looks most people leave alone
+            HomeMarginSide, HomeMarginTop, HomeMarginBottom, DrawerSideMargin, PillOffset, PillCorner, PillIconSize,
+            ThemedIconsWhere, ThemedIconsUncovered, ThemedIconsPacks, ThemedIconsColors, ThemedIconsStyle, IconMask,
+            GlassAuto, WallpaperSystemWrite, WallpaperHistory, WallpaperTransitionMs,
+            NoticeDuration, NoticeIcons, TagFilterKeep,
+        ).map { it.key }.toSet() + glassSurfaces.flatMap { it.settings }.map { it.key }
+    }
+
+    fun isAdvanced(setting: Setting<*>): Boolean = setting.key in advancedKeys
+
+    /**
+     * Finds options by what they are called, described as, or filed under. Every word of the
+     * query has to match somewhere: as part of a word, or (from four letters) as a word one
+     * typing mistake away. Matches in the title come first, then in the section's name.
+     */
     fun search(query: String): List<Setting<*>> {
-        val words = query.lowercase().split(' ').filter { it.isNotBlank() }
+        val words = query.lowercase().split(' ', ',', '-').filter { it.isNotBlank() }
         if (words.isEmpty()) return emptyList()
-        return all.filter { s -> !s.hidden && words.all { it in s.searchText } }
+        val sectionTitles = Sections.all.associate { it.id to "${it.title} ${it.group}".lowercase() }
+        return all.asSequence()
+            .filter { !it.hidden }
+            .mapNotNull { setting ->
+                val title = setting.title.lowercase()
+                val text = setting.searchText + " " + sectionTitles[setting.section].orEmpty()
+                val textWords by lazy { text.split(' ', ',', '.', ':', ';', '(', ')', '"', '/', '-').filter { it.isNotBlank() } }
+                var score = 0
+                for (word in words) {
+                    score += when {
+                        word in title -> 4
+                        word in text -> 2
+                        word.length >= 4 && textWords.any { nearly(word, it) } -> 1
+                        else -> return@mapNotNull null
+                    }
+                }
+                setting to score
+            }
+            .sortedByDescending { it.second }
+            .map { it.first }
+            .toList()
+    }
+
+    /** True when [word] is [other] (or the start of it) with one letter wrong, missing or extra. */
+    internal fun nearly(word: String, other: String): Boolean {
+        if (other.length < word.length - 1) return false
+        val target = if (other.length > word.length + 1) other.substring(0, word.length) else other
+        if (kotlin.math.abs(target.length - word.length) > 1) return false
+        var i = 0
+        var j = 0
+        var edits = 0
+        while (i < word.length && j < target.length) {
+            if (word[i] == target[j]) {
+                i++
+                j++
+                continue
+            }
+            if (++edits > 1) return false
+            when {
+                word.length > target.length -> i++
+                word.length < target.length -> j++
+                else -> {
+                    i++
+                    j++
+                }
+            }
+        }
+        return edits + (word.length - i) + (target.length - j) <= 1
     }
 }

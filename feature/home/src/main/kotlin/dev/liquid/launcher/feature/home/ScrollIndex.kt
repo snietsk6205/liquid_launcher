@@ -13,9 +13,10 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.systemGestureExclusion
+import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,7 +55,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
@@ -68,25 +68,44 @@ import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.floor
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /** Width of the touch strip along the edge. */
 internal val IndexStrip = 24.dp
 
-private val MaxBulge = 64.dp
-private val BubbleSize = 62.dp
-private val EdgeInset = 12.dp
+private val BubbleSize = 54.dp
+private val EdgeInset = 16.dp
+
+/** The letters pass this far beside the finger (towards their edge), so the finger does not cover them. */
+private val ApexOffset = 30.dp
+
+/** With pinned ends, the curve never gets tighter than this many letters on either side of the finger. */
+private const val MIN_REACH_SLOTS = 5f
 
 /** Names that turn a section's index mark into a star. */
 private val FavouriteNames = setOf("favourites", "favorites", "favourite", "favorite", "fav", "★")
 
 /**
- * Touch, glide and highlight state of the index. The list position is a continuous row
+ * Touch, string and glide state of the index. The list position is a continuous row
  * ([GridIndex.rowAt]), so it moves smoothly between letters instead of stepping.
  */
 @Stable
 private class IndexTouch {
     var touching by mutableStateOf(false)
+
+    /** The finger, in the index box. */
+    var fingerX by mutableFloatStateOf(0f)
     var fingerY by mutableFloatStateOf(0f)
+
+    /** The edge the string is pulled from: true = right. */
+    var fromRight by mutableStateOf(true)
+
+    /** How far the string's apex is pulled in from its edge right now (pixels), and its speed. */
+    var pull by mutableFloatStateOf(0f)
+    var pullVelocity = 0f
+
+    /** Where the finger wants the apex. */
+    var pullTarget = 0f
 
     /** Entry under the finger, or -1. */
     var active by mutableIntStateOf(-1)
@@ -131,9 +150,34 @@ internal fun GraphicsLayerScope.applyIndexHighlight(highlight: IndexHighlight, i
 }
 
 /**
- * The drawer's letter index: letters along one edge that bend out around the finger, a
- * bubble with the letter (or section name) under it, and a list that follows the finger
- * continuously. Takes no space unless its letters are always shown.
+ * How far the letter [slots] letters away from the finger follows the pull, 0..1: a raised
+ * cosine that is 1 at the finger and 0 at [reach] letters and beyond, with no kink at either end.
+ */
+internal fun stringWeight(slots: Float, reach: Float): Float {
+    val d = abs(slots)
+    if (reach <= 0f || d >= reach) return 0f
+    return (1f + cos(PI.toFloat() * d / reach)) / 2f
+}
+
+/**
+ * How many letters the curve spans on one side of the finger. [toEnd] is the distance from the
+ * finger to that end of the column, [free] the span the "curve reach" setting gives. With
+ * [pinned] ends the curve is fitted between the finger and the end, so the end letter stays on
+ * the edge (it only gives way when the finger is closer to it than [MIN_REACH_SLOTS]).
+ */
+internal fun stringReach(toEnd: Float, free: Float, pinned: Boolean): Float =
+    if (pinned) minOf(free, maxOf(toEnd, MIN_REACH_SLOTS)) else free
+
+/**
+ * The drawer's letter index: a column of letters held at the top and bottom of an edge that
+ * bends like a string pulled by the finger. The letter under the finger comes to the finger
+ * (just beside it, so it stays visible), the letters between lie on a smooth curve, and the
+ * further in the finger pulls, the deeper the curve. A bubble at the finger shows the letter.
+ * The app list never bends: it scrolls to the letter. On release the string springs back
+ * straight and hides.
+ *
+ * Opus built this twice from a description (0.4.1: the list bent; 0.4.2: the whole column
+ * slid sideways with a small bulge). This version follows the user's reference screenshots.
  */
 @Composable
 internal fun ScrollIndex(
@@ -156,10 +200,8 @@ internal fun ScrollIndex(
     val density = LocalDensity.current
     val touch = remember { IndexTouch() }
     val pop = highlight.pop
-    /** How far the letter column has slid in from its edge, towards the finger (pixels). */
-    val column = remember { Animatable(0f) }
-    val springSpec = spring<Float>(dampingRatio = 0.78f, stiffness = config.stiffness)
     val color = if (glass.lightGlass(Surfaces.Drawer, lightBackground)) Color(0xFF16181C) else Color.White
+    SideEffect { if (!touch.touching && config.side != "both") touch.fromRight = config.side != "left" }
 
     // ---- visibility ----
     val scrolling by remember(state) { derivedStateOf { state.isScrollInProgress } }
@@ -173,7 +215,7 @@ internal fun ScrollIndex(
         if (shown) {
             visibility.animateTo(1f, tween(120))
         } else {
-            // Letters spring back to the edge first, then hide.
+            // The string springs back straight first, then the letters hide.
             kotlinx.coroutines.delay(config.hideMs.toLong())
             visibility.animateTo(0f, tween(320))
         }
@@ -201,6 +243,36 @@ internal fun ScrollIndex(
         touch.position = Float.NaN
     }
 
+    // ---- the string: one spring pulls the apex after the finger, and back to the edge on release ----
+    LaunchedEffect(touch.touching, config.stiffness) {
+        if (!touch.touching && abs(touch.pull) < 0.5f && abs(touch.pullVelocity) < 5f) return@LaunchedEffect
+        var last = 0L
+        while (isActive) {
+            val now = withFrameNanos { it }
+            val dt = if (last == 0L) 1f / 90f else ((now - last) / 1_000_000_000f).coerceIn(0.001f, 0.05f)
+            last = now
+            val held = touch.touching
+            val target = if (held) touch.pullTarget else 0f
+            val stiffness = config.stiffness
+            // Held: it follows without wobbling. Let go: under-damped, so it snaps back like a plucked string.
+            val damping = 2f * (if (held) 0.86f else 0.5f) * sqrt(stiffness)
+            var x = touch.pull
+            var v = touch.pullVelocity
+            repeat(2) {
+                val h = dt / 2f
+                v += (-stiffness * (x - target) - damping * v) * h
+                x += v * h
+            }
+            touch.pullVelocity = v
+            touch.pull = x
+            if (!held && abs(x) < 0.5f && abs(v) < 5f) {
+                touch.pull = 0f
+                touch.pullVelocity = 0f
+                break
+            }
+        }
+    }
+
     BoxWithConstraints(modifier.fillMaxSize()) {
         val height = constraints.maxHeight.toFloat()
         val width = constraints.maxWidth.toFloat()
@@ -208,26 +280,19 @@ internal fun ScrollIndex(
         val spacing = minOf(with(density) { config.spacingDp.dp.toPx() }, (height - with(density) { 16.dp.toPx() }) / n).coerceAtLeast(1f)
         val top = (height - spacing * n) / 2f
         val edge = with(density) { EdgeInset.toPx() }
-        val bulgeMax = with(density) { MaxBulge.toPx() } * config.curve
-        val radius = maxOf(spacing * 4.5f, with(density) { 96.dp.toPx() })
+        val apexOffset = with(density) { ApexOffset.toPx() }
+        val bubblePx = with(density) { BubbleSize.toPx() }
+        val maxPull = width * 0.86f
+        val freeReach = (config.reach * n).coerceAtLeast(MIN_REACH_SLOTS)
         SideEffect { highlight.enabled = config.focus }
         /** Items of entry [i], for the highlight. */
         fun focusOn(i: Int) {
             highlight.from = entries.getOrNull(i)?.firstItem ?: -1
             highlight.to = entries.getOrNull(i + 1)?.firstItem ?: Int.MAX_VALUE
         }
-        val stripWidth = with(density) { IndexStrip.toPx() }
-        val maxTravel = width * 0.62f
-        /**
-         * The column slides towards a finger at [x] (in this box): with "Letters follow the
-         * finger" at 100 % the letters' base line sits at the finger, and the curve pushes the
-         * letters next to it out from under the finger.
-         */
-        fun slideTowards(x: Float) {
-            val fromEdge = if (config.right) width - x else x
-            val target = ((fromEdge - edge) * config.track).coerceIn(0f, maxTravel)
-            scope.launch { column.animateTo(target, springSpec) }
-        }
+
+        /** The line the letters rest on. */
+        fun restX(right: Boolean) = if (right) width - edge else edge
 
         /** Visual slot of entry [i]: entries run bottom to top when the list starts at the bottom. */
         fun slotOf(i: Int) = if (reverse) n - 1 - i else i
@@ -237,11 +302,16 @@ internal fun ScrollIndex(
             val slot = (y - top) / spacing - 0.5f
             return if (reverse) (n - 1) - slot else slot
         }
-        fun bulgeAt(y: Float): Float {
-            if (bulgeMax <= 0f) return 0f
-            val d = (y - touch.fingerY) / radius
-            if (abs(d) >= 1f) return 0f
-            return bulgeMax * pop.value * (1f + cos(PI.toFloat() * d)) / 2f
+        /** Where the letter at height [y] is drawn: on the string, pulled in around the finger. */
+        fun letterX(y: Float): Float {
+            val right = touch.fromRight
+            val pull = touch.pull
+            if (abs(pull) < 0.01f) return restX(right)
+            val slots = (y - touch.fingerY) / spacing
+            // Distance from the finger to the end of the column on this letter's side, in letters.
+            val toEnd = if (slots < 0f) (touch.fingerY - (top + 0.5f * spacing)) / spacing else ((top + (n - 0.5f) * spacing) - touch.fingerY) / spacing
+            val w = stringWeight(slots, stringReach(toEnd, freeReach, config.pinned))
+            return if (right) restX(true) - pull * w else restX(false) + pull * w
         }
         fun tick() {
             if (config.haptics == "off") return
@@ -253,8 +323,12 @@ internal fun ScrollIndex(
             }
             view.performHapticFeedback(constant)
         }
-        fun follow(y: Float) {
-            touch.fingerY = y.coerceIn(0f, height)
+        /** The finger is at ([x], [y]) in this box: aim the string and the list at it. */
+        fun follow(x: Float, y: Float) {
+            touch.fingerX = x
+            touch.fingerY = y.coerceIn(top + 0.5f * spacing, top + (n - 0.5f) * spacing)
+            val inward = if (touch.fromRight) restX(true) - x else x - restX(false)
+            touch.pullTarget = ((inward - apexOffset) * config.track).coerceIn(0f, maxPull)
             val position = positionAt(touch.fingerY)
             touch.target = index.rowAt(position)
             val entry = position.roundToInt().coerceIn(0, n - 1)
@@ -276,7 +350,9 @@ internal fun ScrollIndex(
         }
 
         if (controller.indexDemo) {
-            LaunchedEffect(index, height) {
+            // Settings preview: a pretend finger runs along the letters and pulls the string in and out.
+            LaunchedEffect(index, height, width, config.side) {
+                touch.fromRight = config.side != "left"
                 touch.touching = true
                 touch.active = -1
                 pop.snapTo(1f)
@@ -284,13 +360,10 @@ internal fun ScrollIndex(
                 while (isActive) {
                     withFrameNanos { }
                     t += 0.006f
-                    // Down and up the letters, easing at the ends.
                     val swing = (1f - cos(t * 2f * PI.toFloat())) / 2f
-                    touch.fingerY = top + spacing * (0.5f + swing * (n - 1))
-                    // The pretend finger also wanders inwards a little, so the column's slide shows.
-                    column.snapTo(((1f - cos(t * 3f * PI.toFloat())) / 2f) * with(density) { 48.dp.toPx() } * config.track)
-                    touch.active = positionAt(touch.fingerY).roundToInt().coerceIn(0, n - 1)
-                    focusOn(touch.active)
+                    val inward = apexOffset + width * 0.5f * (1f - cos(t * 3f * PI.toFloat())) / 2f
+                    val y = top + spacing * (0.5f + swing * (n - 1))
+                    follow(if (touch.fromRight) restX(true) - inward else restX(false) + inward, y)
                 }
             }
         }
@@ -304,19 +377,18 @@ internal fun ScrollIndex(
                     // Read so scrolling updates the highlight while not touching.
                     state.firstVisibleItemIndex
                     state.firstVisibleItemScrollOffset
-                    val highlighted = if (touch.touching) touch.active else index.entryForRow(currentRow(state, index))
+                    val held = touch.touching
+                    val highlighted = if (held) touch.active else index.entryForRow(currentRow(state, index))
                     for (i in 0 until n) {
                         val y = centreY(i)
-                        val bend = bulgeAt(y)
-                        val slide = column.value
-                        val x = if (config.right) width - edge - slide - bend else edge + slide + bend
+                        val x = letterX(y)
                         val on = i == highlighted
                         val layout: TextLayoutResult = if (on) bold[i] else normal[i]
                         val w = layout.size.width.toFloat()
                         val h = layout.size.height.toFloat()
                         // Lighter at rest: the letters float over the apps' labels.
-                        val alpha = if (on) 1f else if (touch.touching) 0.72f else 0.5f
-                        val grow = if (on && touch.touching) 1.25f else 1f
+                        val alpha = if (on) 1f else if (held) 0.86f else 0.5f
+                        val grow = if (on && held) 1.3f else 1f
                         scale(grow, Offset(x, y)) {
                             if (entries[i].section && glyph(entries[i].label, true) != "★") {
                                 drawCircle(color.copy(alpha = alpha * 0.8f), radius = maxOf(w, h) * 0.62f, center = Offset(x, y), style = Stroke(1.dp.toPx()))
@@ -327,31 +399,39 @@ internal fun ScrollIndex(
                 }
         )
 
-        // ---- bubble ----
+        // ---- bubble: at the finger, the letter it is on ----
         if (config.bubble != "none") {
             val label = entries.getOrNull(touch.active)?.label.orEmpty()
             val bubbleColor = HomeTheme.accent
-            val textColor = if (config.bubble == "solid") (if (androidx.core.graphics.ColorUtils.calculateLuminance(android.graphics.Color.valueOf(bubbleColor.red, bubbleColor.green, bubbleColor.blue).toArgb()) > 0.5) Color(0xFF16181C) else Color.White) else color
+            val textColor = if (config.bubble == "solid") readableOn(bubbleColor) else color
             val shape = RoundedCornerShape(50)
             Box(
                 Modifier
-                    .align(if (config.right) Alignment.TopEnd else Alignment.TopStart)
-                    .offset {
-                        val gap = 18.dp.toPx() + edge + column.value + bulgeMax * pop.value
-                        val y = (touch.fingerY - BubbleSize.toPx() / 2f).coerceIn(0f, (height - BubbleSize.toPx()).coerceAtLeast(0f))
-                        IntOffset((if (config.right) -gap else gap).roundToInt(), y.roundToInt())
+                    // Placed by its centre, read while placing: the bubble follows the finger without recomposing.
+                    .layout { measurable, constraints ->
+                        val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+                        layout(constraints.maxWidth, constraints.maxHeight) {
+                            val right = touch.fromRight
+                            // Never closer to the edge than the letters' resting line plus the gap, so it does not sit on them.
+                            val x = if (right) minOf(touch.fingerX, restX(true) - apexOffset) else maxOf(touch.fingerX, restX(false) + apexOffset)
+                            val left = (x - placeable.width / 2f).coerceIn(0f, (width - placeable.width).coerceAtLeast(0f))
+                            val topY = (touch.fingerY - placeable.height / 2f).coerceIn(0f, (height - placeable.height).coerceAtLeast(0f))
+                            placeable.place(left.roundToInt(), topY.roundToInt())
+                        }
                     }
                     .graphicsLayer {
                         val p = pop.value
                         alpha = p.coerceIn(0f, 1f)
                         scaleX = 0.6f + 0.4f * p
                         scaleY = 0.6f + 0.4f * p
-                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (config.right) 1f else 0f, 0.5f)
                     }
                     .height(BubbleSize)
                     .widthIn(min = BubbleSize)
                     // Re-draw as the finger moves, so the glass samples its new spot.
-                    .drawBehind { touch.fingerY }
+                    .drawBehind {
+                        touch.fingerX
+                        touch.fingerY
+                    }
                     .then(
                         if (config.bubble == "glass") {
                             Modifier.liquidGlass(backdrop, shape, glass.style(Surfaces.Drawer, lightBackground))
@@ -360,46 +440,49 @@ internal fun ScrollIndex(
                         }
                     )
                     .clip(shape)
-                    .padding(horizontal = 18.dp),
+                    .padding(horizontal = if (label.length <= 2) 0.dp else 16.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = textColor, fontSize = if (label.length <= 2) 28.sp else 17.sp, fontWeight = FontWeight.SemiBold), maxLines = 1)
+                Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = textColor, fontSize = if (label.length <= 2) 26.sp else 16.sp, fontWeight = FontWeight.SemiBold), maxLines = 1)
             }
         }
 
-        // ---- touch strip ----
+        // ---- touch strips: one per edge in use ----
         if (interactive) {
-            Box(
-                Modifier
-                    .align(if (config.right) Alignment.TopEnd else Alignment.TopStart)
-                    .fillMaxHeight()
-                    .width(IndexStrip)
-                    .pointerInput(index, reverse, spacing, top, width, config.track, config.stiffness) {
-                        // The strip's own x in the index box, to turn finger positions into box positions.
-                        val stripLeft = if (config.right) width - stripWidth else 0f
-                        awaitEachGesture {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            down.consume()
-                            touch.active = -1
-                            touch.touching = true
-                            follow(down.position.y)
-                            slideTowards(stripLeft + down.position.x)
-                            scope.launch { pop.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 700f)) }
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                change.consume()
-                                if (!change.pressed) break
-                                follow(change.position.y)
-                                slideTowards(stripLeft + change.position.x)
+            val stripPx = with(density) { IndexStrip.toPx() }
+            for (right in listOf(true, false)) {
+                if (config.side != "both" && (config.side != "left") != right) continue
+                Box(
+                    Modifier
+                        .align(if (right) Alignment.TopEnd else Alignment.TopStart)
+                        .fillMaxHeight()
+                        .width(IndexStrip)
+                        // Pulling in from the edge is the system's back gesture; ask for the strip (the system grants up to 200 dp per edge).
+                        .systemGestureExclusion()
+                        .pointerInput(index, reverse, spacing, top, width, config.track, right) {
+                            // The strip's own x in the index box, to turn finger positions into box positions.
+                            val stripLeft = if (right) width - stripPx else 0f
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                down.consume()
+                                touch.fromRight = right
+                                touch.active = -1
+                                touch.touching = true
+                                follow(stripLeft + down.position.x, down.position.y)
+                                scope.launch { pop.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 700f)) }
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                    change.consume()
+                                    if (!change.pressed) break
+                                    follow(stripLeft + change.position.x, change.position.y)
+                                }
+                                touch.touching = false
+                                scope.launch { pop.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = 500f)) }
                             }
-                            touch.touching = false
-                            // Back to the edge with a spring, then the letters hide (see visibility).
-                            scope.launch { column.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = config.stiffness)) }
-                            scope.launch { pop.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = 500f)) }
                         }
-                    }
-            )
+                )
+            }
         }
     }
 }

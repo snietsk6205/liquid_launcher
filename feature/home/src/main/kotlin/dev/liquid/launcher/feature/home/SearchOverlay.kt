@@ -87,10 +87,13 @@ fun SearchOverlay(
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         if (config.keyboard) runCatching { focus.requestFocus() }
-        appear.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = MotionScale.stiffness(500f)))
+        appear.animateTo(1f, Motion.enter())
     }
-    // The home screen behind blurs with this (Settings → Wallpaper → blur behind search).
-    LaunchedEffect(Unit) { androidx.compose.runtime.snapshotFlow { appear.value }.collect { controller.searchAmount = it.coerceIn(0f, 1f) } }
+    // The home screen behind blurs and sinks with this, and comes back as search leaves.
+    val presence = LocalPresence.current
+    LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow { appear.value.coerceIn(0f, 1f) * presence.value.coerceIn(0f, 1f) }.collect { controller.searchAmount = it }
+    }
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { controller.searchAmount = 0f } }
 
     val visible = remember(apps) { apps.filter { !it.hidden } }

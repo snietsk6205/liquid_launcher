@@ -67,6 +67,25 @@ class SettingsStoreTest {
         assertTrue(hits.contains(LauncherSettings.GuardCount))
         assertTrue(LauncherSettings.search("zzzz").isEmpty())
     }
+
+    @Test
+    fun searchForgivesATypoAndLooksInSectionNames() {
+        assertTrue(LauncherSettings.search("paralax").contains(LauncherSettings.WallpaperParallax))
+        assertTrue(LauncherSettings.search("glas quality").contains(LauncherSettings.GlassQuality))
+        // "notices" is the section's name, not a word of this option.
+        assertTrue(LauncherSettings.search("notices position").contains(LauncherSettings.NoticePosition))
+        // Title matches come first.
+        assertEquals(LauncherSettings.DrawerTravel, LauncherSettings.search("finger travel").first())
+    }
+
+    @Test
+    fun changedOptionsAreRememberedNewestFirst() {
+        val store = SettingsStore.inMemory()
+        store.set(LauncherSettings.HomeColumns, 4)
+        store.set(LauncherSettings.HomeRows, 8)
+        store.set(LauncherSettings.HomeColumns, 6)
+        assertEquals(listOf(LauncherSettings.HomeColumns.key, LauncherSettings.HomeRows.key), store.get(LauncherSettings.RecentlyChanged))
+    }
 }
 
 class SettingsExportTest {

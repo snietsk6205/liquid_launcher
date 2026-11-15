@@ -225,6 +225,7 @@ fun HomeScreen(
     SideEffect {
         Haptics.config = motionConfig
         MotionScale.speed = motionConfig.speed
+        Motion.style = motionConfig.style
         if (live) controller.view = rootView
         controller.motionConfig = motionConfig
     }
@@ -335,7 +336,14 @@ fun HomeScreen(
         LaunchedEffect(Unit) {
             var seen = dev.liquid.launcher.core.common.WallpaperTones.outsideChanges.value
             dev.liquid.launcher.core.common.WallpaperTones.outsideChanges.collect { count ->
-                if (count > seen) controller.flash("Wallpaper changed in another app. Choose it in the launcher for liquid glass")
+                if (count > seen) {
+                    controller.notice(
+                        dev.liquid.launcher.core.common.NoticeKind.Wallpaper,
+                        "Wallpaper changed in another app",
+                        "Tap to choose it here: glass needs the picture",
+                        LauncherAction.WallpaperStudio,
+                    )
+                }
                 seen = count
             }
         }
@@ -443,6 +451,8 @@ fun HomeScreen(
           ) {
             val placing = studio?.takeIf { it.drawsSource }
             val shownWallpaper = placing?.sourceImage ?: blurredWallpaper ?: image
+            // The wallpaper takes part in the drawer transition (it drifts and grows a little).
+            Box(Modifier.fillMaxSize().graphicsLayer { if (placing == null) wallpaperInDrawerTransition(controller.drawer.value, motionShown) }) {
             if (shownWallpaper != null) {
                 WallpaperImage(
                     image = shownWallpaper,
@@ -474,6 +484,7 @@ fun HomeScreen(
                     )
                 }
             }
+            }
             if (homeDim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = homeDim)))
             val pillSpace = (if (pill.enabled || controller.editMode) pill.heightDp + pill.offsetDp + 12 else 0) +
                 (if (dock.enabled) dock.height.value.toInt() + 8 else 0)
@@ -486,8 +497,10 @@ fun HomeScreen(
                     .graphicsLayer {
                         val p = controller.drawer.value
                         val back = returnState.progress.floatValue
-                        alpha = (1f - p.coerceIn(0f, 1f) * 1.6f).coerceIn(0f, 1f) * back
-                        var scale = 1f - motion.homeScale * p
+                        // The drawer transition's share (fade, glide or sink), then everything else on top of it.
+                        homeInDrawerTransition(p, motion)
+                        alpha *= back
+                        var scale = scaleX
                         if (settle == "scale") scale *= 0.94f + 0.06f * back
                         if (controller.editMode) scale *= 0.9f
                         scale *= 1f - 0.06f * menuSink
@@ -643,25 +656,25 @@ fun HomeScreen(
             )
         }
 
-        if (live && controller.searchOpen) {
+        // Each of these keeps its own entrance and leaves through Presence: a quick fade and sink,
+        // the same for all of them.
+        Presence(if (live && controller.searchOpen) Unit else null) {
             SearchOverlay(controller, search, glass, lightBackground, overlayBackdrop, apps)
         }
-        controller.openFolder?.let { id ->
-            layout.find(id)?.second?.takeIf { it.kind == ItemKind.FOLDER }?.let { folder ->
-                FolderOverlay(folder, appIndex, controller, glass, lightBackground, overlayBackdrop, grid)
-            }
+        Presence(controller.openFolder?.let { id -> layout.find(id)?.second?.takeIf { it.kind == ItemKind.FOLDER } }) { folder ->
+            FolderOverlay(folder, appIndex, controller, glass, lightBackground, overlayBackdrop, grid)
         }
-        controller.menu?.let { target ->
+        Presence(controller.menu) { target ->
             AppMenu(target, menuEntries, controller, glass, lightBackground, overlayBackdrop)
         }
         if (mode == HomeMode.PreviewHomeMenu) SideEffect { controller.homeMenu = true }
-        if ((live || mode == HomeMode.PreviewHomeMenu) && controller.homeMenu) {
+        Presence(if ((live || mode == HomeMode.PreviewHomeMenu) && controller.homeMenu) Unit else null) {
             HomeMenu(homeMenuConfig, glass, lightBackground, overlayBackdrop, appIndex, controller)
         }
-        if (live && controller.layoutsSheet) {
+        Presence(if (live && controller.layoutsSheet) Unit else null) {
             LayoutsSheet(glass, lightBackground, overlayBackdrop, controller)
         }
-        if (live && controller.wallpaperStrip) {
+        Presence(if (live && controller.wallpaperStrip) Unit else null) {
             WallpaperStrip(glass, lightBackground, overlayBackdrop, controller)
         }
         if (studio != null) {
@@ -678,7 +691,7 @@ fun HomeScreen(
         controller.iconPicking?.let { IconPickerDialog(it, controller) }
         controller.swipeEditing?.let { id -> layout.find(id)?.let { (_, item) -> SwipeActionsDialog(item, apps, controller) } }
         if (live) TransitionOverlay(controller, transitionStyle)
-        if (live) FlashLabel(controller, glass, lightBackground, overlayBackdrop, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 14.dp))
+        if (live) NoticeHost(controller, glass, lightBackground, overlayBackdrop)
     }
 }
 

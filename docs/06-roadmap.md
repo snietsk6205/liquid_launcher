@@ -1,23 +1,23 @@
 # 6. Roadmap
 
-## Plan as of 0.5.0 (2026-11-14, Opus)
+## Plan as of 0.6.0 (2026-11-15, Fable)
 
 | Phase | Content | Release | State |
 |---|---|---|---|
 | 1A | Redirect engine, diagnostics, glass benchmark | 0.1.0 | Done |
-| 1B | Home grid, pill, drawer, long-press menu, search v1, settings editors and previews | 0.2.0 | Tested on the phone |
-| 1B | Redirect fixes, drawer transition / tabs / scroll bar, pages, clock resize, tags and own tabs, icon packs, folders, swipe actions, shortcuts | 0.2.1 | Tested on the phone |
-| 1B polish | Curved letter index (A), icons following the wallpaper (B), floating tabs pill with positions, styles and a per-tab menu (D) | 0.2.2 | Tested on the phone (in 0.4.0) |
-| 2, part 1: home setup | Home menu (two glass pills on long press), wallpaper studio (picker, history, blur and dim per surface, live preview), saved layouts, backup / restore | 0.3.0 | Tested on the phone (in 0.4.0) |
-| 2, part 2: look | Theme (text, accent and glass colours, fonts incl. an imported file, clock font and weight, icon shapes), presets and `.lltheme` files; folder preview / background / shape / tap-first / columns / drag out; dock; per-page grid, labels and name; page transitions | 0.4.0 | Tested on the phone |
-| 2, fixes after the 0.4.0 test | Index floats with equal margins and bends the list; filtering by tag (moved from Phase 4); themed icons recolour at once; wallpaper library, placing, parallax, strip, shuffle, automatic changes; layout and wallpaper switches with a transition | 0.4.1 | Released (build 29) |
-| 2, adjustments after 0.4.1 | Themed icons coloured while drawing (with the wallpaper, no delay), picked icons follow, tag list button with a morph, letter column follows the finger | 0.4.2 | Released (build 32) |
-| 2, part 3: touch and motion | Two-finger / pinch / edge gestures, double tap per icon, screens of apps as actions, motion and haptics settings (drawer tick, depth transition for search, launch animation, animation speed), in-app updater | 0.5.0 | Released (build 34) |
-| 3 (next) | Widgets: other apps' widgets, clock gallery, built-in widgets, panels; "Widgets" joins the home menu | 2–3 builds | |
-| 4 | Search sources (contacts, calendar, files, settings pages), suggested apps, notification badges, drawer folders and rule-based tabs; the rest of tag organisation (see below) | 2 builds | |
-| 5 | Study companion: GitHub task sync, calendar blocks, Now card, study widgets | 2–3 builds | |
+| 1B | Home grid, pill, drawer, menu, search v1, settings; tags, icon packs, folders, shortcuts; index, themed icons, tabs pill | 0.2.0 – 0.2.2 | Tested on the phone |
+| 2 | Home menu, wallpaper studio and library, layouts, backup; theme, folders, dock, page transitions; gestures, motion and haptics, updater | 0.3.0 – 0.5.0 | Tested on the phone (0.5.0 report of 2026-11-14) |
+| Review | Fable's review of Opus's work and the six bugs of the 0.5.0 report: glass no longer flattened by the benchmark or by a lost wallpaper, every icon follows the wallpaper in the same frame, one system-wallpaper writer, redirect fast path and recents recovery, pause opens HONOR Home, wallpaper sub-folders | 0.5.1 | Released (build 36) |
+| Feel | Letter index as a string pulled by the finger; "One space" drawer transition under the finger; glass notices; one motion vocabulary with exits; settings reorganised | 0.6.0 | Released (see `FABLE_LOG.md` for the build) |
+| 3 (next) | Widgets: clock gallery with full customisation first, then other apps' widgets, built-in widgets, panels | 0.7.x | |
+| 5 | Study companion over the calendar: Now card, Today panel, agenda widget, notices, quick actions (see `05-study-integration.md`, revised) | 0.8.x | |
+| 4 | Search sources (contacts, calendar, files, settings pages), suggested apps, notification badges, drawer folders and rule-based tabs | 2 builds | |
 | 6 | Profiles (Study / Free / Night), study mode, friction; automatic layout switching; wallpaper per profile and per page | 2 builds | |
-| 7 | Performance and polish | 1–2 builds | |
+| 7 | Performance and polish: per-option settings previews, baseline profiles, large folders, wallpaper albums | 1–2 builds | |
+
+Order changed by the user on 2026-11-14: Phase 3 with the clock gallery first, then Phase 5, then the rest by importance.
+
+What the 0.5.0 report asked for and where it went: bugs 1–6 → 0.5.1; drawer transition, index, notices, motion, settings → 0.6.0; clock gallery → Phase 3; calendar-based study companion → Phase 5.
 
 Changes to Fable's plan, and why:
 - Filtering the drawer by tag moved from Phase 4 to 0.4.1: the user called it the main feature of that round (many apps, organised by tags).

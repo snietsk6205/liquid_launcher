@@ -87,6 +87,19 @@ internal fun MainScreen(
 
         StatusCard(store)
 
+        // What was changed last, to carry on where you were or to undo an experiment.
+        val recent by store.observe(LauncherSettings.RecentlyChanged)
+        val recentSettings = remember(recent) {
+            recent.mapNotNull { key -> LauncherSettings.all.firstOrNull { it.key == key && !it.hidden } }.take(4)
+        }
+        if (recentSettings.isNotEmpty()) {
+            SectionHeader("Recently changed")
+            recentSettings.forEach { setting ->
+                val section = LauncherSettings.Sections.all.firstOrNull { it.id == setting.section }
+                NavRow(setting.title, "In ${section?.title ?: "settings"}") { open(Screen.Section(setting.section)) }
+            }
+        }
+
         SectionHeader("Get started")
         NavRow("Setup checklist", "Permissions and phone settings the redirect needs") { open(Screen.Setup) }
         NavRow("Diagnostics", "Device checks and the glass benchmark") { open(Screen.Diagnostics) }
@@ -96,7 +109,7 @@ internal fun MainScreen(
             sections.forEach { section ->
                 NavRow(section.title, section.summary) { open(Screen.Section(section.id)) }
             }
-            if (group == "Launcher") WallpaperRow(wallpaper)
+            if (group == "Look") WallpaperRow(wallpaper)
         }
 
         SectionHeader("Tools")
@@ -240,8 +253,22 @@ internal fun SectionScreen(store: SettingsStore, sectionId: String, onBack: () -
                 "wallpaper" -> WallpaperEditor()
                 "layouts" -> LayoutsAndBackupEditor()
             }
-            settings.forEach { setting ->
+            // The options most changes are about first; the fine tuning waits under "Advanced".
+            val (advanced, basic) = settings.partition { LauncherSettings.isAdvanced(it) }
+            basic.forEach { setting ->
                 if (SettingDependencies.isVisible(setting, store)) SettingRow(setting, store)
+            }
+            val shownAdvanced = advanced.filter { SettingDependencies.isVisible(it, store) }
+            if (shownAdvanced.isNotEmpty()) {
+                // Open by itself when the section has nothing else, or something in it was changed.
+                var expanded by remember(sectionId) {
+                    mutableStateOf(basic.isEmpty() || advanced.any { values.containsKey(it.key) })
+                }
+                NavRow(
+                    if (expanded) "Advanced" else "Advanced (${shownAdvanced.size} more)",
+                    if (expanded) "Fine tuning; the defaults are chosen to work" else shownAdvanced.take(3).joinToString(", ") { it.title } + if (shownAdvanced.size > 3) "…" else "",
+                ) { expanded = !expanded }
+                if (expanded) shownAdvanced.forEach { SettingRow(it, store) }
             }
             if (anyChanged) {
                 OutlinedButton(

@@ -104,7 +104,7 @@ internal fun HomeMenu(
     val layouts by controller.data.layouts.state.collectAsState()
     val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
     val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = MotionScale.stiffness(520f))) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
     fun keyOf(pill: Int, index: Int) = "$pill:$index"
     val byKey = remember(config) {
         buildMap {

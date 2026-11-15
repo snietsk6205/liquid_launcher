@@ -136,8 +136,16 @@ class HomeController(
     /** Filters the drawer by [tags], remembering the use so often-used tags come first. */
     fun filterByTags(tags: Set<String>) {
         val added = tags - tagFilter
+        val changed = tags != tagFilter
         tagFilter = tags
         added.forEach { data.usage.record("tag:$it") }
+        if (changed) {
+            val names = data.organisation.value.value.tags.filter { it.id in tags }.map { it.name }
+            notice(
+                dev.liquid.launcher.core.common.NoticeKind.TagFilter,
+                if (names.isEmpty()) "All apps" else names.joinToString(" + "),
+            )
+        }
     }
 
     /** Best match for the drawer query, launched by the keyboard's Go key. */
@@ -211,18 +219,9 @@ class HomeController(
     /** The wallpaper strip from the home menu. */
     var wallpaperStrip by mutableStateOf(false)
 
-    /** A short glass label at the top (the layout just switched to), or null. */
-    var flashText by mutableStateOf<String?>(null)
-    private var flashJob: kotlinx.coroutines.Job? = null
-
-    fun flash(text: String) {
-        flashJob?.cancel()
-        flashText = text
-        flashJob = scope.launch {
-            kotlinx.coroutines.delay(1500)
-            flashText = null
-        }
-    }
+    /** Announces something as a glass notice (see NoticeHost); which kinds show is a setting. */
+    fun notice(kind: dev.liquid.launcher.core.common.NoticeKind, text: String, detail: String? = null, action: LauncherAction? = null) =
+        dev.liquid.launcher.core.common.Notices.post(kind, text, detail, action?.encode())
 
     /**
      * Changes the screen in one go: [prepare] does the slow work first (loading and placing the
@@ -280,7 +279,7 @@ class HomeController(
             },
             commit = { switch ->
                 data.layouts.switchTo(id, data.settings.get(LauncherSettings.LayoutsAutoSave))
-                data.layouts.find(id)?.let { flash(it.name) }
+                data.layouts.find(id)?.let { notice(dev.liquid.launcher.core.common.NoticeKind.Layout, it.name) }
                 switch.wallpaper?.let {
                     store.show(it, switch.tone)
                     IconPaint.now(switch.palette)
@@ -317,10 +316,11 @@ class HomeController(
         scope.launch {
             val pick = Wallpapers.next(data)
             if (pick == null) {
-                toast("Add favourites in the wallpaper screen to shuffle between them")
+                notice(dev.liquid.launcher.core.common.NoticeKind.Info, "Nothing to shuffle yet", "Add favourites in the wallpaper screen", LauncherAction.WallpaperStudio)
                 return@launch
             }
             applyWallpaper(pick)
+            notice(dev.liquid.launcher.core.common.NoticeKind.Wallpaper, "Wallpaper shuffled", "Tap for the wallpaper strip", LauncherAction.Wallpaper)
         }
     }
 
@@ -362,6 +362,9 @@ class HomeController(
         }
     }
 
+    /** Screen heights of finger travel between closed and open. */
+    private fun drawerTravel(): Float = (motion?.travel ?: 1f).coerceIn(0.15f, 1f)
+
     /**
      * Where the finger has put the drawer, ahead of [drawer] itself: the snaps run on the main
      * thread's queue, so on a slow frame the Animatable can lag several events behind.
@@ -384,9 +387,10 @@ class HomeController(
     var view: android.view.View? = null
     var motionConfig = MotionConfig()
 
+    /** [deltaFraction] is the finger's movement as a fraction of the screen height (up = positive). */
     fun dragDrawerBy(deltaFraction: Float) {
         val before = dragPosition ?: drawer.value
-        val next = (before + deltaFraction).coerceIn(0f, 1f)
+        val next = (before + deltaFraction / drawerTravel()).coerceIn(0f, 1f)
         // A tick where letting go starts to open the drawer (see settleDrawer).
         if (motionConfig.drawerTick && (before > OPEN_POINT) != (next > OPEN_POINT)) Haptics.tick(view)
         dragPosition = next
@@ -403,7 +407,7 @@ class HomeController(
             else -> position > OPEN_POINT
         }
         // Upward finger speed is negative on screen and positive for the drawer.
-        val velocity = (-velocityPxPerSec / screenHeight).coerceIn(-8f, 8f)
+        val velocity = (-velocityPxPerSec / (screenHeight * drawerTravel())).coerceIn(-14f, 14f)
         if (open) openDrawer(velocity) else closeDrawer(velocity = velocity)
     }
 

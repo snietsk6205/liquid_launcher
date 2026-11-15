@@ -613,7 +613,7 @@ fun AppDrawer(
     val sheetProgress = remember { androidx.compose.animation.core.Animatable(0f) }
     LaunchedEffect(controller.tagSheet) {
         if (controller.tagSheet) {
-            sheetProgress.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.78f, stiffness = MotionScale.stiffness(360f)))
+            sheetProgress.animateTo(1f, Motion.enter())
         } else {
             sheetProgress.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = MotionScale.stiffness(520f)))
         }
@@ -663,7 +663,11 @@ private fun GraphicsLayerScope.dimLayer(p: Float, motion: DrawerMotion) {
     }
 }
 
-/** The apps: a sheet that follows the finger, a short rise out of depth, or a fade. */
+/**
+ * The apps. "space": they rise from below while the home screen glides up and away, so both
+ * move the same way, like one tall canvas under the finger. "depth": they come forward from
+ * behind the home screen. "slide": a sheet under the finger. "fade": in place.
+ */
 private fun GraphicsLayerScope.contentLayer(p: Float, motion: DrawerMotion) {
     val pc = p.coerceIn(0f, 1f)
     when (motion.transition) {
@@ -672,10 +676,18 @@ private fun GraphicsLayerScope.contentLayer(p: Float, motion: DrawerMotion) {
             alpha = if (p <= 0f) 0f else 1f
         }
         "fade" -> alpha = pc
+        "depth" -> {
+            alpha = ((pc - 0.1f) / 0.75f).coerceIn(0f, 1f)
+            translationY = (1f - p) * motion.rise * 0.35f * size.height
+            // From a little larger than life: the apps were "behind" the home screen and come into focus.
+            val scale = 1.08f - 0.08f * p
+            scaleX = scale
+            scaleY = scale
+        }
         else -> {
-            alpha = ((pc - 0.12f) / 0.88f).coerceIn(0f, 1f)
+            alpha = ((pc - 0.04f) / 0.72f).coerceIn(0f, 1f)
             translationY = (1f - p) * motion.rise * size.height
-            val scale = 0.94f + 0.06f * p
+            val scale = 0.95f + 0.05f * p
             scaleX = scale
             scaleY = scale
             transformOrigin = TransformOrigin(0.5f, 1f)
@@ -687,13 +699,61 @@ private fun GraphicsLayerScope.contentLayer(p: Float, motion: DrawerMotion) {
 private fun overlayOffset(p: Float, motion: DrawerMotion, height: Float): Int = when (motion.transition) {
     "slide" -> ((1f - p) * height).roundToInt()
     "fade" -> 0
+    "depth" -> ((1f - p) * motion.rise * 0.35f * height).roundToInt()
     else -> ((1f - p) * motion.rise * height).roundToInt()
 }
 
 private fun overlayAlpha(p: Float, motion: DrawerMotion): Float = when {
     p <= 0f -> 0f
     motion.slide -> 1f
-    else -> ((p - 0.25f) / 0.75f).coerceIn(0f, 1f)
+    else -> ((p - 0.2f) / 0.7f).coerceIn(0f, 1f)
+}
+
+/**
+ * The home screen's part in the drawer transition (applied to its pages by the home screen):
+ * it fades before the apps are fully there, and either glides up ("space") or sinks back.
+ */
+internal fun GraphicsLayerScope.homeInDrawerTransition(p: Float, motion: DrawerMotion) {
+    val pc = p.coerceIn(0f, 1f)
+    alpha = (1f - pc * 1.7f).coerceIn(0f, 1f)
+    when (motion.transition) {
+        "space" -> {
+            translationY = -pc * 0.16f * size.height
+            val scale = 1f - motion.homeScale * 0.6f * pc
+            scaleX = scale
+            scaleY = scale
+        }
+        "depth" -> {
+            // Towards the viewer and out of focus: you pass through it.
+            val scale = 1f + motion.homeScale * 1.2f * pc
+            scaleX = scale
+            scaleY = scale
+        }
+        else -> {
+            val scale = 1f - motion.homeScale * pc
+            scaleX = scale
+            scaleY = scale
+        }
+    }
+}
+
+/** The wallpaper's part: it drifts a little the way the content moves, never showing an edge. */
+internal fun GraphicsLayerScope.wallpaperInDrawerTransition(p: Float, motion: DrawerMotion) {
+    val pc = p.coerceIn(0f, 1f)
+    when (motion.transition) {
+        "space" -> {
+            // Scaled up by more than it shifts, so the bottom edge stays covered.
+            val scale = 1f + 0.07f * pc
+            scaleX = scale
+            scaleY = scale
+            translationY = -pc * 0.028f * size.height
+        }
+        "depth" -> {
+            val scale = 1f + 0.05f * pc
+            scaleX = scale
+            scaleY = scale
+        }
+    }
 }
 
 // ---- the list ----
