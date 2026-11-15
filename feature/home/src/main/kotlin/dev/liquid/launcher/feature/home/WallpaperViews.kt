@@ -1,5 +1,8 @@
 package dev.liquid.launcher.feature.home
 
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
@@ -113,7 +116,7 @@ internal fun WallpaperImage(
     )
 }
 
-/** The picture of the old screen melting away over the new one (layout or wallpaper change). */
+/** The picture of the old screen leaving over the new one (layout or wallpaper change; styles in [WallpaperTransitions]). */
 @Composable
 internal fun TransitionOverlay(controller: HomeController, style: String) {
     val shot = controller.transitionShot ?: return
@@ -124,26 +127,7 @@ internal fun TransitionOverlay(controller: HomeController, style: String) {
         modifier = Modifier
             .fillMaxSize()
             .graphicsLayer {
-                val p = controller.transitionProgress.value
-                when (style) {
-                    "slide" -> translationX = -p * size.width
-                    "depth" -> {
-                        alpha = 1f - p
-                        val scale = 1f - 0.08f * p
-                        scaleX = scale
-                        scaleY = scale
-                    }
-                    "fade" -> alpha = 1f - p
-                    else -> {
-                        // Liquid: blurs as it fades, swelling very slightly.
-                        alpha = (1f - p * 1.15f).coerceIn(0f, 1f)
-                        val radius = 26.dp.toPx() * p
-                        renderEffect = if (radius > 0.5f) BlurEffect(radius, radius, TileMode.Clamp) else null
-                        val scale = 1f + 0.025f * p
-                        scaleX = scale
-                        scaleY = scale
-                    }
-                }
+                with(WallpaperTransitions) { oldScreenLeaving(controller.transitionProgress.value, style, controller.transitionOrigin) }
             }
             // Takes no touches: the new screen underneath is already live.
     )
@@ -215,7 +199,7 @@ internal fun WallpaperStrip(
                 Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                StripButton(LauncherIcons.Shuffle, "Shuffle", color, Modifier.weight(1f)) {
+                StripButton(LauncherIcons.Shuffle, "Shuffle", color, Modifier.weight(1f), controller) {
                     controller.wallpaperStrip = false
                     controller.shuffleWallpaper()
                 }
@@ -232,13 +216,19 @@ internal fun WallpaperStrip(
 private fun StripThumb(item: WallpaperItem, current: Boolean, color: Color, controller: HomeController, onClick: () -> Unit) {
     val thumb by produceState<ImageBitmap?>(null, item.id) { value = controller.data.wallpapers.thumbnail(item) }
     val shape = RoundedCornerShape(14.dp)
+    var centre by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
     Box(
         Modifier
             .size(width = 58.dp, height = 104.dp)
+            .onGloballyPositioned { centre = it.boundsInRoot().center }
             .clip(shape)
             .background(color.copy(alpha = 0.1f))
             .border(if (current) 2.dp else 0.5.dp, color.copy(alpha = if (current) 0.95f else 0.25f), shape)
-            .clickable(onClick = onClick),
+            .clickable {
+                // A ripple starts from the picture you tapped (0.7.0, D103).
+                controller.transitionOrigin = centre
+                onClick()
+            },
     ) {
         thumb?.let { Image(it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
         if (item.favourite) {
@@ -250,19 +240,12 @@ private fun StripThumb(item: WallpaperItem, current: Boolean, color: Color, cont
     }
 }
 
+/** A button of the strip: a [GlassButton] (Settings → Buttons); a transition it starts ripples out from it. */
 @Composable
-private fun StripButton(icon: Int, label: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
-    Row(
-        modifier
-            .clip(RoundedCornerShape(50))
-            .background(color.copy(alpha = 0.1f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        LauncherIcon(icon, contentDescription = null, tint = color, size = 18.dp)
-        Spacer(Modifier.size(8.dp))
-        Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1)
+private fun StripButton(icon: Int, label: String, color: Color, modifier: Modifier, controller: HomeController? = null, onClick: () -> Unit) {
+    var centre by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
+    GlassButton(label, color, modifier.onGloballyPositioned { centre = it.boundsInRoot().center }, icon = icon) {
+        controller?.transitionOrigin = centre
+        onClick()
     }
 }

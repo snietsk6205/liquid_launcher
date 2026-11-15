@@ -482,6 +482,8 @@ private fun HomeScreenBody(
                     if (placing == null) {
                         wallpaperInDrawerTransition(controller.drawer.value, motionShown)
                         if (motionConfig.searchTransition == "space") wallpaperInSearchTransition(controller.searchAmount)
+                        // A wallpaper or layout change: the new wallpaper settles in under the old picture (D103).
+                        if (controller.transitionShot != null) with(WallpaperTransitions) { newWallpaperArriving(controller.transitionProgress.value, transitionStyle) }
                     }
                 }
             ) {
@@ -551,6 +553,8 @@ private fun HomeScreenBody(
                         }
                         scaleX = scale
                         scaleY = scale
+                        // A wallpaper or layout change: the new pages settle into place (D103).
+                        if (controller.transitionShot != null) with(WallpaperTransitions) { newScreenArriving(controller.transitionProgress.value, transitionStyle) }
                     }
                     .then(if (live) swipes else Modifier)
                     .statusBarsPadding()
@@ -744,6 +748,8 @@ private fun HomeScreenBody(
             WidgetPicker(glass, lightBackground, overlayBackdrop, controller)
         }
         if (live) {
+            // The wallpaper transitions' shaders, compiled before the first change (D103).
+            LaunchedEffect(Unit) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { WallpaperTransitions.warmUp() } }
             StudyNotices(controller)
             // Follow the calendar while the home screen is composed; read it when the companion is switched on.
             val studyOn by store.derive { get(LauncherSettings.StudyEnabled) }

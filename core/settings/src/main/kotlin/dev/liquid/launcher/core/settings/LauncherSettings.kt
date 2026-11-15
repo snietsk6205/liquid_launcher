@@ -1378,14 +1378,19 @@ object LauncherSettings {
     val WallpaperTransition = ChoiceSetting(
         key = "wallpaper.transition", default = "liquid",
         options = listOf(
-            "liquid" to "Liquid (blurs and fades)",
-            "fade" to "Cross-fade",
-            "depth" to "Depth (the old one sinks away)",
+            "liquid" to "Liquid: blurs away as the new screen settles",
+            "ripple" to "Ripple: a wave from the picture you tapped",
+            "ink" to "Ink: dissolves in soft clouds",
+            "shine" to "Shine: a pane of glass sweeps across",
+            "melt" to "Melt: runs down like paint",
+            "zoom" to "Zoom: you pass through the old screen",
+            "depth" to "Depth: the old one sinks, the new one comes forward",
             "slide" to "Slide",
+            "fade" to "Cross-fade",
             "none" to "None",
         ),
         title = "Transition",
-        summary = "When the wallpaper or the layout changes: wallpaper, icons and widgets change together",
+        summary = "When the wallpaper or the layout changes: wallpaper, icons and widgets change together. Ripple, ink, shine and melt run on the GPU",
         section = "wallpaper", keywords = "wallpaper transition crossfade fade animation layout switch",
     )
     val WallpaperTransitionMs = IntSetting(

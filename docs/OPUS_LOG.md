@@ -580,8 +580,9 @@ lock-screen problem (below), documented for Fable rather than solved; go to the 
 | `feature/home/Widgets.kt` (new), `HomeGrid.kt`, `EditTools.kt`, `Study.kt` | Picker (launcher's widgets, apps with previews and sizes, search); `AppWidgetItem`; Date, Battery, Study block widgets; "Widget settings" and glass plate in edit mode; `placeWidget` shrinks a widget that does not fit | D100 |
 | `Glass.kt` settings | Edge light off by default | D101 |
 | `HomeScreen.kt`, `Study.kt` | Home sinks behind Today, layouts and the picker; clock line `AnimatedContent`; ring and tick animations | D102 |
+| `feature/home/WallpaperTransitions.kt` (new), `WallpaperViews.kt`, `HomeScreen.kt`, `HomeController.kt`, settings | Asked during the same round: Ripple (from the picture tapped), Ink, Shine, Melt (AGSL shaders), Zoom; the new screen and wallpaper settle in for every style; easing and length per style; strip buttons are glass buttons | D103 |
 | Tests | `AppWidgetsTest` (cell sizes, ids in use) | |
-| `ci/smoke.sh` | 12b: the picker finds the Clock app's widgets by search, the system's "Create" is accepted and the widget's own views (TextClock / AnalogClock) run on the home screen; the picker's new heading | |
+| `ci/smoke.sh` | 15: the four transition shaders compile on the emulator (from the launcher's log). 12b: the picker finds the Clock app's widgets by search, the system's "Create" is accepted and the widget's own views (TextClock / AnalogClock) run on the home screen; the picker's new heading | |
 
 **For Fable: the lock-screen wallpaper and glass (not changed, as the user asked).** With "Also on the lock screen" on,
 after changing the wallpaper the glass sometimes turns frosted or flat; with it off, glass stays liquid. Nothing lowers

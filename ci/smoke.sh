@@ -630,6 +630,16 @@ sleep 1
 for i in $(seq 1 40); do service_up && break; sleep 0.5; done
 
 if [ "$ANR_DIALOGS" -gt 0 ]; then echo "NOTE: dismissed $ANR_DIALOGS 'not responding' dialog(s); the emulator was slow (see logcat for ANR reasons)"; fi
+echo "== 15. Wallpaper transition shaders"
+# 0.7.0: ripple, ink, shine and melt are AGSL shaders compiled when the home screen starts; a shader that does not
+# compile falls back to the liquid fade, so it would never show as a crash. The launcher logs which compiled.
+if grep -q "transition shaders ready: ripple, ink, shine, melt" "$LOG" && ! grep -q "transition shader.*unavailable" "$LOG"; then
+  pass "the four transition shaders compile"
+else
+  fail "the four transition shaders compile"
+  grep -E "transition shader" "$LOG" | tail -6
+fi
+
 echo "== 8. No crashes"
 adb logcat -d > "$OUT/logcat.txt" 2>/dev/null
 if grep -A3 "FATAL EXCEPTION" "$OUT/logcat.txt" | grep -q "$PKG"; then

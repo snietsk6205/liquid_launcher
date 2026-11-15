@@ -392,6 +392,9 @@ class HomeController(
     val transitionProgress = Animatable(0f)
     private var transitionJob: kotlinx.coroutines.Job? = null
 
+    /** Where the change was started (the wallpaper tapped in the strip), in screen pixels: a ripple spreads from there. */
+    var transitionOrigin: androidx.compose.ui.geometry.Offset? = null
+
     /** The wallpaper strip from the home menu. */
     var wallpaperStrip by mutableStateOf(false)
 
@@ -421,13 +424,14 @@ class HomeController(
                     transitionProgress.animateTo(
                         1f,
                         androidx.compose.animation.core.tween(
-                            MotionScale.ms(data.settings.get(LauncherSettings.WallpaperTransitionMs)),
-                            easing = androidx.compose.animation.core.FastOutSlowInEasing,
+                            MotionScale.ms((data.settings.get(LauncherSettings.WallpaperTransitionMs) * WallpaperTransitions.lengthFactor(style)).toInt()),
+                            easing = WallpaperTransitions.easing(style),
                         ),
                     )
                 }
             } finally {
                 transitionShot = null
+                transitionOrigin = null
             }
             after(value)
         }
