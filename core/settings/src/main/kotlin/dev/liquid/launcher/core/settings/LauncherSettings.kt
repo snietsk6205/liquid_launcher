@@ -1376,7 +1376,7 @@ object LauncherSettings {
         key = "study.planLink", default = "",
         placeholder = "https://…",
         title = "Study plan link",
-        summary = "Opened by the \"Plan\" quick action: a web page, a document link, or any link an app on the phone opens. Empty: the calendar",
+        summary = "Opened by the \"Plan\" quick action: a web page, a document link, any link an app on the phone opens, or an app's package name (opens that app). Empty: the calendar",
         section = "study", keywords = "study plan link url open",
     )
 

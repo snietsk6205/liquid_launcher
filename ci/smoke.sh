@@ -424,8 +424,36 @@ if tap_text 11-edit "Pages" exact; then
 else
   fail "edit mode has a Pages button"
 fi
+# The widget list (clock, Now card, Today). Only opened and closed: adding a study widget asks for the calendar.
+if tap_text 11-edit "Widgets" exact; then
+  sleep 1
+  dump 12-widgets
+  if on_screen 12-widgets "Add a widget to this page" exact; then pass "edit mode lists the widgets"; else fail "edit mode lists the widgets"; fi
+  adb shell input keyevent KEYCODE_BACK
+  sleep 1
+  dump 11-edit
+else
+  fail "edit mode has a Widgets button"
+fi
 tap_text 11-edit "Done" exact || adb shell input keyevent KEYCODE_BACK
 sleep 1
+
+clear_anr
+# Study companion: the home menu's Today item opens the panel; on a fresh install it offers to switch on.
+adb shell input swipe 540 1250 540 1250 1000
+sleep 1.5
+dump 14-menu
+if tap_text 14-menu "Today" exact; then
+  sleep 1.5
+  peek 14-today
+  dump 14-today
+  if on_screen 14-today "Switch it on" exact; then pass "home menu opens the Today panel"; else fail "home menu opens the Today panel"; fi
+  adb shell input keyevent KEYCODE_BACK
+  sleep 1
+else
+  fail "home menu has a Today item"
+  adb shell input keyevent KEYCODE_BACK
+fi
 clear_anr
 # The updates screen (in-app updater) opens and offers a check; no network is used here.
 adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen updates >/dev/null

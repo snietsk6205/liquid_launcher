@@ -403,4 +403,31 @@ announced once per launch of the home screen instead of once per day.
 | 2460e73 (his work, my commit) | Fable's uncommitted files exactly as he left them |
 | `[opus]` version commit | `app.versionName` 0.6.1 (his code said 0.7.0); roadmap rows for the clock gallery and Phase 5 say what really happened; this entry |
 
+**Result:** run 40, all checks green on the first try: Fable's study code compiled unchanged, unit tests passed, and every
+emulator check passed, including the home-press check that failed in run 39 (which confirms that failure was the
+emulator). **0.6.1 released as build 40**: https://github.com/snietsk6205/liquid_launcher/releases/tag/v0.6.1. No fix
+commit was needed.
+
+---
+
+## Entry 13: 0.6.2, the study companion finished as Fable designed it (2026-11-15, Opus 5.5)
+
+**Goal:** the parts of Phase 5 that Fable's code did not do yet, following `docs/05-study-integration.md` and the event
+format version 1 exactly. Nothing in the format, the design or his files' structure changed; the additions sit in his
+files where they belong and in one new file.
+
+| File | Change | Design point |
+|---|---|---|
+| `core/data/StudyLocal.kt` (new, + `StudyLocalTest`) | Ticks kept on the phone: the event's text with the marks applied and the calendar text it was made from; text form for preferences; focus minutes counted up to the block's end | 5.2 "keeps ticks to itself", 5.3 focus "to the end of the block" |
+| `core/data/StudyCalendar.kt` | Without write permission or with "Write ticks back" off, a tick is kept on the phone instead of being lost; such ticks show while the calendar still holds the same text, are dropped when the event changes there, and go into the next write of that event. The focus timer stops by itself when its block ends (on refresh and on the home screen's minute tick) and writes only the block's minutes; the block's end is kept, so a timer left running overnight is still written to the right event. `firstToday` remembers announced notices per day across restarts | 5.2, 5.3, D89 |
+| `feature/home/Study.kt` | Now card: "Skip" next to "Done"; notices use `firstToday`; the minute tick ends a finished focus timer | 5.3 |
+| `HomeController.kt`, settings | "Plan" also opens an app given by its package name (a web address typed without `https://` still opens) | 5.3 "a link or app of your choice" |
+| `ci/smoke.sh` | Two checks: edit mode lists the widgets; the home menu's Today item opens the panel (offers "Switch it on" on a fresh install) | the study code had never run on a device |
+| `DECISIONS.md` | D89 | |
+
+Not changed: the format, the marks, the status line, the classification of blocks and tasks, the UI layout, D86–D88.
+
+Not verified on a device (no calendar on the emulator, as for 0.6.1): reading and writing real Google Calendar events on
+MagicOS, the share to the Claude app, notices at a block's start.
+
 Result: see the update at the end of this entry.

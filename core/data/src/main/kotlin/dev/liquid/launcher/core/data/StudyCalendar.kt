@@ -10,6 +10,8 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.CalendarContract
 import dev.liquid.launcher.core.common.DebugLog
+import dev.liquid.launcher.core.common.NoticeKind
+import dev.liquid.launcher.core.common.Notices
 import dev.liquid.launcher.core.settings.LauncherSettings
 import dev.liquid.launcher.core.settings.SettingsStore
 import kotlinx.coroutines.CoroutineScope
@@ -18,6 +20,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -96,7 +99,21 @@ class StudyCalendar(
             if (delayMs > 0) delay(delayMs)
             _day.value = if (enabled && canRead) load() else StudyDay()
             _loaded.value = enabled && canRead
+            // Not part of this job: a newer refresh must not cancel the write of the minutes.
+            if (_focus.value != null) scope.launch(Dispatchers.IO) { finishFocusIfOver() }
         }
+    }
+
+    /**
+     * True the first time [what] is asked for today. Remembered across restarts of the launcher,
+     * so "tasks due today" is announced once a day and a block's start once (5.3).
+     */
+    fun firstToday(what: String): Boolean {
+        val today = LocalDate.now().toString() + "|"
+        val seen = prefs.getStringSet("announced", emptySet()).orEmpty().filter { it.startsWith(today) }.toMutableSet()
+        if (!seen.add(today + what)) return false
+        prefs.edit().putStringSet("announced", seen).apply()
+        return true
     }
 
     /** The phone's calendars, for the settings screen. */
@@ -149,6 +166,8 @@ class StudyCalendar(
         val tasks = ArrayList<StudyEvent>()
         val overdue = ArrayList<StudyEvent>()
         var tomorrow: StudyEvent? = null
+        val local = localEdits()
+        val stale = HashSet<String>()
         try {
             context.contentResolver.query(
                 uri,
@@ -166,11 +185,15 @@ class StudyCalendar(
                     if (!isBlockCalendar && calendarId !in taskCalendars) continue
                     if (c.getInt(10) == CalendarContract.Events.STATUS_CANCELED) continue
                     val allDay = c.getInt(3) != 0
-                    val event = StudyEvent(
+                    val fromCalendar = StudyEvent(
                         eventId = c.getLong(0), calendarId = calendarId, begin = c.getLong(1), end = c.getLong(2), allDay = allDay,
                         rawTitle = c.getString(4).orEmpty(), description = c.getString(5).orEmpty(), location = c.getString(6).orEmpty(),
                         color = c.getInt(8), recurring = !c.getString(9).isNullOrEmpty(),
                     )
+                    // Ticks kept on the phone show until the event changes in the calendar.
+                    val kept = local[fromCalendar.key]
+                    if (kept != null && !StudyLocal.isCurrent(kept, fromCalendar.rawTitle, fromCalendar.description)) stale += fromCalendar.key
+                    val event = StudyLocal.apply(fromCalendar, kept)
                     if (event.rawTitle.isBlank()) continue
                     // All-day events are stored from midnight to midnight UTC; timed ones in real time.
                     val firstDay = if (allDay) Instant.ofEpochMilli(event.begin).atZone(ZoneOffset.UTC).toLocalDate() else Instant.ofEpochMilli(event.begin).atZone(zone).toLocalDate()
@@ -190,6 +213,9 @@ class StudyCalendar(
         } catch (e: Exception) {
             DebugLog.error("Study", "reading the calendar failed: $e")
         }
+        // Drop the phone's copies of events that changed in the calendar, and old ones.
+        val oldest = System.currentTimeMillis() - (overdueDays + 2) * 24 * 60 * 60_000L
+        if (local.keys.removeAll { it in stale || local[it]!!.savedAt < oldest }) saveLocal(local)
         return StudyDay(
             blocks = blocks.sortedBy { it.begin },
             tasks = tasks.sortedWith(compareBy({ it.status != StudyStatus.Open }, { it.begin }, { it.rawTitle })),
@@ -215,9 +241,12 @@ class StudyCalendar(
         StudyFormat.withStatus(title, status) to StudyFormat.refreshed(description, note)
     }
 
-    /** Adds [minutes] of focused time to [event]'s status line. */
-    private suspend fun addFocus(eventId: Long, begin: Long, minutes: Int): Boolean {
-        val event = _day.value.blocks.firstOrNull { it.eventId == eventId && it.begin == begin } ?: return false
+    /** Adds [minutes] of focused time to the status line of the block [focus] ran on. */
+    private suspend fun addFocus(focus: StudyFocus, blockEnd: Long, recurring: Boolean, minutes: Int): Boolean {
+        val begin = focus.eventKey.substringAfter('@').toLongOrNull() ?: 0
+        val event = _day.value.blocks.firstOrNull { it.key == focus.eventKey }
+            // A block of an earlier day (the launcher was away when it ended): rebuilt from what was kept at the start.
+            ?: StudyEvent(focus.eventId, 0, begin, blockEnd, false, "", recurring = recurring)
         return edit(event) { title, description ->
             val note = StudyFormat.note(description)
             title to StudyFormat.refreshed(description, note.copy(focusMinutes = note.focusMinutes + minutes))
@@ -227,26 +256,50 @@ class StudyCalendar(
     fun startFocus(event: StudyEvent) {
         val focus = StudyFocus(event.key, event.eventId, System.currentTimeMillis())
         _focus.value = focus
-        prefs.edit().putString("focusKey", focus.eventKey).putLong("focusEvent", focus.eventId).putLong("focusStart", focus.startedAt).apply()
+        prefs.edit().putString("focusKey", focus.eventKey).putLong("focusEvent", focus.eventId).putLong("focusStart", focus.startedAt)
+            .putLong("focusEnd", event.end).putBoolean("focusRecurring", event.recurring).apply()
+    }
+
+    /** The end of the block the focus timer runs on (0 when unknown). */
+    private fun focusEnd(focus: StudyFocus): Long =
+        prefs.getLong("focusEnd", 0).takeIf { it > 0 } ?: _day.value.blocks.firstOrNull { it.key == focus.eventKey }?.end ?: 0
+
+    /**
+     * The focus timer runs to the end of its block (5.3): once the block is over, it stops by
+     * itself and the minutes up to the block's end are written. Returns them, or null when the
+     * timer is still running (or none is).
+     */
+    suspend fun finishFocusIfOver(now: Long = System.currentTimeMillis()): Int? {
+        val focus = _focus.value ?: return null
+        val end = focusEnd(focus)
+        if (!StudyLocal.focusOver(end, now)) return null
+        val minutes = stopFocus(until = end)
+        Notices.post(NoticeKind.Study, "Focus ended with the block: $minutes min", if (minutes > 0) "Added to the block" else null)
+        return minutes
     }
 
     /** Stops the focus timer and writes the minutes to its block. Returns the minutes focused. */
-    suspend fun stopFocus(): Int {
-        val focus = _focus.value ?: return 0
-        _focus.value = null
-        prefs.edit().remove("focusKey").remove("focusEvent").remove("focusStart").apply()
-        val minutes = ((System.currentTimeMillis() - focus.startedAt + 30_000) / 60_000).toInt().coerceIn(0, 12 * 60)
-        if (minutes > 0) addFocus(focus.eventId, focus.eventKey.substringAfter('@').toLongOrNull() ?: 0, minutes)
+    suspend fun stopFocus(until: Long = System.currentTimeMillis()): Int {
+        val running = _focus.value ?: return 0
+        val end = focusEnd(running)
+        val recurring = prefs.getBoolean("focusRecurring", false)
+        // Taken atomically, so the minute tick and a refresh cannot both write the same minutes.
+        val focus = _focus.getAndUpdate { if (it == running) null else it }.takeIf { it == running } ?: return 0
+        prefs.edit().remove("focusKey").remove("focusEvent").remove("focusStart").remove("focusEnd").remove("focusRecurring").apply()
+        val minutes = StudyLocal.focusMinutes(focus.startedAt, until, end)
+        if (minutes > 0) addFocus(focus, end, recurring, minutes)
         return minutes
     }
 
     /**
      * Applies [change] to the event's current title and description (read fresh, so an edit
      * that arrived by sync a moment ago is not overwritten) and writes the result. One
-     * occurrence of a repeating event becomes an exception of its series.
+     * occurrence of a repeating event becomes an exception of its series. When it may not be
+     * written (no write permission, or writing back is off), the result is kept on the phone
+     * ([StudyLocalEdit]); ticks kept that way are carried into the next write of the event.
      */
     private suspend fun edit(event: StudyEvent, change: (title: String, description: String) -> Pair<String, String>?): Boolean = withContext(Dispatchers.IO) {
-        if (!settings.get(LauncherSettings.StudyWriteBack) || !canWrite) return@withContext false
+        val write = settings.get(LauncherSettings.StudyWriteBack) && canWrite
         try {
             val resolver = context.contentResolver
             val eventUri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, event.eventId)
@@ -258,8 +311,24 @@ class StudyCalendar(
                     description = c.getString(1).orEmpty()
                 }
             }
-            val (newTitle, newDescription) = change(title, description) ?: return@withContext false
-            if (newTitle == title && newDescription == description) return@withContext true
+            val local = localEdits()
+            val kept = local[event.key]?.takeIf { StudyLocal.isCurrent(it, title, description) }
+            val (newTitle, newDescription) = change(kept?.title ?: title, kept?.description ?: description) ?: return@withContext false
+            if (newTitle == title && newDescription == description) {
+                // The calendar already says this (for example an undo back to it): nothing to keep or write.
+                if (local.remove(event.key) != null) {
+                    saveLocal(local)
+                    _day.value = load()
+                }
+                return@withContext true
+            }
+            if (!write) {
+                local[event.key] = StudyLocalEdit(title, description, newTitle, newDescription, System.currentTimeMillis())
+                saveLocal(local)
+                DebugLog.event("Study", "calendar event ${event.eventId} kept on the phone (" + (if (canWrite) "writing back is off" else "no permission to write") + ")")
+                _day.value = load()
+                return@withContext true
+            }
             val values = ContentValues().apply {
                 put(CalendarContract.Events.TITLE, newTitle)
                 put(CalendarContract.Events.DESCRIPTION, newDescription)
@@ -271,11 +340,22 @@ class StudyCalendar(
                 resolver.update(eventUri, values, null, null) > 0
             }
             DebugLog.event("Study", "calendar event ${event.eventId} " + if (ok) "updated" else "could not be updated")
-            if (ok) _day.value = load()
+            if (ok) {
+                if (local.remove(event.key) != null) saveLocal(local)
+                _day.value = load()
+            }
             ok
         } catch (e: Exception) {
             DebugLog.error("Study", "writing to the calendar failed: $e")
             false
         }
+    }
+
+    // ---- ticks kept on the phone ----
+
+    private fun localEdits(): MutableMap<String, StudyLocalEdit> = StudyLocal.decode(prefs.getString("local", null))
+
+    private fun saveLocal(edits: Map<String, StudyLocalEdit>) {
+        prefs.edit().putString("local", StudyLocal.encode(edits)).apply()
     }
 }

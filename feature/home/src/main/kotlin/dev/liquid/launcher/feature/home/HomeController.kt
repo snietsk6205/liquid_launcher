@@ -281,9 +281,17 @@ class HomeController(
         start(intent)
     }
 
+    /** Opens the study plan: a link, or an app given by its package name ("a link or app of your choice"). */
     fun openStudyPlan() {
         val link = data.settings.get(LauncherSettings.StudyPlanLink).trim()
-        if (link.isEmpty()) run(LauncherAction.OpenCalendar) else openUrl(link)
+        val app = if (link.isNotEmpty() && ':' !in link && '/' !in link) context.packageManager.getLaunchIntentForPackage(link) else null
+        when {
+            link.isEmpty() -> run(LauncherAction.OpenCalendar)
+            app != null -> start(app)
+            // No scheme and not an installed app: a web address typed without "https://".
+            ':' !in link -> openUrl("https://$link")
+            else -> openUrl(link)
+        }
     }
 
     /** Adds a built-in widget of [type] to the current page, across its width. */

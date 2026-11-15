@@ -220,6 +220,7 @@ internal fun NowCard(controller: HomeController, surface: StudySurface) {
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             if (current.status == StudyStatus.Open) {
                                 ActionChip("Done", color, filled = true) { controller.studyStatus(current, StudyStatus.Done) }
+                                ActionChip("Skip", color) { controller.studyStatus(current, StudyStatus.Skipped) }
                             } else {
                                 ActionChip("Undo", color) { controller.studyStatus(current, StudyStatus.Open) }
                             }
@@ -540,7 +541,9 @@ internal fun studyReport(day: StudyDay): String {
 
 /**
  * Glass notices for the study companion: a block starting, a block about to end, and once a
- * day the number of tasks. Only looks at the clock while the home screen is composed.
+ * day the number of tasks. Only looks at the clock while the home screen is composed. Each one
+ * is shown once ([StudyCalendar.firstToday] remembers it across restarts of the launcher).
+ * The same minute tick stops a focus timer whose block has ended.
  */
 @Composable
 internal fun StudyNotices(controller: HomeController) {
@@ -548,23 +551,22 @@ internal fun StudyNotices(controller: HomeController) {
     val day by study.day.collectAsState()
     val loaded by study.loaded.collectAsState()
     val tick = rememberMinuteTick()
-    val announced = remember { HashSet<String>() }
     LaunchedEffect(tick, day, loaded) {
         if (!loaded) return@LaunchedEffect
+        study.finishFocusIfOver()
         val now = System.currentTimeMillis()
         val lead = controller.data.settings.get(LauncherSettings.StudyNoticeLead) * 60_000L
         val current = day.current(now)
         if (current != null && current.status == StudyStatus.Open) {
-            if (now - current.begin < 3 * 60_000 && announced.add("start:" + current.key)) {
+            if (now - current.begin < 3 * 60_000 && study.firstToday("start:" + current.key)) {
                 val tasks = current.tasks.size
                 Notices.post(NoticeKind.Study, "Now: ${current.title.text}", "${time(current.begin)} – ${time(current.end)}" + if (tasks > 0) " · $tasks tasks" else "", LauncherAction.Today.encode())
             }
-            if (lead > 0 && current.end - now in 1..lead && announced.add("end:" + current.key)) {
+            if (lead > 0 && current.end - now in 1..lead && study.firstToday("end:" + current.key)) {
                 Notices.post(NoticeKind.Study, "${minutes(current.end - now)} left: ${current.title.subject}", "Tap to tick off what you did", LauncherAction.Today.encode())
             }
         }
-        val today = LocalDate.now().toString()
-        if (day.openTasks > 0 && announced.add("tasks:$today")) {
+        if (day.openTasks > 0 && study.firstToday("tasks")) {
             val overdue = day.overdue.size
             Notices.post(NoticeKind.Task, "${day.openTasks} tasks to do today", if (overdue > 0) "$overdue of them from earlier days" else null, LauncherAction.Today.encode())
         }
