@@ -1,4 +1,129 @@
-# 5. Tasks and calendar integration
+# 5. Study companion: tasks and blocks over the calendar
+
+Revised on 2026-11-15 (Fable). The first design (sections 5.1–5.9 of the 2026-11-12 version, kept at the end of this
+file) synced two JSON files through a private GitHub repo. The user's assistant proposed the calendar as the bridge
+instead. This section compares the two and fixes the format.
+
+## 5.0 Decision: the calendar is the bridge
+
+| | Calendar events (chosen) | `plan.json` / `state.json` on GitHub |
+|---|---|---|
+| Setup on the phone | Grant calendar access once | Create a private repo and a fine-grained token, paste it in |
+| Network code in the launcher | None: Android's own calendar sync carries everything | HTTP client, conditional requests, outbox, retries, token storage |
+| Works offline | Yes (the phone's calendar database) | Yes, with a cache and an outbox to build |
+| Claude's side | Already writes study blocks to Google Calendar every evening | Needs a session with access to the repo |
+| Visible elsewhere | Any calendar app, the watch, the lock screen | Only in the launcher |
+| Structure | Semi-structured: a few conventions in title and description | Exact schema, room for statistics |
+| Two writers | The same event, but at different times and in different parts (below) | One file per writer, no conflicts by construction |
+| Work to build | 1 build | 2–3 builds |
+
+The calendar wins on every point that costs the user time. Its one weakness, two writers on one record, is handled by
+dividing the event: **Claude owns the time, the title text and the description's body; the launcher only ever changes
+three marks** (the `✓` in front of a title, the `x` inside a task's brackets, and one status line it appends). Claude
+writes in the evening, the phone during the day. The GitHub design is not built; it stays documented in case exact
+statistics are wanted later.
+
+Trade-off accepted: no per-task ids, priorities or estimates as separate fields. A task is a line of text; what it needs
+beyond that goes into the text.
+
+## 5.1 The event format (version 1), for the assistant
+
+Two dedicated Google calendars. The names are settings; the defaults match anything containing these words.
+
+| Calendar | Holds | Event kind |
+|---|---|---|
+| **Study** | Study blocks | Timed events |
+| **Tasks** | Things to do that are not tied to a time | All-day events on the day they are planned for |
+
+### A study block (calendar "Study")
+
+| Field | Content | Example |
+|---|---|---|
+| Title | `Subject: what` (the part before the first colon is the subject; a title without a colon is all subject) | `Analysis: series convergence` |
+| Start / end | The block's time. Not recurring (one event per block) | 14:00 – 15:30 |
+| Description | Tasks of the block as checklist lines, then free notes. A line starting with `[ ]` is an open task, `[x]` a finished one. A leading `- ` or `* ` is allowed | see below |
+| Colour | Optional. The event's colour (or its calendar's) becomes the block's colour in the launcher | Peacock |
+| Location | Optional link or place; a link here (or the first link in the notes) gets an "Open" button | `https://…/sheet4.pdf` |
+
+```
+[ ] Exercise sheet 4, ex. 1–5
+[ ] Read chapter 3.2
+[ ] Flashcards deck 2
+
+Focus on the convergence tests. Sheet: https://example.org/sheet4.pdf
+```
+
+### A task (calendar "Tasks")
+
+An all-day event on the day it should be done. Title = the task. Optional notes in the description. A task spanning
+several days is an all-day event over those days and shows on each of them until done.
+
+### What the launcher writes back
+
+| Action in the launcher | Change to the event |
+|---|---|
+| Tick a task inside a block | That line's `[ ]` becomes `[x]` (and back when unticked) |
+| Mark a block done | Title gets the prefix `✓ ` |
+| Skip a block | Title gets the prefix `✗ ` |
+| Tick a task of the Tasks calendar | Title gets the prefix `✓ ` |
+| Any of the above, and the focus timer | One status line at the very end of the description, replaced each time: `— launcher: done 15:31 · 2/3 tasks · focus 84 min` |
+
+Nothing else is touched: not the time, not the wording, not the notes. Undoing in the launcher removes the mark again.
+
+### Rules for the evening check-in
+
+1. Read the day's events in both calendars. `✓ ` in front of a title = done, `✗ ` = skipped, neither = not done.
+   `[x]` lines = finished tasks. The `— launcher:` line carries when it was finished, how many tasks, and focus minutes.
+2. When re-planning an unfinished block, **create a new event** for the new time (or move the old one); do not copy the
+   `✓`, the `[x]` marks or the `— launcher:` line into new events.
+3. Leave finished events as they are: they are the record.
+4. Do not use recurring events for study blocks. (The launcher can still tick one occurrence of a recurring event; it
+   then becomes an exception of the series, which is harder to read back.)
+5. Plain text descriptions. Descriptions edited in Google Calendar's web page turn into HTML; the launcher reads and
+   edits those too, but plain text is safer.
+6. Other calendars are never read or changed.
+
+### What it looks like after a day
+
+```
+Title:        ✓ Analysis: series convergence
+Description:  [x] Exercise sheet 4, ex. 1–5
+              [x] Read chapter 3.2
+              [ ] Flashcards deck 2
+
+              Focus on the convergence tests. Sheet: https://example.org/sheet4.pdf
+              — launcher: done 15:31 · 2/3 tasks · focus 84 min
+```
+
+## 5.2 On the phone
+
+- Reading: `CalendarContract.Instances` for today (and the next days for the agenda), limited to the chosen calendars.
+  No account, no network. A content observer refreshes the launcher when the calendar changes; "which block is now" is
+  worked out when the launcher appears and once a minute while it is on screen. No alarms, no background work.
+- Writing: an update of the event's title or description through the calendar provider; Android's sync sends it to
+  Google. For one occurrence of a recurring event, an exception is written.
+- Permissions: read and write calendar, asked the first time the study companion is switched on. Without write
+  permission the launcher still shows everything and keeps ticks to itself (they are then not visible to Claude).
+
+## 5.3 What you see
+
+- **Now card** (widget): the block running now (or the next one with a countdown), time left as a bar, its tasks with
+  tap-to-tick, "Done" and "Skip", and three quick actions: focus timer, note to Claude, study plan.
+- **Today** (panel, and a widget): today's blocks in time order with their tasks, the Tasks calendar's tasks for today,
+  overdue tasks of the last two weeks on top, tomorrow's first block at the bottom.
+- **Glass notices**: a block is starting, a block ends in five minutes, tasks due today (once, the first time the
+  launcher shows that day).
+- **Quick actions**: "Tell Claude" opens the Claude app's share sheet with a ready text (what was planned, what was
+  done, focus minutes, space for a note); "Study plan" opens a link or app of your choice; "Focus" runs a timer to the
+  end of the block and writes the focused minutes into the status line.
+
+## 5.4 Later (Phase 6)
+
+Study mode (a layout switch during blocks), friction for distracting apps, profiles. They read the same blocks.
+
+---
+
+# Appendix: the first design (GitHub files), not built
 
 ## 5.1 Evaluation of the proposed design
 

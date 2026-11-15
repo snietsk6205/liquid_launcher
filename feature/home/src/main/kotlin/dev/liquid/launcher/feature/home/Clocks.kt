@@ -363,6 +363,9 @@ fun ClockFace(
             else -> Alignment.Center
         },
     ) {
+        // Read here: inside the column below, the box's own scope is out of reach.
+        val boxWidth = maxWidth
+        val boxHeight = maxHeight
         val wantsSeconds = style.seconds != "off" && (style.design == "digital" || style.design == "analog")
         val now = when {
             style.design == "analog" && style.seconds == "sweep" -> rememberFrameTime()
@@ -373,24 +376,24 @@ fun ClockFace(
         val date = if (style.date != "off" && style.design != "minimal") dateText(style.dateFormat, now) else null
         // The date line takes a share of the height; the face gets the rest.
         val dateShare = if (date != null) 0.2f else 0f
-        val faceHeight = maxHeight * (1f - dateShare)
+        val faceHeight = boxHeight * (1f - dateShare)
         Column(horizontalAlignment = horizontal, verticalArrangement = Arrangement.Center) {
-            if (date != null && style.date == "above") DateLine(date, ink, maxWidth, maxHeight * dateShare)
-            Box(Modifier.size(maxWidth, faceHeight), contentAlignment = when (style.align) {
+            if (date != null && style.date == "above") DateLine(date, ink, boxWidth, boxHeight * dateShare)
+            Box(Modifier.size(boxWidth, faceHeight), contentAlignment = when (style.align) {
                 "start" -> Alignment.CenterStart
                 "end" -> Alignment.CenterEnd
                 else -> Alignment.Center
             }) {
                 when (style.design) {
-                    "stacked" -> StackedFace(style, ink, time, maxWidth, faceHeight, horizontal)
-                    "minimal" -> MinimalFace(style, ink, time, now, maxWidth, faceHeight, horizontal)
+                    "stacked" -> StackedFace(style, ink, time, boxWidth, faceHeight, horizontal)
+                    "minimal" -> MinimalFace(style, ink, time, now, boxWidth, faceHeight, horizontal)
                     "analog" -> AnalogFace(style, ink, time, now)
-                    "words" -> WordsFace(style, ink, time, maxWidth, faceHeight, horizontal)
-                    "flip" -> FlipFace(style, ink, time, maxWidth, faceHeight)
-                    else -> DigitalFace(style, ink, time, maxWidth, faceHeight)
+                    "words" -> WordsFace(style, ink, time, boxWidth, faceHeight, horizontal)
+                    "flip" -> FlipFace(style, ink, time, boxWidth, faceHeight)
+                    else -> DigitalFace(style, ink, time, boxWidth, faceHeight)
                 }
             }
-            if (date != null && style.date == "below") DateLine(date, ink, maxWidth, maxHeight * dateShare)
+            if (date != null && style.date == "below") DateLine(date, ink, boxWidth, boxHeight * dateShare)
         }
     }
 }
