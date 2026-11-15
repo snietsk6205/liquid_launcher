@@ -583,14 +583,18 @@ private fun HomeScreenBody(
         }
 
         // ---- Pill, or the edit toolbar in its place ----
+        // A sheet rising from the bottom (Today, layouts, clock gallery) puts the pill away instead of
+        // showing it through its glass (0.6.4).
+        val sheetUp = !pill.top && (controller.todaySheet || controller.layoutsSheet || controller.clockStudio != null)
+        val pillAway by androidx.compose.animation.core.animateFloatAsState(if (sheetUp) 1f else 0f, label = "pillAway")
         val barModifier = Modifier
             .align(if (pill.top) Alignment.TopCenter else Alignment.BottomCenter)
             .then(if (pill.top) Modifier.statusBarsPadding() else Modifier.navigationBarsPadding())
             .padding(vertical = pill.offsetDp.dp)
             .graphicsLayer {
                 val p = controller.drawer.value
-                alpha = (1f - p * 2f).coerceIn(0f, 1f) * returnState.progress.floatValue
-                translationY = p * 40.dp.toPx() * (if (pill.top) -1 else 1)
+                alpha = (1f - p * 2f).coerceIn(0f, 1f) * returnState.progress.floatValue * (1f - pillAway)
+                translationY = (p * 40.dp.toPx() + pillAway * 24.dp.toPx()) * (if (pill.top) -1 else 1)
             }
         if (controller.editMode && live) {
             if (controller.pagesSheet) {

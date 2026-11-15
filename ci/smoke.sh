@@ -545,9 +545,16 @@ clear_anr
 # the screenshot is taken while a slow swipe holds the right edge of the drawer.
 echo "== 14c. Letter index while held"
 adb shell input keyevent KEYCODE_HOME
-sleep 1.5
+sleep 2.5
 adb shell input swipe 540 1500 540 400 450
 sleep 2
+dump 14c-drawer
+if ! on_screen 14c-drawer "Search apps"; then
+  adb shell input swipe 540 1700 540 600 600
+  sleep 2
+  dump 14c-drawer
+fi
+on_screen 14c-drawer "Search apps" || echo "NOTE: the drawer did not open; the picture below shows the home screen"
 adb shell input swipe 1072 700 1066 1500 3000 &
 SWIPE_PID=$!
 sleep 1.6

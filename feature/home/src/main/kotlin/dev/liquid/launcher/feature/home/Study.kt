@@ -533,7 +533,7 @@ private fun BlockCard(block: StudyEvent, now: Long, prefs: TodayPrefs, focus: de
             } else {
                 buttons += { ActionChip("Undo", color) { controller.studyStatus(block, StudyStatus.Open) } }
             }
-            if (running || focus?.eventKey == block.key) {
+            if ((running && block.status == StudyStatus.Open) || focus?.eventKey == block.key) {
                 val focusing = focus?.eventKey == block.key
                 buttons += {
                     ActionChip(if (focusing) "Stop focus · " + minutes(now - (focus?.startedAt ?: now)) else "Focus", color, filled = focusing, accent = accent) { controller.studyFocus(block) }

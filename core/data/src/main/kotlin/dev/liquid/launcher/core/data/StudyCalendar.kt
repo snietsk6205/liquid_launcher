@@ -234,7 +234,9 @@ class StudyCalendar(
         return try {
             context.contentResolver.query(
                 CalendarContract.Events.CONTENT_URI, arrayOf(CalendarContract.Events._ID),
-                CalendarContract.Events.DIRTY + " = 1 AND " + CalendarContract.Events.CALENDAR_ID + " IN (" + calendarIds.joinToString(",") + ")",
+                // A calendar of the phone alone ("local") never syncs, so its edits never "wait".
+                CalendarContract.Events.DIRTY + " = 1 AND " + CalendarContract.Events.ACCOUNT_TYPE + " != '" + CalendarContract.ACCOUNT_TYPE_LOCAL + "' AND " +
+                    CalendarContract.Events.CALENDAR_ID + " IN (" + calendarIds.joinToString(",") + ")",
                 null, null,
             )?.use { it.count } ?: 0
         } catch (e: Exception) {
