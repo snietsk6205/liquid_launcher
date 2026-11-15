@@ -154,6 +154,8 @@ data class IndexConfig(
     val spacingDp: Int,
     /** "glass", "solid" or "none". */
     val bubble: String,
+    /** "beside", "above" or "finger": where the bubble sits relative to the finger. */
+    val bubblePlace: String = "beside",
     /** "light", "strong" or "off". */
     val haptics: String,
     /** Time constant of the list catching up with the finger, in milliseconds. */
@@ -314,6 +316,7 @@ fun SettingsStore.indexConfig() = IndexConfig(
     letterSp = get(S.IndexLetterSize),
     spacingDp = get(S.IndexSpacing),
     bubble = get(S.IndexBubble),
+    bubblePlace = get(S.IndexBubblePlace),
     haptics = get(S.IndexHaptics),
     followMs = get(S.IndexFollow),
     track = get(S.IndexTrack) / 100f,

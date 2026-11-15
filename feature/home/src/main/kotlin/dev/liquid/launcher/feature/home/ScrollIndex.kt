@@ -79,6 +79,46 @@ private val EdgeInset = 16.dp
 /** The letters pass this far beside the finger (towards their edge), so the finger does not cover them. */
 private val ApexOffset = 30.dp
 
+/** Space between the finger's touch point and the bubble's near edge: about half a thumb plus a margin. */
+private val BubbleGap = 52.dp
+
+/** A bubble placed beside the finger sits this much higher than it: a thumb covers more below its point than above. */
+private val BubbleLift = 20.dp
+
+/**
+ * Centre of the letter bubble for a finger at ([fingerX], [fingerY]) in a [width] × [height] box,
+ * pulling the string from the right edge ([fromRight]) or the left one (0.6.3, D91).
+ * - "beside": towards the middle of the screen by [gap] plus half the bubble, and [lift] higher, so
+ *   the thumb does not cover it; when there is no room on that side, above the finger instead.
+ * - "above": straight above the finger by [gap] plus half the bubble (below it near the top).
+ * - "finger": at the finger, as before 0.6.3.
+ */
+internal fun bubbleCentre(
+    place: String,
+    fingerX: Float,
+    fingerY: Float,
+    fromRight: Boolean,
+    bubbleWidth: Float,
+    bubbleHeight: Float,
+    gap: Float,
+    lift: Float,
+    width: Float,
+): Offset {
+    fun above(): Offset {
+        val y = fingerY - gap - bubbleHeight / 2f
+        return Offset(fingerX, if (y - bubbleHeight / 2f >= 0f) y else fingerY + gap + bubbleHeight / 2f)
+    }
+    return when (place) {
+        "finger" -> Offset(fingerX, fingerY)
+        "above" -> above()
+        else -> {
+            val x = if (fromRight) fingerX - gap - bubbleWidth / 2f else fingerX + gap + bubbleWidth / 2f
+            val fits = if (fromRight) x - bubbleWidth / 2f >= 0f else x + bubbleWidth / 2f <= width
+            if (fits) Offset(x, fingerY - lift) else above()
+        }
+    }
+}
+
 /** With pinned ends, the curve never gets tighter than this many letters on either side of the finger. */
 private const val MIN_REACH_SLOTS = 5f
 
@@ -282,6 +322,8 @@ internal fun ScrollIndex(
         val edge = with(density) { EdgeInset.toPx() }
         val apexOffset = with(density) { ApexOffset.toPx() }
         val bubblePx = with(density) { BubbleSize.toPx() }
+        val bubbleGap = with(density) { BubbleGap.toPx() }
+        val bubbleLift = with(density) { BubbleLift.toPx() }
         val maxPull = width * 0.86f
         val freeReach = (config.reach * n).coerceAtLeast(MIN_REACH_SLOTS)
         SideEffect { highlight.enabled = config.focus }
@@ -399,7 +441,7 @@ internal fun ScrollIndex(
                 }
         )
 
-        // ---- bubble: at the finger, the letter it is on ----
+        // ---- bubble: beside the finger (or where "Bubble position" says), the letter it is on ----
         if (config.bubble != "none") {
             val label = entries.getOrNull(touch.active)?.label.orEmpty()
             val bubbleColor = HomeTheme.accent
@@ -414,8 +456,12 @@ internal fun ScrollIndex(
                             val right = touch.fromRight
                             // Never closer to the edge than the letters' resting line plus the gap, so it does not sit on them.
                             val x = if (right) minOf(touch.fingerX, restX(true) - apexOffset) else maxOf(touch.fingerX, restX(false) + apexOffset)
-                            val left = (x - placeable.width / 2f).coerceIn(0f, (width - placeable.width).coerceAtLeast(0f))
-                            val topY = (touch.fingerY - placeable.height / 2f).coerceIn(0f, (height - placeable.height).coerceAtLeast(0f))
+                            val centre = bubbleCentre(
+                                config.bubblePlace, x, touch.fingerY, right,
+                                placeable.width.toFloat(), placeable.height.toFloat(), bubbleGap, bubbleLift, width,
+                            )
+                            val left = (centre.x - placeable.width / 2f).coerceIn(0f, (width - placeable.width).coerceAtLeast(0f))
+                            val topY = (centre.y - placeable.height / 2f).coerceIn(0f, (height - placeable.height).coerceAtLeast(0f))
                             placeable.place(left.roundToInt(), topY.roundToInt())
                         }
                     }

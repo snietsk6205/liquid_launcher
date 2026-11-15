@@ -1047,8 +1047,16 @@ object LauncherSettings {
         key = "index.bubble", default = "glass",
         options = listOf("glass" to "Liquid glass", "solid" to "Solid", "none" to "None"),
         title = "Bubble",
-        summary = "The letter (or section name) you are on, shown large at your finger",
+        summary = "The letter (or section name) you are on, shown large next to your finger",
         section = "drawerIndex", keywords = "index bubble popup letter style",
+    )
+    val IndexBubblePlace = ChoiceSetting(
+        key = "index.bubblePlace", default = "beside",
+        options = listOf("beside" to "Beside the finger", "above" to "Above the finger", "finger" to "Under the finger"),
+        title = "Bubble position",
+        summary = "Beside: towards the middle of the screen and a little higher, where your thumb does not cover it " +
+            "(above the finger when there is no room). Under the finger is how it was before 0.6.3",
+        section = "drawerIndex", keywords = "index bubble position place finger covered hidden see letter",
     )
     val IndexHaptics = ChoiceSetting(
         key = "index.haptics", default = "light",
@@ -1567,7 +1575,7 @@ object LauncherSettings {
         DrawerWork, DrawerCloseOnLaunch, DrawerSideMargin, DrawerDim, DrawerTabsPosition,
         DrawerTransition, DrawerTravel, DrawerPillMorph, DrawerSpeed, DrawerBounce, DrawerRise, DrawerHomeScale, DrawerHomeBlur, DrawerBlurLive,
         DrawerScrollbar, DrawerScrollBubble, DrawerScrollEffect, DrawerScrollStrength, DrawerOverscroll,
-        IndexVisibility, IndexSide, IndexTrack, IndexReach, IndexEnds, IndexLetterSize, IndexSpacing, IndexBubble, IndexHaptics, IndexFollow, IndexSpring, IndexHideDelay, IndexFocus, DrawerTopSections,
+        IndexVisibility, IndexSide, IndexTrack, IndexReach, IndexEnds, IndexLetterSize, IndexSpacing, IndexBubble, IndexBubblePlace, IndexHaptics, IndexFollow, IndexSpring, IndexHideDelay, IndexFocus, DrawerTopSections,
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
         TagStripPosition, TagButtonPosition, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
         MenuEntries,
