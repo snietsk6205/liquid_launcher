@@ -65,6 +65,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -174,7 +176,9 @@ internal fun WidgetPicker(glass: GlassConfig, lightBackground: Boolean, backdrop
                         if (query.isEmpty()) Text("Search widgets and apps", style = pickerText(color, 14, alpha = 0.55f))
                         BasicTextField(
                             value = query, onValueChange = { query = it }, singleLine = true,
-                            textStyle = pickerText(color, 14), cursorBrush = SolidColor(color), modifier = Modifier.fillMaxWidth(),
+                            textStyle = pickerText(color, 14), cursorBrush = SolidColor(color),
+                            // The placeholder under the field is hidden from accessibility (fully covered), so the field says it.
+                            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Search widgets and apps" },
                         )
                     }
                 }
