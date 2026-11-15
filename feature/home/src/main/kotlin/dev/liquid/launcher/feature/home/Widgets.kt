@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -138,6 +139,8 @@ internal fun WidgetPicker(glass: GlassConfig, lightBackground: Boolean, backdrop
         Column(
             Modifier
                 .align(Alignment.BottomCenter)
+                // Stays below the status bar when the keyboard pushes it up; the list gives up height first.
+                .statusBarsPadding()
                 .navigationBarsPadding()
                 .imePadding()
                 .padding(12.dp)

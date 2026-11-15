@@ -584,8 +584,9 @@ if tap_text 12b-menu "Widgets" exact; then
     dump 12b-search
     peek 12b-search
     WIDGET=""
-    for name in "Digital clock" "Analog clock" "Clock"; do
-      if [ "$name" != "Clock" ] && on_screen 12b-search "$name" exact; then WIDGET="$name"; break; fi
+    # The Clock app calls them "Digital" and "Analog" on the emulator's image (run 51), "… clock" on others.
+    for name in "Digital clock" "Analog clock" "Digital" "Analog"; do
+      if on_screen 12b-search "$name" exact; then WIDGET="$name"; break; fi
     done
     if [ -n "$WIDGET" ]; then
       tap_text 12b-search "$WIDGET" exact
