@@ -478,8 +478,23 @@ his outside the study companion; it is in a separate `[opus]` commit.
 Not changed: the event format, the marks, the Now card and Today widget (still in the widget list), Fable's clock faces
 other than the one line.
 
-Not verified on a device: the colour-change timing on the phone (the emulator has no comparable GPU), how the line looks
-under each of the six clock designs, the bubble's distance for a real thumb.
+**Result:** run 45, all green: unit tests (with `BubblePlaceTest`, `StudyGlanceTest`), every emulator check, released as
+**0.6.3 build 45**: https://github.com/snietsk6205/liquid_launcher/releases/tag/v0.6.3. On the way: run 42 was replaced by
+43 (the clock line's long press, below); run 43 was green and released build 43, but its new calendar check had been
+skipped (the device's `content` tool refuses a bound value with a colon); run 44 showed the app working on the
+emulator's calendar provider and failed on my test (a ticked box's icon is also labelled "Done", and the test tapped
+it); run 45 presses Done before ticking. Build 45 replaced build 43 in the release.
+
+**Verified on the emulator for the first time** (new check 14b, a local "Study" calendar with a running block): the
+launcher reads the block from the real calendar provider, the line under the clock shows it, a tap opens Today with its
+tasks, Done writes `✓ ` and the status line, a tick writes `[x]` and the status line counts it.
+
+Changed after the first push: the clock line had "hold for the focus timer"; the clock widget's own gesture detector
+starts edit-and-move after the long-press timeout without checking whether a child took the touch, so both would have
+happened. The line now has a tap only.
+
+Not verified on a device: Google's sync of the edits on MagicOS, the colour-change timing on the phone (the emulator
+has no comparable GPU), how the line looks under each of the six clock designs, the bubble's distance for a real thumb.
 
 ### For the next model (review)
 1. Fable's clock gallery and study companion are still not reviewed as a whole (entries 12–13).
