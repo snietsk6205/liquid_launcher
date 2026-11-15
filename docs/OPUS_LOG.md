@@ -525,14 +525,28 @@ was hours behind in both directions. With the right time the line would have sho
 | `feature/home/HomeController.kt` | `openStudyLink`: Chrome tab / Chrome / Claude / the phone's choice, double tap ignored | D96 |
 | `feature/home/ScrollIndex.kt` | `pullFor` (letters bend "Letters beside the finger" past it), bubble past the letter under the finger | D97 |
 | `core/settings/LauncherSettings.kt` | Section "Buttons" (8 settings); Liquid glass → Edge light; Study: Blocks in Today, Done and Skip buttons, Tomorrow in Today, Open the plan and block links in, Under the clock gains "Today only"; Scroll index: Letters beside the finger, Bubble distance | |
-| `feature/home/Previews.kt`, `HomeScreen.kt` | Settings → Buttons and Study companion show the Today panel live (`HomeMode.PreviewToday`) | D95 |
+| `feature/home/Previews.kt`, `HomeScreen.kt` | Settings → Buttons and Study companion show the Today panel live (`HomeMode.PreviewToday`); a sheet rising from the bottom puts the pill (and the morphing pill) away | D95 |
 | Tests | `StudyGlanceTest` (unmarked, tomorrow, today only), `BubblePlaceTest` (bubble past the letters, `pullFor`) | |
 | `ci/smoke.sh` | 14b also creates a block for tomorrow: Today's Tomorrow opens to it and its steps; with today done the clock line shows it. 14c: a picture of the letter index while held | |
 
 Not changed: the event format, the marks, the check-in's prompt, Fable's files other than `ClockStudio.kt`'s chip (now a
 `GlassButton`).
 
-**Result:** see below (CI).
+**Result:** released as **0.6.4 build 48**: https://github.com/snietsk6205/liquid_launcher/releases/tag/v0.6.4. Run 46
+was green, with every new emulator check (Today's Tomorrow opens to tomorrow's block and its steps; with today's block
+done the clock line shows "Tomorrow … · Micro smoke tomorrow"). Its pictures showed two things the checks could not:
+the pill showing through the bottom of the Today panel (already in 0.6.3; the panel's glass is a tint on the emulator)
+and "2 changes not sent to Google yet" for the emulator's phone-only calendar. Run 47: a sheet rising from the bottom
+(Today, layouts, clock gallery) puts the pill away, phone-only calendars never count as waiting, no Focus on a marked
+block, and the letter-index picture opens the drawer first; its picture showed the letters bent out from under the
+finger with the bubble past them, and the pill still under Today: with "pill turns into the search field" on, the pill
+is another composable. Run 48 moves that one away too; its picture shows the panel clear. Builds 46 and 47 were
+replaced in the release by 48.
+
+Verified on the emulator: the glance order (unit tests), the Tomorrow section, the clock line moving on to tomorrow,
+the letter curve and bubble (picture), the Today panel's layout with the buttons on the right (picture). Not verified:
+liquid glass buttons with real refraction (the emulator has no GPU, so they draw as crystal there), the Chrome tab and
+the Claude app for links, whether MagicOS honours the sync request, the Buttons and Study settings previews.
 
 ### For the next model (review)
 1. Glass buttons sample the sheet's exported layer; while Today scrolls they redraw each frame. Watch the frame rate on
