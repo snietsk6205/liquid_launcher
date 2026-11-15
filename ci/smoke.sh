@@ -601,9 +601,16 @@ if tap_text 12b-menu "Widgets" exact; then
       peek 12b-bind
       tap_text 12b-bind "Create" exact || tap_text 12b-bind "Allow" exact || true
       sleep 3
-      # A widget with a set-up screen opens it now: shown, not cancelled.
+      # A widget with a set-up screen opens it now (the Clock app's Analog asks for a clock face): pick the first choice.
       peek 12b-after
       echo "      top: $(top_activity)"
+      if ! top_activity | grep -q "$PKG"; then
+        dump 12b-setup
+        for choice in Scallop Numeral Done Save OK; do
+          if tap_text 12b-setup "$choice" exact; then echo "      set-up screen: picked \"$choice\""; break; fi
+        done
+        sleep 3
+      fi
       dump 12b-home
       peek 12b-home
       # The launcher logs each step; "added" means the widget's item is on the page with the app's views in it.
