@@ -678,7 +678,12 @@ private fun HomeScreenBody(
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .imePadding()
-                    .graphicsLayer { alpha = returnState.progress.floatValue },
+                    .graphicsLayer {
+                        // Only the closed pill makes way for a sheet; a pill already turned into the drawer's search stays.
+                        val away = pillAway * (1f - controller.drawer.value).coerceIn(0f, 1f)
+                        alpha = returnState.progress.floatValue * (1f - away)
+                        translationY = away * 24.dp.toPx()
+                    },
             )
         }
 
