@@ -500,14 +500,16 @@ else
     peek 14b-panel
     dump 14b-panel
     if on_screen 14b-panel "Recall the theorems" exact; then pass "the clock line opens Today with the block's tasks"; else fail "the clock line opens Today with the block's tasks"; fi
-    tap_text 14b-panel "Recall the theorems" exact || true
-    sleep 3
-    if event_text | grep -q '\[x\] Recall the theorems'; then pass "a tick is written into the event's description"; else fail "a tick is written into the event's description"; event_text | head -8; fi
-    dump 14b-panel2
-    tap_text 14b-panel2 "Done" exact || true
+    # "Done" first: once a task is ticked, its tick icon is also labelled "Done" (for accessibility) and comes earlier on screen.
+    tap_text 14b-panel "Done" exact || true
     sleep 3
     if event_text | grep -q 'title=✓ Proba 2 smoke block'; then pass "Done puts ✓ in front of the event's title"; else fail "Done puts ✓ in front of the event's title"; event_text | head -8; fi
     if event_text | grep -q '— launcher: done'; then pass "the launcher's status line is written"; else fail "the launcher's status line is written"; fi
+    dump 14b-panel2
+    tap_text 14b-panel2 "Recall the theorems" exact || true
+    sleep 3
+    if event_text | grep -q '\[x\] Recall the theorems'; then pass "a tick is written into the event's description"; else fail "a tick is written into the event's description"; event_text | head -8; fi
+    if event_text | grep -q '— launcher: done .* · 1/2 tasks'; then pass "the status line counts the ticked task"; else fail "the status line counts the ticked task"; event_text | tail -2; fi
     adb shell input keyevent KEYCODE_BACK
     sleep 1
   else
