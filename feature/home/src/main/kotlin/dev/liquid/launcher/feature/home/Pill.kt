@@ -67,6 +67,10 @@ fun actionIcon(action: LauncherAction): Int = when (action) {
     LauncherAction.Pages -> LauncherIcons.Pages
     LauncherAction.Layouts, LauncherAction.NextLayout, is LauncherAction.SwitchLayout -> LauncherIcons.Layers
     LauncherAction.SaveLayout -> LauncherIcons.Save
+    LauncherAction.Today, LauncherAction.StudyPlan -> LauncherIcons.School
+    LauncherAction.TellClaude -> LauncherIcons.Chat
+    LauncherAction.FocusTimer -> LauncherIcons.Schedule
+    LauncherAction.Widgets -> LauncherIcons.Widgets
     is LauncherAction.Section -> when (action.id) {
         "icons" -> LauncherIcons.Palette
         "drawer" -> LauncherIcons.Apps

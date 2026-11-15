@@ -319,6 +319,11 @@ fun HomeScreen(
             when (returnState.request) {
                 "wallpaper" -> controller.run(LauncherAction.Wallpaper)
                 "layouts" -> controller.run(LauncherAction.Layouts)
+                "today" -> controller.run(LauncherAction.Today)
+                "study" -> {
+                    controller.setupStudy()
+                    controller.run(LauncherAction.Today)
+                }
             }
             returnState.request = null
         }
@@ -680,6 +685,22 @@ fun HomeScreen(
         if (studio != null) {
             WallpaperStudio(studio, glass, lightBackground, overlayBackdrop, controller)
         }
+        Presence(if (live && controller.todaySheet) Unit else null) {
+            TodaySheet(glass, lightBackground, overlayBackdrop, controller)
+        }
+        Presence(if (live && controller.widgetPicker) Unit else null) {
+            WidgetPicker(glass, lightBackground, overlayBackdrop, controller)
+        }
+        if (live) {
+            StudyNotices(controller)
+            // Follow the calendar while the home screen is composed; read it when the companion is switched on.
+            val studyOn by store.derive { get(LauncherSettings.StudyEnabled) }
+            androidx.compose.runtime.DisposableEffect(studyOn) {
+                data.study.refresh()
+                data.study.watch(studyOn)
+                onDispose { data.study.watch(false) }
+            }
+        }
         Presence(controller.clockStudio.takeIf { live }) { clock ->
             ClockStudio(clock, glass, lightBackground, overlayBackdrop, controller)
         }
@@ -759,7 +780,7 @@ private fun EditToolbar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ToolButton(LauncherIcons.Recents, "Pages", color) { controller.pagesSheet = !controller.pagesSheet }
-        ToolButton(LauncherIcons.Schedule, "Add clock", color) { controller.addClock() }
+        ToolButton(LauncherIcons.Widgets, "Widgets", color) { controller.widgetPicker = !controller.widgetPicker }
         ToolButton(LauncherIcons.Undo, "Undo", color, enabled = canUndo) { controller.data.layout.undo() }
         ToolButton(LauncherIcons.Redo, "Redo", color, enabled = canRedo) { controller.data.layout.redo() }
         ToolButton(LauncherIcons.Settings, "Settings", color) { controller.run(LauncherAction.OpenSettings) }

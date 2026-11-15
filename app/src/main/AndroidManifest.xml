@@ -9,6 +9,9 @@
 
     <!-- Only for the in-app updater: checking GitHub releases and downloading a new build when asked. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Study companion: study blocks and tasks are calendar events; ticks are written back to them. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application

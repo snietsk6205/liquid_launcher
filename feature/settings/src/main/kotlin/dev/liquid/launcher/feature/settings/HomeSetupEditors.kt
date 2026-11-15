@@ -147,6 +147,54 @@ internal fun WallpaperEditor() {
     }
 }
 
+/** The study companion's state: whether it may read the calendar, and which calendars it uses for what. */
+@Composable
+internal fun StudyEditor(store: SettingsStore) {
+    val context = LocalContext.current
+    val data = remember { LauncherData.get(context) }
+    val enabled by store.observe(LauncherSettings.StudyEnabled)
+    val blockWords by store.observe(LauncherSettings.StudyBlockCalendars)
+    val taskWords by store.observe(LauncherSettings.StudyTaskCalendars)
+    val calendars = remember(enabled) { data.study.calendars() }
+    fun matches(name: String, words: String) = words.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.any { it in name.lowercase() }
+    InfoCard {
+        Text("How it works", style = MaterialTheme.typography.titleMedium)
+        BodyText(
+            "Your assistant writes study blocks into a calendar (timed events) and tasks into another (all-day events). " +
+                "A block's tasks are lines starting with [ ] in its description. The launcher shows them, and a tick changes the event " +
+                "(✓ in front of the title, [x] in the line), which your phone syncs to Google, so the assistant sees what you finished. " +
+                "No account and no network in the launcher. The exact format is in docs/05-study-integration.md."
+        )
+        BodyText(
+            when {
+                !data.study.canRead -> "Calendar access: not allowed yet."
+                !data.study.canWrite -> "Calendar access: reading only (ticks stay on the phone)."
+                else -> "Calendar access: allowed."
+            } + if (enabled) "" else " The companion is switched off.",
+            Modifier.padding(top = 8.dp),
+        )
+        Button(onClick = { openOnHome(context, if (enabled && data.study.canRead) "today" else "study") }, modifier = Modifier.padding(top = 8.dp)) {
+            Text(if (enabled && data.study.canRead) "Open Today on the home screen" else "Switch on and allow the calendar")
+        }
+        if (calendars.isNotEmpty()) {
+            Text("Calendars on this phone", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+            calendars.forEach { calendar ->
+                val use = when {
+                    matches(calendar.name, blockWords) -> "study blocks"
+                    matches(calendar.name, taskWords) -> "tasks"
+                    else -> "not used"
+                }
+                BodyText("${calendar.name}: $use" + if (use != "not used" && !calendar.writable) " (read-only: ticks cannot be written)" else "")
+            }
+        }
+        BodyText(
+            "On the home screen: Home menu → Widgets adds the Now card and the Today list; Home menu → Today opens the panel. " +
+                "\"Tell Claude\", \"Plan\" and \"Focus\" are also actions for gestures and the pill.",
+            Modifier.padding(top = 8.dp),
+        )
+    }
+}
+
 /** Saved layouts (list, export, import) and the full backup. */
 @Composable
 internal fun LayoutsAndBackupEditor() {

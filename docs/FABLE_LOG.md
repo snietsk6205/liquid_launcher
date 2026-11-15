@@ -152,3 +152,37 @@ built-in widgets too and will bring the picker with them.
 Not verified on a device: how each face looks at the user's 5 × 3 clock size, the roll animation's clipping, glass text
 fill on light wallpapers, sweep second hand cost (it redraws every frame while the home screen is visible; "Ticking" does not).
 
+### Entry 4 addendum
+
+Run 38 failed to compile: inside `ClockFace` the faces read `maxWidth` / `maxHeight` from within a `Column`, where the
+`BoxWithConstraints` scope is not allowed (layout scope marker). Fixed by reading both at the top of the box. Run 39
+carries the fix; see the release note in the session summary at the end of this file.
+
+---
+
+## Entry 5: 0.8.0, study companion over the calendar (Phase 5) (2026-11-15)
+
+| File | Change | Why |
+|---|---|---|
+| `docs/05-study-integration.md` | Rewritten: comparison, decision, **event format version 1** with the rules for the assistant; the GitHub design moved to an appendix | D86 |
+| `core/data/StudyFormat.kt` (+ `StudyFormatTest`) | Pure text handling: titles and status marks, checklist lines (plain text and Google's HTML), ticking one box in place, the launcher's status line; `StudyEvent`, `StudyDay` (current / next block) | D86 |
+| `core/data/StudyCalendar.kt` | Reads `CalendarContract.Instances` for the chosen calendars (today, overdue days, tomorrow), classifies blocks / tasks / overdue; writes title and description back (an exception for one occurrence of a repeating event); content observer; focus timer (two timestamps in preferences) | D86, D88 |
+| `feature/home/Study.kt` | `NowCard`, `TodayWidget`, `TodaySheet`, `WidgetPicker`, `StudyNotices`, `studyReport` (the text "Tell Claude" shares) | D87 |
+| `HomeController.kt`, `HomeGrid.kt`, `HomeScreen.kt`, `MainActivity.kt`, `LauncherAction.kt`, `Pill.kt`, `HomeMenu.kt` | Actions Today / Tell Claude / Study plan / Focus timer / Widgets; `addWidget`; calendar permission request; refresh on resume | |
+| `core/settings` | Section "Study companion" (calendars by name, write back, overdue days, notice lead, Claude app, plan link); home menu defaults gain Today and Widgets | |
+| `feature/settings` | `StudyEditor`: access state, which calendar is used for what, button to switch on from the home screen | |
+| `app/AndroidManifest.xml` | `READ_CALENDAR`, `WRITE_CALENDAR` | |
+
+How to start on the phone: Home menu → Today (or add the "Now" widget) → "Switch it on" → allow the calendar. Blocks need
+a calendar whose name contains "Study", tasks one whose name contains "Tasks" (both names are settings).
+
+Not verified on a device (no calendar on the emulator test): reading instances on MagicOS, that Google's sync uploads the
+edits promptly, exceptions of repeating events, and the Claude app's package name for the share (`com.anthropic.claude`
+is the default; if it is wrong the phone's share sheet opens instead).
+
+Open points for the user (collected, none blocks the work):
+1. Should a block's notice also arrive as a real phone notification when the launcher is not in front? (Needs an alarm
+   and the notification permission; D88.)
+2. Should ticking the last task of a block mark the block done by itself? Now "Done" is its own tap.
+3. Names of the two calendars your assistant uses, if not "Study" and "Tasks".
+

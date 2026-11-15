@@ -45,6 +45,11 @@ class MainActivity : ComponentActivity() {
         folderCallback = null
     }
 
+    private var calendarCallback: ((Boolean) -> Unit)? = null
+    private val askCalendar = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        calendarCallback?.invoke(result[android.Manifest.permission.READ_CALENDAR] == true)
+        calendarCallback = null
+    }
     private var fontCallback: ((android.net.Uri?) -> Unit)? = null
     private val pickFontFile = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
         fontCallback?.invoke(uri)
@@ -90,6 +95,22 @@ class MainActivity : ComponentActivity() {
                     DebugLog.error("App", "photo picker failed: $e")
                     imagesCallback = null
                     callback(emptyList())
+                }
+            },
+            requestCalendar = { callback ->
+                val read = checkSelfPermission(android.Manifest.permission.READ_CALENDAR) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                val write = checkSelfPermission(android.Manifest.permission.WRITE_CALENDAR) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                if (read && write) {
+                    callback(true)
+                } else {
+                    calendarCallback = callback
+                    try {
+                        askCalendar.launch(arrayOf(android.Manifest.permission.READ_CALENDAR, android.Manifest.permission.WRITE_CALENDAR))
+                    } catch (e: Exception) {
+                        DebugLog.error("App", "calendar permission request failed: $e")
+                        calendarCallback = null
+                        callback(read)
+                    }
                 }
             },
             pickFont = { callback ->
@@ -162,6 +183,8 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // The wallpaper may have changed while another app was open (themed icons).
         dev.liquid.launcher.core.data.LauncherData.get(this).checkWallpaperColours()
+        // So may the calendar (the study companion's blocks and tasks).
+        dev.liquid.launcher.core.data.LauncherData.get(this).study.refresh()
         resumed = true
         RedirectStatus.onLauncherResumed()
         window.decorView.post {

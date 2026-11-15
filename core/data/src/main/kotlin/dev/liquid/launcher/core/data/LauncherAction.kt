@@ -28,6 +28,20 @@ sealed interface LauncherAction {
     data object Layouts : LauncherAction
     data object SaveLayout : LauncherAction
     data object NextLayout : LauncherAction
+    /** The study companion's Today panel. */
+    data object Today : LauncherAction
+
+    /** Shares today's study log to the Claude app, ready for a note. */
+    data object TellClaude : LauncherAction
+
+    /** Opens the study plan link (or the calendar). */
+    data object StudyPlan : LauncherAction
+
+    /** Starts or stops the focus timer on the block running now. */
+    data object FocusTimer : LauncherAction
+
+    /** The list of built-in widgets to add to the current page. */
+    data object Widgets : LauncherAction
     data class SwitchLayout(val id: String) : LauncherAction
     data class Section(val id: String) : LauncherAction
     data class LaunchApp(val ref: AppRef) : LauncherAction
@@ -57,6 +71,11 @@ sealed interface LauncherAction {
         Layouts -> "layouts"
         SaveLayout -> "save_layout"
         NextLayout -> "next_layout"
+        Today -> "today"
+        TellClaude -> "tell_claude"
+        StudyPlan -> "study_plan"
+        FocusTimer -> "focus"
+        Widgets -> "widgets"
         is SwitchLayout -> "layout:$id"
         is Section -> "section:$id"
         is LaunchApp -> "app:${ref.key}"
@@ -85,6 +104,11 @@ sealed interface LauncherAction {
             Layouts to "Saved layouts",
             SaveLayout to "Save the current layout",
             NextLayout to "Next saved layout",
+            Today to "Today: study blocks and tasks",
+            TellClaude to "Tell Claude what I studied",
+            StudyPlan to "Open my study plan",
+            FocusTimer to "Focus timer for the current block",
+            Widgets to "Add a widget",
             OpenSettings to "Launcher settings",
             SystemLauncher to "Open the system launcher",
         )

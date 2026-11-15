@@ -221,6 +221,11 @@ private fun ItemView(item: HomeItem, pageIndex: Int, env: PageEnv, controller: H
                     val draft = controller.clockStudio?.takeIf { it.itemId == item.id }?.style
                     ClockFace(draft ?: saved, env.contentColor, env.shadow, env.glass, env.lightBackground, env.wallpaperBackdrop)
                 }
+                if (item.widget == "now" || item.widget == "today") {
+                    // Ticks and buttons work on the live home screen, not while editing or in a preview.
+                    val surface = StudySurface(env.glass, env.lightBackground, env.wallpaperBackdrop, env.interactive && !env.editMode)
+                    if (item.widget == "now") NowCard(controller, surface) else TodayWidget(controller, surface)
+                }
                 if (env.editMode && env.interactive && controller.selectedItem == item.id) {
                     ResizeFrame(item, pageIndex, env, controller)
                 }

@@ -251,6 +251,7 @@ internal fun SectionScreen(store: SettingsStore, sectionId: String, onBack: () -
                 "homeMenu" -> HomeMenuEditor(store)
                 "theme" -> ThemeEditor(store)
                 "wallpaper" -> WallpaperEditor()
+                "study" -> StudyEditor(store)
                 "layouts" -> LayoutsAndBackupEditor()
             }
             // The options most changes are about first; the fine tuning waits under "Advanced".

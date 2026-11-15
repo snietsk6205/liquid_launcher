@@ -39,6 +39,7 @@ object LauncherSettings {
         val Layouts = SettingsSection("layouts", "Saved layouts and backup", "Home setups you can switch between; back up and restore everything", "Layouts and backup")
         val Search = SettingsSection("search", "Search", "Swipe-down search and web search", "App drawer")
         val Notices = SettingsSection("notices", "Glass notices", "Short glass labels for layout switches, wallpapers, tag filters, the redirect, updates and study blocks", "Motion and feedback")
+        val Study = SettingsSection("study", "Study companion", "Study blocks and tasks from your calendar: Now card, Today, notices, quick actions", "Study")
         val Glass = SettingsSection("glass", "Liquid glass", "Quality, blur, refraction and tint, overall and per surface", "Look")
 
         val Redirect = SettingsSection("redirect", "Redirect engine", "When and how the launcher is brought to the front", "Redirect")
@@ -54,6 +55,7 @@ object LauncherSettings {
             Drawer, Tags, DrawerMotion, DrawerIndex, Search,
             Motion, Notices,
             Layouts,
+            Study,
             Redirect, Detection, Exclusions, Handover, Log,
         )
     }
@@ -1213,12 +1215,12 @@ object LauncherSettings {
 
     /** Encoded launcher actions of the upper ("set up") pill. Edited with the home menu editor. */
     val HomeMenuSetup = StringListSetting(
-        key = "homeMenu.setup", default = listOf("settings", "layouts"),
+        key = "homeMenu.setup", default = listOf("settings", "layouts", "today"),
         title = "Set-up pill", section = "homeMenu", hidden = true,
     )
     /** Encoded launcher actions of the lower ("actions") pill. */
     val HomeMenuActions = StringListSetting(
-        key = "homeMenu.actions", default = listOf("wallpaper", "edit", "add_page", "pages"),
+        key = "homeMenu.actions", default = listOf("wallpaper", "edit", "widgets", "add_page", "pages"),
         title = "Actions pill", section = "homeMenu", hidden = true,
     )
     val HomeMenuLabels = BoolSetting(
@@ -1320,6 +1322,62 @@ object LauncherSettings {
         title = "Shuffle",
         summary = "Off: in order",
         section = "wallpaper", keywords = "wallpaper rotation shuffle random order",
+    )
+
+    // ---- Study companion ----
+
+    val StudyEnabled = BoolSetting(
+        key = "study.enabled", default = false,
+        title = "Study companion",
+        summary = "Shows the study blocks and tasks your assistant puts into your calendar, and lets you tick them off. " +
+            "Asks for calendar access when switched on from the home screen (Home menu → Today, or a study widget)",
+        section = "study", keywords = "study calendar tasks blocks plan claude assistant",
+    )
+    val StudyBlockCalendars = TextSetting(
+        key = "study.blockCalendars", default = "Study",
+        placeholder = "Study",
+        title = "Calendars with study blocks",
+        summary = "Part of the calendar's name; several separated by commas. Timed events in them are blocks",
+        section = "study", keywords = "study calendar name blocks",
+    )
+    val StudyTaskCalendars = TextSetting(
+        key = "study.taskCalendars", default = "Tasks",
+        placeholder = "Tasks",
+        title = "Calendars with tasks",
+        summary = "All-day events in them (and in the block calendars) are tasks for that day",
+        section = "study", keywords = "study calendar name tasks todo",
+    )
+    val StudyWriteBack = BoolSetting(
+        key = "study.writeBack", default = true,
+        title = "Write ticks back to the calendar",
+        summary = "A tick changes the event (✓ in front of the title, [x] in a task line, one status line), which syncs to Google " +
+            "so your assistant sees what you finished. Off: the calendar is only read",
+        section = "study", keywords = "study write sync done tick calendar",
+    )
+    val StudyOverdueDays = IntSetting(
+        key = "study.overdueDays", default = 14, min = 0, max = 60, unit = "days",
+        title = "Show unfinished tasks from the last",
+        section = "study", keywords = "study overdue tasks days",
+    )
+    val StudyNoticeLead = IntSetting(
+        key = "study.noticeLead", default = 5, min = 0, max = 30, unit = "min",
+        title = "Announce a block this long before it ends",
+        summary = "0: only when it starts. Which notices show at all is in Glass notices",
+        section = "study", keywords = "study notice block start end minutes",
+    )
+    val StudyClaudeApp = TextSetting(
+        key = "study.claudeApp", default = "com.anthropic.claude",
+        placeholder = "com.anthropic.claude",
+        title = "App that gets \"Tell Claude\"",
+        summary = "Package name of the app the study note is shared to. Empty: the phone's share sheet",
+        section = "study", keywords = "study claude share app package note",
+    )
+    val StudyPlanLink = TextSetting(
+        key = "study.planLink", default = "",
+        placeholder = "https://…",
+        title = "Study plan link",
+        summary = "Opened by the \"Plan\" quick action: a web page, a document link, or any link an app on the phone opens. Empty: the calendar",
+        section = "study", keywords = "study plan link url open",
     )
 
     // ---- Glass notices ----
@@ -1517,6 +1575,7 @@ object LauncherSettings {
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
+        StudyEnabled, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyPlanLink,
         NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,
         NoticeLayout, NoticeWallpaper, NoticeTags, NoticeRedirect, NoticeUpdate, NoticeStudy, NoticeTask, NoticeInfo,
         GlassQuality, GlassAuto, GlassCap, GlassFullPercent, GlassTintMode,
@@ -1567,7 +1626,7 @@ object LauncherSettings {
             HomeMarginSide, HomeMarginTop, HomeMarginBottom, DrawerSideMargin, PillOffset, PillCorner, PillIconSize,
             ThemedIconsWhere, ThemedIconsUncovered, ThemedIconsPacks, ThemedIconsColors, ThemedIconsStyle, IconMask,
             GlassAuto, WallpaperSystemWrite, WallpaperHistory, WallpaperTransitionMs,
-            NoticeDuration, NoticeIcons, TagFilterKeep,
+            NoticeDuration, NoticeIcons, TagFilterKeep, StudyOverdueDays, StudyClaudeApp,
         ).map { it.key }.toSet() + glassSurfaces.flatMap { it.settings }.map { it.key }
     }
 

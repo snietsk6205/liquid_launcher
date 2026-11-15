@@ -78,6 +78,9 @@ class LauncherData private constructor(private val context: Context) {
     private val wallpapersStore = JsonStore(File(dir, "wallpapers.json"), WallpaperLibraryState.serializer(), WallpaperLibraryState(), scope)
     val wallpapers = WallpaperLibrary(context, wallpapersStore, File(context.filesDir, "wallpaper/library"), File(context.cacheDir, "wallpaper-thumbs"))
 
+    /** Study blocks and tasks from the phone's calendar. */
+    val study = StudyCalendar(context, settings, scope)
+
     init {
         layout.ensureDefault(settings.get(LauncherSettings.HomeColumns), settings.get(LauncherSettings.HomeRows))
         scope.launch {

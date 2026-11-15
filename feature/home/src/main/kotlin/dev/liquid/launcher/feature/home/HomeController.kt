@@ -172,7 +172,7 @@ class HomeController(
     val drawerOpen: Boolean get() = drawer.targetValue > 0.5f || drawer.value > 0.01f
     val anyOverlay: Boolean get() = drawerOpen || searchOpen || menu != null || editMode || renaming != null || tagging != null ||
         iconPicking != null || swipeEditing != null || openFolder != null || homeMenu || wallpaperStudio || layoutsSheet || savingLayout ||
-        wallpaperStrip || clockStudio != null
+        wallpaperStrip || clockStudio != null || todaySheet || widgetPicker
 
     // ---- home menu, wallpaper, layouts ----
 
@@ -212,6 +212,107 @@ class HomeController(
     }
 
     var layoutsSheet by mutableStateOf(false)
+
+    // ---- study companion and widgets ----
+
+    /** The Today panel (study blocks and tasks). */
+    var todaySheet by mutableStateOf(false)
+
+    /** The list of built-in widgets, over edit mode. */
+    var widgetPicker by mutableStateOf(false)
+
+    /** Switches the study companion on and asks for the calendar. */
+    fun setupStudy() {
+        data.settings.set(LauncherSettings.StudyEnabled, true)
+        callbacks.requestCalendar { granted ->
+            data.study.refresh()
+            data.study.watch(true)
+            if (!granted) notice(dev.liquid.launcher.core.common.NoticeKind.Info, "Calendar access is needed", "Allow it in the phone's app settings to see your blocks")
+        }
+    }
+
+    private fun studyWrite(change: suspend () -> Boolean) {
+        scope.launch {
+            if (change()) return@launch
+            when {
+                !data.settings.get(LauncherSettings.StudyWriteBack) -> notice(dev.liquid.launcher.core.common.NoticeKind.Info, "Writing to the calendar is off", "Settings → Study companion", LauncherAction.Section("study"))
+                !data.study.canWrite -> callbacks.requestCalendar { data.study.refresh() }
+                else -> notice(dev.liquid.launcher.core.common.NoticeKind.Info, "That event could not be changed", "Its calendar may be read-only")
+            }
+        }
+    }
+
+    fun studyTick(event: dev.liquid.launcher.core.data.StudyEvent, index: Int, done: Boolean) {
+        Haptics.tick(view)
+        studyWrite { data.study.setTask(event, index, done) }
+    }
+
+    fun studyStatus(event: dev.liquid.launcher.core.data.StudyEvent, status: dev.liquid.launcher.core.data.StudyStatus) {
+        Haptics.confirm(view)
+        studyWrite {
+            // Finishing the block also ends its focus timer, so the minutes land in the same event.
+            if (status != dev.liquid.launcher.core.data.StudyStatus.Open && data.study.focus.value?.eventKey == event.key) data.study.stopFocus()
+            data.study.setStatus(event, status)
+        }
+    }
+
+    /** Starts the focus timer on [event], or stops it and writes the minutes to the event. */
+    fun studyFocus(event: dev.liquid.launcher.core.data.StudyEvent) {
+        Haptics.confirm(view)
+        val running = data.study.focus.value
+        scope.launch {
+            if (running != null) {
+                val minutes = data.study.stopFocus()
+                notice(dev.liquid.launcher.core.common.NoticeKind.Study, "Focus stopped: $minutes min", if (minutes > 0) "Written to the block" else null)
+                if (running.eventKey == event.key) return@launch
+            }
+            data.study.startFocus(event)
+            notice(dev.liquid.launcher.core.common.NoticeKind.Study, "Focus on ${event.title.subject}", "Until the block ends; tap Focus again to stop")
+        }
+    }
+
+    /** Shares today's study log with the Claude app (or the share sheet), ready for a note. */
+    fun tellClaude() {
+        val text = studyReport(data.study.day.value)
+        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+        val target = data.settings.get(LauncherSettings.StudyClaudeApp).trim()
+        val direct = if (target.isNotEmpty()) Intent(send).setPackage(target) else null
+        val intent = if (direct != null && direct.resolveActivity(context.packageManager) != null) direct else Intent.createChooser(send, "Send the study log")
+        start(intent)
+    }
+
+    fun openStudyPlan() {
+        val link = data.settings.get(LauncherSettings.StudyPlanLink).trim()
+        if (link.isEmpty()) run(LauncherAction.OpenCalendar) else openUrl(link)
+    }
+
+    /** Adds a built-in widget of [type] to the current page, across its width. */
+    fun addWidget(type: String) {
+        val pageIndex = if (::pager.isInitialized) pager.currentPage else 0
+        val (columns, rows) = gridFor(pageIndex)
+        val layout = data.layout.layout.value
+        val page = layout.pages.getOrNull(pageIndex) ?: return
+        val wanted = WidgetTypes.firstOrNull { it.first == type }?.third ?: 3
+        // The wanted height if there is room for it, else whatever fits.
+        var h = minOf(wanted, rows)
+        var spot = LayoutOps.firstFree(page, columns, h, columns, rows)
+        while (spot == null && h > 2) {
+            h--
+            spot = LayoutOps.firstFree(page, columns, h, columns, rows)
+        }
+        if (spot == null) {
+            toast("No room for it on this page")
+            return
+        }
+        val item = HomeItem(LayoutOps.newId(), ItemKind.WIDGET, spot.first, spot.second, columns, h, widget = type)
+        data.layout.commit(layout.copy(pages = layout.pages.mapIndexed { i, p -> if (i == pageIndex) p.copy(items = p.items + item) else p }))
+        when (type) {
+            // Straight into the gallery: a new clock is there to be chosen and styled.
+            "clock" -> openClockStudio(item.id)
+            else -> if (!data.study.loaded.value) setupStudy()
+        }
+    }
+
     var savingLayout by mutableStateOf(false)
 
     /** How far search is open (0..1), for the blur behind it. */
@@ -448,6 +549,8 @@ class HomeController(
         wallpaperStrip = false
         layoutsSheet = false
         wallpaperStudio = false
+        todaySheet = false
+        widgetPicker = false
         if (clockStudio != null) closeClockStudio(save = true)
         menu = null
         openFolder = null
@@ -471,6 +574,8 @@ class HomeController(
             wallpaperStrip -> wallpaperStrip = false
             layoutsSheet -> layoutsSheet = false
             wallpaperStudio -> wallpaperStudio = false
+            todaySheet -> todaySheet = false
+            widgetPicker -> widgetPicker = false
             clockStudio != null -> closeClockStudio(save = true)
             openFolder != null -> openFolder = null
             searchOpen -> searchOpen = false
@@ -598,22 +703,7 @@ class HomeController(
         data.layout.commit(LayoutOps.removeItem(data.layout.layout.value, itemId))
     }
 
-    fun addClock() {
-        val pageIndex = if (::pager.isInitialized) pager.currentPage else 0
-        val (columns, rows) = gridFor(pageIndex)
-        val layout = data.layout.layout.value
-        val page = layout.pages.getOrNull(pageIndex) ?: return
-        val h = minOf(3, rows)
-        val spot = LayoutOps.firstFree(page, columns, h, columns, rows)
-        if (spot == null) {
-            toast("No room for a clock on this page")
-            return
-        }
-        val clock = HomeItem(LayoutOps.newId(), ItemKind.WIDGET, spot.first, spot.second, columns, h, widget = "clock")
-        data.layout.commit(layout.copy(pages = layout.pages.mapIndexed { i, p -> if (i == pageIndex) p.copy(items = p.items + clock) else p }))
-        // Straight into the gallery: a new clock is there to be chosen and styled.
-        openClockStudio(clock.id)
-    }
+    fun addClock() = addWidget("clock")
 
     fun addPage() {
         data.layout.commit(LayoutOps.addPage(data.layout.layout.value))
@@ -871,6 +961,28 @@ class HomeController(
             LauncherAction.SaveLayout -> savingLayout = true
             LauncherAction.NextLayout -> data.layouts.next()?.let { switchLayout(it.id) } ?: toast("No saved layouts yet")
             is LauncherAction.SwitchLayout -> switchLayout(action.id)
+            LauncherAction.Today -> {
+                closeAll()
+                if (editMode) exitEdit()
+                if (!data.study.loaded.value) data.study.refresh()
+                todaySheet = true
+            }
+            LauncherAction.TellClaude -> tellClaude()
+            LauncherAction.StudyPlan -> openStudyPlan()
+            LauncherAction.FocusTimer -> {
+                val now = System.currentTimeMillis()
+                val block = data.study.day.value.current(now)
+                when {
+                    block != null -> studyFocus(block)
+                    data.study.focus.value != null -> scope.launch { data.study.stopFocus() }
+                    else -> notice(dev.liquid.launcher.core.common.NoticeKind.Study, "No study block is running", "The focus timer belongs to a block", LauncherAction.Today)
+                }
+            }
+            LauncherAction.Widgets -> {
+                closeAll()
+                editMode = true
+                widgetPicker = true
+            }
             is LauncherAction.Section -> callbacks.openSection(action.id)
         }
     }
@@ -926,6 +1038,8 @@ class HomeCallbacks(
     val pickImages: ((List<android.net.Uri>) -> Unit) -> Unit = { it(emptyList()) },
     /** Shows the system folder picker; the callback gets the folder or null. */
     val pickFolder: ((android.net.Uri?) -> Unit) -> Unit = { it(null) },
+    /** Asks for calendar access (read and write); the callback gets whether reading was granted. */
+    val requestCalendar: ((Boolean) -> Unit) -> Unit = { it(false) },
     /** Shows the system file picker for a font file; the callback gets it or null. */
     val pickFont: ((android.net.Uri?) -> Unit) -> Unit = { it(null) },
 )

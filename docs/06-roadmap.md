@@ -11,7 +11,7 @@
 | Feel | Letter index as a string pulled by the finger; "One space" drawer transition under the finger; glass notices; one motion vocabulary with exits; settings reorganised | 0.6.0 | Released (see `FABLE_LOG.md` for the build) |
 | 3, part 1 | Clock gallery: six designs, each clock with its own font, weight, size, colours, fill, glass plate, date and seconds | 0.7.0 | Released (see `FABLE_LOG.md`) |
 | 3, rest | Widget picker, other apps' widgets, more built-in widgets, panels | 0.7.x | |
-| 5 | Study companion over the calendar: Now card, Today panel, agenda widget, notices, quick actions (see `05-study-integration.md`, revised) | 0.8.x | |
+| 5 | Study companion over the calendar: event format for the assistant, Now card, Today panel and widget, notices, focus timer, Tell Claude, study plan (see `05-study-integration.md`) | 0.8.0 | Released (see `FABLE_LOG.md`); waits for the first real day with the assistant |
 | 4 | Search sources (contacts, calendar, files, settings pages), suggested apps, notification badges, drawer folders and rule-based tabs | 2 builds | |
 | 6 | Profiles (Study / Free / Night), study mode, friction; automatic layout switching; wallpaper per profile and per page | 2 builds | |
 | 7 | Performance and polish: per-option settings previews, baseline profiles, large folders, wallpaper albums | 1–2 builds | |
