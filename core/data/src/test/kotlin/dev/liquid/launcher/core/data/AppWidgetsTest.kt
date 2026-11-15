@@ -28,8 +28,9 @@ class AppWidgetsTest {
                 HomePage("p2", items = listOf(widget("c", 31))),
             ),
             dock = listOf(widget("d", 7)),
+            search = listOf(widget("s", 44)),
         )
-        assertEquals(setOf(12, 31, 7), AppWidgets.idsIn(layout))
+        assertEquals(setOf(12, 31, 7, 44), AppWidgets.idsIn(layout))
         assertEquals(null, AppWidgets.idOf(widget("e", null)))
     }
 }

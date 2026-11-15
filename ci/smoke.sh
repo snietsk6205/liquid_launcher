@@ -364,6 +364,12 @@ sleep 1.5
 peek 10-search
 dump 10-search
 if on_screen 10-search "= 42"; then pass "swipe down opens search and the calculator answers"; else fail "swipe down opens search and the calculator answers"; fi
+# 0.7.1: with nothing typed, the search screen (the pill turned into its field at the bottom) offers widgets.
+for i in 1 2 3 4 5; do adb shell input keyevent KEYCODE_DEL; done
+sleep 1
+peek 10b-search-empty
+dump 10b-search-empty
+if on_screen 10b-search-empty "Add widget" exact; then pass "the search screen offers widgets"; else fail "the search screen offers widgets"; fi
 adb shell input keyevent KEYCODE_BACK
 sleep 0.5
 adb shell input keyevent KEYCODE_BACK

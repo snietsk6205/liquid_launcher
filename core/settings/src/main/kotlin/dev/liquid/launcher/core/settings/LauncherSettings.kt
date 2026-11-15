@@ -630,11 +630,13 @@ object LauncherSettings {
         key = "motion.search", default = "space",
         options = listOf(
             "space" to "One space, like the drawer: the home screen glides down under your finger",
+            "zoom" to "Zoom: the home screen falls back, search comes forward",
             "depth" to "Depth (home sinks back)",
             "fade" to "Fade",
         ),
         title = "Opening search",
-        summary = "Search follows a swipe down the way the drawer follows a swipe up, and springs open or back when you let go",
+        summary = "Search follows a swipe down the way the drawer follows a swipe up, and springs open or back when you let go. " +
+            "With \"The pill becomes the search field\" (Drawer motion) the pill turns into the search field above the keyboard",
         section = "motion", keywords = "search transition space depth fade animation swipe down follow",
     )
     val MotionStyle = ChoiceSetting(
@@ -926,7 +928,8 @@ object LauncherSettings {
     val DrawerPillMorph = BoolSetting(
         key = "drawer.pillMorph", default = true,
         title = "The pill becomes the search field",
-        summary = "When the pill is at the bottom, it changes shape into the drawer's search field as the drawer opens",
+        summary = "When the pill is at the bottom, it changes shape into the drawer's search field as the drawer opens, " +
+            "and into the search field above the keyboard as search opens (0.7.1)",
         section = "drawerMotion", keywords = "pill morph search shape continuous",
     )
     val DrawerSpeed = IntSetting(
@@ -1376,7 +1379,7 @@ object LauncherSettings {
         section = "wallpaper", keywords = "wallpaper parallax scroll pages move slide",
     )
     val WallpaperTransition = ChoiceSetting(
-        key = "wallpaper.transition", default = "liquid",
+        key = "wallpaper.transition", default = "ripple",
         options = listOf(
             "liquid" to "Liquid: blurs away as the new screen settles",
             "ripple" to "Ripple: a wave from the picture you tapped",

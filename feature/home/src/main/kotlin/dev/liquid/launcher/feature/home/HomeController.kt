@@ -343,6 +343,12 @@ class HomeController(
         val pageIndex = if (::pager.isInitialized) pager.currentPage else 0
         val (columns, rows) = gridFor(pageIndex)
         val kind = WidgetTypes.firstOrNull { it.type == type }
+        if (widgetTarget == "search") {
+            val item = HomeItem(LayoutOps.newId(), ItemKind.WIDGET, 0, 0, columns, (kind?.h ?: 3).coerceIn(1, 4), widget = type)
+            addSearchWidget(item)
+            if (type in setOf("now", "today", "next") && !data.study.loaded.value) setupStudy()
+            return
+        }
         val wantedW = kind?.w?.takeIf { it > 0 }?.coerceAtMost(columns) ?: columns
         val item = placeWidget(pageIndex, columns, rows, wantedW, kind?.h ?: 3) { x, y, w, h ->
             HomeItem(LayoutOps.newId(), ItemKind.WIDGET, x, y, w, h, widget = type)
@@ -364,6 +370,15 @@ class HomeController(
 
     /** How far search is open (0..1), for the blur behind it. */
     val searchAmount: Float get() = search.value.coerceIn(0f, 1f)
+
+    /** What is typed in search; kept here so the field inside the morphing pill and the results share it (0.7.1). */
+    var searchQuery by mutableStateOf("")
+
+    /** Opens search's first result (the keyboard's Go); set by the search screen. */
+    var searchSubmit: (() -> Unit)? = null
+
+    /** How far the pill has turned into a search field: by the drawer or by search, whichever is open. */
+    fun morph(): Float = maxOf(drawer.value, search.value)
 
     /** Where the finger has put search, ahead of [search] (see [dragPosition]). */
     private var searchDragPosition: Float? = null
@@ -604,7 +619,11 @@ class HomeController(
     fun closeSearch(immediately: Boolean = false, velocity: Float = 0f) {
         searchDragPosition = null
         searchOpen = false
-        scope.launch { if (immediately) search.snapTo(0f) else search.animateTo(0f, drawerSpring(), initialVelocity = velocity) }
+        searchEditing = false
+        scope.launch {
+            if (immediately) search.snapTo(0f) else search.animateTo(0f, drawerSpring(), initialVelocity = velocity)
+            if (!searchOpen) searchQuery = ""
+        }
     }
 
     /** [deltaFraction]: the finger's movement as a fraction of the screen height (down = positive). */
@@ -829,9 +848,20 @@ class HomeController(
         }
         val pageIndex = if (::pager.isInitialized) pager.currentPage else 0
         val label = info.loadLabel(context.packageManager).orEmpty()
+        val target = widgetTarget
         fun place() {
             val (columns, rows) = gridFor(pageIndex)
             val (w, h) = dev.liquid.launcher.core.data.AppWidgets.cells(info, screenWidth / columns, screenHeight * 0.8f / rows, columns, rows)
+            if (target == "search") {
+                // On the search screen a widget takes the full width and its own height.
+                addSearchWidget(
+                    HomeItem(
+                        LayoutOps.newId(), ItemKind.WIDGET, 0, 0, columns, h, widget = "app",
+                        options = mapOf("appWidgetId" to id.toString(), "provider" to info.provider.flattenToString(), "label" to label),
+                    )
+                )
+                return
+            }
             val item = placeWidget(pageIndex, columns, rows, w, h) { x, y, cw, ch ->
                 HomeItem(
                     LayoutOps.newId(), ItemKind.WIDGET, x, y, cw, ch, widget = "app",
@@ -854,6 +884,48 @@ class HomeController(
                 }
             }
         }
+    }
+
+    // ---- widgets on the search screen (0.7.1, D105) ----
+
+    /** Where the widget picker adds: "page" (the current home page) or "search" (the search screen). */
+    var widgetTarget by mutableStateOf("page")
+
+    /** The search screen's widgets show remove and move buttons. */
+    var searchEditing by mutableStateOf(false)
+
+    /** Opens the widget picker for the search screen. */
+    fun pickSearchWidget() {
+        widgetTarget = "search"
+        widgetPicker = true
+    }
+
+    fun addSearchWidget(item: HomeItem) {
+        val layout = data.layout.layout.value
+        data.layout.commit(layout.copy(search = layout.search + item))
+        DebugLog.event("Widgets", "added a widget to the search screen (${item.widget})")
+    }
+
+    fun removeSearchWidget(id: String) {
+        val layout = data.layout.layout.value
+        data.layout.commit(layout.copy(search = layout.search.filter { it.id != id }))
+    }
+
+    /** Moves a search widget one place up ([up]) or down. */
+    fun moveSearchWidget(id: String, up: Boolean) {
+        val layout = data.layout.layout.value
+        val list = layout.search.toMutableList()
+        val i = list.indexOfFirst { it.id == id }
+        val j = if (up) i - 1 else i + 1
+        if (i < 0 || j !in list.indices) return
+        list[i] = list[j].also { list[j] = list[i] }
+        data.layout.commit(layout.copy(search = list))
+    }
+
+    /** Makes a search widget one cell taller or shorter (1 to 6 cells). */
+    fun resizeSearchWidget(id: String, delta: Int) {
+        val layout = data.layout.layout.value
+        data.layout.commit(layout.copy(search = layout.search.map { if (it.id == id) it.copy(h = (it.h + delta).coerceIn(1, 6)) else it }))
     }
 
     /** The page the home screen shows, or the first before the pager exists. */

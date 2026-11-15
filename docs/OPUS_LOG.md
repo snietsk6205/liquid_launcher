@@ -605,3 +605,23 @@ alone as not a change of the home wallpaper.
 2. A long press on an app widget starts edit and move through the item's own gesture detector, but the widget may also
    receive the touch's end as a tap; Launcher3 cancels the view's touch on long press. Worth checking on the phone.
 3. Search follows the finger only when "Swipe down" is "Open search".
+
+## Entry 17: 0.7.1, search as part of the home screen, widgets in search, Ripple by default (2026-11-15, Opus 5.5)
+
+**Asked by the user (same evening):** make swipe-down search feel like part of the home screen the way Fable's drawer
+does, the pill turning smoothly into the search bar just above the keyboard; be able to add widgets there; smooth
+and fast like the drawer, with zoom or something customisable. They liked the Ripple wallpaper transition.
+
+| File | Change | Decision |
+|---|---|---|
+| `PillMorph.kt` (Fable's) | The morph follows `max(drawer, search)`; in search it holds `SearchPillField` instead of the drawer's field; dragging the field up puts search away | D104 |
+| `SearchOverlay.kt` | `SearchPillField`; `BottomSearch` (results upwards from the field, frequent apps above it, widgets above them); Zoom; the query lives in `HomeController.searchQuery` | D104 |
+| `HomeScreen.kt` | Search under the morphing pill; the pill no longer fades for search; Zoom on the home screen | D104 |
+| `Models.kt`, `AppWidgets.kt`, `HomeController.kt`, `Widgets.kt`, `HomeGrid.kt` | `HomeLayout.search`; picker target ("page" / "search"); add, move, resize, remove search widgets; `WidgetContent` shared by pages and search | D105 |
+| Settings | "Opening search" gains Zoom; Ripple is the default wallpaper transition | D104 |
+| `ci/smoke.sh` | 10b: with nothing typed the search screen offers "Add widget" | |
+
+Changed in Fable's `PillMorph.kt`: the progress it reads (drawer or search), the content in search, and the drag on
+the open field. The drawer's own behaviour is unchanged.
+
+**Result:** see below (CI).

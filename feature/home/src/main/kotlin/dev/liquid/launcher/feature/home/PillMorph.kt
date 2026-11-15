@@ -44,7 +44,10 @@ private val SearchBottomMargin = 14.dp
  * pill grows into the search field (size, corners and height follow the drawer), its items
  * fade out and the search field fades in, so home and drawer read as one space.
  *
- * Geometry is set during layout from the drawer's position, so moving the drawer only
+ * Since 0.7.1 (D104) it does the same for search: a swipe down grows the pill into the search
+ * field at the bottom of the screen, which rides up with the keyboard; the results open above it.
+ *
+ * Geometry is set during layout from the drawer's (or search's) position, so moving them only
  * re-measures this one element.
  */
 @Composable
@@ -62,25 +65,28 @@ fun MorphingPill(
 ) {
     val density = LocalDensity.current
     val open by remember { derivedStateOf { controller.drawer.value >= 0.5f } }
-    val showItems by remember { derivedStateOf { controller.drawer.value < 0.45f } }
-    val showSearch by remember { derivedStateOf { controller.drawer.value > 0.02f } }
+    // Search grows the pill too; the two are never open together.
+    val searchMode by remember { derivedStateOf { controller.search.value > controller.drawer.value && controller.search.value > 0.001f } }
+    val searchOpen by remember { derivedStateOf { controller.search.value >= 0.5f } }
+    val showItems by remember { derivedStateOf { controller.morph() < 0.45f } }
+    val showSearch by remember { derivedStateOf { controller.morph() > 0.02f } }
     // Tabs inside the search pill make it taller; it then rounds less so the tabs keep their width.
     val bar = if (drawer.tabsInPill) controller.tabsBar else null
     val extra = if (bar != null) tabsRowHeight(drawer.tabsSize) else 0.dp
     val shape = remember(config.cornerPercent, bar != null) {
-        RoundedCornerShape(MorphCorner(config.cornerPercent, if (bar != null) 30 else 50) { controller.drawer.value })
+        RoundedCornerShape(MorphCorner(config.cornerPercent, if (bar != null) 30 else 50) { controller.morph() })
     }
     val gestures = remember(config, controller) { Modifier.morphGestures(config, controller) }
     val homeColor = if (glass.lightGlass(Surfaces.Pill, lightBackground)) Color(0xFF16181C) else Color.White
     val searchColor = if (glass.lightGlass(Surfaces.Drawer, drawerLight)) Color(0xFF16181C) else Color.White
-    val surface = if (open) Surfaces.Drawer else Surfaces.Pill
+    val surface = if (open && !searchMode) Surfaces.Drawer else Surfaces.Pill
     val homeWidth = with(density) { (controller.screenWidth * config.widthFraction).toDp() }
     val searchWidth = with(density) { controller.screenWidth.toDp() } - SearchSideMargin * 2
     val flexible = config.slots.any { it == PillSlot.Search || it == PillSlot.Spacer }
 
     Box(
         modifier
-            .morphLayout(controller, config, extra)
+            .morphLayout(controller, config, if (searchMode) 0.dp else extra)
             .liquidGlass(backdrop, shape, glass.style(surface, if (open) drawerLight else lightBackground))
             .clip(shape)
             .then(if (interactive) gestures else Modifier),
@@ -90,15 +96,24 @@ fun MorphingPill(
             Row(
                 Modifier
                     .requiredSize(homeWidth, config.heightDp.dp)
-                    .graphicsLayer { alpha = (1f - controller.drawer.value * 2.6f).coerceIn(0f, 1f) }
+                    .graphicsLayer { alpha = (1f - controller.morph() * 2.6f).coerceIn(0f, 1f) }
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = if (flexible) Arrangement.spacedBy(4.dp) else Arrangement.SpaceEvenly,
             ) {
-                for (slot in config.slots) PillSlotView(slot, config, homeColor, apps, controller, interactive && !open)
+                for (slot in config.slots) PillSlotView(slot, config, homeColor, apps, controller, interactive && !open && !searchOpen)
             }
         }
-        if (showSearch) {
+        if (showSearch && searchMode) {
+            SearchPillField(
+                controller = controller,
+                color = homeColor,
+                interactive = interactive && searchOpen,
+                modifier = Modifier
+                    .requiredSize(searchWidth, SearchHeight)
+                    .graphicsLayer { alpha = ((controller.search.value - 0.35f) / 0.65f).coerceIn(0f, 1f) },
+            )
+        } else if (showSearch) {
             androidx.compose.foundation.layout.Column(
                 Modifier
                     .requiredSize(searchWidth, SearchHeight + extra)
@@ -133,7 +148,7 @@ private class MorphCorner(private val from: Int, private val to: Int, private va
 /** Size and bottom margin between the pill's and the search field's, by drawer position. */
 private fun Modifier.morphLayout(controller: HomeController, config: PillConfig, extra: androidx.compose.ui.unit.Dp): Modifier =
     layout { measurable, constraints ->
-        val p = controller.drawer.value.coerceIn(0f, 1f)
+        val p = controller.morph().coerceIn(0f, 1f)
         val full = constraints.maxWidth.toFloat()
         val width = lerp(full * config.widthFraction, full - SearchSideMargin.toPx() * 2, p)
         val height = lerp(config.heightDp.dp.toPx(), (SearchHeight + extra).toPx(), p)
@@ -154,38 +169,48 @@ private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
 private fun Modifier.morphGestures(config: PillConfig, controller: HomeController): Modifier = this
     .pointerInput(config.tap, config.longPress) {
         detectTapGestures(
-            onTap = { if (controller.drawer.value < 0.5f) controller.run(config.tap) },
-            onLongPress = { if (controller.drawer.value < 0.5f) controller.run(config.longPress) },
+            onTap = { if (controller.morph() < 0.5f) controller.run(config.tap) },
+            onLongPress = { if (controller.morph() < 0.5f) controller.run(config.longPress) },
         )
     }
     .pointerInput(config.swipeUp, config.swipeDown) {
         val tracker = VelocityTracker()
         var total = 0f
         var fromOpen = false
+        var fromSearch = false
         val follow = config.swipeUp == LauncherAction.OpenDrawer
         detectVerticalDragGestures(
             onDragStart = {
                 tracker.resetTracking()
                 total = 0f
                 fromOpen = controller.drawer.value >= 0.5f
+                fromSearch = controller.search.value >= 0.5f
             },
             onVerticalDrag = { change, dy ->
                 tracker.addPointerInputChange(change)
                 total += dy
                 change.consume()
-                if (fromOpen || (follow && (total < 0 || controller.drawer.value > 0f))) {
-                    controller.dragDrawerBy(-dy / controller.screenHeight)
+                when {
+                    // The search field: pushing it up puts search away (it came down; D104).
+                    fromSearch -> controller.dragSearchBy(dy / controller.screenHeight)
+                    fromOpen || (follow && (total < 0 || controller.drawer.value > 0f)) -> controller.dragDrawerBy(-dy / controller.screenHeight)
                 }
             },
             onDragEnd = {
                 val velocity = tracker.calculateVelocity().y
                 val threshold = 40.dp.toPx()
                 when {
+                    fromSearch -> controller.settleSearch(velocity)
                     fromOpen || (follow && controller.drawer.value > 0f) -> controller.settleDrawer(velocity)
                     total < -threshold || velocity < -1000f -> controller.run(config.swipeUp)
                     total > threshold || velocity > 1000f -> controller.run(config.swipeDown)
                 }
             },
-            onDragCancel = { if (fromOpen || follow) controller.settleDrawer(0f) },
+            onDragCancel = {
+                when {
+                    fromSearch -> controller.settleSearch(0f)
+                    fromOpen || follow -> controller.settleDrawer(0f)
+                }
+            },
         )
     }

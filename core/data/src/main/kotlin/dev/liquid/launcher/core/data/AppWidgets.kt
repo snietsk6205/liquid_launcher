@@ -96,9 +96,9 @@ class AppWidgets(private val context: Context) {
         /** The widget id an item holds, or null. */
         fun idOf(item: HomeItem): Int? = if (item.kind == ItemKind.WIDGET && item.widget == "app") item.options?.get("appWidgetId")?.toIntOrNull() else null
 
-        /** Widget ids used by [layout] (pages and dock). */
+        /** Widget ids used by [layout] (pages, dock and the search screen). */
         fun idsIn(layout: HomeLayout): Set<Int> =
-            (layout.pages.flatMap { it.items } + layout.dock).mapNotNull { idOf(it) }.toSet()
+            (layout.pages.flatMap { it.items } + layout.dock + layout.search).mapNotNull { idOf(it) }.toSet()
 
         /**
          * A widget's size in cells: the provider's own cell size when it gives one (Android 12+),

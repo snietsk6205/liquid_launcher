@@ -130,6 +130,9 @@ internal fun WidgetPicker(glass: GlassConfig, lightBackground: Boolean, backdrop
     fun close() {
         controller.widgetPicker = false
     }
+    val toSearch = controller.widgetTarget == "search"
+    // Back to adding to pages once the picker is gone, however it was closed.
+    DisposableEffect(Unit) { onDispose { controller.widgetTarget = "page" } }
     Box(
         Modifier
             .fillMaxSize()
@@ -158,7 +161,7 @@ internal fun WidgetPicker(glass: GlassConfig, lightBackground: Boolean, backdrop
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f).padding(start = 4.dp)) {
                         Text("Widgets", style = pickerText(color, 18, FontWeight.SemiBold))
-                        Text("Tap one to add it to this page", style = pickerText(color, 12, alpha = 0.7f))
+                        Text(if (toSearch) "Tap one to add it to the search screen" else "Tap one to add it to this page", style = pickerText(color, 12, alpha = 0.7f))
                     }
                     GlassButton(null, color, icon = LauncherIcons.Close, contentDescription = "Close") { close() }
                 }
@@ -198,8 +201,8 @@ internal fun WidgetPicker(glass: GlassConfig, lightBackground: Boolean, backdrop
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(16.dp))
                                 .clickable {
-                                    close()
                                     controller.addWidget(type.type)
+                                    close()
                                 }
                                 .padding(horizontal = 10.dp, vertical = 9.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -233,8 +236,8 @@ internal fun WidgetPicker(glass: GlassConfig, lightBackground: Boolean, backdrop
                             if (open) {
                                 for (info in group.widgets) {
                                     WidgetPreviewCard(info, color, controller) {
-                                        close()
                                         controller.addAppWidget(info)
+                                        close()
                                     }
                                 }
                             }

@@ -550,6 +550,11 @@ private fun HomeScreenBody(
                                 scale *= 1f - 0.07f * s
                                 alpha *= 1f - 0.35f * s
                             }
+                            "zoom" -> {
+                                // Falls back into the distance while search comes forward (D104).
+                                scale *= 1f - 0.12f * s
+                                alpha *= (1f - s * 1.5f).coerceIn(0f, 1f)
+                            }
                         }
                         scaleX = scale
                         scaleY = scale
@@ -686,6 +691,13 @@ private fun HomeScreenBody(
             ownSearchPill = !morph,
             interactive = live && studio == null,
         )
+        // Search keeps itself on screen while its progress is above 0, so it can follow the finger and close by itself (D99).
+        val searchShown by remember { derivedStateOf { controller.searchOpen || controller.search.value > 0.001f } }
+        val searchEnv = PageEnv(grid, clock, gestures, glass, lightBackground, contentColor, shadow, appIndex, wallpaperBackdrop, false, live)
+        // With the pill turning into the search field, search sits under the pill (D104).
+        if (live && searchShown && morph) {
+            SearchOverlay(controller, search, glass, lightBackground, overlayBackdrop, apps, motionConfig.searchTransition, motion, fieldInPill = true, env = searchEnv)
+        }
         if (morph) {
             MorphingPill(
                 config = pill,
@@ -702,8 +714,8 @@ private fun HomeScreenBody(
                     .navigationBarsPadding()
                     .imePadding()
                     .graphicsLayer {
-                        // Only the closed pill makes way for a sheet; a pill already turned into the drawer's search stays.
-                        val away = maxOf(pillAway, (controller.searchAmount * 2f).coerceIn(0f, 1f)) * (1f - controller.drawer.value).coerceIn(0f, 1f)
+                        // Only the closed pill makes way for a sheet; a pill turned into a search field (drawer or search) stays.
+                        val away = pillAway * (1f - controller.morph()).coerceIn(0f, 1f)
                         alpha = returnState.progress.floatValue * (1f - away)
                         translationY = away * 24.dp.toPx()
                     },
@@ -712,10 +724,8 @@ private fun HomeScreenBody(
 
         // Each of these keeps its own entrance and leaves through Presence: a quick fade and sink,
         // the same for all of them.
-        // Search keeps itself on screen while its progress is above 0, so it can follow the finger and close by itself (D99).
-        val searchShown by remember { derivedStateOf { controller.searchOpen || controller.search.value > 0.001f } }
-        if (live && searchShown) {
-            SearchOverlay(controller, search, glass, lightBackground, overlayBackdrop, apps, motionConfig.searchTransition, motion)
+        if (live && searchShown && !morph) {
+            SearchOverlay(controller, search, glass, lightBackground, overlayBackdrop, apps, motionConfig.searchTransition, motion, env = searchEnv)
         }
         Presence(controller.openFolder?.let { id -> layout.find(id)?.second?.takeIf { it.kind == ItemKind.FOLDER } }) { folder ->
             FolderOverlay(folder, appIndex, controller, glass, lightBackground, overlayBackdrop, grid)

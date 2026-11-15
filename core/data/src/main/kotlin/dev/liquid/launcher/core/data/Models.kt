@@ -90,6 +90,8 @@ data class HomeLayout(
     val defaultPage: String? = null,
     /** Apps in the dock, which stays on every page; an item's x is its slot. */
     val dock: List<HomeItem> = emptyList(),
+    /** Widgets on the search screen, top to bottom, each across its width (0.7.1); an item's h is its height in cells. */
+    val search: List<HomeItem> = emptyList(),
 ) {
     val defaultIndex: Int get() = pages.indexOfFirst { it.id == defaultPage }.coerceAtLeast(0)
 

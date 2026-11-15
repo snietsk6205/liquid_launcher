@@ -217,43 +217,7 @@ private fun ItemView(item: HomeItem, pageIndex: Int, env: PageEnv, controller: H
 
         ItemKind.WIDGET -> {
             Box(base.iconGestures({ holder.value }, widgetHandler(item, holder, controller), env.interactive)) {
-                if (item.widget == "clock") {
-                    // The clock's own style over the Clock settings; while the gallery is open on it, the draft.
-                    val base = remember(env.clock) { ClockStyle.fromSettings(env.clock) }
-                    val saved = remember(item.options, base) { ClockStyle.decode(item.options, base) }
-                    val draft = controller.clockStudio?.takeIf { it.itemId == item.id }?.style
-                    val style = draft ?: saved
-                    // The study block running now (or next) as a line under the clock, when the companion is on (0.6.3, D92).
-                    val showStudy by controller.data.settings.derive { get(LauncherSettings.StudyClockLine) != "off" }
-                    val glance = if (showStudy) rememberStudyGlance(controller) else null
-                    Column(
-                        Modifier.fillMaxSize(),
-                        horizontalAlignment = when (style.align) {
-                            "start" -> Alignment.Start
-                            "end" -> Alignment.End
-                            else -> Alignment.CenterHorizontally
-                        },
-                    ) {
-                        ClockFace(style, env.contentColor, env.shadow, env.glass, env.lightBackground, env.wallpaperBackdrop, Modifier.weight(1f))
-                        if (glance != null) {
-                            StudyLine(
-                                glance, controller, env.contentColor, env.shadow, env.interactive && !env.editMode,
-                                Modifier.padding(horizontal = if (style.plate == "none") 0.dp else 10.dp).padding(bottom = 2.dp),
-                            )
-                        }
-                    }
-                }
-                when (item.widget) {
-                    "app" -> AppWidgetItem(item, env, controller)
-                    "date" -> DateWidget(env.contentColor, env.shadow)
-                    "battery" -> BatteryWidget(env.contentColor, env.shadow)
-                    "next" -> NextBlockWidget(controller, env.contentColor, env.shadow, env.interactive && !env.editMode)
-                }
-                if (item.widget == "now" || item.widget == "today") {
-                    // Ticks and buttons work on the live home screen, not while editing or in a preview.
-                    val surface = StudySurface(env.glass, env.lightBackground, env.wallpaperBackdrop, env.interactive && !env.editMode)
-                    if (item.widget == "now") NowCard(controller, surface) else TodayWidget(controller, surface)
-                }
+                WidgetContent(item, env, controller)
                 if (env.editMode && env.interactive && controller.selectedItem == item.id) {
                     ResizeFrame(item, pageIndex, env, controller)
                 }
@@ -467,4 +431,49 @@ private fun Modifier.homeMenuSlide(controller: HomeController): Modifier {
                 controller.homeMenuFinger = null
             }
         }
+}
+
+/**
+ * What a widget item shows, without its gestures or edit frame: used on home pages and on the
+ * search screen (0.7.1).
+ */
+@Composable
+internal fun WidgetContent(item: HomeItem, env: PageEnv, controller: HomeController) {
+    if (item.widget == "clock") {
+        // The clock's own style over the Clock settings; while the gallery is open on it, the draft.
+        val base = remember(env.clock) { ClockStyle.fromSettings(env.clock) }
+        val saved = remember(item.options, base) { ClockStyle.decode(item.options, base) }
+        val draft = controller.clockStudio?.takeIf { it.itemId == item.id }?.style
+        val style = draft ?: saved
+        // The study block running now (or next) as a line under the clock, when the companion is on (0.6.3, D92).
+        val showStudy by controller.data.settings.derive { get(LauncherSettings.StudyClockLine) != "off" }
+        val glance = if (showStudy) rememberStudyGlance(controller) else null
+        Column(
+            Modifier.fillMaxSize(),
+            horizontalAlignment = when (style.align) {
+                "start" -> Alignment.Start
+                "end" -> Alignment.End
+                else -> Alignment.CenterHorizontally
+            },
+        ) {
+            ClockFace(style, env.contentColor, env.shadow, env.glass, env.lightBackground, env.wallpaperBackdrop, Modifier.weight(1f))
+            if (glance != null) {
+                StudyLine(
+                    glance, controller, env.contentColor, env.shadow, env.interactive && !env.editMode,
+                    Modifier.padding(horizontal = if (style.plate == "none") 0.dp else 10.dp).padding(bottom = 2.dp),
+                )
+            }
+        }
+    }
+    when (item.widget) {
+        "app" -> AppWidgetItem(item, env, controller)
+        "date" -> DateWidget(env.contentColor, env.shadow)
+        "battery" -> BatteryWidget(env.contentColor, env.shadow)
+        "next" -> NextBlockWidget(controller, env.contentColor, env.shadow, env.interactive && !env.editMode)
+    }
+    if (item.widget == "now" || item.widget == "today") {
+        // Ticks and buttons work on the live home screen, not while editing or in a preview.
+        val surface = StudySurface(env.glass, env.lightBackground, env.wallpaperBackdrop, env.interactive && !env.editMode)
+        if (item.widget == "now") NowCard(controller, surface) else TodayWidget(controller, surface)
+    }
 }
