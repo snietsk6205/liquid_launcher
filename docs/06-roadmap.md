@@ -9,7 +9,8 @@
 | 2 | Home menu, wallpaper studio and library, layouts, backup; theme, folders, dock, page transitions; gestures, motion and haptics, updater | 0.3.0 – 0.5.0 | Tested on the phone (0.5.0 report of 2026-11-14) |
 | Review | Fable's review of Opus's work and the six bugs of the 0.5.0 report: glass no longer flattened by the benchmark or by a lost wallpaper, every icon follows the wallpaper in the same frame, one system-wallpaper writer, redirect fast path and recents recovery, pause opens HONOR Home, wallpaper sub-folders | 0.5.1 | Released (build 36) |
 | Feel | Letter index as a string pulled by the finger; "One space" drawer transition under the finger; glass notices; one motion vocabulary with exits; settings reorganised | 0.6.0 | Released (see `FABLE_LOG.md` for the build) |
-| 3 (next) | Widgets: clock gallery with full customisation first, then other apps' widgets, built-in widgets, panels | 0.7.x | |
+| 3, part 1 | Clock gallery: six designs, each clock with its own font, weight, size, colours, fill, glass plate, date and seconds | 0.7.0 | Released (see `FABLE_LOG.md`) |
+| 3, rest | Widget picker, other apps' widgets, more built-in widgets, panels | 0.7.x | |
 | 5 | Study companion over the calendar: Now card, Today panel, agenda widget, notices, quick actions (see `05-study-integration.md`, revised) | 0.8.x | |
 | 4 | Search sources (contacts, calendar, files, settings pages), suggested apps, notification badges, drawer folders and rule-based tabs | 2 builds | |
 | 6 | Profiles (Study / Free / Night), study mode, friction; automatic layout switching; wallpaper per profile and per page | 2 builds | |

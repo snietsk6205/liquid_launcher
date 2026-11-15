@@ -25,7 +25,7 @@ object LauncherSettings {
         val Folders = SettingsSection("folders", "Folders", "Preview, background, shape, columns and what a tap does", "Home screen")
         val Dock = SettingsSection("dock", "Dock", "A row of apps above the pill that stays on every page", "Home screen")
         val Icons = SettingsSection("icons", "Icons", "Icon packs for home and drawer, and icons the pack does not cover", "Look")
-        val Clock = SettingsSection("clock", "Clock", "Time format, size, date line and glass plate. Resize it in edit mode; more styles come with widgets", "Look")
+        val Clock = SettingsSection("clock", "Clock", "Defaults for new clocks. Each clock has its own gallery: hold it on the home screen, then \"Customise\" (designs, fonts, colours, glass)", "Look")
         val Gestures = SettingsSection("gestures", "Gestures", "Swipes, taps, presses, pinches, two-finger swipes and edge swipes on the home screen", "Home screen")
         val Pill = SettingsSection("pill", "Pill", "The glass bar: its items, size, position and gestures", "Home screen")
         val Drawer = SettingsSection("drawer", "App drawer", "Layout, sorting, search, tabs and the work profile", "App drawer")

@@ -80,13 +80,13 @@ internal fun BoxScope.ResizeFrame(item: HomeItem, pageIndex: Int, env: PageEnv, 
                 .padding(12.dp)
                 .clip(RoundedCornerShape(50))
                 .background(Color.Black.copy(alpha = 0.55f))
-                .clickable { controller.openSection(LauncherSettings.Sections.Clock.id) }
+                .clickable { controller.openClockStudio(item.id) }
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             LauncherIcon(LauncherIcons.Tune, contentDescription = null, tint = Color.White, size = 16.dp)
             Spacer(Modifier.width(6.dp))
-            Text("Clock settings", style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium))
+            Text("Customise", style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium))
         }
     }
 }

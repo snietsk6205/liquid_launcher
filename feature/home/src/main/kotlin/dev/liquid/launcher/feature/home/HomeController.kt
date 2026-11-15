@@ -172,7 +172,7 @@ class HomeController(
     val drawerOpen: Boolean get() = drawer.targetValue > 0.5f || drawer.value > 0.01f
     val anyOverlay: Boolean get() = drawerOpen || searchOpen || menu != null || editMode || renaming != null || tagging != null ||
         iconPicking != null || swipeEditing != null || openFolder != null || homeMenu || wallpaperStudio || layoutsSheet || savingLayout ||
-        wallpaperStrip
+        wallpaperStrip || clockStudio != null
 
     // ---- home menu, wallpaper, layouts ----
 
@@ -187,6 +187,30 @@ class HomeController(
     internal var homeMenuRun: (String) -> Unit = {}
 
     var wallpaperStudio by mutableStateOf(false)
+
+    /** The clock gallery, open on one clock widget; the widget draws its draft style meanwhile. */
+    var clockStudio by mutableStateOf<ClockStudioState?>(null)
+
+    fun openClockStudio(itemId: String) {
+        val item = data.layout.layout.value.find(itemId)?.second ?: return
+        val base = ClockStyle.fromSettings(data.settings.clockConfig())
+        if (editMode) exitEdit()
+        closeAll()
+        clockStudio = ClockStudioState(itemId, base, ClockStyle.decode(item.options, base))
+    }
+
+    /** Closes the gallery; [save] keeps the style on the widget (one undo step). */
+    fun closeClockStudio(save: Boolean) {
+        val studio = clockStudio ?: return
+        clockStudio = null
+        if (!save || studio.style == studio.before) return
+        val options = studio.style.encode(studio.base).takeIf { it.isNotEmpty() }
+        val layout = data.layout.layout.value
+        data.layout.commit(
+            layout.copy(pages = layout.pages.map { page -> page.copy(items = page.items.map { if (it.id == studio.itemId) it.copy(options = options) else it }) })
+        )
+    }
+
     var layoutsSheet by mutableStateOf(false)
     var savingLayout by mutableStateOf(false)
 
@@ -197,6 +221,7 @@ class HomeController(
     internal val pickImage: ((android.net.Uri?) -> Unit) -> Unit get() = callbacks.pickImage
     internal val pickImages: ((List<android.net.Uri>) -> Unit) -> Unit get() = callbacks.pickImages
     internal val pickFolder: ((android.net.Uri?) -> Unit) -> Unit get() = callbacks.pickFolder
+    internal val pickFont: ((android.net.Uri?) -> Unit) -> Unit get() = callbacks.pickFont
 
     /** The finger let go after sliding: run the item under it, if any. */
     fun releaseHomeMenuSlide(finger: Offset, moved: Boolean) {
@@ -423,6 +448,7 @@ class HomeController(
         wallpaperStrip = false
         layoutsSheet = false
         wallpaperStudio = false
+        if (clockStudio != null) closeClockStudio(save = true)
         menu = null
         openFolder = null
         renaming = null
@@ -445,6 +471,7 @@ class HomeController(
             wallpaperStrip -> wallpaperStrip = false
             layoutsSheet -> layoutsSheet = false
             wallpaperStudio -> wallpaperStudio = false
+            clockStudio != null -> closeClockStudio(save = true)
             openFolder != null -> openFolder = null
             searchOpen -> searchOpen = false
             drawerOpen && tagFilter.isNotEmpty() && drawerQuery.isEmpty() -> tagFilter = emptySet()
@@ -584,6 +611,8 @@ class HomeController(
         }
         val clock = HomeItem(LayoutOps.newId(), ItemKind.WIDGET, spot.first, spot.second, columns, h, widget = "clock")
         data.layout.commit(layout.copy(pages = layout.pages.mapIndexed { i, p -> if (i == pageIndex) p.copy(items = p.items + clock) else p }))
+        // Straight into the gallery: a new clock is there to be chosen and styled.
+        openClockStudio(clock.id)
     }
 
     fun addPage() {
@@ -897,4 +926,6 @@ class HomeCallbacks(
     val pickImages: ((List<android.net.Uri>) -> Unit) -> Unit = { it(emptyList()) },
     /** Shows the system folder picker; the callback gets the folder or null. */
     val pickFolder: ((android.net.Uri?) -> Unit) -> Unit = { it(null) },
+    /** Shows the system file picker for a font file; the callback gets it or null. */
+    val pickFont: ((android.net.Uri?) -> Unit) -> Unit = { it(null) },
 )

@@ -680,6 +680,9 @@ fun HomeScreen(
         if (studio != null) {
             WallpaperStudio(studio, glass, lightBackground, overlayBackdrop, controller)
         }
+        Presence(controller.clockStudio.takeIf { live }) { clock ->
+            ClockStudio(clock, glass, lightBackground, overlayBackdrop, controller)
+        }
         if (controller.savingLayout) SaveLayoutDialog(controller)
         controller.pageSettings?.let { PageSettingsDialog(it, controller) }
         controller.drag?.let { drag ->

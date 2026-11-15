@@ -45,6 +45,12 @@ class MainActivity : ComponentActivity() {
         folderCallback = null
     }
 
+    private var fontCallback: ((android.net.Uri?) -> Unit)? = null
+    private val pickFontFile = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        fontCallback?.invoke(uri)
+        fontCallback = null
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -84,6 +90,17 @@ class MainActivity : ComponentActivity() {
                     DebugLog.error("App", "photo picker failed: $e")
                     imagesCallback = null
                     callback(emptyList())
+                }
+            },
+            pickFont = { callback ->
+                fontCallback = callback
+                try {
+                    // Font files rarely carry a font type on Android, so any file can be picked; the launcher checks it loads.
+                    pickFontFile.launch(arrayOf("font/*", "application/x-font-ttf", "application/x-font-otf", "application/octet-stream", "*/*"))
+                } catch (e: Exception) {
+                    DebugLog.error("App", "file picker failed: $e")
+                    fontCallback = null
+                    callback(null)
                 }
             },
             pickFolder = { callback ->

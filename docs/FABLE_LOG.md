@@ -128,3 +128,27 @@ frame rate of the "One space" transition, and the notice position over the clock
 
 Hooks left for Phase 5: `NoticeKind.Study` and `NoticeKind.Task` exist with their switches; nothing posts them yet.
 
+### Entry 3 addendum
+
+Run 37: compiled, all unit tests and all emulator checks passed at the first attempt. **0.6.0 build 37 released** (`v0.6.0`).
+
+---
+
+## Entry 4: 0.7.0, clock gallery (Phase 3, first part) (2026-11-15)
+
+| File | Change | Why |
+|---|---|---|
+| `core/data/Models.kt` | `HomeItem.options: Map<String, String>?` | Per-widget options (D85) |
+| `feature/home/Clocks.kt` (new) | `ClockStyle` (encode / decode over a base from the Clock settings), `ClockFonts` (system families and `files/fonts/*.ttf|otf`), `ClockFace` and the six faces; text is auto-fitted by measuring a template with the widest digits; `timeInWords` | D85 |
+| `feature/home/ClockStudio.kt` (new) | The gallery sheet: live miniatures of the designs, tabs Text / Colours / Surface / Details, font import | D85 |
+| `HomeController.kt`, `HomeGrid.kt`, `EditTools.kt`, `HomeScreen.kt`, `MainActivity.kt` | `clockStudio` draft state, `openClockStudio` / `closeClockStudio`, "Customise" chip on a selected clock, "Add clock" opens the gallery, font file picker | |
+| `feature/home/Clock.kt` | Only `rememberMinuteTick` is left; the old fixed `ClockWidget` is gone | Replaced by `ClockFace` |
+| Tests | `ClockStyleTest` (style round trip, fallbacks, words, and the index string's weight and reach) | |
+
+Phase 3 state: clock gallery done. Still to build in Phase 3: a widget picker, other apps' widgets (AppWidgetHost: bind,
+configure, resize), further built-in widgets (date, battery, media, note) and panels. The study widgets of Phase 5 are
+built-in widgets too and will bring the picker with them.
+
+Not verified on a device: how each face looks at the user's 5 × 3 clock size, the roll animation's clipping, glass text
+fill on light wallpapers, sweep second hand cost (it redraws every frame while the home screen is visible; "Ticking" does not).
+

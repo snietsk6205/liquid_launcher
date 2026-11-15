@@ -60,6 +60,8 @@ data class HomeItem(
     val swipeDown: String? = null,
     /** Encoded [LauncherAction] run by double-tapping the item (a single tap then waits a moment). */
     val doubleTap: String? = null,
+    /** A widget's own options (a clock's style, a system widget's id), as text values; null = the defaults. */
+    val options: Map<String, String>? = null,
 ) {
     fun covers(cx: Int, cy: Int): Boolean = cx in x until x + w && cy in y until y + h
 

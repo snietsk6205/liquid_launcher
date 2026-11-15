@@ -215,7 +215,11 @@ private fun ItemView(item: HomeItem, pageIndex: Int, env: PageEnv, controller: H
         ItemKind.WIDGET -> {
             Box(base.iconGestures({ holder.value }, widgetHandler(item, holder, controller), env.interactive)) {
                 if (item.widget == "clock") {
-                    ClockWidget(env.clock, env.contentColor, env.shadow, env.glass, env.lightBackground, env.wallpaperBackdrop)
+                    // The clock's own style over the Clock settings; while the gallery is open on it, the draft.
+                    val base = remember(env.clock) { ClockStyle.fromSettings(env.clock) }
+                    val saved = remember(item.options, base) { ClockStyle.decode(item.options, base) }
+                    val draft = controller.clockStudio?.takeIf { it.itemId == item.id }?.style
+                    ClockFace(draft ?: saved, env.contentColor, env.shadow, env.glass, env.lightBackground, env.wallpaperBackdrop)
                 }
                 if (env.editMode && env.interactive && controller.selectedItem == item.id) {
                     ResizeFrame(item, pageIndex, env, controller)
