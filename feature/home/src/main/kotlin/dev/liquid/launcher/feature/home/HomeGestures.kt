@@ -91,10 +91,12 @@ internal fun Modifier.homeGestures(gestures: GestureConfig, controller: HomeCont
             var startCentroid = Offset.Zero
             var zoom = 1f
             var pan = Offset.Zero
+            var lastEventAt = down.uptimeMillis
 
             while (true) {
                 val pass = if (mode == HomeTouch.TwoFingers) PointerEventPass.Initial else PointerEventPass.Main
                 val event = awaitPointerEvent(pass)
+                event.changes.firstOrNull()?.let { lastEventAt = it.uptimeMillis }
                 val pressed = event.changes.filter { it.pressed }
                 if (pressed.isEmpty()) break
                 // A second finger soon after the first: a two-finger gesture, even if the first already moved a little.
@@ -157,7 +159,13 @@ internal fun Modifier.homeGestures(gestures: GestureConfig, controller: HomeCont
 
             when (mode) {
                 HomeTouch.Vertical -> {
-                    val velocity = tracker.calculateVelocity().y
+                    var velocity = tracker.calculateVelocity().y
+                    // After a stalled frame the last samples are too old for the tracker and it reports
+                    // 0 px/s; a quick swipe then still counts by its average speed.
+                    val duration = lastEventAt - down.uptimeMillis
+                    if (abs(velocity) < 300f && duration in 1..600 && abs(total.y) > threshold) {
+                        velocity = total.y / (duration / 1000f)
+                    }
                     DebugLog.event("Home", "swipe: " + total.y.toInt() + " px, " + velocity.toInt() + " px/s" + if (edge != 0) " (edge)" else "")
                     when {
                         follow && controller.drawer.value > 0f -> controller.settleDrawer(velocity)

@@ -137,6 +137,9 @@ internal fun GlassBenchScreen(store: SettingsStore, window: Window, wallpaper: W
         // Remember the best tier that held the frame rate, for the automatic fallback.
         val cap = collected.firstOrNull { it.holdsFrameRate }?.quality ?: GlassQuality.Tint
         store.set(LauncherSettings.GlassCap, cap.name.lowercase())
+        collected.firstOrNull { it.quality == GlassQuality.Full }?.let { full ->
+            if (full.refreshHz > 0f) store.set(LauncherSettings.GlassFullPercent, (full.fps / full.refreshHz * 100f).toInt().coerceIn(1, 200))
+        }
         running = false
     }
 

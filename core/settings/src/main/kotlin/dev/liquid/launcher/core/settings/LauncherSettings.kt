@@ -1087,6 +1087,10 @@ object LauncherSettings {
         options = listOf("full" to "Full", "frosted" to "Frosted", "tint" to "Tint"),
         title = "Best tier the benchmark allows", section = "state", hidden = true,
     )
+    val GlassFullPercent = IntSetting(
+        key = "state.glassFullPercent", default = 0, min = 0, max = 200,
+        title = "Full glass frame rate in the benchmark, percent of the refresh rate", section = "state", hidden = true,
+    )
     val GlassTintMode = ChoiceSetting(
         key = "glass.tintMode", default = "auto",
         options = listOf("auto" to "Follow the wallpaper", "light" to "Light", "dark" to "Dark"),
@@ -1385,7 +1389,7 @@ object LauncherSettings {
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
-        GlassQuality, GlassAuto, GlassCap, GlassTintMode,
+        GlassQuality, GlassAuto, GlassCap, GlassFullPercent, GlassTintMode,
     ) + GlassDefault.settings + glassSurfaces.flatMap { it.settings } + listOf(
         LogEnabled, LogVerbosity, LogSize,
         LastSystemLauncherVersion, LastSystemLauncher, DetectorVerified,

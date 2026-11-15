@@ -341,8 +341,13 @@ fun SettingsStore.glassConfig(): GlassConfig {
     // surface, so one benchmark run that measured "tint" turned all liquid glass into flat fills.
     // Still glass costs nothing per frame, and small glass is cheap while it moves; the benchmark
     // now only takes the refraction off large sheets.
-    val quality = GlassQuality.fromSetting(get(S.GlassQuality))
-    val capped = get(S.GlassAuto) && GlassQuality.fromSetting(get(S.GlassCap)) != GlassQuality.Full
+    val requested = GlassQuality.fromSetting(get(S.GlassQuality))
+    val cap = GlassQuality.fromSetting(get(S.GlassCap))
+    val capped = get(S.GlassAuto) && cap != GlassQuality.Full
+    // A device that draws full glass at under 45 % of its refresh rate (no GPU: an emulator)
+    // cannot show it at all; there the cap applies to everything, as before.
+    val hopeless = capped && get(S.GlassFullPercent) in 1..44
+    val quality = if (hopeless) requested.cappedAt(cap) else requested
     val large = if (capped && quality == GlassQuality.Full) GlassQuality.Frosted else quality
     fun values(surface: S.GlassSurface) = SurfaceValues(get(surface.blur), get(surface.refraction), get(surface.tint))
     val default = values(S.GlassDefault)
