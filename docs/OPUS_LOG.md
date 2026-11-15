@@ -368,3 +368,39 @@ Not done / limits: two-finger gestures and edge swipes cannot be driven from adb
 1. Entries 6–11 and decisions D43–D71.
 2. The roadmap changes (plan as of 0.4.1): tag filtering moved from Phase 4 into 0.4.1, wallpaper library added; the user's later wallpaper and tag ideas are placed in Phases 4, 6 and 7.
 3. Earlier items still open: D37–D39 redirect changes, the drawer rewrite, `IconThemer` with real packs, the home-press heuristic, emulator on API 34.
+
+---
+
+## Entry 12: 0.6.1, Fable's unfinished work released as he left it (2026-11-15, Opus 5.5)
+
+**Handover.** Fable 5.2's tokens ran out again in the middle of his session, so he could not complete his tasks. His
+last log entry is `FABLE_LOG.md` entry 5. Everything he wrote after 0.6.0 (the clock gallery and the study companion)
+**needs a review later**, by Fable or another model; I have not reviewed it, only built and released it. The user asked
+me not to change his work: his commits stay as they are and everything of mine is a separate `[opus]` commit on top.
+
+**Where he stopped.** Fable's code said 0.7.0 (clock gallery) and 0.8.0 (study companion), and his roadmap and log call
+both "Released". Neither was: the last release was **0.6.0, build 37**.
+
+| Part | State when he stopped |
+|---|---|
+| Clock gallery (Phase 3 part 1, D85) | Committed (a191651, c81cd59). Run 38 failed to compile; his fix in c81cd59 compiled and passed the unit tests in run 39 |
+| Run 39 (c81cd59) | Red: one emulator check, "home press redirected (0 -> 0)". After a screen dump Android suspended and re-bound the accessibility service three times, and for the whole step (both tries, 05:54:35–05:55:26) the service received no events at all; the next checks passed once it came back. The redirect code and the test script are identical to 0.6.0's passing run 37 (the 0.7.0 diff touches no redirect or CI file), so this is the emulator, not his code |
+| Study format + tests (`StudyFormat.kt`, `StudyFormatTest`) | Done, committed, tests pass |
+| Design and event format (`docs/05-study-integration.md`, D86) | Done, committed |
+| Calendar reader and writer (`StudyCalendar.kt`) | Written, uncommitted, never compiled |
+| Home screen: Now card, Today widget and panel, widget list, quick actions, notices (`Study.kt` and wiring) | Written, uncommitted, never compiled; a few parts of the design missing (below) |
+| Study settings card (`StudyEditor`) and settings | Written, uncommitted, never compiled |
+| D87, D88, log entry 5, roadmap | Written, uncommitted |
+| Emulator run with the study code | Never ran |
+
+Missing against his own design (`05-study-integration.md` 5.3), left for 0.6.2: the Now card has no "Skip" button; the
+focus timer does not stop at the end of its block (a forgotten timer would write hours of focus); "tasks due today" is
+announced once per launch of the home screen instead of once per day.
+
+**What I did for 0.6.1**
+| Commit | Change |
+|---|---|
+| 2460e73 (his work, my commit) | Fable's uncommitted files exactly as he left them |
+| `[opus]` version commit | `app.versionName` 0.6.1 (his code said 0.7.0); roadmap rows for the clock gallery and Phase 5 say what really happened; this entry |
+
+Result: see the update at the end of this entry.
