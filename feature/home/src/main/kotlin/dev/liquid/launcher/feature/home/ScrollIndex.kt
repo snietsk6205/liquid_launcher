@@ -76,48 +76,53 @@ internal val IndexStrip = 24.dp
 private val BubbleSize = 54.dp
 private val EdgeInset = 16.dp
 
-/** The letters pass this far beside the finger (towards their edge), so the finger does not cover them. */
-private val ApexOffset = 30.dp
-
-/** Space between the finger's touch point and the bubble's near edge: about half a thumb plus a margin. */
+/** Space between the finger's touch point and the bubble's near edge with "above": about half a thumb plus a margin. */
 private val BubbleGap = 52.dp
 
-/** A bubble placed beside the finger sits this much higher than it: a thumb covers more below its point than above. */
-private val BubbleLift = 20.dp
-
 /**
- * Centre of the letter bubble for a finger at ([fingerX], [fingerY]) in a [width] × [height] box,
- * pulling the string from the right edge ([fromRight]) or the left one (0.6.3, D91).
- * - "beside": towards the middle of the screen by [gap] plus half the bubble, and [lift] higher, so
- *   the thumb does not cover it; when there is no room on that side, above the finger instead.
- * - "above": straight above the finger by [gap] plus half the bubble (below it near the top).
+ * Centre of the letter bubble for a finger at ([fingerX], [fingerY]) in a box [width] wide,
+ * pulling the string from the right edge ([fromRight]) or the left one (0.6.3, D91; 0.6.4, D97).
+ * - "beside": past the bent letters: [anchorX] is the inner edge of the letter under the finger,
+ *   and the bubble's near edge is [gap] further towards the middle, [lift] higher. When there is no
+ *   room on that side, above the finger instead.
+ * - "above": straight above the finger by [aboveGap] plus half the bubble (below it near the top).
  * - "finger": at the finger, as before 0.6.3.
  */
 internal fun bubbleCentre(
     place: String,
     fingerX: Float,
     fingerY: Float,
+    anchorX: Float,
     fromRight: Boolean,
     bubbleWidth: Float,
     bubbleHeight: Float,
     gap: Float,
+    aboveGap: Float,
     lift: Float,
     width: Float,
 ): Offset {
     fun above(): Offset {
-        val y = fingerY - gap - bubbleHeight / 2f
-        return Offset(fingerX, if (y - bubbleHeight / 2f >= 0f) y else fingerY + gap + bubbleHeight / 2f)
+        val y = fingerY - aboveGap - bubbleHeight / 2f
+        return Offset(fingerX, if (y - bubbleHeight / 2f >= 0f) y else fingerY + aboveGap + bubbleHeight / 2f)
     }
     return when (place) {
         "finger" -> Offset(fingerX, fingerY)
         "above" -> above()
         else -> {
-            val x = if (fromRight) fingerX - gap - bubbleWidth / 2f else fingerX + gap + bubbleWidth / 2f
+            val x = if (fromRight) anchorX - gap - bubbleWidth / 2f else anchorX + gap + bubbleWidth / 2f
             val fits = if (fromRight) x - bubbleWidth / 2f >= 0f else x + bubbleWidth / 2f <= width
             if (fits) Offset(x, fingerY - lift) else above()
         }
     }
 }
+
+/**
+ * How far the string's apex is pulled in from its resting line (0.6.4, D97): [letterGap] past the
+ * finger, so the letters bend out from under the thumb towards the middle of the screen, plus
+ * [track] of how far the finger itself has moved in ([inward], from the resting line), capped at [maxPull].
+ */
+internal fun pullFor(inward: Float, letterGap: Float, track: Float, maxPull: Float): Float =
+    (letterGap + maxOf(0f, inward) * track).coerceIn(0f, maxPull)
 
 /** With pinned ends, the curve never gets tighter than this many letters on either side of the finger. */
 private const val MIN_REACH_SLOTS = 5f
@@ -210,9 +215,10 @@ internal fun stringReach(toEnd: Float, free: Float, pinned: Boolean): Float =
 
 /**
  * The drawer's letter index: a column of letters held at the top and bottom of an edge that
- * bends like a string pulled by the finger. The letter under the finger comes to the finger
- * (just beside it, so it stays visible), the letters between lie on a smooth curve, and the
- * further in the finger pulls, the deeper the curve. A bubble at the finger shows the letter.
+ * bends like a string pulled by the finger. Since 0.6.4 (D97) the string bends out from under the
+ * thumb: the letter under the finger rides the apex "Letters beside the finger" past it, towards
+ * the middle of the screen, the letters between lie on a smooth curve, and the further in the
+ * finger pulls, the further the curve follows. The bubble sits past the letters.
  * The app list never bends: it scrolls to the letter. On release the string springs back
  * straight and hides.
  *
@@ -320,10 +326,9 @@ internal fun ScrollIndex(
         val spacing = minOf(with(density) { config.spacingDp.dp.toPx() }, (height - with(density) { 16.dp.toPx() }) / n).coerceAtLeast(1f)
         val top = (height - spacing * n) / 2f
         val edge = with(density) { EdgeInset.toPx() }
-        val apexOffset = with(density) { ApexOffset.toPx() }
-        val bubblePx = with(density) { BubbleSize.toPx() }
-        val bubbleGap = with(density) { BubbleGap.toPx() }
-        val bubbleLift = with(density) { BubbleLift.toPx() }
+        val letterGap = with(density) { config.letterGapDp.dp.toPx() }
+        val bubbleGap = with(density) { config.bubbleGapDp.dp.toPx() }
+        val aboveGap = with(density) { BubbleGap.toPx() }
         val maxPull = width * 0.86f
         val freeReach = (config.reach * n).coerceAtLeast(MIN_REACH_SLOTS)
         SideEffect { highlight.enabled = config.focus }
@@ -370,7 +375,7 @@ internal fun ScrollIndex(
             touch.fingerX = x
             touch.fingerY = y.coerceIn(top + 0.5f * spacing, top + (n - 0.5f) * spacing)
             val inward = if (touch.fromRight) restX(true) - x else x - restX(false)
-            touch.pullTarget = ((inward - apexOffset) * config.track).coerceIn(0f, maxPull)
+            touch.pullTarget = pullFor(inward, letterGap, config.track, maxPull)
             val position = positionAt(touch.fingerY)
             touch.target = index.rowAt(position)
             val entry = position.roundToInt().coerceIn(0, n - 1)
@@ -403,7 +408,7 @@ internal fun ScrollIndex(
                     withFrameNanos { }
                     t += 0.006f
                     val swing = (1f - cos(t * 2f * PI.toFloat())) / 2f
-                    val inward = apexOffset + width * 0.5f * (1f - cos(t * 3f * PI.toFloat())) / 2f
+                    val inward = width * 0.4f * (1f - cos(t * 3f * PI.toFloat())) / 2f
                     val y = top + spacing * (0.5f + swing * (n - 1))
                     follow(if (touch.fromRight) restX(true) - inward else restX(false) + inward, y)
                 }
@@ -454,11 +459,14 @@ internal fun ScrollIndex(
                         val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
                         layout(constraints.maxWidth, constraints.maxHeight) {
                             val right = touch.fromRight
-                            // Never closer to the edge than the letters' resting line plus the gap, so it does not sit on them.
-                            val x = if (right) minOf(touch.fingerX, restX(true) - apexOffset) else maxOf(touch.fingerX, restX(false) + apexOffset)
+                            // "Above" and "finger": never on the letters' resting line.
+                            val x = if (right) minOf(touch.fingerX, restX(true) - edge) else maxOf(touch.fingerX, restX(false) + edge)
+                            // "Beside": past the letter under the finger, which rides the string's apex (it grows by 1.3 while held).
+                            val letterHalf = (bold.getOrNull(touch.active)?.size?.width ?: 0) * 0.65f
+                            val anchor = if (right) restX(true) - touch.pull - letterHalf else restX(false) + touch.pull + letterHalf
                             val centre = bubbleCentre(
-                                config.bubblePlace, x, touch.fingerY, right,
-                                placeable.width.toFloat(), placeable.height.toFloat(), bubbleGap, bubbleLift, width,
+                                config.bubblePlace, x, touch.fingerY, anchor, right,
+                                placeable.width.toFloat(), placeable.height.toFloat(), bubbleGap, aboveGap, 0f, width,
                             )
                             val left = (centre.x - placeable.width / 2f).coerceIn(0f, (width - placeable.width).coerceAtLeast(0f))
                             val topY = (centre.y - placeable.height / 2f).coerceIn(0f, (height - placeable.height).coerceAtLeast(0f))
@@ -473,10 +481,11 @@ internal fun ScrollIndex(
                     }
                     .height(BubbleSize)
                     .widthIn(min = BubbleSize)
-                    // Re-draw as the finger moves, so the glass samples its new spot.
+                    // Re-draw as the finger and the string move, so the glass samples its new spot.
                     .drawBehind {
                         touch.fingerX
                         touch.fingerY
+                        touch.pull
                     }
                     .then(
                         if (config.bubble == "glass") {

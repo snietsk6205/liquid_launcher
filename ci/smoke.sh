@@ -470,6 +470,9 @@ CAL=\$(content query --uri content://com.android.calendar/calendars --projection
 D=\$(printf '[ ] Recall the theorems\n[ ] Serie 1, ex. 1-2\n\nWHAT smoke test block.\nP2-BLOCK 2026-11-15 smoke-1')
 content insert --uri content://com.android.calendar/events --bind calendar_id:i:\$CAL --bind 'title:s:Proba 2 smoke block' \
   --bind description:s:"\$D" --bind dtstart:l:$(( (NOW_S - 1800) * 1000 )) --bind dtend:l:$(( (NOW_S + 3600) * 1000 )) --bind eventTimezone:s:UTC
+T=\$(printf '[ ] Refaire le TD 3\n[ ] Corriger\n\nWHAT tomorrow smoke block, read only today.')
+content insert --uri content://com.android.calendar/events --bind calendar_id:i:\$CAL --bind 'title:s:Micro smoke tomorrow' \
+  --bind description:s:"\$T" --bind dtstart:l:$(( (NOW_S + 86400) * 1000 )) --bind dtend:l:$(( (NOW_S + 86400 + 3600) * 1000 )) --bind eventTimezone:s:UTC
 content query --uri content://com.android.calendar/events --projection _id:title --where "calendar_id=\$CAL"
 CALEOF
 adb push "$OUT/cal.sh" /data/local/tmp/cal.sh >/dev/null 2>&1
@@ -510,12 +513,49 @@ else
     sleep 3
     if event_text | grep -q '\[x\] Recall the theorems'; then pass "a tick is written into the event's description"; else fail "a tick is written into the event's description"; event_text | head -8; fi
     if event_text | grep -q '— launcher: done .* · 1/2 tasks'; then pass "the status line counts the ticked task"; else fail "the status line counts the ticked task"; event_text | tail -2; fi
+    # 0.6.4: tomorrow opens from Today, and each of its blocks opens to its steps.
+    dump 14b-panel3
+    if tap_text 14b-panel3 "Tomorrow · "; then
+      sleep 1.5
+      dump 14b-tomorrow
+      if tap_text 14b-tomorrow "Micro smoke tomorrow" exact; then
+        sleep 1.5
+        peek 14b-tomorrow-open
+        dump 14b-tomorrow-open
+        if on_screen 14b-tomorrow-open "Refaire le TD 3" exact; then pass "a block of tomorrow opens to its steps"; else fail "a block of tomorrow opens to its steps"; fi
+      else
+        fail "Today lists tomorrow's block once tomorrow is opened"
+      fi
+    else
+      fail "Today shows a Tomorrow section"
+    fi
     adb shell input keyevent KEYCODE_BACK
-    sleep 1
+    sleep 2
+    # With the block done and no task left, the clock line moves on to tomorrow instead of vanishing.
+    dump 14b-home2
+    peek 14b-home2
+    if on_screen 14b-home2 "· Micro smoke tomorrow"; then pass "with today done the clock line shows tomorrow's first block"; else fail "with today done the clock line shows tomorrow's first block"; fi
   else
     fail "the clock line can be tapped"
   fi
 fi
+
+clear_anr
+# 0.6.4: the letter index bends out from under the finger and the bubble sits past the letters. A picture only:
+# the screenshot is taken while a slow swipe holds the right edge of the drawer.
+echo "== 14c. Letter index while held"
+adb shell input keyevent KEYCODE_HOME
+sleep 1.5
+adb shell input swipe 540 1500 540 400 450
+sleep 2
+adb shell input swipe 1072 700 1066 1500 3000 &
+SWIPE_PID=$!
+sleep 1.6
+peek 14c-index
+wait "$SWIPE_PID" 2>/dev/null
+sleep 1
+adb shell input keyevent KEYCODE_HOME
+sleep 1
 
 clear_anr
 # The updates screen (in-app updater) opens and offers a check; no network is used here.

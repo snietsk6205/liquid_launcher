@@ -154,8 +154,12 @@ data class IndexConfig(
     val spacingDp: Int,
     /** "glass", "solid" or "none". */
     val bubble: String,
-    /** "beside", "above" or "finger": where the bubble sits relative to the finger. */
+    /** "beside" (beyond the letters), "above" or "finger": where the bubble sits. */
     val bubblePlace: String = "beside",
+    /** How far the curve carries the letters past the finger, towards the middle (dp, 0.6.4). */
+    val letterGapDp: Int = 64,
+    /** Space between the bent letters and the bubble (dp, 0.6.4). */
+    val bubbleGapDp: Int = 32,
     /** "light", "strong" or "off". */
     val haptics: String,
     /** Time constant of the list catching up with the finger, in milliseconds. */
@@ -211,6 +215,8 @@ data class GlassConfig(
      * lower it to frosted; pills, chips, menus and the clock always keep [quality].
      */
     val largeQuality: GlassQuality = quality,
+    /** Edge light of every glass surface, 0..1 (0.6.4). */
+    val rim: Float = 0f,
 ) {
     private fun values(surface: String) = surfaces[surface] ?: surfaces.getValue(S.GlassDefault.id)
 
@@ -233,7 +239,7 @@ data class GlassConfig(
             else -> lightBackground
         }
         val base = tintColor ?: if (light) Color.White else Color.Black
-        return GlassStyle(if (large) largeQuality else quality, v.blurDp.dp, v.refraction / 100f, base.copy(alpha = v.tint / 100f))
+        return GlassStyle(if (large) largeQuality else quality, v.blurDp.dp, v.refraction / 100f, base.copy(alpha = v.tint / 100f), rim)
     }
 }
 
@@ -317,6 +323,8 @@ fun SettingsStore.indexConfig() = IndexConfig(
     spacingDp = get(S.IndexSpacing),
     bubble = get(S.IndexBubble),
     bubblePlace = get(S.IndexBubblePlace),
+    letterGapDp = get(S.IndexLetterGap),
+    bubbleGapDp = get(S.IndexBubbleGap),
     haptics = get(S.IndexHaptics),
     followMs = get(S.IndexFollow),
     track = get(S.IndexTrack) / 100f,
@@ -372,7 +380,7 @@ fun SettingsStore.glassConfig(): GlassConfig {
         val custom = surface.custom
         surfaces[surface.id] = if (custom != null && get(custom)) values(surface) else default
     }
-    return GlassConfig(quality, get(S.GlassTintMode), surfaces, dev.liquid.launcher.core.settings.ColorSetting.parse(get(S.ThemeGlassColor))?.let { Color(it) }, large)
+    return GlassConfig(quality, get(S.GlassTintMode), surfaces, dev.liquid.launcher.core.settings.ColorSetting.parse(get(S.ThemeGlassColor))?.let { Color(it) }, large, get(S.GlassRim) / 100f)
 }
 
 data class SearchConfig(val engine: String, val keyboard: Boolean, val dim: Float, val blurDp: Int)

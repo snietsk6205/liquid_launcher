@@ -201,10 +201,20 @@ data class StudyDay(
     val tasks: List<StudyEvent> = emptyList(),
     /** Tasks of earlier days that are still open, newest first. */
     val overdue: List<StudyEvent> = emptyList(),
-    /** The first block of tomorrow, if any. */
-    val tomorrow: StudyEvent? = null,
+    /** Tomorrow's blocks, in time order (0.6.4: all of them, for the Tomorrow peek in Today). */
+    val tomorrowBlocks: List<StudyEvent> = emptyList(),
+    /** Tomorrow's tasks. */
+    val tomorrowTasks: List<StudyEvent> = emptyList(),
+    /** Edits of study events on the phone that the calendar sync has not sent to the account yet. */
+    val waitingToSync: Int = 0,
 ) {
     val isEmpty: Boolean get() = blocks.isEmpty() && tasks.isEmpty() && overdue.isEmpty()
+
+    /** The first block of tomorrow, if any. */
+    val tomorrow: StudyEvent? get() = tomorrowBlocks.firstOrNull()
+
+    /** Blocks of today that have ended and are neither done nor skipped, latest first. */
+    fun unmarked(now: Long): List<StudyEvent> = blocks.filter { it.end <= now && it.status == StudyStatus.Open }.sortedByDescending { it.end }
 
     /** The block running at [now]: the latest one that has started and not ended, open ones first. */
     fun current(now: Long): StudyEvent? {

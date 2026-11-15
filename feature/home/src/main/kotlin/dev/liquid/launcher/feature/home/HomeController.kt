@@ -289,9 +289,53 @@ class HomeController(
             link.isEmpty() -> run(LauncherAction.OpenCalendar)
             app != null -> start(app)
             // No scheme and not an installed app: a web address typed without "https://".
-            ':' !in link -> openUrl("https://$link")
-            else -> openUrl(link)
+            ':' !in link -> openStudyLink("https://$link")
+            else -> openStudyLink(link)
         }
+    }
+
+    private var lastStudyLink = 0L
+
+    /**
+     * Opens a study link (the plan, a block's link) straight in the app chosen in Settings → Study
+     * companion (0.6.4, D96), instead of handing it to the phone, which may first show a link
+     * chooser or a link-checking app. A second tap within a moment does not open it twice.
+     */
+    fun openStudyLink(url: String) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastStudyLink < 900) return
+        lastStudyLink = now
+        val pm = context.packageManager
+        val uri = Uri.parse(url)
+        fun view(pkg: String?) = Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE).also { if (pkg != null) it.setPackage(pkg) }
+        fun resolves(intent: Intent) = intent.resolveActivity(pm) != null
+        // A Custom Tab: Chrome's own view of the page over the launcher, signed in like Chrome.
+        // Built by hand (the extras of androidx.browser), so no library is needed for it.
+        fun tab(): Intent? {
+            val browsers = try {
+                pm.queryIntentServices(Intent("android.support.customtabs.action.CustomTabsService"), 0).map { it.serviceInfo.packageName }
+            } catch (e: Exception) {
+                emptyList()
+            }
+            val pkg = listOf("com.android.chrome", "com.chrome.beta", "com.chrome.dev", "com.brave.browser").firstOrNull { it in browsers } ?: browsers.firstOrNull() ?: return null
+            return view(pkg).apply {
+                putExtras(android.os.Bundle().apply { putBinder("android.support.customtabs.extra.SESSION", null) })
+                putExtra("android.support.customtabs.extra.TITLE_VISIBILITY", 1)
+                putExtra("android.support.customtabs.extra.SHARE_STATE", 1)
+            }
+        }
+        val claude = data.settings.get(LauncherSettings.StudyClaudeApp).trim().ifEmpty { "com.anthropic.claude" }
+        val intent = when (data.settings.get(LauncherSettings.StudyLinkOpener)) {
+            "system" -> view(null)
+            "chrome" -> view("com.android.chrome").takeIf(::resolves) ?: tab() ?: view(null)
+            "claude" -> view(claude).takeIf(::resolves) ?: run {
+                notice(dev.liquid.launcher.core.common.NoticeKind.Info, "The Claude app does not open links", "Opened in a Chrome tab instead")
+                tab() ?: view(null)
+            }
+            else -> tab() ?: view(null)
+        }
+        DebugLog.event("Study", "opening a study link in " + (intent.`package` ?: "the phone's choice"))
+        start(intent)
     }
 
     /** Adds a built-in widget of [type] to the current page, across its width. */
@@ -973,6 +1017,7 @@ class HomeController(
                 closeAll()
                 if (editMode) exitEdit()
                 if (!data.study.loaded.value) data.study.refresh()
+                data.study.requestSync()
                 todaySheet = true
             }
             LauncherAction.TellClaude -> tellClaude()

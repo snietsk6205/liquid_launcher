@@ -215,20 +215,10 @@ private fun DialogRow(label: String, onClick: () -> Unit) {
     Text(label, modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp), style = TextStyle(fontFamily = HomeTheme.font, fontSize = 16.sp))
 }
 
+/** A button of the sheet: a [GlassButton] in the look of Settings → Buttons (0.6.4). */
 @Composable
 private fun SheetChip(label: String, icon: Int, color: Color, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .clip(RoundedCornerShape(50))
-            .background(color.copy(alpha = 0.12f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        LauncherIcon(icon, contentDescription = null, tint = color, size = 16.dp)
-        Spacer(Modifier.width(6.dp))
-        Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 13.sp, fontWeight = FontWeight.Medium))
-    }
+    GlassButton(label, color, icon = icon, onClick = onClick)
 }
 
 /** The layout's home page drawn small: dots for apps, blocks for widgets and folders. */

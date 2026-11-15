@@ -40,7 +40,8 @@ object LauncherSettings {
         val Search = SettingsSection("search", "Search", "Swipe-down search and web search", "App drawer")
         val Notices = SettingsSection("notices", "Glass notices", "Short glass labels for layout switches, wallpapers, tag filters, the redirect, updates and study blocks", "Motion and feedback")
         val Study = SettingsSection("study", "Study companion", "Study blocks and tasks from your calendar: Now card, Today, notices, quick actions", "Study")
-        val Glass = SettingsSection("glass", "Liquid glass", "Quality, blur, refraction and tint, overall and per surface", "Look")
+        val Glass = SettingsSection("glass", "Liquid glass", "Quality, blur, refraction, tint and edge light, overall and per surface", "Look")
+        val Buttons = SettingsSection("buttons", "Buttons", "Liquid glass buttons in Today, the Now card and the sheets: style, shape, size, tint, edge light, the main button's colour", "Look")
 
         val Redirect = SettingsSection("redirect", "Redirect engine", "When and how the launcher is brought to the front", "Redirect")
         val Detection = SettingsSection("detection", "Detection", "How the system launcher's home screen and recents are recognised", "Redirect")
@@ -50,7 +51,7 @@ object LauncherSettings {
 
         // In the order the settings app lists them; sections with the same group sit under one heading.
         val all = listOf(
-            Theme, Wallpaper, Icons, Glass, Clock,
+            Theme, Wallpaper, Icons, Glass, Buttons, Clock,
             Home, Pill, Dock, Folders, HomeMenu, Menu, Gestures,
             Drawer, Tags, DrawerMotion, DrawerIndex, Search,
             Motion, Notices,
@@ -1052,11 +1053,24 @@ object LauncherSettings {
     )
     val IndexBubblePlace = ChoiceSetting(
         key = "index.bubblePlace", default = "beside",
-        options = listOf("beside" to "Beside the finger", "above" to "Above the finger", "finger" to "Under the finger"),
+        options = listOf("beside" to "Beyond the letters", "above" to "Above the finger", "finger" to "Under the finger"),
         title = "Bubble position",
-        summary = "Beside: towards the middle of the screen and a little higher, where your thumb does not cover it " +
+        summary = "Beyond the letters: past the bent letters, towards the middle of the screen, where your thumb does not cover it " +
             "(above the finger when there is no room). Under the finger is how it was before 0.6.3",
         section = "drawerIndex", keywords = "index bubble position place finger covered hidden see letter",
+    )
+    val IndexLetterGap = IntSetting(
+        key = "index.letterGap", default = 64, min = 0, max = 140, step = 4, unit = "dp",
+        title = "Letters beside the finger",
+        summary = "How far the curve carries the letters past your finger, towards the middle of the screen, so the thumb does not cover them. " +
+            "0: the letter you are on comes to your finger",
+        section = "drawerIndex", keywords = "index curve larger bigger deeper letters finger covered gap distance edge bulge",
+    )
+    val IndexBubbleGap = IntSetting(
+        key = "index.bubbleGap", default = 32, min = 0, max = 120, step = 4, unit = "dp",
+        title = "Bubble distance",
+        summary = "Space between the bent letters and the bubble",
+        section = "drawerIndex", keywords = "index bubble distance gap further space",
     )
     val IndexHaptics = ChoiceSetting(
         key = "index.haptics", default = "light",
@@ -1073,8 +1087,9 @@ object LauncherSettings {
     val IndexTrack = IntSetting(
         key = "index.track", default = 100, min = 0, max = 100, step = 10, unit = "%",
         title = "Pull depth",
-        summary = "The letters bend like a string pulled by your finger: at 100 % the letter you are on comes all the way to your finger, " +
-            "lower values keep the curve shallower, 0 leaves the column straight. It springs back when you let go. The app list never moves sideways",
+        summary = "The letters bend like a string, out from under your finger (\"Letters beside the finger\" sets how far). When you pull inwards, " +
+            "at 100 % they keep that distance from your finger wherever it goes; lower values follow less, 0 keeps the curve where it started. " +
+            "It springs back when you let go. The app list never moves sideways",
         section = "drawerIndex", keywords = "index follow finger pull string depth curve track",
     )
     val IndexSpring = ChoiceSetting(
@@ -1140,6 +1155,12 @@ object LauncherSettings {
         key = "state.glassFullPercent", default = 0, min = 0, max = 200,
         title = "Full glass frame rate in the benchmark, percent of the refresh rate", section = "state", hidden = true,
     )
+    val GlassRim = IntSetting(
+        key = "glass.rim", default = 45, min = 0, max = 100, step = 5, unit = "%",
+        title = "Edge light",
+        summary = "A thin bright rim along the edge of every glass surface, like light catching real glass. 0: no rim (as before 0.6.4)",
+        section = "glass", keywords = "glass edge light rim highlight specular shine border",
+    )
     val GlassTintMode = ChoiceSetting(
         key = "glass.tintMode", default = "auto",
         options = listOf("auto" to "Follow the wallpaper", "light" to "Light", "dark" to "Dark"),
@@ -1186,6 +1207,69 @@ object LauncherSettings {
         key = "home.clockGlass", default = false,
         title = "Glass plate behind it",
         section = "clock", keywords = "clock glass background plate",
+    )
+
+    // ---- Buttons (0.6.4, D95) ----
+
+    val ButtonStyle = ChoiceSetting(
+        key = "buttons.style", default = "glass",
+        options = listOf(
+            "glass" to "Liquid glass: bends the glass it sits on",
+            "crystal" to "Crystal: drawn glass, lighter on the phone",
+            "tint" to "Tinted: flat, as before 0.6.4",
+            "outline" to "Outline",
+            "solid" to "Solid",
+        ),
+        title = "Button style",
+        summary = "For the buttons in Today, the Now card, the layouts sheet and the clock gallery. Liquid glass follows \"Quality\" in Liquid glass (crystal when it is Tint)",
+        section = "buttons", keywords = "button style glass liquid crystal flat outline solid chip",
+    )
+    val ButtonShape = IntSetting(
+        key = "buttons.corner", default = 50, min = 0, max = 50, step = 5, unit = "%",
+        title = "Corner roundness",
+        summary = "50 %: capsules. Lower values give rounded rectangles, 0 square corners",
+        section = "buttons", keywords = "button shape corner radius round square capsule pill",
+    )
+    val ButtonSize = ChoiceSetting(
+        key = "buttons.size", default = "medium",
+        options = listOf("small" to "Small", "medium" to "Medium", "large" to "Large"),
+        title = "Button size",
+        section = "buttons", keywords = "button size height small large big",
+    )
+    val ButtonTint = IntSetting(
+        key = "buttons.tint", default = 16, min = 0, max = 60, step = 2, unit = "%",
+        title = "Tint strength",
+        summary = "How much white the glass of a button carries; higher stands out more from the sheet",
+        section = "buttons", keywords = "button tint opacity fill strength",
+    )
+    val ButtonRim = IntSetting(
+        key = "buttons.rim", default = 70, min = 0, max = 100, step = 5, unit = "%",
+        title = "Edge light",
+        summary = "The bright rim along a button's edge",
+        section = "buttons", keywords = "button edge light rim highlight border shine",
+    )
+    val ButtonRefraction = IntSetting(
+        key = "buttons.refraction", default = 60, min = 0, max = 100, step = 5, unit = "%",
+        title = "Refraction",
+        summary = "How strongly a liquid glass button bends what is behind it (Full quality only)",
+        section = "buttons", keywords = "button refraction lens bend",
+    )
+    val ButtonMain = ChoiceSetting(
+        key = "buttons.main", default = "block",
+        options = listOf(
+            "block" to "The block's colour",
+            "accent" to "The theme's accent",
+            "plain" to "Like the other buttons",
+        ),
+        title = "Main button colour",
+        summary = "The button that matters most where it sits: Done on the block running now, a running focus timer, \"Switch it on\"",
+        section = "buttons", keywords = "button main primary colour color accent block done",
+    )
+    val ButtonSquish = BoolSetting(
+        key = "buttons.squish", default = true,
+        title = "Squish when pressed",
+        summary = "A button shrinks a little under your finger and springs back",
+        section = "buttons", keywords = "button press animation squish spring scale",
     )
 
     // ---- Search ----
@@ -1343,11 +1427,57 @@ object LauncherSettings {
     )
     val StudyClockLine = ChoiceSetting(
         key = "study.clockLine", default = "block",
-        options = listOf("block" to "The block now or next, else tasks left", "off" to "Nothing"),
+        options = listOf(
+            "block" to "Now, next, unmarked, tasks left, then tomorrow",
+            "today" to "Today only (nothing about tomorrow)",
+            "off" to "Nothing",
+        ),
         title = "Under the clock",
-        summary = "A line under your clock widget: the block running now with a ring for the time gone, else the next one, " +
-            "else the tasks left today. Tap it for Today (ticks, Done, Skip, Focus). The pill can show the same: add \"Study block\" to its items",
-        section = "study", keywords = "study clock line now current block next glance pill",
+        summary = "A line under your clock widget: the block running now with a ring for the time gone; the next block when it starts within the hour; " +
+            "a block that ended without Done or Skip; the next block later; the tasks left; then tomorrow's first block. " +
+            "Tap it for Today. The pill can show the same: add \"Study block\" to its items",
+        section = "study", keywords = "study clock line now current block next glance pill tomorrow unmarked",
+    )
+    val StudyBlockCards = ChoiceSetting(
+        key = "study.blockCards", default = "preview",
+        options = listOf(
+            "compact" to "Compact: title and time; tap to open",
+            "preview" to "Tasks and the start of the notes; tap for everything",
+            "full" to "Everything, always",
+        ),
+        title = "Blocks in Today",
+        summary = "Tap a block's title to open or close it. In compact mode the block running now starts open",
+        section = "study", keywords = "study today block card expand collapse description notes details",
+    )
+    val StudyButtonSide = ChoiceSetting(
+        key = "study.buttonSide", default = "end",
+        options = listOf("end" to "Right", "start" to "Left"),
+        title = "Done and Skip buttons",
+        section = "study", keywords = "study done skip buttons right left side align",
+    )
+    val StudyTomorrow = ChoiceSetting(
+        key = "study.tomorrow", default = "peek",
+        options = listOf(
+            "peek" to "First block; tap to see the whole day",
+            "all" to "All of tomorrow's blocks and tasks",
+            "off" to "Hidden",
+        ),
+        title = "Tomorrow in Today",
+        summary = "Tap a block of tomorrow to read its steps and notes",
+        section = "study", keywords = "study tomorrow peek expand next day preview hide",
+    )
+    val StudyLinkOpener = ChoiceSetting(
+        key = "study.linkOpener", default = "tab",
+        options = listOf(
+            "tab" to "A Chrome tab over the launcher",
+            "chrome" to "Chrome",
+            "claude" to "The Claude app",
+            "system" to "Ask the phone (your default link app)",
+        ),
+        title = "Open the plan and block links in",
+        summary = "Straight to that app, without the phone's link chooser. A Chrome tab is signed in like Chrome. " +
+            "When the app is missing or does not open links, a Chrome tab is used",
+        section = "study", keywords = "study plan link open chrome claude browser tab redirect chooser",
     )
     val StudyBlockCalendars = TextSetting(
         key = "study.blockCalendars", default = "Study",
@@ -1583,7 +1713,7 @@ object LauncherSettings {
         DrawerWork, DrawerCloseOnLaunch, DrawerSideMargin, DrawerDim, DrawerTabsPosition,
         DrawerTransition, DrawerTravel, DrawerPillMorph, DrawerSpeed, DrawerBounce, DrawerRise, DrawerHomeScale, DrawerHomeBlur, DrawerBlurLive,
         DrawerScrollbar, DrawerScrollBubble, DrawerScrollEffect, DrawerScrollStrength, DrawerOverscroll,
-        IndexVisibility, IndexSide, IndexTrack, IndexReach, IndexEnds, IndexLetterSize, IndexSpacing, IndexBubble, IndexBubblePlace, IndexHaptics, IndexFollow, IndexSpring, IndexHideDelay, IndexFocus, DrawerTopSections,
+        IndexVisibility, IndexSide, IndexTrack, IndexReach, IndexEnds, IndexLetterSize, IndexSpacing, IndexBubble, IndexBubblePlace, IndexLetterGap, IndexBubbleGap, IndexHaptics, IndexFollow, IndexSpring, IndexHideDelay, IndexFocus, DrawerTopSections,
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
         TagStripPosition, TagButtonPosition, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
         MenuEntries,
@@ -1591,10 +1721,11 @@ object LauncherSettings {
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
-        StudyEnabled, StudyClockLine, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyPlanLink,
+        StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyPlanLink, StudyLinkOpener,
         NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,
         NoticeLayout, NoticeWallpaper, NoticeTags, NoticeRedirect, NoticeUpdate, NoticeStudy, NoticeTask, NoticeInfo,
-        GlassQuality, GlassAuto, GlassCap, GlassFullPercent, GlassTintMode,
+        GlassQuality, GlassAuto, GlassCap, GlassFullPercent, GlassTintMode, GlassRim,
+        ButtonStyle, ButtonShape, ButtonSize, ButtonTint, ButtonRim, ButtonRefraction, ButtonMain, ButtonSquish,
     ) + GlassDefault.settings + glassSurfaces.flatMap { it.settings } + listOf(
         LogEnabled, LogVerbosity, LogSize,
         RecentlyChanged, LastSystemLauncherVersion, LastSystemLauncher, DetectorVerified,
@@ -1613,7 +1744,7 @@ object LauncherSettings {
 
     /** Keys that make up a theme: the Theme section and the glass look (not its quality, which is about this phone). */
     val themeKeys: Set<String> by lazy {
-        all.filter { it.section == "theme" || (it.section == "glass" && it != GlassQuality && it != GlassAuto && it != GlassCap) }
+        all.filter { it.section == "theme" || it.section == "buttons" || (it.section == "glass" && it != GlassQuality && it != GlassAuto && it != GlassCap) }
             .map { it.key }.toSet()
     }
 
@@ -1636,7 +1767,8 @@ object LauncherSettings {
             OnRecentsExitDelay, ScreenOffDelay, UnlockCheck,
             // Fine tuning of motion
             DrawerTravel, DrawerBounce, DrawerRise, DrawerHomeScale, DrawerBlurLive, DrawerScrollStrength, DrawerOverscroll,
-            IndexReach, IndexEnds, IndexFollow, IndexSpring, IndexHideDelay, IndexSpacing,
+            IndexReach, IndexEnds, IndexFollow, IndexSpring, IndexHideDelay, IndexSpacing, IndexBubbleGap,
+            ButtonRefraction, ButtonSquish,
             GestureEdgeWidth, HapticsStrength,
             // Looks most people leave alone
             HomeMarginSide, HomeMarginTop, HomeMarginBottom, DrawerSideMargin, PillOffset, PillCorner, PillIconSize,

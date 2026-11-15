@@ -165,7 +165,8 @@ class StudyCalendar(
         val blocks = ArrayList<StudyEvent>()
         val tasks = ArrayList<StudyEvent>()
         val overdue = ArrayList<StudyEvent>()
-        var tomorrow: StudyEvent? = null
+        val tomorrowBlocks = ArrayList<StudyEvent>()
+        val tomorrowTasks = ArrayList<StudyEvent>()
         val local = localEdits()
         val stale = HashSet<String>()
         try {
@@ -202,10 +203,11 @@ class StudyCalendar(
                     when {
                         isBlockCalendar && !allDay -> when {
                             isToday -> blocks += event
-                            firstDay == today.plusDays(1) && tomorrow == null -> tomorrow = event
+                            firstDay == today.plusDays(1) -> tomorrowBlocks += event
                         }
                         // Everything else is a task: all-day events, and timed events of the task calendars.
                         isToday -> tasks += event
+                        firstDay == today.plusDays(1) -> tomorrowTasks += event
                         !dayAfter.isAfter(today) && event.status == StudyStatus.Open -> overdue += event
                     }
                 }
@@ -220,8 +222,68 @@ class StudyCalendar(
             blocks = blocks.sortedBy { it.begin },
             tasks = tasks.sortedWith(compareBy({ it.status != StudyStatus.Open }, { it.begin }, { it.rawTitle })),
             overdue = overdue.sortedByDescending { it.begin },
-            tomorrow = tomorrow,
+            tomorrowBlocks = tomorrowBlocks.sortedBy { it.begin },
+            tomorrowTasks = tomorrowTasks.sortedBy { it.rawTitle },
+            waitingToSync = waitingToSync(blockCalendars + taskCalendars),
         )
+    }
+
+    /** Study events changed on the phone that the sync has not sent yet (the calendar's "dirty" flag). */
+    private fun waitingToSync(calendarIds: Set<Long>): Int {
+        if (calendarIds.isEmpty()) return 0
+        return try {
+            context.contentResolver.query(
+                CalendarContract.Events.CONTENT_URI, arrayOf(CalendarContract.Events._ID),
+                CalendarContract.Events.DIRTY + " = 1 AND " + CalendarContract.Events.CALENDAR_ID + " IN (" + calendarIds.joinToString(",") + ")",
+                null, null,
+            )?.use { it.count } ?: 0
+        } catch (e: Exception) {
+            0
+        }
+    }
+
+    private var lastSyncRequest = 0L
+
+    /**
+     * Asks Android to sync the study calendars' accounts now, both ways (0.6.4): the phone's ticks
+     * reach Google before the evening check-in reads them, and blocks moved or added elsewhere reach
+     * the phone. On some phones (seen on MagicOS) the calendar otherwise syncs hours late. Any app
+     * may ask; the sync itself is the system's. [force]: also within a few minutes of the last request.
+     */
+    fun requestSync(force: Boolean = false) {
+        if (!enabled || !canRead) return
+        val now = System.currentTimeMillis()
+        if (!force && now - lastSyncRequest < 5 * 60_000L) return
+        lastSyncRequest = now
+        scope.launch(Dispatchers.IO) {
+            try {
+                val blockWords = words(LauncherSettings.StudyBlockCalendars)
+                val taskWords = words(LauncherSettings.StudyTaskCalendars)
+                val accounts = HashSet<android.accounts.Account>()
+                context.contentResolver.query(
+                    CalendarContract.Calendars.CONTENT_URI,
+                    arrayOf(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME, CalendarContract.Calendars.ACCOUNT_NAME, CalendarContract.Calendars.ACCOUNT_TYPE),
+                    null, null, null,
+                )?.use { c ->
+                    while (c.moveToNext()) {
+                        val name = c.getString(0).orEmpty().lowercase()
+                        val type = c.getString(2).orEmpty()
+                        if (type == CalendarContract.ACCOUNT_TYPE_LOCAL || type.isEmpty()) continue
+                        if ((blockWords + taskWords).any { it in name }) accounts += android.accounts.Account(c.getString(1).orEmpty(), type)
+                    }
+                }
+                for (account in accounts) {
+                    val extras = android.os.Bundle().apply {
+                        putBoolean(android.content.ContentResolver.SYNC_EXTRAS_MANUAL, true)
+                        putBoolean(android.content.ContentResolver.SYNC_EXTRAS_EXPEDITED, true)
+                    }
+                    android.content.ContentResolver.requestSync(account, CalendarContract.AUTHORITY, extras)
+                }
+                if (accounts.isNotEmpty()) DebugLog.event("Study", "calendar sync requested for ${accounts.size} account(s)")
+            } catch (e: Exception) {
+                DebugLog.error("Study", "could not request a calendar sync: $e")
+            }
+        }
     }
 
     // ---- writing back ----
@@ -343,11 +405,24 @@ class StudyCalendar(
             if (ok) {
                 if (local.remove(event.key) != null) saveLocal(local)
                 _day.value = load()
+                // Send it now rather than whenever the phone next syncs; ticks in a row are sent together.
+                scheduleUpload()
             }
             ok
         } catch (e: Exception) {
             DebugLog.error("Study", "writing to the calendar failed: $e")
             false
+        }
+    }
+
+    private var uploadJob: Job? = null
+
+    /** Requests a sync a few seconds after the last write, so a run of ticks goes up in one sync. */
+    private fun scheduleUpload() {
+        uploadJob?.cancel()
+        uploadJob = scope.launch {
+            delay(4_000)
+            requestSync(force = true)
         }
     }
 

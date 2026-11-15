@@ -312,19 +312,10 @@ private fun importFont(context: android.content.Context, uri: android.net.Uri): 
     null
 }
 
+/** A chip of the gallery: a [GlassButton] in the look of Settings → Buttons (0.6.4); [on] when chosen. */
 @Composable
 private fun StudioChip(label: String, on: Boolean, color: Color, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .height(32.dp)
-            .clip(RoundedCornerShape(50))
-            .background(color.copy(alpha = if (on) 0.24f else 0.07f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 13.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, maxLines = 1, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 13.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal))
-    }
+    GlassButton(label, color, emphasis = if (on) ControlEmphasis.Selected else ControlEmphasis.Normal, onClick = onClick)
 }
 
 /** A label and a row of chips that scrolls sideways when it does not fit. */

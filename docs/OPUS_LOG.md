@@ -501,3 +501,41 @@ has no comparable GPU), how the line looks under each of the six clock designs, 
 2. D90 removes the only composition-time reader of `IconPaint` I found; a profile on the phone would confirm it was the cause.
 3. The clock line shrinks the clock face by 30 dp while it is shown; if that looks wrong under the "stacked" or "words"
    designs, an overlay might be better.
+
+## Entry 15: 0.6.4, Today, glass buttons, the clock line, the letter curve (2026-11-15, Opus 5.5)
+
+**Asked by the user (after testing 0.6.3 on the phone):** the line under the clock did not show although it was on
+(the pill item worked); in Today, open a block to read its description, put Done and Skip on the right, let tomorrow be
+peeked or opened, with a setting to hide it; the letter index: the letters should be where the bubble was and the
+bubble further out; liquid glass on everything, the buttons first, all customisable in settings; recommendations for
+the study workspace; "Plan" showed two redirections before the P2 plan (a link-checking app, then the browser).
+
+**Why the clock line was empty.** At 21:00 the day's only block had ended unmarked and nothing else was left, so
+`studyGlance` returned nothing (D92's rule). Worse, Google Calendar had that block at 19:30–21:30 (moved at 19:43) while
+the phone still showed 14:30–16:30, and the six ticks made at 20:15 had not reached Google: the phone's calendar sync
+was hours behind in both directions. With the right time the line would have shown the block at 21:00.
+
+**0.6.4**
+| File | Change | Decision |
+|---|---|---|
+| `feature/home/Study.kt` | `studyGlance`: running, next within the hour, unmarked, next, tasks, tomorrow; "Today only" option; ring for each case | D93 |
+| `feature/home/Study.kt` | Today panel: `BlockCard` (tap the title to open: all steps, notes in full; progress bar; steps count; buttons right with the main one nearest the edge), `TomorrowSection` / `TomorrowBlock` (peek, open, read only), "Sync now" with the number of unsent changes | D94, D98 |
+| `core/data/StudyFormat.kt`, `StudyCalendar.kt` | `StudyDay.tomorrowBlocks`, `tomorrowTasks`, `waitingToSync`, `unmarked()`; `requestSync` (on resume, Today, 4 s after writes) | D94, D98 |
+| `feature/home/Controls.kt` (new), `Glass.kt`, `HomeConfig.kt`, `HomeScreen.kt`, `LayoutsSheet.kt`, `ClockStudio.kt` | `GlassButton`, `ControlLook`, `ProvideControls`; glass on glass through the sheet's exported layer; crystal, tinted, outline, solid; edge light on every glass surface | D95 |
+| `feature/home/HomeController.kt` | `openStudyLink`: Chrome tab / Chrome / Claude / the phone's choice, double tap ignored | D96 |
+| `feature/home/ScrollIndex.kt` | `pullFor` (letters bend "Letters beside the finger" past it), bubble past the letter under the finger | D97 |
+| `core/settings/LauncherSettings.kt` | Section "Buttons" (8 settings); Liquid glass → Edge light; Study: Blocks in Today, Done and Skip buttons, Tomorrow in Today, Open the plan and block links in, Under the clock gains "Today only"; Scroll index: Letters beside the finger, Bubble distance | |
+| `feature/home/Previews.kt`, `HomeScreen.kt` | Settings → Buttons and Study companion show the Today panel live (`HomeMode.PreviewToday`) | D95 |
+| Tests | `StudyGlanceTest` (unmarked, tomorrow, today only), `BubblePlaceTest` (bubble past the letters, `pullFor`) | |
+| `ci/smoke.sh` | 14b also creates a block for tomorrow: Today's Tomorrow opens to it and its steps; with today done the clock line shows it. 14c: a picture of the letter index while held | |
+
+Not changed: the event format, the marks, the check-in's prompt, Fable's files other than `ClockStudio.kt`'s chip (now a
+`GlassButton`).
+
+**Result:** see below (CI).
+
+### For the next model (review)
+1. Glass buttons sample the sheet's exported layer; while Today scrolls they redraw each frame. Watch the frame rate on
+   the phone with many blocks; "Crystal" is the cheap fallback.
+2. `requestSync` is asked of the system; whether MagicOS honours it promptly is not verified.
+3. The letter curve's defaults (64 dp, bubble 32 dp past) are a guess for a thumb; the user can tune both.

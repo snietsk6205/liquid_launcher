@@ -189,7 +189,7 @@ private fun pageEnv(env: PageEnv, page: dev.liquid.launcher.core.data.HomePage):
 private fun savedImageKey(wallpaper: WallpaperStore): Any? = wallpaper.image.collectAsState().value
 
 /** How the home screen is shown: the real thing, or a miniature inside the settings app. */
-enum class HomeMode { Live, Preview, PreviewDrawer, PreviewDrawerMotion, PreviewDrawerIndex, PreviewMenu, PreviewHomeMenu }
+enum class HomeMode { Live, Preview, PreviewDrawer, PreviewDrawerMotion, PreviewDrawerIndex, PreviewMenu, PreviewHomeMenu, PreviewToday }
 
 @Composable
 fun HomeScreen(
@@ -198,6 +198,23 @@ fun HomeScreen(
     returnState: HomeReturnState,
     callbacks: HomeCallbacks,
     mode: HomeMode = HomeMode.Live,
+) {
+    // The buttons' look (Settings → Buttons, 0.6.4) for every sheet; sheets that export their glass add it as the buttons' backdrop.
+    val look by data.settings.derive { controlLook() }
+    val glass by data.settings.derive { glassConfig() }
+    val controls = remember(look, glass) { ControlEnv(look, glass, null) }
+    androidx.compose.runtime.CompositionLocalProvider(LocalControls provides controls) {
+        HomeScreenBody(data, wallpaper, returnState, callbacks, mode)
+    }
+}
+
+@Composable
+private fun HomeScreenBody(
+    data: LauncherData,
+    wallpaper: WallpaperStore,
+    returnState: HomeReturnState,
+    callbacks: HomeCallbacks,
+    mode: HomeMode,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -685,7 +702,12 @@ fun HomeScreen(
         if (studio != null) {
             WallpaperStudio(studio, glass, lightBackground, overlayBackdrop, controller)
         }
-        Presence(if (live && controller.todaySheet) Unit else null) {
+        if (mode == HomeMode.PreviewToday) {
+            // Settings → Buttons and Study companion: the Today panel, open, with the real day.
+            SideEffect { controller.todaySheet = true }
+            LaunchedEffect(Unit) { data.study.refresh() }
+        }
+        Presence(if ((live || mode == HomeMode.PreviewToday) && controller.todaySheet) Unit else null) {
             TodaySheet(glass, lightBackground, overlayBackdrop, controller)
         }
         Presence(if (live && controller.widgetPicker) Unit else null) {

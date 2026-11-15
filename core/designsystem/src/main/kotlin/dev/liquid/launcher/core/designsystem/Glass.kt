@@ -10,6 +10,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
@@ -45,11 +47,17 @@ data class GlassStyle(
     /** 0..1, how strongly the edges bend what is behind (Full only). */
     val refraction: Float,
     val tint: Color,
+    /** 0..1, the bright rim along the edge ("edge light", 0.6.4); 0 draws none. */
+    val rim: Float = 0f,
 ) {
     companion object {
         val Default = GlassStyle(GlassQuality.Full, 4.dp, 0.6f, Color.White.copy(alpha = 0.18f))
     }
 }
+
+/** The rim for [style], or null for none. */
+private fun rimOf(style: GlassStyle): (() -> Highlight?)? =
+    if (style.rim <= 0.01f) null else ({ Highlight.Default.copy(alpha = style.rim.coerceIn(0f, 1f)) })
 
 /**
  * Draws a glass surface that samples [backdrop].
@@ -57,11 +65,13 @@ data class GlassStyle(
  * The surface must not be a descendant of the content recorded into [backdrop], otherwise it
  * would sample itself. Use it on a few surfaces at a time, never per item in a scrolling list.
  */
-fun Modifier.liquidGlass(backdrop: Backdrop, shape: CornerBasedShape, style: GlassStyle): Modifier =
+fun Modifier.liquidGlass(backdrop: Backdrop, shape: CornerBasedShape, style: GlassStyle, exported: LayerBackdrop? = null): Modifier =
     when (style.quality) {
         GlassQuality.Full -> drawBackdrop(
             backdrop = backdrop,
             shape = { shape },
+            highlight = rimOf(style),
+            exportedBackdrop = exported,
             effects = {
                 vibrancy()
                 if (style.blur > 0.dp) blur(style.blur.toPx())
@@ -78,6 +88,8 @@ fun Modifier.liquidGlass(backdrop: Backdrop, shape: CornerBasedShape, style: Gla
         GlassQuality.Frosted -> drawBackdrop(
             backdrop = backdrop,
             shape = { shape },
+            highlight = rimOf(style),
+            exportedBackdrop = exported,
             effects = {
                 vibrancy()
                 blur(maxOf(style.blur, 12.dp).toPx())
@@ -88,7 +100,7 @@ fun Modifier.liquidGlass(backdrop: Backdrop, shape: CornerBasedShape, style: Gla
         GlassQuality.Tint -> this
             .clip(shape)
             .background(style.tint.copy(alpha = (style.tint.alpha * 2.5f).coerceIn(0.35f, 0.85f)))
-            .border(1.dp, Color.White.copy(alpha = 0.18f), shape)
+            .border(1.dp, Color.White.copy(alpha = 0.18f + 0.3f * style.rim), shape)
     }
 
 /** Older form used by the glass benchmark: one quality tier with default blur and refraction. */

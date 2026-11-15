@@ -111,6 +111,12 @@ Description:  [x] Exercise sheet 4, ex. 1–5
 with a ring for the time gone, else the next one, else the tasks left; tap it for Today) and,
 if wanted, a "Study block" item in the pill. The Now card and the Today widget below are still there for a page.
 
+**Since 0.6.4 (D93–D98)** the line also shows a block that ended without Done or Skip ("not marked yet") and, with
+nothing left today, tomorrow's first block. In Today a block opens with a tap on its title (all steps, the notes in
+full), Done and Skip sit on the right, and Tomorrow opens to all of tomorrow's blocks and tasks (read only). The
+launcher asks the phone to sync the study calendars when it comes to the front and a few seconds after each mark, so
+the marks reach the assistant before the evening check-in. Nothing in the event format changed.
+
 - **Now card** (widget): the block running now (or the next one with a countdown), time left as a bar, its tasks with
   tap-to-tick, "Done" and "Skip", and three quick actions: focus timer, note to Claude, study plan.
 - **Today** (panel, and a widget): today's blocks in time order with their tasks, the Tasks calendar's tasks for today,

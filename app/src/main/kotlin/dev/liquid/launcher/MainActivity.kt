@@ -185,6 +185,8 @@ class MainActivity : ComponentActivity() {
         dev.liquid.launcher.core.data.LauncherData.get(this).checkWallpaperColours()
         // So may the calendar (the study companion's blocks and tasks).
         dev.liquid.launcher.core.data.LauncherData.get(this).study.refresh()
+        // And ask the phone to sync the study calendars (at most every 5 minutes): some phones sync them hours late.
+        dev.liquid.launcher.core.data.LauncherData.get(this).study.requestSync()
         resumed = true
         RedirectStatus.onLauncherResumed()
         window.decorView.post {

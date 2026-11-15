@@ -189,11 +189,14 @@ internal fun StudyEditor(store: SettingsStore) {
         }
         BodyText(
             "On the home screen, without a page of its own: a line under your clock shows the block running now (a ring fills " +
-                "as the time goes), else the next one, else the tasks left; tap it for Today with the ticks and the focus timer " +
-                "(\"Under the clock\" below). The pill can show the same: Pill → Items → Add item → Study block. " +
-                "Home menu → Today opens the panel with every block, its ticks, Done, Skip and Focus. The Now card and the Today " +
-                "list are still in Home menu → Widgets if you want them on a page. \"Tell Claude\", \"Plan\" and \"Focus\" are also " +
-                "actions for gestures and the pill.",
+                "as the time goes), the next one, a block that ended without Done or Skip, the tasks left, then tomorrow's first block; " +
+                "tap it for Today (\"Under the clock\" below). The pill can show the same: Pill → Items → Add item → Study block. " +
+                "Today has every block: tap a block's title to open it (all steps, the notes in full), Done and Skip on the right, " +
+                "and Tomorrow, which opens to the next day's blocks and tasks (\"Blocks in Today\", \"Done and Skip buttons\", " +
+                "\"Tomorrow in Today\" below; the preview above shows them). Its buttons follow Settings → Buttons. " +
+                "The launcher asks the phone to sync these calendars when it comes to the front and after each tick, so the " +
+                "assistant sees your ticks and you see re-planned blocks. The Now card and the Today list are still in Home menu → " +
+                "Widgets. \"Tell Claude\", \"Plan\" and \"Focus\" are also actions for gestures and the pill.",
             Modifier.padding(top = 8.dp),
         )
     }
