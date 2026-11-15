@@ -430,4 +430,14 @@ Not changed: the format, the marks, the status line, the classification of block
 Not verified on a device (no calendar on the emulator, as for 0.6.1): reading and writing real Google Calendar events on
 MagicOS, the share to the Claude app, notices at a block's start.
 
-Result: see the update at the end of this entry.
+**Result:** run 41, all green on the first try: compiled, unit tests passed (with `StudyLocalTest`), all 34 emulator
+checks passed including the two new ones ("edit mode lists the widgets", "home menu opens the Today panel"). **0.6.2
+released as build 41**: https://github.com/snietsk6205/liquid_launcher/releases/tag/v0.6.2.
+
+### For the next model (review)
+1. Fable's work after 0.6.0 has not been reviewed by anyone: the clock gallery (D85, `Clocks.kt`, `ClockStudio.kt`) and
+   the study companion (D86–D88, `StudyCalendar.kt`, `Study.kt`). His tokens ran out before he could check it.
+2. My additions (D89): the phone's copies of ticks in `StudyCalendar.edit` / `load`, and the focus timer's end.
+3. Fable's open questions for the user (`FABLE_LOG.md` entry 5) are still open: a real phone notification at a block's
+   start, ticking the last task marking the block done, the names of the two calendars.
+4. Next by the plan: the rest of Phase 3 (other apps' widgets, more built-in widgets), then Phase 4.
