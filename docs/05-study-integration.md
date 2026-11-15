@@ -108,7 +108,7 @@ Description:  [x] Exercise sheet 4, ex. 1–5
 ## 5.3 What you see
 
 **Since 0.6.3 (D92)** the block is visible without a page of its own: a line under the clock widget (the block running now
-with a ring for the time gone, else the next one, else the tasks left; tap it for Today, hold it for the focus timer) and,
+with a ring for the time gone, else the next one, else the tasks left; tap it for Today) and,
 if wanted, a "Study block" item in the pill. The Now card and the Today widget below are still there for a page.
 
 - **Now card** (widget): the block running now (or the next one with a countdown), time left as a bar, its tasks with

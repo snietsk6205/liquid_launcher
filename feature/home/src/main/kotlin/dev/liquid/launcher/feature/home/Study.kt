@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -657,10 +656,10 @@ private fun StudyRing(glance: StudyGlance, color: Color, size: Dp) {
 
 /**
  * The line under a clock widget: the block running now with a ring for the time gone, else the
- * next block, else the tasks left. Tap opens Today (ticks, Done, Skip, Focus); a long press starts
- * or stops the focus timer. Uses the clock's colour and shadow so it reads as part of the clock.
+ * next block, else the tasks left. Tap opens Today (ticks, Done, Skip, Focus). No long press of its own:
+ * holding the clock widget already means "edit and move it". Uses the clock's colour and shadow so it
+ * reads as part of the clock.
  */
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 internal fun StudyLine(
     glance: StudyGlance,
@@ -677,11 +676,10 @@ internal fun StudyLine(
             .height(30.dp)
             .clip(RoundedCornerShape(50))
             .then(
-                if (interactive) Modifier.combinedClickable(
+                if (interactive) Modifier.clickable(
                     interactionSource = null,
                     indication = null,
                     onClick = { controller.run(LauncherAction.Today) },
-                    onLongClick = { controller.run(LauncherAction.FocusTimer) },
                 ) else Modifier
             )
             .padding(horizontal = 6.dp),

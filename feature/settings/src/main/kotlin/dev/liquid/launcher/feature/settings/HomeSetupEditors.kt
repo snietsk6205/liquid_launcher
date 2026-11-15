@@ -189,7 +189,7 @@ internal fun StudyEditor(store: SettingsStore) {
         }
         BodyText(
             "On the home screen, without a page of its own: a line under your clock shows the block running now (a ring fills " +
-                "as the time goes), else the next one, else the tasks left; tap it for Today, hold it for the focus timer " +
+                "as the time goes), else the next one, else the tasks left; tap it for Today with the ticks and the focus timer " +
                 "(\"Under the clock\" below). The pill can show the same: Pill → Items → Add item → Study block. " +
                 "Home menu → Today opens the panel with every block, its ticks, Done, Skip and Focus. The Now card and the Today " +
                 "list are still in Home menu → Widgets if you want them on a page. \"Tell Claude\", \"Plan\" and \"Focus\" are also " +

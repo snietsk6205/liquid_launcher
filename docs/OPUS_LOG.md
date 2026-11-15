@@ -472,7 +472,7 @@ his outside the study companion; it is in a separate `[opus]` commit.
 |---|---|---|
 | `feature/home/Clocks.kt` (Fable's) | The palette is read only by a clock whose colour is "tone" | D90 |
 | `feature/home/ScrollIndex.kt`, `HomeConfig.kt`, settings | `bubbleCentre`: beside the finger (52 dp inward, 20 dp higher), above it when there is no room; setting "Bubble position" (beside / above / under the finger) | D91 |
-| `feature/home/Study.kt`, `HomeGrid.kt`, `Pill.kt`, `core/data/PillSlot.kt`, settings editors | `studyGlance` (running block with time left and progress, else next unmarked block, else open tasks); `StudyLine` under every clock widget (tap = Today, hold = focus timer); pill item "Study block"; setting "Under the clock"; the Study settings card explains it | D92 |
+| `feature/home/Study.kt`, `HomeGrid.kt`, `Pill.kt`, `core/data/PillSlot.kt`, settings editors | `studyGlance` (running block with time left and progress, else next unmarked block, else open tasks); `StudyLine` under every clock widget (tap = Today; no long press, which would also start the widget's own edit-and-move); pill item "Study block"; setting "Under the clock"; the Study settings card explains it | D92 |
 | Tests | `BubblePlaceTest`, `StudyGlanceTest`; the pill round-trip test includes the new item | |
 
 Not changed: the event format, the marks, the Now card and Today widget (still in the widget list), Fable's clock faces

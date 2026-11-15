@@ -1346,7 +1346,7 @@ object LauncherSettings {
         options = listOf("block" to "The block now or next, else tasks left", "off" to "Nothing"),
         title = "Under the clock",
         summary = "A line under your clock widget: the block running now with a ring for the time gone, else the next one, " +
-            "else the tasks left today. Tap it for Today, hold it for the focus timer. The pill can show the same: add \"Study block\" to its items",
+            "else the tasks left today. Tap it for Today (ticks, Done, Skip, Focus). The pill can show the same: add \"Study block\" to its items",
         section = "study", keywords = "study clock line now current block next glance pill",
     )
     val StudyBlockCalendars = TextSetting(
