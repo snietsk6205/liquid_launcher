@@ -597,7 +597,10 @@ the phone: the debug log for "wallpaper changed outside the launcher (id …)" a
 call before the system one and remember both ids as the launcher's own (`ownIds`), or treat a change of the lock id
 alone as not a change of the home wallpaper.
 
-**Result:** see the next note (CI).
+**Result:** released as **0.7.0 build 51** (runs 49–51; 49 was replaced by 50, 50 failed only on the picker's search
+field being hidden from accessibility, 51 green). The transition shaders compile on the emulator (check 15), search
+follows the finger there ("search: released at 0.47"). Placing another app's widget was verified in 0.7.1's runs
+(entry 17).
 
 ### For the next model (review)
 1. Other apps' widgets were tested with the emulator's Clock widget only; widgets with set-up screens, scrolling lists
@@ -632,4 +635,11 @@ everything (icons, wallpaper, glass) was drawn anew, often while the next wallpa
 declares `assetsPaths|colorMode` (D106) and logs "screen created again" / "system theme colours changed: the screen
 is kept". Not changed: the second recolouring when the system reports its colours (Fable's D63 path).
 
-**Result:** see below (CI).
+**Result:** released as **0.7.1 build 56**: https://github.com/snietsk6205/liquid_launcher/releases/tag/v0.7.1. On
+the emulator: swipe-down search with the pill as its field and the calculator, "Add widget" on the empty search
+screen, every study check, the transition shaders, and, for the first time, another app's widget end to end: the
+Clock app's Analog widget asked for permission ("Create"), opened its own set-up screen ("Select a Clock Face"),
+and was placed (3 × 2). Runs 53–55 found the way there: run 53 placed nothing and said nothing (now every step is
+logged), run 55 showed the set-up screen left open by the test, run 56 picks a face. Not verified: the screen no
+longer being rebuilt after a wallpaper hand-over (the emulator does not recolour its theme; the log line will tell
+on the phone), widgets on the search screen with a real app widget, Zoom on the phone.
