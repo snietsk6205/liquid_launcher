@@ -168,6 +168,7 @@ Notation: `[type · default]`. Types: toggle, slider (range), choice, color, fon
 - App launch animation `[clip reveal / scale up / fade / system default]`
 - Haptics: master `[toggle · on]`, intensity, per event (tap, long press, drag start, snap to cell, page change, drawer snap, folder open, task complete, search result select, fast-scroll letter): pattern `[tick / click / heavy / double / none]`
 - Sound effects `[toggle · off]`
+- Effects and touch (built in 0.8.0, D110–D113): looks `[Liquid / Nice liquid / Water drop / Frosted ice / Neon / Bubble / Calm / Glass of 0.7]`; touch effect `[ripple / drop / light pool / ink / paint / colour flood / smoke / glint / pop / swoosh / specks / bubbles / none · ripple]`, where `[items / everywhere]`, amount, speed, brightness, size, colour `[wallpaper / accent / rainbow / white / custom]`; press motion `[squish / jelly / sink / grow / shrink / rise / tilt / pop / fade / bouncy / gentle / off · squish]`, depth, wobble, light from the finger; moving wallpaper `[none / orbs / bubbles / motes / snow / rain · none]` with amount, speed, brightness, size, colour, stirred by touches
 
 ## 3.11 Study
 

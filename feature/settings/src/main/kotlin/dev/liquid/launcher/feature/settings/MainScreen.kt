@@ -250,6 +250,7 @@ internal fun SectionScreen(store: SettingsStore, sectionId: String, onBack: () -
                 "icons" -> IconPacksEditor(store)
                 "homeMenu" -> HomeMenuEditor(store)
                 "theme" -> ThemeEditor(store)
+                "glass", "effects" -> LooksEditor(store)
                 "wallpaper" -> WallpaperEditor()
                 "study" -> StudyEditor(store)
                 "layouts" -> LayoutsAndBackupEditor()

@@ -189,7 +189,7 @@ private fun pageEnv(env: PageEnv, page: dev.liquid.launcher.core.data.HomePage):
 private fun savedImageKey(wallpaper: WallpaperStore): Any? = wallpaper.image.collectAsState().value
 
 /** How the home screen is shown: the real thing, or a miniature inside the settings app. */
-enum class HomeMode { Live, Preview, PreviewDrawer, PreviewDrawerMotion, PreviewDrawerIndex, PreviewMenu, PreviewHomeMenu, PreviewToday, PreviewSearch }
+enum class HomeMode { Live, Preview, PreviewDrawer, PreviewDrawerMotion, PreviewDrawerIndex, PreviewMenu, PreviewHomeMenu, PreviewToday, PreviewSearch, PreviewEffects }
 
 @Composable
 fun HomeScreen(
@@ -203,7 +203,9 @@ fun HomeScreen(
     val look by data.settings.derive { controlLook() }
     val glass by data.settings.derive { glassConfig() }
     val controls = remember(look, glass) { ControlEnv(look, glass, null) }
-    androidx.compose.runtime.CompositionLocalProvider(LocalControls provides controls) {
+    // Presses of this screen, for the touch effect and the moving wallpaper (0.8.0, D111).
+    val touchFx = remember { TouchFx() }
+    androidx.compose.runtime.CompositionLocalProvider(LocalControls provides controls, LocalTouchFx provides touchFx) {
         HomeScreenBody(data, wallpaper, returnState, callbacks, mode)
     }
 }
@@ -245,6 +247,8 @@ private fun HomeScreenBody(
         Motion.style = motionConfig.style
         PressStyle.style = motionConfig.press
         PressStyle.depth = motionConfig.pressDepth
+        PressStyle.wobble = motionConfig.pressWobble
+        PressStyle.light = motionConfig.pressLight
         if (live) controller.view = rootView
         controller.motionConfig = motionConfig
     }
@@ -459,6 +463,11 @@ private fun HomeScreenBody(
     }
     val transitionStyle by store.derive { get(LauncherSettings.WallpaperTransition) }
     if (live) SystemWallpaperOffsets(controller)
+    val touchFx = LocalTouchFx.current
+    val touchConfig by store.derive { touchFxConfig() }
+    val wallpaperFx by store.derive { wallpaperFxConfig() }
+    if (touchFx != null) SideEffect { touchFx.config = touchConfig }
+    val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
 
     Box(
         Modifier
@@ -467,6 +476,7 @@ private fun HomeScreenBody(
                 controller.screenHeight = it.height.toFloat().coerceAtLeast(1f)
                 controller.screenWidth = it.width.toFloat().coerceAtLeast(1f)
             }
+            .then(if (touchFx != null) Modifier.touchFxDowns(touchFx).onGloballyPositioned { touchFx.root = it } else Modifier)
             .then(
                 if (live) Modifier.drawWithContent {
                     if (capturing) {
@@ -541,6 +551,16 @@ private fun HomeScreenBody(
                         },
                     )
                 }
+            }
+            // The moving wallpaper (0.8.0, D113): over the picture, under the icons, inside what glass bends.
+            if (studio == null) {
+                WallpaperFxLayer(
+                    wallpaperFx, touchFx,
+                    running = {
+                        (!live || windowInfo.isWindowFocused) &&
+                            controller.drawer.value < 0.98f && controller.searchAmount < 0.98f && controller.transitionShot == null
+                    },
+                )
             }
             }
             if (homeDim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = homeDim)))
@@ -819,6 +839,9 @@ private fun HomeScreenBody(
         controller.iconPicking?.let { IconPickerDialog(it, controller) }
         controller.swipeEditing?.let { id -> layout.find(id)?.let { (_, item) -> SwipeActionsDialog(item, apps, controller) } }
         if (live) TransitionOverlay(controller, transitionStyle)
+        if (mode == HomeMode.PreviewEffects && touchFx != null) EffectsDemo(touchFx, glass, lightBackground, overlayBackdrop)
+        // What a press throws over the screen (0.8.0, D111), above everything it was pressed on.
+        if (touchFx != null) TouchFxLayer(touchFx, touchConfig)
         if (live) NoticeHost(controller, glass, lightBackground, overlayBackdrop)
     }
 }

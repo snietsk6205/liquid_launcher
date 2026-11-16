@@ -1,5 +1,6 @@
 package dev.liquid.launcher.feature.home
 
+import kotlinx.coroutines.launch
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -110,7 +111,15 @@ internal fun HomeMenu(
     val layouts by controller.data.layouts.state.collectAsState()
     val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
     val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
+    // The pills rise as narrow drops and spread out with a wobble (0.8.0, D116); on closing they narrow and sink.
+    val spread = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.coroutineScope {
+            launch { appear.animateTo(1f, Motion.enter()) }
+            launch { spread.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.55f, stiffness = MotionScale.stiffness(380f))) }
+        }
+    }
+    val presence = LocalPresence.current
     fun keyOf(pill: Int, index: Int) = "$pill:$index"
     val byKey = remember(config) {
         buildMap {
@@ -156,10 +165,13 @@ internal fun HomeMenu(
                             // The lower pill leads, the upper one follows a moment later.
                             val delay = if (pillIndex == 0) 0.12f else 0f
                             val p = ((appear.value - delay) / (1f - delay)).coerceIn(0f, 1.2f)
-                            alpha = p.coerceIn(0f, 1f)
-                            translationY = (1f - p) * 36.dp.toPx()
-                            scaleX = 0.92f + 0.08f * p
-                            scaleY = 0.92f + 0.08f * p
+                            val w = ((spread.value - delay) / (1f - delay)).coerceIn(0f, 1.3f)
+                            val leave = presence.value.coerceIn(0f, 1f)
+                            alpha = (p * 2.5f).coerceIn(0f, 1f)
+                            translationY = (1f - p) * 36.dp.toPx() + (1f - leave) * 28.dp.toPx()
+                            // Narrow and a little tall while rising, like a drop; full width once it settles.
+                            scaleX = (0.4f + 0.6f * w) * (0.55f + 0.45f * leave)
+                            scaleY = (1.18f - 0.18f * w) * (0.8f + 0.2f * leave)
                         }
                         .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground))
                         .clip(shape)
@@ -177,7 +189,16 @@ internal fun HomeMenu(
                             color = color,
                             hovered = hover == key,
                             current = current,
-                            modifier = Modifier.onPlaced { coords ->
+                            modifier = Modifier
+                                .graphicsLayer {
+                                    // Items pop in one after another as the pill spreads.
+                                    val d = 0.06f * i.coerceAtMost(7) + if (pillIndex == 0) 0.1f else 0f
+                                    val p = ((appear.value - d) / (1f - d)).coerceIn(0f, 1f)
+                                    alpha = p
+                                    scaleX = 0.6f + 0.4f * p
+                                    scaleY = 0.6f + 0.4f * p
+                                }
+                                .onPlaced { coords ->
                                 if (coords.isAttached) controller.homeMenuTargets[key] = coords.boundsInRoot()
                             },
                             onClick = { run(action) },

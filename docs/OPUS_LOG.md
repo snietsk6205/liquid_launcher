@@ -700,3 +700,46 @@ list. 12b now starts the launcher first when it is not in front. No release from
    the right place, without the in-step glide.
 3. `PressFeel` adds one graphics layer to every icon; it draws nothing at rest (scale 1), but a profile on the phone
    with a full page of icons would confirm there is no cost.
+
+## Entry 19: 0.8.0, liquid that is more liquid: looks, touch effects, press motions, moving wallpaper (2026-11-16)
+
+**Asked by the user (with screenshots of wmkeyboard's theme editor, their "nice liquid" keyboard theme and a log):**
+before moving to the next phase, make the liquid glass more liquid and customisable like wmkeyboard's keyboard themes
+(press effects with Amount, Speed, Brightness, Size and colour; key motions Sink to Fade), bring these into the
+picture, give the buttons a nice default; improve the search transition, the popups, transitions and animations;
+build, push, and say which phase this is, what exists and what is missing.
+
+**What the log and the diagnostics showed.** Redirects: 47 of 47 confirmed, launch to first frame median 170 ms, p95
+284 ms. Glass: full 81 fps at 90 Hz with 11 % of frames late, frosted and tint at 89 fps. Search: "no keyboard came,
+the field goes down" five times between 09:05 and 11:04 (wmkeyboard is the keyboard; windows list `wmkeyboard`), the
+keyboard height was remembered once (933 px), so the keyboard did come at other times: an intermittent lost request,
+not a missing keyboard (D114).
+
+**0.8.0**
+| File | Change | Decision |
+|---|---|---|
+| `core/designsystem/Glass.kt` | `GlassStyle` gains saturation, brightness, dispersion, depth, rim colour, light angle, shadow, glow; `look()` keeps the old `vibrancy()` for the old values | D110 |
+| `feature/home/HomeConfig.kt`, `Controls.kt` | `GlassExtras` applied to every surface and to liquid glass buttons; `MotionConfig` gains wobble and light | D110, D112 |
+| `core/data/Looks.kt` (new), `feature/settings/LooksEditor.kt` (new), `MainScreen.kt` | Eight looks as chips at the top of Liquid glass and Effects and touch; the chip of the look in use stays lit until something is changed | D110 |
+| `feature/home/TouchEffects.kt` (new) | `TouchFx` (downs, one splash per touch, energy), `TouchFxLayer` (12 kinds), `WallpaperFxLayer` (5 kinds), `EffectsDemo` for the preview | D111, D113 |
+| `feature/home/PressFeel.kt`, `Gestures.kt` | Motions, wobble, tilt from the press position, light from the finger; a press throws its splash when it shows (a quick tap on release) | D112 |
+| `feature/home/HomeScreen.kt`, `Previews.kt` | `LocalTouchFx`, the finger watcher on the screen, the splash layer over everything, the moving wallpaper inside the glass's layer; `HomeMode.PreviewEffects` | D111, D113 |
+| `feature/home/SearchOverlay.kt` | `SearchKeyboard`: window focus, explicit show, three retries, log lines | D114 |
+| `feature/home/PillMorph.kt` | `rememberLiquidStretch`: search's pill stretches the way it travels and wobbles as it lands | D115 |
+| `feature/home/AppMenu.kt`, `HomeMenu.kt` | Menu grows from the icon and shrinks back into it, rows staggered; home menu pills spread like drops | D116 |
+| `core/settings/LauncherSettings.kt` | Section "Effects and touch" (Touch effect, Where, Amount, Speed, Brightness, Size, Colour, Your colour, Press motion, Press depth, Wobble, Light from the finger, Moving wallpaper and its six options); Liquid glass gains eight options; button tint 12 %, rim 85 % | |
+| Tests | `LooksTest` (every value fits its setting, a look leaves quality and colours alone), `PressStyleTest` (every motion's spring) | |
+
+Not changed: the drawer's transition (Fable's, called good), the 0.7.2 keyboard line (D107), the redirect.
+
+Verified here: the unit tests and a release APK build. Not verified: everything on the screen. The emulator in CI has
+no GPU, so its glass is a tint and depth, rainbow edges and glow cannot show there; the splashes, motions, the moving
+wallpaper and the keyboard retries need the phone.
+
+### For the next model (review)
+1. The moving wallpaper sits inside the layer glass samples, so with it on the pill and dock redraw every frame. The
+   benchmark (81 fps for full glass) suggests it holds; if not, "Speed 0" or "None" stop it.
+2. `TouchFx` counts one splash per touch by a counter of finger-downs; a press shown from a pretend down (the preview)
+   uses `pretend`/`noteDown` first.
+3. The keyboard retries check `rootWindowInsets.isVisible(ime)`; if a keyboard reports itself visible before it
+   draws, a retry is skipped, which is harmless.

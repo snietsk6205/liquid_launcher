@@ -69,7 +69,7 @@ private fun Modifier.iconPointerInput(
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
             // A short wait before squashing, so a swipe through the item (pager, drawer list) never does.
-            feel.press(delayMs = 60L)
+            feel.press(delayMs = 60L, position = down.position)
             // Before the long press: a tap, a swipe of the item's own, or a swipe for a parent.
             val early = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                 var moved = Offset.Zero

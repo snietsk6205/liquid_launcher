@@ -55,9 +55,12 @@ data class MotionConfig(
     val launch: String = "reveal",
     /** How search opens: "lift" (D107), "space" (like the drawer, D99), "zoom", "depth" or "fade". */
     val searchTransition: String = "lift",
-    /** How presses feel: "squishy", "bouncy", "gentle" or "off" (D108). */
+    /** How presses feel: "squishy", "jelly", "sink", "grow", "shrink", "rise", "tilt", "pop", "fade", "bouncy", "gentle" or "off" (D108, D112). */
     val press: String = "squishy",
     val pressDepth: Float = 0.5f,
+    val pressWobble: Float = 0.5f,
+    /** Light from the finger on a pressed thing, 0..1 (D112). */
+    val pressLight: Float = 0.35f,
     /** 1 = normal; 2 = twice as fast. */
     val speed: Float = 1f,
     /** "calm", "liquid" or "lively" (see Motion). */
@@ -73,6 +76,8 @@ fun SettingsStore.motionConfig() = MotionConfig(
     searchTransition = get(S.SearchTransition),
     press = get(S.PressFeel),
     pressDepth = get(S.PressDepth) / 100f,
+    pressWobble = get(S.PressWobble) / 100f,
+    pressLight = get(S.TouchLight) / 100f,
     speed = get(S.MotionSpeed) / 100f,
     style = get(S.MotionStyle),
 )
@@ -223,6 +228,8 @@ data class GlassConfig(
     val largeQuality: GlassQuality = quality,
     /** Edge light of every glass surface, 0..1 (0.6.4). */
     val rim: Float = 0f,
+    /** What every glass surface adds on top of blur, refraction and tint (0.8.0, D110). */
+    val extras: GlassExtras = GlassExtras(),
 ) {
     private fun values(surface: String) = surfaces[surface] ?: surfaces.getValue(S.GlassDefault.id)
 
@@ -245,9 +252,37 @@ data class GlassConfig(
             else -> lightBackground
         }
         val base = tintColor ?: if (light) Color.White else Color.Black
-        return GlassStyle(if (large) largeQuality else quality, v.blurDp.dp, v.refraction / 100f, base.copy(alpha = v.tint / 100f), rim)
+        return extras.applyTo(GlassStyle(if (large) largeQuality else quality, v.blurDp.dp, v.refraction / 100f, base.copy(alpha = v.tint / 100f), rim))
     }
 }
+
+/** The 0.8.0 glass controls shared by every surface and button (Settings → Liquid glass, D110). */
+data class GlassExtras(
+    val saturation: Float = 1.5f,
+    val brightness: Float = 0f,
+    val depth: Boolean = true,
+    val dispersion: Boolean = true,
+    val glow: Float = 0.2f,
+    val shadow: Float = 1f,
+    val rimColor: Color = Color.White,
+    val lightAngle: Float = 45f,
+) {
+    fun applyTo(style: GlassStyle): GlassStyle = style.copy(
+        saturation = saturation, brightness = brightness, depth = depth, dispersion = dispersion,
+        glow = glow, shadow = shadow, rimColor = rimColor, lightAngle = lightAngle,
+    )
+}
+
+fun SettingsStore.glassExtras() = GlassExtras(
+    saturation = get(S.GlassSaturation) / 100f,
+    brightness = get(S.GlassBrightness) / 100f,
+    depth = get(S.GlassDepth),
+    dispersion = get(S.GlassDispersion),
+    glow = get(S.GlassGlow) / 100f,
+    shadow = get(S.GlassShadow) / 100f,
+    rimColor = dev.liquid.launcher.core.settings.ColorSetting.parse(get(S.GlassRimColour))?.let { Color(it) } ?: Color.White,
+    lightAngle = get(S.GlassLightAngle).toFloat(),
+)
 
 fun SettingsStore.gridConfig() = GridConfig(
     columns = get(S.HomeColumns),
@@ -386,7 +421,7 @@ fun SettingsStore.glassConfig(): GlassConfig {
         val custom = surface.custom
         surfaces[surface.id] = if (custom != null && get(custom)) values(surface) else default
     }
-    return GlassConfig(quality, get(S.GlassTintMode), surfaces, dev.liquid.launcher.core.settings.ColorSetting.parse(get(S.ThemeGlassColor))?.let { Color(it) }, large, get(S.GlassRim) / 100f)
+    return GlassConfig(quality, get(S.GlassTintMode), surfaces, dev.liquid.launcher.core.settings.ColorSetting.parse(get(S.ThemeGlassColor))?.let { Color(it) }, large, get(S.GlassRim) / 100f, glassExtras())
 }
 
 data class SearchConfig(

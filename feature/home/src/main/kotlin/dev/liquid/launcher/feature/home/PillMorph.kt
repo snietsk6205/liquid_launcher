@@ -37,6 +37,9 @@ import dev.liquid.launcher.core.data.AppRef
 import dev.liquid.launcher.core.data.LauncherAction
 import dev.liquid.launcher.core.data.PillSlot
 import dev.liquid.launcher.core.designsystem.liquidGlass
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.roundToInt
 
 private val SearchHeight = 54.dp
@@ -88,10 +91,19 @@ fun MorphingPill(
     val homeWidth = with(density) { (controller.screenWidth * config.widthFraction).toDp() }
     val searchWidth = with(density) { controller.screenWidth.toDp() } - SearchSideMargin * 2
     val flexible = config.slots.any { it == PillSlot.Search || it == PillSlot.Spacer }
+    val stretch = rememberLiquidStretch(controller, insets)
 
     Box(
         modifier
             .morphLayout(controller, config, if (searchMode) 0.dp else extra, insets)
+            .graphicsLayer {
+                // Search only (the drawer's morph stays as Fable made it): a drop stretching the way it travels.
+                if (!(controller.searchInPill && controller.search.value > controller.drawer.value)) return@graphicsLayer
+                val st = stretch.value
+                scaleY = 1f + st
+                scaleX = 1f - st * 0.55f
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+            }
             .liquidGlass(backdrop, shape, glass.style(surface, if (open) drawerLight else lightBackground))
             .clip(shape)
             .then(if (interactive) gestures else Modifier),
@@ -141,6 +153,35 @@ fun MorphingPill(
             }
         }
     }
+}
+
+/**
+ * How much the morphing pill stretches (0.8.0, D115): from how fast search's field travels,
+ * springing back with a wobble once it stops, like a drop that lands. Up to 0.14 either way.
+ */
+@Composable
+private fun rememberLiquidStretch(controller: HomeController, insets: FieldInsets): androidx.compose.animation.core.Animatable<Float, androidx.compose.animation.core.AnimationVector1D> {
+    val stretch = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(controller, insets) {
+        var lastP = controller.search.value
+        var lastLine = 0f
+        var lastT = System.nanoTime()
+        snapshotFlow { controller.search.value to insets.ime() }.collectLatest { (p, line) ->
+            val t = System.nanoTime()
+            val dt = ((t - lastT) / 1e9f).coerceIn(1f / 240f, 0.1f)
+            // Progress per second, plus the field riding up with the keyboard (screen heights per second).
+            val v = (p - lastP) / dt + (line - lastLine) / controller.screenHeight.coerceAtLeast(1f) / dt * 3f
+            lastP = p
+            lastLine = line
+            lastT = t
+            val target = (kotlin.math.abs(v) * 0.045f).coerceIn(0f, 0.14f)
+            stretch.snapTo(stretch.value + (target - stretch.value) * 0.45f)
+            // No new position for a moment: it has landed.
+            kotlinx.coroutines.delay(34)
+            stretch.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 0.32f, stiffness = MotionScale.stiffness(320f)))
+        }
+    }
+    return stretch
 }
 
 /** Corner size that follows the drawer: [from] percent on the home screen, [to] percent in the drawer. */

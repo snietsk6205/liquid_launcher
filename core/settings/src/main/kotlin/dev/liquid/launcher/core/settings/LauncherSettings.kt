@@ -42,6 +42,7 @@ object LauncherSettings {
         val Study = SettingsSection("study", "Study companion", "Study blocks and tasks from your calendar: Now card, Today, notices, quick actions", "Study")
         val Glass = SettingsSection("glass", "Liquid glass", "Quality, blur, refraction, tint and edge light, overall and per surface", "Look")
         val Buttons = SettingsSection("buttons", "Buttons", "Liquid glass buttons in Today, the Now card and the sheets: style, shape, size, tint, edge light, the main button's colour", "Look")
+        val Effects = SettingsSection("effects", "Effects and touch", "What a press throws over the screen (ripples, paint, ink, light, swooshes…), how icons and buttons move under your finger, and moving effects over the wallpaper, like a keyboard theme", "Look")
 
         val Redirect = SettingsSection("redirect", "Redirect engine", "When and how the launcher is brought to the front", "Redirect")
         val Detection = SettingsSection("detection", "Detection", "How the system launcher's home screen and recents are recognised", "Redirect")
@@ -51,7 +52,7 @@ object LauncherSettings {
 
         // In the order the settings app lists them; sections with the same group sit under one heading.
         val all = listOf(
-            Theme, Wallpaper, Icons, Glass, Buttons, Clock,
+            Theme, Wallpaper, Icons, Glass, Buttons, Effects, Clock,
             Home, Pill, Dock, Folders, HomeMenu, Menu, Gestures,
             Drawer, Tags, DrawerMotion, DrawerIndex, Search,
             Motion, Notices,
@@ -662,19 +663,34 @@ object LauncherSettings {
     val PressFeel = ChoiceSetting(
         key = "motion.press", default = "squishy",
         options = listOf(
-            "squishy" to "Squishy: squashes like a drop under your finger and wobbles back",
+            "squishy" to "Squish: squashes like a drop under your finger and wobbles back",
+            "jelly" to "Jelly: flattens wide like jelly, then wobbles",
+            "sink" to "Sink: sinks into the screen",
+            "grow" to "Grow: swells under the finger",
+            "shrink" to "Shrink: shrinks away from the finger",
+            "rise" to "Rise: lifts up towards you",
+            "tilt" to "Tilt: tips towards where your finger landed",
+            "pop" to "Pop: grows and hops up",
+            "fade" to "Fade: fades back a little",
             "bouncy" to "Bouncy: a deeper squash and a livelier spring",
             "gentle" to "Gentle: shrinks a little, no bounce",
             "off" to "Off",
         ),
-        title = "Pressing icons and buttons",
-        summary = "Icons, pill items, search results, menus and glass buttons answer your finger. Big things such as widgets dip only a little",
-        section = "motion", keywords = "press squish bounce jelly tap feedback button icon spring",
+        title = "Press motion",
+        summary = "How icons, pill items, search results, menus and glass buttons move under your finger. Big things such as widgets move only a little",
+        section = "effects", keywords = "press squish bounce jelly tap feedback button icon spring key motion sink grow shrink rise tilt pop fade",
     )
     val PressDepth = IntSetting(
         key = "motion.pressDepth", default = 50, min = 0, max = 100, step = 10, unit = "%",
         title = "Press depth",
-        section = "motion", keywords = "press squish depth amount",
+        summary = "How far a press goes: deeper squash, higher hop, more tilt",
+        section = "effects", keywords = "press squish depth amount dip",
+    )
+    val PressWobble = IntSetting(
+        key = "motion.pressWobble", default = 50, min = 0, max = 100, step = 10, unit = "%",
+        title = "Wobble",
+        summary = "How much a pressed thing rings as it springs back; 0 settles without overshooting",
+        section = "effects", keywords = "press wobble bounce spring overshoot jelly",
     )
     val MotionStyle = ChoiceSetting(
         key = "motion.style", default = "liquid",
@@ -1207,6 +1223,52 @@ object LauncherSettings {
             "Off by default since 0.7.0: Fable's glass has none. Buttons have their own edge light (Settings → Buttons)",
         section = "glass", keywords = "glass edge light rim highlight specular shine border",
     )
+    val GlassSaturation = IntSetting(
+        key = "glass.saturation", default = 150, min = 0, max = 250, step = 5, unit = "%",
+        title = "Colour through the glass",
+        summary = "How vivid what is behind the glass looks. 100 %: unchanged; 150 %: the launcher's usual glass",
+        section = "glass", keywords = "glass saturation vibrancy colour vivid",
+    )
+    val GlassBrightness = IntSetting(
+        key = "glass.brightness", default = 0, min = -40, max = 40, step = 2, unit = "%",
+        title = "Brightness through the glass",
+        section = "glass", keywords = "glass brightness lighter darker",
+    )
+    val GlassDepth = BoolSetting(
+        key = "glass.depth", default = true,
+        title = "Thick glass",
+        summary = "The middle swells what is behind it a little as well as the edge bending it, like a drop of water (Full quality)",
+        section = "glass", keywords = "glass depth thick lens magnify drop liquid",
+    )
+    val GlassDispersion = BoolSetting(
+        key = "glass.dispersion", default = true,
+        title = "Rainbow edges",
+        summary = "The bent light splits into colours at the edge, like a prism (Full quality)",
+        section = "glass", keywords = "glass dispersion chromatic aberration rainbow prism edge",
+    )
+    val GlassGlow = IntSetting(
+        key = "glass.glow", default = 20, min = 0, max = 100, step = 5, unit = "%",
+        title = "Inner glow",
+        summary = "Light gathered inside the edge, as in a drop of water",
+        section = "glass", keywords = "glass glow inner light shine liquid",
+    )
+    val GlassShadow = IntSetting(
+        key = "glass.shadow", default = 100, min = 0, max = 100, step = 10, unit = "%",
+        title = "Shadow",
+        summary = "The soft shadow glass casts on the wallpaper",
+        section = "glass", keywords = "glass shadow depth elevation",
+    )
+    val GlassRimColour = ColorSetting(
+        key = "glass.rimColour", autoLabel = "White light",
+        title = "Edge light colour",
+        section = "glass", keywords = "glass edge light rim colour color",
+    )
+    val GlassLightAngle = IntSetting(
+        key = "glass.lightAngle", default = 45, min = 0, max = 345, step = 15, unit = "°",
+        title = "Light comes from",
+        summary = "The angle of the edge light: 45° is the top left",
+        section = "glass", keywords = "glass light angle direction edge rim",
+    )
     val GlassTintMode = ChoiceSetting(
         key = "glass.tintMode", default = "auto",
         options = listOf("auto" to "Follow the wallpaper", "light" to "Light", "dark" to "Dark"),
@@ -1283,13 +1345,13 @@ object LauncherSettings {
         section = "buttons", keywords = "button size height small large big",
     )
     val ButtonTint = IntSetting(
-        key = "buttons.tint", default = 16, min = 0, max = 60, step = 2, unit = "%",
+        key = "buttons.tint", default = 12, min = 0, max = 60, step = 2, unit = "%",
         title = "Tint strength",
         summary = "How much white the glass of a button carries; higher stands out more from the sheet",
         section = "buttons", keywords = "button tint opacity fill strength",
     )
     val ButtonRim = IntSetting(
-        key = "buttons.rim", default = 70, min = 0, max = 100, step = 5, unit = "%",
+        key = "buttons.rim", default = 85, min = 0, max = 100, step = 5, unit = "%",
         title = "Edge light",
         summary = "The bright rim along a button's edge",
         section = "buttons", keywords = "button edge light rim highlight border shine",
@@ -1316,6 +1378,133 @@ object LauncherSettings {
         title = "Squish when pressed",
         summary = "A button shrinks a little under your finger and springs back",
         section = "buttons", keywords = "button press animation squish spring scale",
+    )
+
+    // ---- Effects and touch (0.8.0, D111–D113) ----
+
+    /** Colours an effect can take; shared by the touch and the wallpaper effects. */
+    val EFFECT_COLOURS = listOf(
+        "wallpaper" to "Wallpaper colours",
+        "accent" to "Theme accent",
+        "rainbow" to "A new colour for every press",
+        "white" to "White light",
+        "custom" to "Your colour (below)",
+    )
+
+    val TouchEffect = ChoiceSetting(
+        key = "touch.effect", default = "ripple",
+        options = listOf(
+            "ripple" to "Ripple: rings spread like on water",
+            "drop" to "Drop: a liquid drop lands and splashes",
+            "light" to "Light pool: soft light under the finger",
+            "ink" to "Ink blot: blooms out and fades",
+            "paint" to "Paint splash: splats, flings drops, drips",
+            "flood" to "Colour flood: a wash over the whole screen",
+            "puff" to "Smoke puff: drifts up and thins out",
+            "glint" to "Glint: a star of light",
+            "pop" to "Pop: a ring that throws small bits",
+            "swoosh" to "Swoosh: curved strokes sweep round",
+            "specks" to "Specks: a scatter of tiny dots",
+            "bubbles" to "Bubbles: rise from the finger",
+            "none" to "None",
+        ),
+        title = "Touch effect",
+        summary = "What a press throws over the screen, like a keyboard theme. It fades a second later and costs nothing while nobody touches",
+        section = "effects", keywords = "touch effect press splash ripple paint ink light flood smoke glint pop swoosh specks bubbles drop",
+    )
+    val TouchWhere = ChoiceSetting(
+        key = "touch.where", default = "items",
+        options = listOf(
+            "items" to "Icons, buttons, pill items and results",
+            "everywhere" to "Also empty space on the home screen",
+        ),
+        title = "Where",
+        section = "effects", keywords = "touch effect where empty space everywhere",
+    )
+    val TouchAmount = IntSetting(
+        key = "touch.amount", default = 50, min = 0, max = 100, step = 5, unit = "%",
+        title = "Amount",
+        summary = "How many drops, specks, bits and strokes",
+        section = "effects", keywords = "touch effect amount density count",
+    )
+    val TouchSpeed = IntSetting(
+        key = "touch.speed", default = 70, min = 20, max = 300, step = 10, unit = "%",
+        title = "Speed",
+        summary = "100 % is the effect's own pace; lower lingers longer",
+        section = "effects", keywords = "touch effect speed duration slow fast",
+    )
+    val TouchBrightness = IntSetting(
+        key = "touch.brightness", default = 45, min = 5, max = 100, step = 5, unit = "%",
+        title = "Brightness",
+        section = "effects", keywords = "touch effect brightness intensity opacity strength",
+    )
+    val TouchSize = IntSetting(
+        key = "touch.size", default = 100, min = 50, max = 200, step = 10, unit = "%",
+        title = "Size",
+        section = "effects", keywords = "touch effect size scale big small",
+    )
+    val TouchColour = ChoiceSetting(
+        key = "touch.colour", default = "wallpaper", options = EFFECT_COLOURS,
+        title = "Colour",
+        section = "effects", keywords = "touch effect colour color accent wallpaper rainbow",
+    )
+    val TouchCustomColour = ColorSetting(
+        key = "touch.customColour", autoLabel = "Theme accent",
+        title = "Your colour",
+        summary = "Used when Colour is \"Your colour\" (touch and wallpaper effects)",
+        section = "effects", keywords = "touch effect custom colour color",
+    )
+    val TouchLight = IntSetting(
+        key = "touch.light", default = 35, min = 0, max = 100, step = 5, unit = "%",
+        title = "Light from the finger",
+        summary = "A soft light on the icon or button under your finger while it is pressed",
+        section = "effects", keywords = "touch light glow bloom finger highlight press",
+    )
+    val WallpaperEffect = ChoiceSetting(
+        key = "effects.wallpaper", default = "none",
+        options = listOf(
+            "none" to "None",
+            "orbs" to "Colour orbs: soft pools of colour drifting",
+            "bubbles" to "Bubbles: rising slowly through the picture",
+            "motes" to "Motes: specks of light floating",
+            "snow" to "Snow",
+            "rain" to "Rain: drops running down the glass",
+        ),
+        title = "Moving wallpaper",
+        summary = "An effect that moves over the picture, under the icons; glass bends it like the picture. It stops while an app, the drawer or search covers the home screen",
+        section = "effects", keywords = "wallpaper effect animated moving orbs bubbles motes snow rain live",
+    )
+    val WallpaperEffectAmount = IntSetting(
+        key = "effects.wallpaperAmount", default = 50, min = 0, max = 100, step = 5, unit = "%",
+        title = "Wallpaper effect: amount",
+        section = "effects", keywords = "wallpaper effect amount density",
+    )
+    val WallpaperEffectSpeed = IntSetting(
+        key = "effects.wallpaperSpeed", default = 60, min = 0, max = 300, step = 10, unit = "%",
+        title = "Wallpaper effect: speed",
+        summary = "0 holds it still",
+        section = "effects", keywords = "wallpaper effect speed still",
+    )
+    val WallpaperEffectBrightness = IntSetting(
+        key = "effects.wallpaperBrightness", default = 40, min = 5, max = 100, step = 5, unit = "%",
+        title = "Wallpaper effect: brightness",
+        section = "effects", keywords = "wallpaper effect brightness intensity",
+    )
+    val WallpaperEffectSize = IntSetting(
+        key = "effects.wallpaperSize", default = 100, min = 50, max = 200, step = 10, unit = "%",
+        title = "Wallpaper effect: size",
+        section = "effects", keywords = "wallpaper effect size scale",
+    )
+    val WallpaperEffectColour = ChoiceSetting(
+        key = "effects.wallpaperColour", default = "wallpaper", options = EFFECT_COLOURS,
+        title = "Wallpaper effect: colour",
+        section = "effects", keywords = "wallpaper effect colour color",
+    )
+    val WallpaperEffectReact = IntSetting(
+        key = "effects.wallpaperReact", default = 40, min = 0, max = 100, step = 10, unit = "%",
+        title = "Wallpaper effect: stirred by touches",
+        summary = "Each press speeds it up and brightens it for a moment; 0 ignores touches",
+        section = "effects", keywords = "wallpaper effect reactive touch stir energy",
     )
 
     // ---- Search ----
@@ -1791,7 +1980,7 @@ object LauncherSettings {
         HomeMarginSide, HomeMarginTop, HomeMarginBottom, Clock24h, ClockSize, ClockDate, ClockGlass,
         GestureSwipeUp, GestureSwipeDown, GestureDoubleTap, GestureLongPress,
         GesturePinchIn, GesturePinchOut, GestureTwoUp, GestureTwoDown, GestureEdgeLeftUp, GestureEdgeLeftDown, GestureEdgeRightUp, GestureEdgeRightDown, GestureEdgeWidth,
-        HapticsEnabled, HapticsStrength, HapticDrawer, HapticPickUp, LaunchAnimation, PressFeel, PressDepth, MotionStyle, MotionSpeed, UpdatesDaily,
+        HapticsEnabled, HapticsStrength, HapticDrawer, HapticPickUp, LaunchAnimation, MotionStyle, MotionSpeed, UpdatesDaily,
         PillEnabled, PillSlots, PillPosition, PillOffset, PillWidth, PillHeight, PillCorner, PillIconSize,
         PillHint, PillTap, PillLongPress, PillSwipeUp, PillSwipeDown,
         DrawerColumns, DrawerIconSize, DrawerLabels, DrawerFromBottom, DrawerAutoKeyboard, DrawerSort,
@@ -1811,7 +2000,12 @@ object LauncherSettings {
         NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,
         NoticeLayout, NoticeWallpaper, NoticeTags, NoticeRedirect, NoticeUpdate, NoticeStudy, NoticeTask, NoticeInfo,
         GlassQuality, GlassAuto, GlassCap, GlassFullPercent, GlassTintMode, GlassRim,
+        GlassSaturation, GlassBrightness, GlassDepth, GlassDispersion, GlassGlow, GlassShadow, GlassRimColour, GlassLightAngle,
         ButtonStyle, ButtonShape, ButtonSize, ButtonTint, ButtonRim, ButtonRefraction, ButtonMain, ButtonSquish,
+        TouchEffect, TouchWhere, TouchAmount, TouchSpeed, TouchBrightness, TouchSize, TouchColour, TouchCustomColour,
+        PressFeel, PressDepth, PressWobble, TouchLight,
+        WallpaperEffect, WallpaperEffectAmount, WallpaperEffectSpeed, WallpaperEffectBrightness, WallpaperEffectSize,
+        WallpaperEffectColour, WallpaperEffectReact,
     ) + GlassDefault.settings + glassSurfaces.flatMap { it.settings } + listOf(
         LogEnabled, LogVerbosity, LogSize,
         RecentlyChanged, LastSystemLauncherVersion, LastSystemLauncher, DetectorVerified,
@@ -1830,7 +2024,7 @@ object LauncherSettings {
 
     /** Keys that make up a theme: the Theme section and the glass look (not its quality, which is about this phone). */
     val themeKeys: Set<String> by lazy {
-        all.filter { it.section == "theme" || it.section == "buttons" || (it.section == "glass" && it != GlassQuality && it != GlassAuto && it != GlassCap) }
+        all.filter { it.section == "theme" || it.section == "buttons" || it.section == "effects" || (it.section == "glass" && it != GlassQuality && it != GlassAuto && it != GlassCap) }
             .map { it.key }.toSet()
     }
 
@@ -1854,7 +2048,9 @@ object LauncherSettings {
             // Fine tuning of motion
             DrawerTravel, DrawerBounce, DrawerRise, DrawerHomeScale, DrawerBlurLive, DrawerScrollStrength, DrawerOverscroll,
             IndexReach, IndexEnds, IndexFollow, IndexSpring, IndexHideDelay, IndexSpacing, IndexBubbleGap,
-            ButtonRefraction, ButtonSquish, PressDepth, SearchHomeScale, SearchClaudeTarget,
+            ButtonRefraction, ButtonSquish, PressDepth, PressWobble, SearchHomeScale, SearchClaudeTarget,
+            TouchWhere, TouchCustomColour, WallpaperEffectReact,
+            GlassShadow, GlassRimColour, GlassLightAngle, GlassBrightness,
             GestureEdgeWidth, HapticsStrength,
             // Looks most people leave alone
             HomeMarginSide, HomeMarginTop, HomeMarginBottom, DrawerSideMargin, PillOffset, PillCorner, PillIconSize,

@@ -10,8 +10,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.BackdropEffectScope
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.highlight.HighlightStyle
+import com.kyant.backdrop.shadow.InnerShadow
+import com.kyant.backdrop.shadow.Shadow
+import com.kyant.backdrop.effects.colorControls
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
@@ -49,6 +54,24 @@ data class GlassStyle(
     val tint: Color,
     /** 0..1, the bright rim along the edge ("edge light", 0.6.4); 0 draws none. */
     val rim: Float = 0f,
+    /**
+     * The look of what is seen through the glass (0.8.0, D110): colour saturation (1 unchanged,
+     * 1.5 is the "vibrancy" every glass had up to 0.7.2) and brightness (-1..1, 0 unchanged).
+     */
+    val saturation: Float = 1.5f,
+    val brightness: Float = 0f,
+    /** Rainbow fringes where the edge bends the light, like a prism (Full only). */
+    val dispersion: Boolean = false,
+    /** Thick glass: the middle swells what is behind as well as the edge bending it (Full only). */
+    val depth: Boolean = false,
+    /** Colour of the edge light. */
+    val rimColor: Color = Color.White,
+    /** Where the light comes from, in degrees (45: top left). */
+    val lightAngle: Float = 45f,
+    /** 0..1: the soft shadow under the glass (1 is the shadow glass always had). */
+    val shadow: Float = 1f,
+    /** 0..1: light glowing inside the edge, as in a drop of water. */
+    val glow: Float = 0f,
 ) {
     companion object {
         val Default = GlassStyle(GlassQuality.Full, 4.dp, 0.6f, Color.White.copy(alpha = 0.18f))
@@ -57,7 +80,33 @@ data class GlassStyle(
 
 /** The rim for [style], or null for none. */
 private fun rimOf(style: GlassStyle): (() -> Highlight?)? =
-    if (style.rim <= 0.01f) null else ({ Highlight.Default.copy(alpha = style.rim.coerceIn(0f, 1f)) })
+    if (style.rim <= 0.01f) null else ({
+        Highlight.Default.copy(
+            alpha = style.rim.coerceIn(0f, 1f),
+            style = HighlightStyle.Default(color = style.rimColor, angle = style.lightAngle),
+        )
+    })
+
+private fun shadowOf(style: GlassStyle): (() -> Shadow?) =
+    if (style.shadow <= 0.01f) ({ null }) else ({ Shadow.Default.copy(alpha = style.shadow.coerceIn(0f, 1f)) })
+
+private fun glowOf(style: GlassStyle): (() -> InnerShadow?)? =
+    if (style.glow <= 0.01f) null else ({
+        InnerShadow.Default.copy(
+            radius = (6f + 10f * style.glow).dp,
+            color = style.rimColor.copy(alpha = 0.55f),
+            alpha = style.glow.coerceIn(0f, 1f),
+        )
+    })
+
+/** Saturation and brightness of what is behind; exactly the old vibrancy for the old values. */
+private fun BackdropEffectScope.look(style: GlassStyle) {
+    if (style.saturation == 1.5f && style.brightness == 0f) {
+        vibrancy()
+    } else if (style.saturation != 1f || style.brightness != 0f) {
+        colorControls(brightness = style.brightness, contrast = 1f, saturation = style.saturation)
+    }
+}
 
 /**
  * Draws a glass surface that samples [backdrop].
@@ -71,14 +120,18 @@ fun Modifier.liquidGlass(backdrop: Backdrop, shape: CornerBasedShape, style: Gla
             backdrop = backdrop,
             shape = { shape },
             highlight = rimOf(style),
+            shadow = shadowOf(style),
+            innerShadow = glowOf(style),
             exportedBackdrop = exported,
             effects = {
-                vibrancy()
+                look(style)
                 if (style.blur > 0.dp) blur(style.blur.toPx())
                 if (style.refraction > 0f) {
                     lens(
                         refractionHeight = (10f + 10f * style.refraction).dp.toPx(),
                         refractionAmount = (32f * style.refraction).dp.toPx(),
+                        depthEffect = style.depth,
+                        chromaticAberration = style.dispersion,
                     )
                 }
             },
@@ -89,9 +142,11 @@ fun Modifier.liquidGlass(backdrop: Backdrop, shape: CornerBasedShape, style: Gla
             backdrop = backdrop,
             shape = { shape },
             highlight = rimOf(style),
+            shadow = shadowOf(style),
+            innerShadow = glowOf(style),
             exportedBackdrop = exported,
             effects = {
-                vibrancy()
+                look(style)
                 blur(maxOf(style.blur, 12.dp).toPx())
             },
             onDrawSurface = { drawRect(style.tint) },
@@ -100,7 +155,7 @@ fun Modifier.liquidGlass(backdrop: Backdrop, shape: CornerBasedShape, style: Gla
         GlassQuality.Tint -> this
             .clip(shape)
             .background(style.tint.copy(alpha = (style.tint.alpha * 2.5f).coerceIn(0.35f, 0.85f)))
-            .border(1.dp, Color.White.copy(alpha = 0.18f + 0.3f * style.rim), shape)
+            .border(1.dp, style.rimColor.copy(alpha = 0.18f + 0.3f * style.rim), shape)
     }
 
 /** Older form used by the glass benchmark: one quality tier with default blur and refraction. */

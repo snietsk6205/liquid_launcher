@@ -18,7 +18,7 @@ import dev.liquid.launcher.core.designsystem.WallpaperStore
 
 /** Settings sections that show a live preview, and what the preview shows. */
 object HomePreviews {
-    val sections = setOf("home", "icons", "clock", "pill", "glass", "drawer", "tags", "drawerMotion", "drawerIndex", "menu", "homeMenu", "wallpaper", "theme", "folders", "dock", "buttons", "study", "search")
+    val sections = setOf("home", "icons", "clock", "pill", "glass", "drawer", "tags", "drawerMotion", "drawerIndex", "menu", "homeMenu", "wallpaper", "theme", "folders", "dock", "buttons", "study", "search", "effects")
 
     fun modeFor(sectionId: String): HomeMode = when (sectionId) {
         "drawer", "tags" -> HomeMode.PreviewDrawer
@@ -28,6 +28,7 @@ object HomePreviews {
         "homeMenu" -> HomeMode.PreviewHomeMenu
         "buttons", "study" -> HomeMode.PreviewToday
         "search" -> HomeMode.PreviewSearch
+        "effects" -> HomeMode.PreviewEffects
         else -> HomeMode.Preview
     }
 }

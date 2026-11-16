@@ -2,6 +2,7 @@ package dev.liquid.launcher.feature.home
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -101,9 +102,25 @@ fun AppMenu(
     }
     val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
     val shape = RoundedCornerShape(26.dp)
+    // Grows out of the pressed icon like a drop (0.8.0, D116): width and height on springs a little
+    // out of step, the rows arriving one after another; on closing it shrinks back into the icon.
     val appear = remember(target) { Animatable(0f) }
-    LaunchedEffect(target) { appear.animateTo(1f, Motion.pop()) }
+    val wide = remember(target) { Animatable(0f) }
+    val tall = remember(target) { Animatable(0f) }
+    LaunchedEffect(target) {
+        launch { appear.animateTo(1f, Motion.pop()) }
+        launch { wide.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = MotionScale.stiffness(620f))) }
+        tall.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = MotionScale.stiffness(430f)))
+    }
+    val presence = LocalPresence.current
     var above by remember(target) { mutableStateOf(true) }
+    var origin by remember(target) { mutableStateOf(TransformOrigin(0.5f, 1f)) }
+    fun Modifier.arriving(index: Int): Modifier = graphicsLayer {
+        val d = 0.05f * index.coerceAtMost(8)
+        val p = ((appear.value - d) / (1f - d)).coerceIn(0f, 1f)
+        alpha = p
+        translationY = (1f - p) * (if (above) 10.dp.toPx() else -10.dp.toPx())
+    }
 
     Box(
         Modifier
@@ -116,17 +133,18 @@ fun AppMenu(
                     Modifier
                         .width(248.dp)
                         .graphicsLayer {
-                            val p = appear.value
-                            alpha = p.coerceIn(0f, 1f)
-                            scaleX = 0.85f + 0.15f * p
-                            scaleY = 0.85f + 0.15f * p
-                            transformOrigin = TransformOrigin(0.5f, if (above) 1f else 0f)
+                            val leave = presence.value.coerceIn(0f, 1f)
+                            alpha = (appear.value * 3f).coerceIn(0f, 1f)
+                            scaleX = (0.16f + 0.84f * wide.value) * (0.3f + 0.7f * leave)
+                            scaleY = (0.1f + 0.9f * tall.value) * (0.3f + 0.7f * leave)
+                            transformOrigin = origin
                         }
                         .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground))
                         .clip(shape)
                         .padding(vertical = 8.dp)
                 ) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    var rowIndex = 0
+                    Row(Modifier.fillMaxWidth().arriving(rowIndex++).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         AppIcon(target.app, false, Modifier.size(28.dp), null)
                         Spacer(Modifier.width(12.dp))
                         Text(
@@ -141,6 +159,7 @@ fun AppMenu(
                         Row(
                             Modifier
                                 .fillMaxWidth()
+                                .arriving(rowIndex++)
                                 .squishClickable {
                                     controller.menu = null
                                     controller.openShortcut(shortcut)
@@ -160,6 +179,7 @@ fun AppMenu(
                         Row(
                             Modifier
                                 .fillMaxWidth()
+                                .arriving(rowIndex++)
                                 .squishClickable {
                                     controller.menu = null
                                     row.onClick()
@@ -190,6 +210,11 @@ fun AppMenu(
                 (anchor.bottom + 8.dp.roundToPx()).roundToInt()
                     .coerceAtMost(constraints.maxHeight - card.height - margin)
             }
+            // The card grows from the icon's centre, wherever the card sits.
+            origin = TransformOrigin(
+                ((anchor.center.x - x) / card.width.coerceAtLeast(1)).coerceIn(-0.5f, 1.5f),
+                ((anchor.center.y - y) / card.height.coerceAtLeast(1)).coerceIn(-0.5f, 1.5f),
+            )
             layout(constraints.maxWidth, constraints.maxHeight) { card.place(x, y) }
         }
     }

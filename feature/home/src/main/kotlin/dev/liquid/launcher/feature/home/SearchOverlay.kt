@@ -12,6 +12,7 @@ import android.content.Context
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.layout.layout
 import dev.liquid.launcher.core.common.DebugLog
 import dev.liquid.launcher.core.data.ClaudeQuery
@@ -118,15 +119,7 @@ fun SearchOverlay(
     val context = LocalContext.current
     // The keyboard comes once search is opening for good (released past the open point, or the pill tapped),
     // and goes as soon as it starts to close. With the field in the pill, the pill's field does this.
-    if (!fieldInPill && live) {
-        LaunchedEffect(controller.searchOpen) {
-            if (controller.searchOpen) {
-                if (config.keyboard) runCatching { focus.requestFocus() }
-            } else {
-                focusManager.clearFocus(force = true)
-            }
-        }
-    }
+    if (!fieldInPill && live) SearchKeyboard(controller, focus, config.keyboard)
     if (live) KeyboardWatch(controller)
     val rise = (motion?.rise ?: 0.12f).coerceIn(0.04f, 0.4f)
 
@@ -387,6 +380,45 @@ private fun FieldModeIcon(controller: HomeController, color: Color, claudeOn: Bo
 }
 
 /**
+ * Brings the keyboard up for search's field (0.8.0, D114), and takes focus away when search
+ * closes. On the phone the keyboard sometimes never came ("no keyboard came" in the log, five
+ * times in a morning): a focus request made while the window is still getting focus (just after
+ * a redirect brought the launcher to the front) is dropped by the system, and a field that kept
+ * its focus asks for nothing. So: wait for the window's focus, ask for focus and for the keyboard
+ * explicitly, and ask again (dropping and taking focus anew) while no keyboard is on its way.
+ */
+@Composable
+private fun SearchKeyboard(controller: HomeController, focus: FocusRequester, wanted: Boolean) {
+    val window = androidx.compose.ui.platform.LocalWindowInfo.current
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    LaunchedEffect(controller.searchOpen) {
+        if (!controller.searchOpen) {
+            focusManager.clearFocus(force = true)
+            return@LaunchedEffect
+        }
+        if (!wanted) return@LaunchedEffect
+        if (!window.isWindowFocused) {
+            DebugLog.event("Home", "search: waiting for the window's focus before asking for the keyboard")
+            kotlinx.coroutines.withTimeoutOrNull(1500) { snapshotFlow { window.isWindowFocused }.first { it } }
+        }
+        runCatching { focus.requestFocus() }
+        keyboard?.show()
+        fun coming(): Boolean = view.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true
+        for ((i, wait) in listOf(300L, 500L, 900L).withIndex()) {
+            kotlinx.coroutines.delay(wait)
+            if (!controller.searchOpen || coming()) return@LaunchedEffect
+            DebugLog.event("Home", "search: no keyboard yet, asking again (${i + 1}; window focused: ${if (window.isWindowFocused) "yes" else "no"})")
+            focusManager.clearFocus(force = true)
+            runCatching { focus.requestFocus() }
+            keyboard?.show()
+            view.windowInsetsController?.show(android.view.WindowInsets.Type.ime())
+        }
+    }
+}
+
+/**
  * Watches the keyboard while search is on screen (D107): remembers its height once it is up, lets
  * the field follow it down when it is put away while search stays open, and gives up on it when it
  * never came.
@@ -418,8 +450,9 @@ private fun KeyboardWatch(controller: HomeController) {
     }
     LaunchedEffect(controller.searchOpen) {
         if (controller.searchOpen && controller.expectKeyboard) {
-            // Generous: on a slow phone the keyboard can take two seconds or more (the emulator: 2.7 s).
-            kotlinx.coroutines.delay(3000)
+            // Generous: on a slow phone the keyboard can take two seconds or more (the emulator: 2.7 s),
+            // and SearchKeyboard asks again until 1.7 s.
+            kotlinx.coroutines.delay(3500)
             if (controller.searchOpen && insets.imeTarget() <= insets.nav() + 1f) {
                 DebugLog.event("Home", "search: no keyboard came, the field goes down")
                 controller.expectKeyboard = false
@@ -549,15 +582,7 @@ internal fun SearchPillField(controller: HomeController, color: Color, interacti
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboard by controller.data.settings.derive { get(dev.liquid.launcher.core.settings.LauncherSettings.SearchOpenKeyboard) }
     val claudeOn by controller.data.settings.derive { get(dev.liquid.launcher.core.settings.LauncherSettings.SearchClaude) != "off" }
-    if (canFocus) {
-        LaunchedEffect(controller.searchOpen) {
-            if (controller.searchOpen) {
-                if (keyboard) runCatching { focus.requestFocus() }
-            } else {
-                focusManager.clearFocus(force = true)
-            }
-        }
-    }
+    if (canFocus) SearchKeyboard(controller, focus, keyboard)
     Row(modifier.padding(start = 12.dp, end = 18.dp), verticalAlignment = Alignment.CenterVertically) {
         FieldModeIcon(controller, color, claudeOn && interactive)
         Spacer(Modifier.width(8.dp))

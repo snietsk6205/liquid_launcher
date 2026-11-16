@@ -13,6 +13,13 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
@@ -22,29 +29,45 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * How things react to a finger (0.7.2, D108): a press squashes them like a drop of liquid and
- * letting go springs them back past their size before they settle, so every icon, pill item,
- * result and button answers the finger the same way.
+ * How things react to a finger (0.7.2, D108; motions and light 0.8.0, D112): a press moves them
+ * (a squash like a drop of liquid by default) and letting go springs them back past their size
+ * before they settle, so every icon, pill item, result and button answers the finger the same way.
  *
  * Two springs drive the width and the height with different stiffness, so on release the two
- * wobble slightly out of step: the "jelly" look. Large things (widgets, rows) squash by a
- * fixed number of pixels at most, so a full-width card dips gently while an icon squishes.
+ * wobble slightly out of step: the "jelly" look. Large things (widgets, rows) move by a fixed
+ * number of pixels at most, so a full-width card dips gently while an icon squishes.
+ *
+ * The motions follow wmkeyboard's key motions (Sink, Grow, Shrink, Rise, Tilt, Jelly, Pop,
+ * Squish, Fade), applied to the launcher's own icons and glass.
  */
 object PressStyle {
-    /** "off", "gentle", "squishy" (default) or "bouncy". */
+    /**
+     * "squishy" (default), "jelly", "sink", "grow", "shrink", "rise", "tilt", "pop", "fade",
+     * "bouncy", "gentle" or "off".
+     */
     @Volatile
     var style = "squishy"
 
-    /** 0..1: how deep a press goes (Settings → Motion, "Press depth"). */
+    /** 0..1: how deep a press goes (Effects and touch, "Press depth"). */
     @Volatile
     var depth = 0.5f
 
+    /** 0..1: how much the way back rings ("Wobble"); 0.5 is the 0.7.2 feel. */
+    @Volatile
+    var wobble = 0.5f
+
+    /** 0..1: the light from the finger on a pressed thing. */
+    @Volatile
+    var light = 0.35f
+
     internal val on: Boolean get() = style != "off"
 
-    /** Fraction an icon-sized thing shrinks by when fully pressed. */
+    /** Fraction an icon-sized thing changes size by when fully pressed. */
     internal fun shrink(): Float = when (style) {
         "gentle" -> 0.05f
         "bouncy" -> 0.13f
+        "shrink" -> 0.16f
+        "jelly", "pop" -> 0.12f
         else -> 0.1f
     } * (0.4f + 1.2f * depth)
 
@@ -61,47 +84,71 @@ object PressStyle {
         else -> 1.12f
     }
 
-    /** Damping of the way back: 1 settles without overshoot. */
-    internal fun releaseDamping(): Float = when (style) {
-        "gentle" -> 0.9f
-        "bouncy" -> 0.3f
-        else -> 0.42f
+    /** Damping of the way back: 1 settles without overshoot. [wobble] 0.5 gives each style's own. */
+    internal fun releaseDamping(): Float {
+        val own = when (style) {
+            "gentle", "fade" -> 0.9f
+            "bouncy", "pop" -> 0.3f
+            "jelly" -> 0.28f
+            "tilt", "sink" -> 0.55f
+            else -> 0.42f
+        }
+        return (1f - (1f - own) * (wobble / 0.5f)).coerceIn(0.15f, 1f)
     }
 }
 
 /**
- * The squash of one element: 0 at rest, 1 fully pressed; while springing back it overshoots
- * below 0, which draws the element slightly larger than its size.
+ * The press of one element: 0 at rest, 1 fully pressed; while springing back it overshoots
+ * below 0, which moves the element slightly past its rest.
  */
 @Stable
-class PressFeel internal constructor(private val scope: CoroutineScope) {
+class PressFeel internal constructor(private val scope: CoroutineScope, private val fx: TouchFx?) {
     internal val x = Animatable(0f)
     internal val y = Animatable(0f)
     private var pending: Job? = null
 
-    /** The finger is down. [delayMs]: wait this long first (inside scrolling lists, so a scroll never squishes). */
-    fun press(delayMs: Long = 0L) {
-        if (!PressStyle.on) return
+    /** Where the finger landed in the element, in its own pixels (Unspecified: the centre). */
+    internal var at: Offset = Offset.Unspecified
+        private set
+
+    /**
+     * The finger is down. [delayMs]: wait this long first (inside scrolling lists, so a scroll
+     * never presses). [position]: where in the element, for Tilt and the light. When the press
+     * shows, the touch effect is thrown where the finger is (D111).
+     */
+    fun press(delayMs: Long = 0L, position: Offset = Offset.Unspecified) {
+        at = position
+        thrown = false
         pending?.cancel()
         pending = scope.launch {
             if (delayMs > 0) delay(delayMs)
+            thrown = true
+            fx?.fromPress()
+            if (!PressStyle.on) return@launch
             val spec = spring(dampingRatio = 0.8f, stiffness = MotionScale.stiffness(1500f), visibilityThreshold = 0.002f)
             launch { x.animateTo(1f, spec) }
             launch { y.animateTo(1f, spec) }
         }
     }
 
+    /** Whether this press already threw its touch effect. */
+    private var thrown = false
+
     /**
-     * The finger let go on it (a tap): spring back with a bounce. A tap too quick for the squash
-     * to show still gets one, from a push downwards before the spring brings it back.
+     * The finger let go on it (a tap): spring back with a bounce. A tap too quick for the press
+     * to show still gets one, from a push before the spring brings it back, and its effect.
      */
     fun release() {
-        if (!PressStyle.on) return
         pending?.cancel()
         pending = null
+        if (!thrown) {
+            thrown = true
+            fx?.fromPress()
+        }
+        if (!PressStyle.on) return
         scope.launch {
             val damping = PressStyle.releaseDamping()
-            // A push that dips the element when it had not gone down yet.
+            // A push that moves the element when it had not gone down yet.
             val push = if (y.value < 0.5f) 9f else 0f
             launch { y.animateTo(0f, spring(dampingRatio = damping, stiffness = MotionScale.stiffness(520f), visibilityThreshold = 0.002f), initialVelocity = push) }
             launch { x.animateTo(0f, spring(dampingRatio = damping, stiffness = MotionScale.stiffness(390f), visibilityThreshold = 0.002f), initialVelocity = push * 0.75f) }
@@ -120,28 +167,115 @@ class PressFeel internal constructor(private val scope: CoroutineScope) {
         }
     }
 
-    /** Applies the squash to a layer of [GraphicsLayerScope.size]; pivot at the centre. */
+    /** Applies the press to a layer of [GraphicsLayerScope.size]; pivot at the centre. */
     internal fun GraphicsLayerScope.applySquash() {
         val px = x.value
         val py = y.value
         if (px == 0f && py == 0f) return
         val shrink = PressStyle.shrink()
-        // At most this many pixels off the shorter side, so big things dip gently.
-        val cap = 9.dp.toPx() / size.minDimension.coerceAtLeast(1f)
+        val minSide = size.minDimension.coerceAtLeast(1f)
+        // At most this many pixels off the shorter side, so big things move gently.
+        val cap = 9.dp.toPx() / minSide
         val d = minOf(shrink, cap * (shrink / 0.1f))
-        scaleX *= 1f - px * d * PressStyle.widthShare()
-        scaleY *= 1f - py * d * PressStyle.heightShare()
+        // Moves in pixels shrink for big things the same way.
+        val big = (64.dp.toPx() / minSide).coerceAtMost(1f)
+        val depth = 0.4f + 1.2f * PressStyle.depth
+        when (PressStyle.style) {
+            "jelly" -> {
+                scaleX *= 1f + px * d * 0.9f
+                scaleY *= 1f - py * d * 1.5f
+            }
+            "sink" -> {
+                val s = 1f - py * d * 0.55f
+                scaleX *= s
+                scaleY *= s
+                translationY += py * 3.dp.toPx() * depth * big
+                alpha *= 1f - 0.12f * py.coerceAtLeast(0f)
+            }
+            "grow" -> {
+                val s = 1f + py * d * 0.9f
+                scaleX *= s
+                scaleY *= s
+            }
+            "shrink" -> {
+                val s = 1f - py * d
+                scaleX *= s
+                scaleY *= s
+            }
+            "rise" -> {
+                val s = 1f + py * d * 0.35f
+                scaleX *= s
+                scaleY *= s
+                translationY -= py * 5.dp.toPx() * depth * big
+            }
+            "pop" -> {
+                val s = 1f + px * d * 0.9f
+                scaleX *= s
+                scaleY *= 1f + py * d * 0.9f
+                translationY -= py * 7.dp.toPx() * depth * big
+            }
+            "fade" -> {
+                alpha *= (1f - py * 0.35f * depth).coerceIn(0.2f, 1f)
+                val s = 1f - py * d * 0.45f
+                scaleX *= s
+                scaleY *= s
+            }
+            "tilt" -> {
+                val p = at
+                val tx = if (p.isSpecified) ((p.x / size.width.coerceAtLeast(1f)) * 2f - 1f).coerceIn(-1f, 1f) else 0f
+                val ty = if (p.isSpecified) ((p.y / size.height.coerceAtLeast(1f)) * 2f - 1f).coerceIn(-1f, 1f) else 0f
+                val deg = 14f * depth * big
+                // The side pressed goes down, as a plate on a pivot would.
+                rotationY = rotationY - tx * py * deg
+                rotationX = rotationX + ty * px * deg
+                cameraDistance = maxOf(12f * density, size.maxDimension * 4f)
+                val s = 1f - py * d * 0.35f
+                scaleX *= s
+                scaleY *= s
+            }
+            else -> {
+                scaleX *= 1f - px * d * PressStyle.widthShare()
+                scaleY *= 1f - py * d * PressStyle.heightShare()
+            }
+        }
+    }
+
+    /** The light from the finger, drawn over the element while it is pressed (D112). */
+    internal fun DrawScope.drawLight() {
+        val light = PressStyle.light
+        if (light <= 0.01f || !PressStyle.on) return
+        val p = y.value
+        if (p <= 0.01f) return
+        val centre = if (at.isSpecified) at else Offset(size.width / 2f, size.height / 2f)
+        val r = size.minDimension * 0.75f
+        if (r <= 1f) return
+        val a = (light * 0.55f * p).coerceIn(0f, 0.6f)
+        drawCircle(
+            Brush.radialGradient(
+                0f to Color.White.copy(alpha = a),
+                0.45f to Color.White.copy(alpha = a * 0.4f),
+                1f to Color.Transparent,
+                center = centre, radius = r,
+            ),
+            radius = r, center = centre, blendMode = BlendMode.Plus,
+        )
     }
 }
 
 @Composable
 fun rememberPressFeel(): PressFeel {
     val scope = rememberCoroutineScope()
-    return remember(scope) { PressFeel(scope) }
+    val fx = LocalTouchFx.current
+    return remember(scope, fx) { PressFeel(scope, fx) }
 }
 
-/** Draws [feel]'s squash. Put it after the element's pointer input, before what it draws. */
-fun Modifier.pressSquash(feel: PressFeel): Modifier = graphicsLayer { with(feel) { applySquash() } }
+/** Draws [feel]'s press and the light from the finger. Put it after the element's pointer input, before what it draws. */
+fun Modifier.pressSquash(feel: PressFeel): Modifier =
+    graphicsLayer { with(feel) { applySquash() } }
+        .drawWithContent {
+            drawContent()
+            with(feel) { drawLight() }
+        }
 
 /** Squashes with the presses of [interaction] (a clickable's interaction source). */
 @Composable
@@ -150,7 +284,7 @@ fun Modifier.squishOn(interaction: InteractionSource, delayMs: Long = 0L): Modif
     LaunchedEffect(interaction) {
         interaction.interactions.collect { event: Interaction ->
             when (event) {
-                is PressInteraction.Press -> feel.press(delayMs)
+                is PressInteraction.Press -> feel.press(delayMs, event.pressPosition)
                 is PressInteraction.Release -> feel.release()
                 is PressInteraction.Cancel -> feel.cancel()
             }

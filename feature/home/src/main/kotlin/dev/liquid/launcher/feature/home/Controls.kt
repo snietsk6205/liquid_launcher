@@ -40,6 +40,8 @@ import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.highlight.HighlightStyle
+import com.kyant.backdrop.effects.colorControls
 import dev.liquid.launcher.core.designsystem.GlassQuality
 import dev.liquid.launcher.core.designsystem.LauncherIcon
 import dev.liquid.launcher.core.settings.SettingsStore
@@ -133,10 +135,11 @@ internal fun controlSurface(env: ControlEnv?, shape: CornerBasedShape, color: Co
         val top = fill.copy(alpha = (fill.alpha * 1.45f).coerceAtMost(0.95f))
         val bottom = fill.copy(alpha = fill.alpha * 0.6f)
         val rim = look.rim
+        val light = env?.glass?.extras?.rimColor ?: Color.White
         val edge = Brush.linearGradient(
-            0f to Color.White.copy(alpha = 0.85f * rim),
-            0.45f to Color.White.copy(alpha = 0.1f * rim),
-            1f to Color.White.copy(alpha = 0.4f * rim),
+            0f to light.copy(alpha = 0.85f * rim),
+            0.45f to light.copy(alpha = 0.1f * rim),
+            1f to light.copy(alpha = 0.4f * rim),
             start = Offset.Zero, end = Offset.Infinite,
         )
         return ControlSurface(
@@ -165,20 +168,24 @@ internal fun controlSurface(env: ControlEnv?, shape: CornerBasedShape, color: Co
             val refraction = if (env.glass.quality == GlassQuality.Full) look.refraction else 0f
             val rim = look.rim
             val redraw = env.redraw
+            val x = env.glass.extras
             ControlSurface(
                 (if (redraw != null) Modifier.drawBehind { redraw() } else Modifier).drawBackdrop(
                     backdrop = backdrop,
                     shape = { shape },
                     effects = {
-                        vibrancy()
+                        if (x.saturation == 1.5f && x.brightness == 0f) vibrancy()
+                        else colorControls(brightness = x.brightness, contrast = 1f, saturation = x.saturation)
                         if (refraction > 0f) {
                             lens(
                                 refractionHeight = minOf(size.minDimension / 2f, (8f + 8f * refraction).dp.toPx()),
                                 refractionAmount = (6f + 18f * refraction).dp.toPx(),
+                                depthEffect = x.depth,
+                                chromaticAberration = x.dispersion,
                             )
                         }
                     },
-                    highlight = if (rim > 0.01f) ({ Highlight.Default.copy(alpha = rim) }) else null,
+                    highlight = if (rim > 0.01f) ({ Highlight.Default.copy(alpha = rim, style = HighlightStyle.Default(color = x.rimColor, angle = x.lightAngle)) }) else null,
                     onDrawSurface = { drawRect(fill) },
                 ),
                 onMain ?: color,
