@@ -75,6 +75,7 @@ internal fun menuLabel(action: LauncherAction, apps: Map<AppRef, AppEntry>, layo
     LauncherAction.NextLayout -> "Next layout"
     LauncherAction.Today -> "Today"
     LauncherAction.TellClaude -> "Tell Claude"
+    LauncherAction.AskClaude -> "Ask Claude"
     LauncherAction.StudyPlan -> "Plan"
     LauncherAction.FocusTimer -> "Focus"
     LauncherAction.Widgets -> "Widgets"
@@ -212,12 +213,12 @@ private fun MenuItem(
     Column(
         modifier
             .widthIn(min = if (labels) 66.dp else 48.dp)
+            .squishClickable(onClick = onClick)
             .clip(shape)
             .background(HomeTheme.accent.copy(alpha = if (hovered) 0.35f else 0f), shape)
             .drawBehind {
                 if (current) drawRoundRect(HomeTheme.accent, style = Stroke(1.5.dp.toPx()), cornerRadius = CornerRadius(22.dp.toPx()))
             }
-            .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = if (labels) 8.dp else 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

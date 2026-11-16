@@ -141,7 +141,7 @@ fun AppMenu(
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .clickable {
+                                .squishClickable {
                                     controller.menu = null
                                     controller.openShortcut(shortcut)
                                 }
@@ -160,7 +160,7 @@ fun AppMenu(
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .clickable {
+                                .squishClickable {
                                     controller.menu = null
                                     row.onClick()
                                 }

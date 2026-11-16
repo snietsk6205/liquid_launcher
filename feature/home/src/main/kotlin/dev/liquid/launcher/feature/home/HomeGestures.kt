@@ -84,7 +84,7 @@ internal fun Modifier.homeGestures(gestures: GestureConfig, controller: HomeCont
             }.takeIf { it != LauncherAction.None } ?: gestures.swipeDown
             val follow = up == LauncherAction.OpenDrawer
             // Search follows a swipe down the way the drawer follows a swipe up (0.7.0, D99).
-            val followSearch = downAction == LauncherAction.OpenSearch
+            val followSearch = downAction == LauncherAction.OpenSearch || downAction == LauncherAction.AskClaude
 
             var mode = HomeTouch.Undecided
             var total = Offset.Zero
@@ -151,6 +151,8 @@ internal fun Modifier.homeGestures(gestures: GestureConfig, controller: HomeCont
                             controller.dragDrawerBy(delta)
                             dragged += delta
                         } else if (followSearch && (total.y > 0 || controller.search.value > 0f)) {
+                            // "Ask Claude" on the swipe opens search ready to ask (0.7.2).
+                            if (!controller.searchOpen && controller.search.value == 0f) controller.askClaudeMode = downAction == LauncherAction.AskClaude
                             val delta = dy / controller.screenHeight
                             controller.dragSearchBy(delta)
                             searchDragged += delta

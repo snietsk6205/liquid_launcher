@@ -39,6 +39,7 @@ import dev.liquid.launcher.feature.redirect.RedirectStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.floor
+import kotlin.math.roundToInt
 
 /** Where a long-press menu was opened from. */
 data class MenuTarget(
@@ -309,21 +310,7 @@ class HomeController(
         val uri = Uri.parse(url)
         fun view(pkg: String?) = Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE).also { if (pkg != null) it.setPackage(pkg) }
         fun resolves(intent: Intent) = intent.resolveActivity(pm) != null
-        // A Custom Tab: Chrome's own view of the page over the launcher, signed in like Chrome.
-        // Built by hand (the extras of androidx.browser), so no library is needed for it.
-        fun tab(): Intent? {
-            val browsers = try {
-                pm.queryIntentServices(Intent("android.support.customtabs.action.CustomTabsService"), 0).map { it.serviceInfo.packageName }
-            } catch (e: Exception) {
-                emptyList()
-            }
-            val pkg = listOf("com.android.chrome", "com.chrome.beta", "com.chrome.dev", "com.brave.browser").firstOrNull { it in browsers } ?: browsers.firstOrNull() ?: return null
-            return view(pkg).apply {
-                putExtras(android.os.Bundle().apply { putBinder("android.support.customtabs.extra.SESSION", null) })
-                putExtra("android.support.customtabs.extra.TITLE_VISIBILITY", 1)
-                putExtra("android.support.customtabs.extra.SHARE_STATE", 1)
-            }
-        }
+        fun tab(): Intent? = customTab(uri)
         val claude = data.settings.get(LauncherSettings.StudyClaudeApp).trim().ifEmpty { "com.anthropic.claude" }
         val intent = when (data.settings.get(LauncherSettings.StudyLinkOpener)) {
             "system" -> view(null)
@@ -336,6 +323,95 @@ class HomeController(
         }
         DebugLog.event("Study", "opening a study link in " + (intent.`package` ?: "the phone's choice"))
         start(intent)
+    }
+
+    /**
+     * A Custom Tab: Chrome's own view of the page over the launcher, signed in like Chrome.
+     * Built by hand (the extras of androidx.browser), so no library is needed for it.
+     */
+    private fun customTab(uri: Uri): Intent? {
+        val pm = context.packageManager
+        val browsers = try {
+            pm.queryIntentServices(Intent("android.support.customtabs.action.CustomTabsService"), 0).map { it.serviceInfo.packageName }
+        } catch (e: Exception) {
+            emptyList()
+        }
+        val pkg = listOf("com.android.chrome", "com.chrome.beta", "com.chrome.dev", "com.brave.browser").firstOrNull { it in browsers } ?: browsers.firstOrNull() ?: return null
+        return Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE).setPackage(pkg).apply {
+            putExtras(android.os.Bundle().apply { putBinder("android.support.customtabs.extra.SESSION", null) })
+            putExtra("android.support.customtabs.extra.TITLE_VISIBILITY", 1)
+            putExtra("android.support.customtabs.extra.SHARE_STATE", 1)
+        }
+    }
+
+    // ---- Claude (0.7.2, D109) ----
+
+    /** Search sends what is typed to Claude: the field's icon switches it, the "Ask Claude" action opens search this way. */
+    var askClaudeMode by mutableStateOf(false)
+
+    /** The Claude app's package (the one "Tell Claude" uses). */
+    val claudePackage: String get() = data.settings.get(LauncherSettings.StudyClaudeApp).trim().ifEmpty { "com.anthropic.claude" }
+
+    /**
+     * Sends [text] to Claude: into a new chat of the Claude app (it arrives as shared text, ready to
+     * send or add to), or claude.ai with the question filled in when the app is not there or
+     * "Ask Claude in" says so.
+     */
+    fun askClaude(text: String) {
+        val prompt = text.trim()
+        if (prompt.isEmpty()) return
+        DebugLog.event("Home", "ask Claude (" + prompt.length + " characters)")
+        if (data.settings.get(LauncherSettings.SearchClaudeTarget) == "app") {
+            val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, prompt).setPackage(claudePackage)
+            if (send.resolveActivity(context.packageManager) != null) {
+                start(send)
+                return
+            }
+        }
+        val uri = Uri.parse("https://claude.ai/new?q=" + Uri.encode(prompt))
+        start(customTab(uri) ?: Intent(Intent.ACTION_VIEW, uri))
+    }
+
+    /** Starts a chat with Claude about a study block: its title, time, steps and notes. */
+    fun askClaudeAbout(block: dev.liquid.launcher.core.data.StudyEvent) {
+        val time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT)
+        val steps = block.tasks.joinToString("\n") { (if (it.done) "[x] " else "[ ] ") + it.text }
+        val prompt = buildString {
+            append("I'm about to study this block and would like your help with it.\n\n")
+            append(block.title.text).append(" (").append(time.format(java.util.Date(block.begin))).append("–").append(time.format(java.util.Date(block.end))).append(")\n")
+            if (steps.isNotEmpty()) append("\nSteps:\n").append(steps).append('\n')
+            if (block.notes.isNotBlank()) append("\nNotes:\n").append(block.notes.trim()).append('\n')
+            append("\nHow should I go about it?")
+        }
+        askClaude(prompt)
+    }
+
+    /** Opens search ready to ask Claude: what is typed goes to Claude on Go. */
+    fun openAskClaude() {
+        askClaudeMode = true
+        openSearch()
+    }
+
+    /**
+     * True when text was copied in the last [withinMs]. Only the clip's description is looked at,
+     * which Android does not report as reading the clipboard; the text is read when it is used.
+     */
+    fun recentClip(withinMs: Long = 120_000L): Boolean = try {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val description = clipboard.primaryClipDescription
+        description != null &&
+            (description.hasMimeType("text/*") || description.hasMimeType(android.content.ClipDescription.MIMETYPE_TEXT_PLAIN)) &&
+            System.currentTimeMillis() - description.timestamp in 0..withinMs
+    } catch (e: Exception) {
+        false
+    }
+
+    /** The copied text, or null. Android shows that the launcher read the clipboard. */
+    fun clipText(): String? = try {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+    } catch (e: Exception) {
+        null
     }
 
     /** Adds a built-in widget of [type] to the current page: across its width, or its own width when it has one. */
@@ -378,7 +454,62 @@ class HomeController(
     var searchSubmit: (() -> Unit)? = null
 
     /** How far the pill has turned into a search field: by the drawer or by search, whichever is open. */
-    fun morph(): Float = maxOf(drawer.value, search.value)
+    fun morph(): Float = maxOf(drawer.value, if (searchInPill) search.value else 0f)
+
+    // ---- where search's field goes (0.7.2, D107) ----
+
+    /** Search grows the pill into its field (false: the field is at the top and the pill steps away). Set by the home screen. */
+    var searchInPill by mutableStateOf(true)
+
+    /** "keyboard", "bottom" or "top" (Settings → Search → Search field). Set by the home screen. */
+    var searchField by mutableStateOf("keyboard")
+
+    /** The keyboard comes with search (Settings → Search → Open the keyboard). Set by the home screen. */
+    var searchKeyboard by mutableStateOf(true)
+
+    /**
+     * The keyboard's height the last time it was up (px from the bottom of the screen, navigation
+     * bar included), so the field can go straight to where the keyboard will be instead of to the
+     * bottom and up again with it. Remembered across starts.
+     */
+    var keyboardHeight by mutableFloatStateOf(data.settings.get(LauncherSettings.SearchKeyboardHeight).toFloat())
+
+    /**
+     * Search is counting on the keyboard: from the moment it starts opening until the keyboard is
+     * put away while search stays open (then the field follows the keyboard down).
+     */
+    var expectKeyboard by mutableStateOf(false)
+
+    /** Remembers the keyboard's height when it changes by more than a few pixels. */
+    fun rememberKeyboard(px: Float) {
+        if (px < screenHeight * 0.12f || kotlin.math.abs(px - keyboardHeight) < 3f) return
+        keyboardHeight = px
+        data.settings.set(LauncherSettings.SearchKeyboardHeight, px.roundToInt())
+        DebugLog.event("Home", "keyboard height " + px.roundToInt() + " px remembered")
+    }
+
+    /**
+     * Where the bottom of the open search field sits, in px from the bottom of the screen, before
+     * its margin: above the keyboard that is coming (the height remembered, or a guess the first
+     * time), above the keyboard that is there, or above the navigation bar. While the keyboard
+     * rises towards a [target] that differs from the height remembered, the line moves from one to
+     * the other in step with it, so a wrong guess never shows as a jump.
+     */
+    fun searchFieldLine(nav: Float, ime: Float, target: Float): Float {
+        if (!expectKeyboard) return maxOf(nav, ime)
+        val remembered = if (keyboardHeight > 0f) keyboardHeight else screenHeight * 0.4f
+        val known = if (target > nav + 1f) {
+            val risen = ((ime - nav) / (target - nav)).coerceIn(0f, 1f)
+            remembered + (target - remembered) * risen
+        } else {
+            remembered
+        }
+        return maxOf(nav, ime, known)
+    }
+
+    private fun startExpectingKeyboard() {
+        expectKeyboard = searchKeyboard && searchField == "keyboard" && searchInPill
+    }
 
     /** Where the finger has put search, ahead of [search] (see [dragPosition]). */
     private var searchDragPosition: Float? = null
@@ -612,6 +743,7 @@ class HomeController(
     fun openSearch(velocity: Float = 0f) {
         menu = null
         searchDragPosition = null
+        if (!searchOpen && search.value < 0.001f) startExpectingKeyboard()
         searchOpen = true
         scope.launch { search.animateTo(1f, drawerSpring(), initialVelocity = velocity) }
     }
@@ -622,13 +754,18 @@ class HomeController(
         searchEditing = false
         scope.launch {
             if (immediately) search.snapTo(0f) else search.animateTo(0f, drawerSpring(), initialVelocity = velocity)
-            if (!searchOpen) searchQuery = ""
+            if (!searchOpen) {
+                searchQuery = ""
+                askClaudeMode = false
+                expectKeyboard = false
+            }
         }
     }
 
     /** [deltaFraction]: the finger's movement as a fraction of the screen height (down = positive). */
     fun dragSearchBy(deltaFraction: Float) {
         val before = searchDragPosition ?: search.value
+        if (!searchOpen && before < 0.001f) startExpectingKeyboard()
         val next = (before + deltaFraction / drawerTravel()).coerceIn(0f, 1f)
         if (motionConfig.drawerTick && (before > OPEN_POINT) != (next > OPEN_POINT)) Haptics.tick(view)
         searchDragPosition = next
@@ -1157,7 +1294,10 @@ class HomeController(
         when (action) {
             LauncherAction.None -> Unit
             LauncherAction.OpenDrawer -> openDrawer()
-            LauncherAction.OpenSearch -> openSearch()
+            LauncherAction.OpenSearch -> {
+                if (!searchOpen) askClaudeMode = false
+                openSearch()
+            }
             LauncherAction.OpenSettings -> callbacks.openSettings()
             LauncherAction.EditHome -> {
                 closeAll()
@@ -1228,6 +1368,7 @@ class HomeController(
                 todaySheet = true
             }
             LauncherAction.TellClaude -> tellClaude()
+            LauncherAction.AskClaude -> openAskClaude()
             LauncherAction.StudyPlan -> openStudyPlan()
             LauncherAction.FocusTimer -> {
                 val now = System.currentTimeMillis()

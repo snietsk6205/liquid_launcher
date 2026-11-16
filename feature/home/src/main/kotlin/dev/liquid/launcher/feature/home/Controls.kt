@@ -207,22 +207,18 @@ internal fun GlassButton(
     val look = env?.look ?: ControlLook()
     val shape = RoundedCornerShape(percent = look.cornerPercent)
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val squish by animateFloatAsState(if (pressed && look.squish) 0.92f else 1f, spring(dampingRatio = 0.5f, stiffness = 900f), label = "squish")
     val surface = controlSurface(env, shape, color, emphasis, accent)
     val h = look.heightDp
     Row(
         modifier
             .height(h.dp)
             .widthIn(min = h.dp)
-            .graphicsLayer {
-                scaleX = squish
-                scaleY = squish
-                alpha = if (enabled) 1f else 0.45f
-            }
+            // The touch is read outside the squash; the glass, its content and its edge squish together (D108).
+            .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
+            .then(if (look.squish) Modifier.squishOn(interaction) else Modifier)
+            .graphicsLayer { alpha = if (enabled) 1f else 0.45f }
             .then(surface.modifier)
             .clip(shape)
-            .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
             .padding(horizontal = if (text == null) 0.dp else (h * 0.38f).dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,

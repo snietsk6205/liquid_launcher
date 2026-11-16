@@ -643,3 +643,52 @@ and was placed (3 × 2). Runs 53–55 found the way there: run 53 placed nothing
 logged), run 55 showed the set-up screen left open by the test, run 56 picks a face. Not verified: the screen no
 longer being rebuilt after a wallpaper hand-over (the emulator does not recolour its theme; the log line will tell
 on the phone), widgets on the search screen with a real app widget, Zoom on the phone.
+
+## Entry 18: 0.7.2, search flows to the keyboard, squishy presses, Claude in the launcher (2026-11-16)
+
+**Asked by the user (after 0.7.1 fixed the wallpaper and icon lag):** swipe-down search still did not feel part of the
+home screen; the field went down to the bottom and then up again with the keyboard, with no setting to change it.
+With "Open the keyboard" on, it should flow straight to the top of the keyboard, with blur and zoom like the drawer's
+default. Buttons should squish or bounce when pressed. As a designer of transitions and liquid motion: improve the
+whole experience, suggest and build better ways for the launcher to work with Claude, then build 0.7.2.
+
+**Why the field went down and up.** 0.7.1's morphing pill measured its open place as 14 dp above the navigation bar
+and rode on `imePadding()`. The keyboard is only asked for once search is opening for good, so the field first slid
+to the bottom with the swipe and was then pushed up by the keyboard's own animation. Android cannot say how tall the
+keyboard will be before it shows, so 0.7.2 remembers it.
+
+| File | Change | Decision |
+|---|---|---|
+| `HomeController.kt` | `keyboardHeight` (remembered in `state.keyboardHeight`), `expectKeyboard`, `searchFieldLine` (remembered height, moving to the real one in step with the keyboard), `searchInPill`, `searchField`; `morph()` ignores search when its field is at the top | D107 |
+| `PillMorph.kt` | `FieldInsets` (navigation bar, keyboard, keyboard animation target, read while laying out), `fieldBottom`; the pill computes its whole distance from the bottom instead of `navigationBarsPadding().imePadding()` | D107 |
+| `SearchOverlay.kt` | Rewritten around the field: `KeyboardWatch` (remember height at the end of each animation, follow the keyboard down when put away, give up after 1.2 s), content laid out above the field's final place and riding with it, "Lift"; `SearchResult.Claude`, `FieldModeIcon` (search ↔ Claude), `ClipboardChips`, `AskClaudeHint`, `SuggestionRow` (frequent apps pop in one after another with the finger), result rows slide when the ranking changes (`animateItem`), `PreviewKeyboard` for the settings preview | D107, D109 |
+| `HomeScreen.kt`, `Drawer.kt`, `Previews.kt` | "Lift" for the home screen (falls back, fades, sinks a little) and the wallpaper (grows into its blur); `HomeMode.PreviewSearch` loops search in Settings → Search | D107 |
+| `PressFeel.kt` (new), `Gestures.kt`, `Pill.kt`, `Controls.kt`, `HomeMenu.kt`, `AppMenu.kt`, `DrawerParts.kt` | `PressFeel` / `squishOn` / `squishClickable`; every icon through `iconGestures`, pill items, glass buttons, menus, tab buttons | D108 |
+| `core/data/Search.kt`, `LauncherAction.kt` | `ClaudeQuery` (bangs `!c` `!claude` `!ai`, question detection in English and French), `LauncherAction.AskClaude` | D109 |
+| `HomeController.kt`, `Study.kt`, `HomeGestures.kt` | `askClaude` (Claude app share or claude.ai `?q=` in a Chrome tab; the Custom Tab builder moved out of `openStudyLink`), `askClaudeAbout(block)`, `recentClip` / `clipText`; a swipe set to "Ask Claude" follows the finger | D109 |
+| Settings | Search: Opening search (moved from Motion, "Lift" default), Search field, Home screen falls back by, Blur behind search (14 dp, moved from Wallpaper), Dim (40 %), Ask Claude, Ask Claude in, Offer what you just copied. Motion: Pressing icons and buttons, Press depth | |
+| Tests | `ClaudeQueryTest` | |
+| `ci/smoke.sh` | 10c: a question offers "Ask Claude"; the field's centre is within 260 px above the keyboard the launcher logged | |
+
+Not changed: the drawer's field and its keyboard (it keeps `imePadding`; its own "Open the keyboard" is off by
+default), Fable's drawer transition, the 0.7.1 widgets on the search screen, the settings app's own buttons (they are
+Material and live in a module that does not depend on `feature/home`).
+
+### Ideas offered to the user, not built
+1. A Claude home widget: a glass card with the field and the last three questions, so a question starts from the home
+   screen without a swipe.
+2. Recent questions to Claude in search's Claude mode (kept on the phone), one tap to ask again.
+3. Selecting text in any app → "Ask Claude" from the system text menu (`ACTION_PROCESS_TEXT`), sending it with the
+   same prompt templates (explain, translate, summarise).
+4. The evening check-in prepared for Claude: Today's blocks done, skipped and unmarked, as a draft the user finishes.
+5. Keyboard that follows the finger: Android 11+ lets an app drive the keyboard frame by frame
+   (`WindowInsetsController.controlWindowInsetsAnimation`), so a slow swipe could pull the keyboard up with the field.
+   Needs testing with the phone's keyboard; too risky to ship untested.
+
+### For the next model (review)
+1. The keyboard line depends on the IME insets reaching the app with `adjustNothing`; the user's report (the field rode
+   up with the keyboard in 0.7.1) says they do on the phone, and the emulator check 10c measures it there.
+2. `imeAnimationTarget` is experimental in Compose; if a keyboard does not animate its insets, the line still ends at
+   the right place, without the in-step glide.
+3. `PressFeel` adds one graphics layer to every icon; it draws nothing at rest (scale 1), but a profile on the phone
+   with a full page of icons would confirm there is no cost.

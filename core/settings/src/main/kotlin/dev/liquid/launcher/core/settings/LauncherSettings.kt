@@ -37,7 +37,7 @@ object LauncherSettings {
         val HomeMenu = SettingsSection("homeMenu", "Home menu", "The two glass pills from holding empty space: items, order, labels", "Home screen")
         val Wallpaper = SettingsSection("wallpaper", "Wallpaper", "Your library, placing and parallax, blur and dim per screen, transitions, changing automatically", "Look")
         val Layouts = SettingsSection("layouts", "Saved layouts and backup", "Home setups you can switch between; back up and restore everything", "Layouts and backup")
-        val Search = SettingsSection("search", "Search", "Swipe-down search and web search", "App drawer")
+        val Search = SettingsSection("search", "Search", "How search opens, where its field sits, blur and zoom, the keyboard, Ask Claude and web search", "App drawer")
         val Notices = SettingsSection("notices", "Glass notices", "Short glass labels for layout switches, wallpapers, tag filters, the redirect, updates and study blocks", "Motion and feedback")
         val Study = SettingsSection("study", "Study companion", "Study blocks and tasks from your calendar: Now card, Today, notices, quick actions", "Study")
         val Glass = SettingsSection("glass", "Liquid glass", "Quality, blur, refraction, tint and edge light, overall and per surface", "Look")
@@ -627,17 +627,54 @@ object LauncherSettings {
         section = "motion", keywords = "launch animation open app icon reveal scale grow fade",
     )
     val SearchTransition = ChoiceSetting(
-        key = "motion.search", default = "space",
+        // Default "lift" since 0.7.2 (D107); was "space".
+        key = "motion.search", default = "lift",
         options = listOf(
-            "space" to "One space, like the drawer: the home screen glides down under your finger",
-            "zoom" to "Zoom: the home screen falls back, search comes forward",
+            "lift" to "Lift: the home screen falls back into the blur while the pill flows up to the keyboard",
+            "space" to "One space: the home screen glides down under your finger",
+            "zoom" to "Zoom: the home screen falls back, search comes forward from the field",
             "depth" to "Depth (home sinks back)",
             "fade" to "Fade",
         ),
         title = "Opening search",
         summary = "Search follows a swipe down the way the drawer follows a swipe up, and springs open or back when you let go. " +
-            "With \"The pill becomes the search field\" (Drawer motion) the pill turns into the search field above the keyboard",
-        section = "motion", keywords = "search transition space depth fade animation swipe down follow",
+            "The wallpaper grows and melts into its blur as in the drawer",
+        section = "search", keywords = "search transition lift space zoom depth fade animation swipe down follow blur",
+    )
+    val SearchField = ChoiceSetting(
+        key = "search.field", default = "keyboard",
+        options = listOf(
+            "keyboard" to "Above the keyboard: the pill flows straight to where the keyboard will be",
+            "bottom" to "At the bottom (the keyboard pushes it up)",
+            "top" to "At the top of the screen",
+        ),
+        title = "Search field",
+        summary = "Above the keyboard and at the bottom, the pill itself becomes the field (with \"The pill becomes the search field\" " +
+            "in Drawer motion and the pill at the bottom). The launcher remembers your keyboard's height, so the field never goes down and up again",
+        section = "search", keywords = "search field position keyboard bottom top pill morph",
+    )
+    val SearchHomeScale = IntSetting(
+        key = "search.homeScale", default = 10, min = 0, max = 25, unit = "%",
+        title = "Home screen falls back by",
+        summary = "How far the home screen shrinks into the distance as search opens (Lift and Zoom)",
+        section = "search", keywords = "search zoom scale home depth fall back",
+    )
+    val PressFeel = ChoiceSetting(
+        key = "motion.press", default = "squishy",
+        options = listOf(
+            "squishy" to "Squishy: squashes like a drop under your finger and wobbles back",
+            "bouncy" to "Bouncy: a deeper squash and a livelier spring",
+            "gentle" to "Gentle: shrinks a little, no bounce",
+            "off" to "Off",
+        ),
+        title = "Pressing icons and buttons",
+        summary = "Icons, pill items, search results, menus and glass buttons answer your finger. Big things such as widgets dip only a little",
+        section = "motion", keywords = "press squish bounce jelly tap feedback button icon spring",
+    )
+    val PressDepth = IntSetting(
+        key = "motion.pressDepth", default = 50, min = 0, max = 100, step = 10, unit = "%",
+        title = "Press depth",
+        section = "motion", keywords = "press squish depth amount",
     )
     val MotionStyle = ChoiceSetting(
         key = "motion.style", default = "liquid",
@@ -1297,19 +1334,53 @@ object LauncherSettings {
     val SearchOpenKeyboard = BoolSetting(
         key = "search.keyboard", default = true,
         title = "Open the keyboard",
+        summary = "It comes up as soon as search is opening for good, under a field that is already in its place",
         section = "search", keywords = "keyboard focus",
+    )
+    val SearchClaude = ChoiceSetting(
+        key = "search.claude", default = "questions",
+        options = listOf(
+            "questions" to "First for questions and longer requests, otherwise after the apps",
+            "always" to "Always, after the apps",
+            "first" to "Always first",
+            "off" to "Off",
+        ),
+        title = "Ask Claude",
+        summary = "Offers \"Ask Claude\" for what you type; !c, !claude or !ai sends it straight away. Tap the search icon in the field to " +
+            "switch it to Claude, so Go sends anything you type",
+        section = "search", keywords = "claude ai assistant ask question chat prompt",
+    )
+    val SearchClaudeTarget = ChoiceSetting(
+        key = "search.claudeTarget", default = "app",
+        options = listOf(
+            "app" to "The Claude app (claude.ai in a Chrome tab when it is not installed)",
+            "web" to "claude.ai in a Chrome tab",
+        ),
+        title = "Ask Claude in",
+        section = "search", keywords = "claude app web browser chrome tab",
+    )
+    val SearchClipboard = BoolSetting(
+        key = "search.clipboard", default = true,
+        title = "Offer what you just copied",
+        summary = "For two minutes after you copy text, search shows Paste and Ask Claude about it. Nothing is read until you tap one",
+        section = "search", keywords = "clipboard copy paste claude",
+    )
+    val SearchKeyboardHeight = IntSetting(
+        key = "state.keyboardHeight", default = 0, min = 0, max = 10000,
+        title = "Height of the keyboard last time, px", section = "state", hidden = true,
     )
 
     val SearchDim = IntSetting(
-        key = "search.dim", default = 55, min = 0, max = 90, step = 5, unit = "%",
+        key = "search.dim", default = 40, min = 0, max = 90, step = 5, unit = "%",
         title = "Dim behind search",
-        section = "wallpaper", keywords = "search dim background",
+        section = "search", keywords = "search dim background wallpaper",
     )
     val SearchBlur = IntSetting(
-        key = "search.blur", default = 0, min = 0, max = 40, step = 2, unit = "dp",
+        // 14 dp since 0.7.2, like the drawer (was 0).
+        key = "search.blur", default = 14, min = 0, max = 40, step = 2, unit = "dp",
         title = "Blur behind search",
-        summary = "Off automatically when the glass benchmark found the phone only manages tint glass",
-        section = "wallpaper", keywords = "search blur background",
+        summary = "The wallpaper melts into a blurred copy of itself as search opens, as it does for the drawer. The copy is made once, so this costs nothing while moving",
+        section = "search", keywords = "search blur background wallpaper",
     )
 
     // ---- Home menu ----
@@ -1720,7 +1791,7 @@ object LauncherSettings {
         HomeMarginSide, HomeMarginTop, HomeMarginBottom, Clock24h, ClockSize, ClockDate, ClockGlass,
         GestureSwipeUp, GestureSwipeDown, GestureDoubleTap, GestureLongPress,
         GesturePinchIn, GesturePinchOut, GestureTwoUp, GestureTwoDown, GestureEdgeLeftUp, GestureEdgeLeftDown, GestureEdgeRightUp, GestureEdgeRightDown, GestureEdgeWidth,
-        HapticsEnabled, HapticsStrength, HapticDrawer, HapticPickUp, LaunchAnimation, SearchTransition, MotionStyle, MotionSpeed, UpdatesDaily,
+        HapticsEnabled, HapticsStrength, HapticDrawer, HapticPickUp, LaunchAnimation, PressFeel, PressDepth, MotionStyle, MotionSpeed, UpdatesDaily,
         PillEnabled, PillSlots, PillPosition, PillOffset, PillWidth, PillHeight, PillCorner, PillIconSize,
         PillHint, PillTap, PillLongPress, PillSwipeUp, PillSwipeDown,
         DrawerColumns, DrawerIconSize, DrawerLabels, DrawerFromBottom, DrawerAutoKeyboard, DrawerSort,
@@ -1731,7 +1802,8 @@ object LauncherSettings {
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
         TagStripPosition, TagButtonPosition, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
         MenuEntries,
-        SearchEngine, SearchOpenKeyboard, SearchDim, SearchBlur,
+        SearchTransition, SearchField, SearchOpenKeyboard, SearchBlur, SearchDim, SearchHomeScale,
+        SearchClaude, SearchClaudeTarget, SearchClipboard, SearchEngine, SearchKeyboardHeight,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
@@ -1782,7 +1854,7 @@ object LauncherSettings {
             // Fine tuning of motion
             DrawerTravel, DrawerBounce, DrawerRise, DrawerHomeScale, DrawerBlurLive, DrawerScrollStrength, DrawerOverscroll,
             IndexReach, IndexEnds, IndexFollow, IndexSpring, IndexHideDelay, IndexSpacing, IndexBubbleGap,
-            ButtonRefraction, ButtonSquish,
+            ButtonRefraction, ButtonSquish, PressDepth, SearchHomeScale, SearchClaudeTarget,
             GestureEdgeWidth, HapticsStrength,
             // Looks most people leave alone
             HomeMarginSide, HomeMarginTop, HomeMarginBottom, DrawerSideMargin, PillOffset, PillCorner, PillIconSize,

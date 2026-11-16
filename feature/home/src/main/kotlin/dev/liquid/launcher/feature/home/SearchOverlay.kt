@@ -9,8 +9,12 @@ import androidx.compose.ui.semantics.contentDescription
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.layout.layout
+import dev.liquid.launcher.core.common.DebugLog
+import dev.liquid.launcher.core.data.ClaudeQuery
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -77,16 +81,19 @@ private sealed interface SearchResult {
     data class Calc(val expression: String, val value: String) : SearchResult
     data class Bang(val name: String, val url: String, val query: String) : SearchResult
     data class Web(val query: String, val url: String) : SearchResult
+
+    /** Ask Claude with [prompt] (0.7.2, D109). */
+    data class Claude(val prompt: String) : SearchResult
 }
 
 /**
- * Swipe-down search: apps (typo-tolerant, ranked by use), calculator, bangs and the web.
+ * Swipe-down search: apps (typo-tolerant, ranked by use), calculator, bangs, the web and Claude.
  *
  * Since 0.7.0 (D99) it opens like the drawer: its progress is [HomeController.search], which a swipe
- * down drags under the finger. With "One space" (default) the home screen glides down and fades
- * while the field and results come down from above and the wallpaper drifts the same way, so
- * search is the space above the home screen as the drawer is the space below it. The field is
- * glass, so it moves by layout (not by layer) and keeps refracting what is really behind it.
+ * down drags under the finger. Since 0.7.2 (D107) the default, "Lift", lets the home screen fall
+ * back into the blurred, slightly growing wallpaper while the pill flows straight to where the
+ * keyboard will be (its height is remembered), and the results grow out of the field. The field
+ * is glass, so it moves by layout (not by layer) and keeps refracting what is really behind it.
  */
 @Composable
 fun SearchOverlay(
@@ -96,10 +103,12 @@ fun SearchOverlay(
     lightBackground: Boolean,
     backdrop: Backdrop,
     apps: List<AppEntry>,
-    transition: String = "space",
+    transition: String = "lift",
     motion: DrawerMotion? = null,
     fieldInPill: Boolean = false,
     env: PageEnv? = null,
+    pillOffsetDp: Int = 0,
+    live: Boolean = true,
 ) {
     val usage by controller.data.usage.usage.collectAsState()
     val query = controller.searchQuery
@@ -109,7 +118,7 @@ fun SearchOverlay(
     val context = LocalContext.current
     // The keyboard comes once search is opening for good (released past the open point, or the pill tapped),
     // and goes as soon as it starts to close. With the field in the pill, the pill's field does this.
-    if (!fieldInPill) {
+    if (!fieldInPill && live) {
         LaunchedEffect(controller.searchOpen) {
             if (controller.searchOpen) {
                 if (config.keyboard) runCatching { focus.requestFocus() }
@@ -118,6 +127,7 @@ fun SearchOverlay(
             }
         }
     }
+    if (live) KeyboardWatch(controller)
     val rise = (motion?.rise ?: 0.12f).coerceIn(0.04f, 0.4f)
 
     val visible = remember(apps) { apps.filter { !it.hidden } }
@@ -126,7 +136,11 @@ fun SearchOverlay(
             .sortedByDescending { controller.data.usage.score(it.key) }
             .take(5)
     }
-    val results = remember(query, visible, usage, config.engine) { buildResults(query, visible, usage, config.engine) }
+    val claudeApp = remember(visible) { visible.firstOrNull { it.component.packageName == controller.claudePackage && !it.isWorkProfile } }
+    val askMode = controller.askClaudeMode && config.claude != "off"
+    val results = remember(query, visible, usage, config.engine, config.claude, askMode) {
+        buildResults(query, visible, usage, config.engine, config.claude, askMode)
+    }
 
     fun open(result: SearchResult) {
         when (result) {
@@ -139,13 +153,14 @@ fun SearchOverlay(
             }
             is SearchResult.Bang -> controller.openUrl(result.url)
             is SearchResult.Web -> controller.openUrl(result.url)
+            is SearchResult.Claude -> controller.askClaude(result.prompt)
         }
         controller.closeSearch()
     }
     androidx.compose.runtime.SideEffect { controller.searchSubmit = { results.firstOrNull()?.let { open(it) } } }
 
     if (fieldInPill) {
-        BottomSearch(controller, config, glass, transition, rise, env, suggestions, results, query) { open(it) }
+        BottomSearch(controller, config, glass, transition, rise, env, suggestions, results, query, claudeApp, pillOffsetDp, live) { open(it) }
         return
     }
 
@@ -159,83 +174,75 @@ fun SearchOverlay(
     ) {
         // The dim fades in place; the content moves.
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = progress.value.coerceIn(0f, 1f) }.background(Color.Black.copy(alpha = config.dim)))
-        Column(
-            Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .imePadding()
-                .padding(horizontal = 16.dp)
-                .offset {
-                    val p = progress.value
-                    val dy = when (transition) {
-                        "fade", "zoom" -> 0f
-                        "depth" -> (1f - p) * -40.dp.toPx()
-                        // From above, as far as the drawer's apps come from below.
-                        else -> (1f - p) * -rise * controller.screenHeight
-                    }
-                    IntOffset(0, dy.roundToInt())
-                }
-                .graphicsLayer {
-                    val p = progress.value.coerceIn(0f, 1f)
-                    alpha = if (transition == "space") ((p - 0.04f) / 0.72f).coerceIn(0f, 1f) else p
-                },
-        ) {
-            Spacer(Modifier.height(12.dp))
-            Row(
+        ProvideControls(controller, glass, null) {
+            Column(
                 Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .liquidGlass(backdrop, fieldShape, glass.style(Surfaces.Pill, lightBackground))
-                    .clip(fieldShape)
-                    .padding(horizontal = 18.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 16.dp)
+                    .offset {
+                        val p = progress.value
+                        val dy = when (transition) {
+                            "fade", "zoom" -> 0f
+                            "depth", "lift" -> (1f - p) * -40.dp.toPx()
+                            // From above, as far as the drawer's apps come from below.
+                            else -> (1f - p) * -rise * controller.screenHeight
+                        }
+                        IntOffset(0, dy.roundToInt())
+                    }
+                    .graphicsLayer {
+                        val p = progress.value.coerceIn(0f, 1f)
+                        alpha = if (transition == "space" || transition == "lift") ((p - 0.04f) / 0.72f).coerceIn(0f, 1f) else p
+                    },
             ) {
-                LauncherIcon(LauncherIcons.Search, contentDescription = null, tint = fieldColor, size = 22.dp)
-                Spacer(Modifier.width(12.dp))
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (query.isEmpty()) {
-                        Text("Apps, calculations, web, !yt …", style = TextStyle(fontFamily = HomeTheme.font, color = fieldColor.copy(alpha = 0.6f), fontSize = 16.sp))
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .liquidGlass(backdrop, fieldShape, glass.style(Surfaces.Pill, lightBackground))
+                        .clip(fieldShape)
+                        .padding(horizontal = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FieldModeIcon(controller, fieldColor, config.claude != "off")
+                    Spacer(Modifier.width(12.dp))
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                        if (query.isEmpty()) {
+                            Text(fieldHint(askMode), style = TextStyle(fontFamily = HomeTheme.font, color = fieldColor.copy(alpha = 0.6f), fontSize = 16.sp), maxLines = 1)
+                        }
+                        BasicTextField(
+                            value = query,
+                            onValueChange = { controller.searchQuery = it },
+                            singleLine = true,
+                            textStyle = TextStyle(fontFamily = HomeTheme.font, color = fieldColor, fontSize = 16.sp),
+                            cursorBrush = SolidColor(fieldColor),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                            keyboardActions = KeyboardActions(onGo = { results.firstOrNull()?.let { open(it) } }),
+                            modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                        )
                     }
-                    BasicTextField(
-                        value = query,
-                        onValueChange = { controller.searchQuery = it },
-                        singleLine = true,
-                        textStyle = TextStyle(fontFamily = HomeTheme.font, color = fieldColor, fontSize = 16.sp),
-                        cursorBrush = SolidColor(fieldColor),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                        keyboardActions = KeyboardActions(onGo = { results.firstOrNull()?.let { open(it) } }),
-                        modifier = Modifier.fillMaxWidth().focusRequester(focus),
-                    )
-                }
-                if (query.isNotEmpty()) {
-                    Box(Modifier.size(36.dp).clip(RoundedCornerShape(50)).clickable { controller.searchQuery = "" }, contentAlignment = Alignment.Center) {
-                        LauncherIcon(LauncherIcons.Close, contentDescription = "Clear", tint = fieldColor, size = 20.dp)
-                    }
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            if (query.isBlank()) {
-                if (suggestions.isNotEmpty()) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        for (app in suggestions) {
-                            Column(
-                                Modifier.width(64.dp).clip(RoundedCornerShape(16.dp)).clickable { open(SearchResult.App(app)) }.padding(4.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                AppIcon(app, false, Modifier.size(48.dp), app.label)
-                                Text(
-                                    app.label,
-                                    style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 11.sp, textAlign = TextAlign.Center),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
+                    if (query.isNotEmpty()) {
+                        Box(Modifier.size(36.dp).squishClickable { controller.searchQuery = "" }.clip(RoundedCornerShape(50)), contentAlignment = Alignment.Center) {
+                            LauncherIcon(LauncherIcons.Close, contentDescription = "Clear", tint = fieldColor, size = 20.dp)
                         }
                     }
                 }
-            } else {
-                LazyColumn(Modifier.fillMaxWidth()) {
-                    items(results, key = { resultKey(it) }) { result -> ResultRow(result) { open(result) } }
+                Spacer(Modifier.height(16.dp))
+                if (query.isBlank()) {
+                    ClipboardChips(controller, config, live)
+                    if (askMode) {
+                        AskClaudeHint(controller, claudeApp)
+                    } else if (suggestions.isNotEmpty()) {
+                        SuggestionRow(controller, suggestions, transition) { open(SearchResult.App(it)) }
+                    }
+                } else {
+                    LazyColumn(Modifier.fillMaxWidth()) {
+                        items(results, key = { resultKey(it) }) { result ->
+                            ResultRow(result, claudeApp, Modifier.animateItem()) { open(result) }
+                        }
+                    }
                 }
             }
         }
@@ -247,31 +254,55 @@ private fun resultKey(result: SearchResult): String = when (result) {
     is SearchResult.Calc -> "calc"
     is SearchResult.Bang -> "bang"
     is SearchResult.Web -> "web"
+    is SearchResult.Claude -> "claude"
 }
 
-private fun buildResults(query: String, apps: List<AppEntry>, usage: Map<String, Usage>, engine: String): List<SearchResult> {
+private fun fieldHint(askMode: Boolean): String = if (askMode) "Ask Claude anything…" else "Apps, calculations, web, Claude…"
+
+private fun buildResults(
+    query: String,
+    apps: List<AppEntry>,
+    usage: Map<String, Usage>,
+    engine: String,
+    claude: String,
+    askMode: Boolean,
+): List<SearchResult> {
     val text = query.trim()
     if (text.isEmpty()) return emptyList()
+    // Switched to Claude (the field's icon or the "Ask Claude" action): everything typed goes there.
+    if (askMode) return listOf(SearchResult.Claude(text))
+    if (claude != "off") {
+        ClaudeQuery.bang(text)?.let { prompt ->
+            return if (prompt.isEmpty()) emptyList() else listOf(SearchResult.Claude(prompt))
+        }
+    }
     val out = ArrayList<SearchResult>()
     Bangs.parse(text)?.let { (bang, rest) ->
         if (rest.isNotEmpty()) out += SearchResult.Bang(bang.name, Bangs.url(bang.url, rest), rest)
     }
-    Calculator.evaluate(text)?.let { out += SearchResult.Calc(text, it) }
+    val calc = Calculator.evaluate(text)
+    calc?.let { out += SearchResult.Calc(text, it) }
     if (!text.startsWith("!")) {
+        val ask = SearchResult.Claude(text)
+        // A question or a request puts Claude first (after a calculation, which answers at once).
+        val claudeFirst = claude == "first" || (claude == "questions" && calc == null && ClaudeQuery.looksLikeQuestion(text))
+        if (claudeFirst) out += ask
         Fuzzy.rank(text, apps, { it.label }, { usageBoost(it, usage) }).take(8).forEach { out += SearchResult.App(it) }
+        if (!claudeFirst && claude != "off") out += ask
         out += SearchResult.Web(text, WebSearch.url(engine, text))
     }
     return out
 }
 
 @Composable
-private fun ResultRow(result: SearchResult, onClick: () -> Unit) {
+private fun ResultRow(result: SearchResult, claudeApp: AppEntry?, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 16.sp)
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
+            // Inside a scrolling list: a short wait before squashing, so a scroll never does (D108).
+            .squishClickable(delayMs = 50L, onClick = onClick)
             .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -303,48 +334,231 @@ private fun ResultRow(result: SearchResult, onClick: () -> Unit) {
                 Spacer(Modifier.width(14.dp))
                 Text("Search the web for “${result.query}”", style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            is SearchResult.Claude -> {
+                if (claudeApp != null) AppIcon(claudeApp, false, Modifier.size(40.dp), null) else IconBox(LauncherIcons.Sparkle, HomeTheme.accent.copy(alpha = 0.35f))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Ask Claude", style = style.copy(fontWeight = FontWeight.Medium))
+                    Text(
+                        "“${result.prompt}”",
+                        style = style.copy(fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f)),
+                        maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                LauncherIcon(LauncherIcons.Sparkle, contentDescription = null, tint = Color.White.copy(alpha = 0.55f), size = 18.dp)
+            }
         }
     }
 }
 
 @Composable
-private fun IconBox(icon: Int) {
+private fun IconBox(icon: Int, background: Color = Color.White.copy(alpha = 0.12f)) {
     Box(
-        Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.12f)),
+        Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(background),
         contentAlignment = Alignment.Center,
     ) {
         LauncherIcon(icon, contentDescription = null, tint = Color.White, size = 22.dp)
     }
 }
 
+/**
+ * The field's leading icon: a magnifier, or a sparkle while search asks Claude. A tap switches
+ * between them (when Ask Claude is on), with a little turn and pop.
+ */
+@Composable
+private fun FieldModeIcon(controller: HomeController, color: Color, claudeOn: Boolean) {
+    val ask = controller.askClaudeMode && claudeOn
+    val turn by animateFloatAsState(if (ask) 1f else 0f, spring(dampingRatio = 0.55f, stiffness = 420f), label = "fieldMode")
+    Box(
+        Modifier
+            .size(32.dp)
+            .then(if (claudeOn) Modifier.squishClickable { controller.askClaudeMode = !controller.askClaudeMode } else Modifier)
+            .semantics { contentDescription = if (ask) "Asking Claude: tap to search" else "Search: tap to ask Claude" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.graphicsLayer { alpha = (1f - turn).coerceIn(0f, 1f); rotationZ = -90f * turn; scaleX = 1f - 0.4f * turn; scaleY = 1f - 0.4f * turn }) {
+            LauncherIcon(LauncherIcons.Search, contentDescription = null, tint = color, size = 22.dp)
+        }
+        Box(Modifier.graphicsLayer { alpha = turn.coerceIn(0f, 1f); rotationZ = 90f * (1f - turn); scaleX = 0.6f + 0.4f * turn; scaleY = 0.6f + 0.4f * turn }) {
+            LauncherIcon(LauncherIcons.Sparkle, contentDescription = null, tint = color, size = 22.dp)
+        }
+    }
+}
 
-// ---- search as part of the home screen (0.7.1, D104, D105) ----
+/**
+ * Watches the keyboard while search is on screen (D107): remembers its height once it is up, lets
+ * the field follow it down when it is put away while search stays open, and gives up on it when it
+ * never came.
+ */
+@Composable
+private fun KeyboardWatch(controller: HomeController) {
+    val insets = rememberFieldInsets()
+    LaunchedEffect(insets) {
+        var seenUp = false
+        snapshotFlow { insets.imeTarget() > insets.nav() + 1f }.collect { up ->
+            if (up) {
+                seenUp = true
+            } else if (seenUp && controller.searchOpen) {
+                // Put away (Back, or the keyboard's own button): the field glides down with it.
+                controller.expectKeyboard = false
+            }
+        }
+    }
+    LaunchedEffect(insets) {
+        // The final height, once an animation has ended (a keyboard can change height while up);
+        // remembered only then, so the line never jumps at the start of an animation.
+        snapshotFlow { insets.ime() }.collect { now ->
+            if (now > insets.nav() + 1f && kotlin.math.abs(now - insets.imeTarget()) < 1f) controller.rememberKeyboard(now)
+        }
+    }
+    LaunchedEffect(controller.searchOpen) {
+        if (controller.searchOpen && controller.expectKeyboard) {
+            kotlinx.coroutines.delay(1200)
+            if (controller.searchOpen && insets.imeTarget() <= insets.nav() + 1f) {
+                DebugLog.event("Home", "search: no keyboard came, the field goes down")
+                controller.expectKeyboard = false
+            }
+        }
+    }
+}
+
+/**
+ * Text copied in the last two minutes: Paste, and Ask Claude about it (D109). Only the clip's
+ * description is checked while search opens; the text is read when a button is pressed.
+ */
+@Composable
+private fun ClipboardChips(controller: HomeController, config: SearchConfig, live: Boolean) {
+    if (!config.clipboard || !live) return
+    var used by remember { mutableStateOf(false) }
+    val offered = remember(controller.searchOpen) { controller.searchOpen && controller.recentClip() }
+    if (!offered || used) return
+    val color = Color.White
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        GlassButton("Paste", color, icon = LauncherIcons.Paste) {
+            controller.clipText()?.let { controller.searchQuery = it.take(600) }
+            used = true
+        }
+        if (config.claude != "off") {
+            GlassButton("Ask Claude about it", color, icon = LauncherIcons.Sparkle) {
+                val text = controller.clipText()
+                if (text != null) {
+                    controller.askClaude(text)
+                    controller.closeSearch()
+                }
+                used = true
+            }
+        }
+    }
+}
+
+/** While search asks Claude with nothing typed: what Go will do. */
+@Composable
+private fun AskClaudeHint(controller: HomeController, claudeApp: AppEntry?) {
+    val whereTo = if (claudeApp != null && controller.data.settings.get(dev.liquid.launcher.core.settings.LauncherSettings.SearchClaudeTarget) == "app") "the Claude app" else "claude.ai"
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color.White.copy(alpha = 0.08f))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (claudeApp != null) AppIcon(claudeApp, false, Modifier.size(32.dp), null) else LauncherIcon(LauncherIcons.Sparkle, contentDescription = null, tint = Color.White, size = 24.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Ask Claude anything", style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium))
+            Text(
+                "Go sends it to $whereTo. Tap the sparkle to search again",
+                style = TextStyle(fontFamily = HomeTheme.font, color = Color.White.copy(alpha = 0.65f), fontSize = 12.sp),
+            )
+        }
+    }
+}
+
+/**
+ * Frequent apps. Each pops in on its own as search opens, one after another from the left,
+ * following the finger (their timing is a slice of search's progress).
+ */
+@Composable
+private fun SuggestionRow(controller: HomeController, suggestions: List<AppEntry>, transition: String, open: (AppEntry) -> Unit) {
+    val progress = controller.search
+    val staggered = transition != "fade" && transition != "depth"
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+        for ((i, app) in suggestions.withIndex()) {
+            Column(
+                Modifier
+                    .width(64.dp)
+                    .graphicsLayer {
+                        if (!staggered) return@graphicsLayer
+                        val t = ((progress.value - 0.3f - i * 0.07f) / 0.38f).coerceIn(0f, 1f)
+                        val s = 0.55f + 0.45f * easeOutBack(t)
+                        scaleX = s
+                        scaleY = s
+                        alpha = t
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+                    }
+                    .squishClickable { open(app) }
+                    .clip(RoundedCornerShape(16.dp))
+                    .padding(4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                AppIcon(app, false, Modifier.size(48.dp), app.label)
+                Text(
+                    app.label,
+                    style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 11.sp, textAlign = TextAlign.Center),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/** 0..1 with a small overshoot near the end. */
+private fun easeOutBack(t: Float): Float {
+    val c1 = 1.4f
+    val c3 = c1 + 1f
+    val x = t - 1f
+    return 1f + c3 * x * x * x + c1 * x * x
+}
+
+// ---- search as part of the home screen (0.7.1, D104, D105; 0.7.2, D107) ----
 
 private val PillFieldHeight = 54.dp
 private val PillFieldBottom = 14.dp
 
 /**
  * The search field inside the morphing pill: the pill itself becomes it (the same glass shape),
- * at the bottom of the screen, riding up with the keyboard. It edits [HomeController.searchQuery].
+ * above the keyboard. It edits [HomeController.searchQuery]. [canFocus]: false in a settings
+ * preview, which must never bring up a keyboard.
  */
 @Composable
-internal fun SearchPillField(controller: HomeController, color: Color, interactive: Boolean, modifier: Modifier) {
+internal fun SearchPillField(controller: HomeController, color: Color, interactive: Boolean, modifier: Modifier, canFocus: Boolean = true) {
     val focus = remember { FocusRequester() }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboard by controller.data.settings.derive { get(dev.liquid.launcher.core.settings.LauncherSettings.SearchOpenKeyboard) }
-    LaunchedEffect(controller.searchOpen) {
-        if (controller.searchOpen) {
-            if (keyboard) runCatching { focus.requestFocus() }
-        } else {
-            focusManager.clearFocus(force = true)
+    val claudeOn by controller.data.settings.derive { get(dev.liquid.launcher.core.settings.LauncherSettings.SearchClaude) != "off" }
+    if (canFocus) {
+        LaunchedEffect(controller.searchOpen) {
+            if (controller.searchOpen) {
+                if (keyboard) runCatching { focus.requestFocus() }
+            } else {
+                focusManager.clearFocus(force = true)
+            }
         }
     }
-    Row(modifier.padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-        LauncherIcon(LauncherIcons.Search, contentDescription = null, tint = color, size = 22.dp)
-        Spacer(Modifier.width(12.dp))
+    Row(modifier.padding(start = 12.dp, end = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+        FieldModeIcon(controller, color, claudeOn && interactive)
+        Spacer(Modifier.width(8.dp))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (controller.searchQuery.isEmpty()) {
-                Text("Apps, calculations, web, !yt …", style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.6f), fontSize = 16.sp), maxLines = 1)
+                Text(fieldHint(controller.askClaudeMode && claudeOn), style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.6f), fontSize = 16.sp), maxLines = 1)
             }
             BasicTextField(
                 value = controller.searchQuery,
@@ -354,6 +568,7 @@ internal fun SearchPillField(controller: HomeController, color: Color, interacti
                 cursorBrush = SolidColor(color),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = { controller.searchSubmit?.invoke() }),
+                enabled = canFocus,
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focus)
@@ -361,7 +576,7 @@ internal fun SearchPillField(controller: HomeController, color: Color, interacti
             )
         }
         if (controller.searchQuery.isNotEmpty() && interactive) {
-            Box(Modifier.size(36.dp).clip(RoundedCornerShape(50)).clickable { controller.searchQuery = "" }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(36.dp).squishClickable { controller.searchQuery = "" }.clip(RoundedCornerShape(50)), contentAlignment = Alignment.Center) {
                 LauncherIcon(LauncherIcons.Close, contentDescription = "Clear", tint = color, size = 20.dp)
             }
         }
@@ -369,10 +584,23 @@ internal fun SearchPillField(controller: HomeController, color: Color, interacti
 }
 
 /**
- * Search with its field in the pill at the bottom: results grow upwards from the field (the best
- * nearest the thumb), frequent apps sit just above it, and with nothing typed the space above holds
- * the search screen's own widgets. "One space" brings the content down from above while the home
- * screen glides down; "Zoom" brings it forward while the home screen falls back.
+ * Lays its content out above the open search field: [reserve] px from the bottom of the screen
+ * are left free (read while laying out, so the keyboard's movement never recomposes it).
+ */
+private fun Modifier.reserveBottom(reserve: androidx.compose.ui.unit.Density.() -> Float): Modifier =
+    layout { measurable, constraints ->
+        val height = constraints.maxHeight
+        val free = (height - reserve().roundToInt()).coerceIn(0, height)
+        val placeable = measurable.measure(constraints.copy(minHeight = free, maxHeight = free))
+        layout(constraints.maxWidth, height) { placeable.place(0, 0) }
+    }
+
+/**
+ * Search with its field in the pill: results grow upwards from the field (the best nearest the
+ * thumb), frequent apps sit just above it, and with nothing typed the space above holds the
+ * search screen's own widgets. The content rides with the field as it flows up to the keyboard
+ * and grows out of it ("Lift", "Zoom"); "One space" brings it down from above while the home
+ * screen glides down.
  */
 @Composable
 private fun BottomSearch(
@@ -385,26 +613,35 @@ private fun BottomSearch(
     suggestions: List<AppEntry>,
     results: List<SearchResult>,
     query: String,
+    claudeApp: AppEntry?,
+    pillOffsetDp: Int,
+    live: Boolean,
     open: (SearchResult) -> Unit,
 ) {
     val progress = controller.search
     val layout by controller.data.layout.layout.collectAsState()
     val widgets = layout.search
+    val insets = rememberFieldInsets()
+    val askMode = controller.askClaudeMode && config.claude != "off"
     Box(
         Modifier
             .fillMaxSize()
             .pointerInput(Unit) { detectTapGestures { if (!controller.searchEditing) controller.closeSearch() } }
     ) {
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = progress.value.coerceIn(0f, 1f) }.background(Color.Black.copy(alpha = config.dim)))
+        // A settings preview has no keyboard: a plate shows where it would be.
+        if (!live) PreviewKeyboard(controller, insets, Modifier.align(Alignment.BottomCenter))
         ProvideControls(controller, glass, null) {
             Column(
                 Modifier
                     .fillMaxSize()
                     .statusBarsPadding()
-                    .navigationBarsPadding()
-                    .imePadding()
-                    // Room for the field in the pill below.
-                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = PillFieldHeight + PillFieldBottom + 10.dp)
+                    // Room for the field where it ends up: above the keyboard that is coming.
+                    .reserveBottom {
+                        fieldBottom(controller, insets, 1f, pillOffsetDp.dp.toPx(), PillFieldBottom.toPx(), true) +
+                            PillFieldHeight.toPx() + 10.dp.toPx()
+                    }
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp)
                     .offset {
                         val p = progress.value
                         val dy = when (transition) {
@@ -416,47 +653,74 @@ private fun BottomSearch(
                     }
                     .graphicsLayer {
                         val p = progress.value.coerceIn(0f, 1f)
-                        alpha = if (transition == "space" || transition == "zoom") ((p - 0.04f) / 0.72f).coerceIn(0f, 1f) else p
-                        if (transition == "zoom") {
-                            // Comes forward as the home screen falls back.
-                            val scale = 1.08f - 0.08f * p
-                            scaleX = scale
-                            scaleY = scale
-                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+                        val grows = transition == "lift" || transition == "zoom"
+                        if (grows) {
+                            // Rides with the field on its way up, so the results grow out of it.
+                            val now = fieldBottom(controller, insets, p, pillOffsetDp.dp.toPx(), PillFieldBottom.toPx(), true)
+                            val end = fieldBottom(controller, insets, 1f, pillOffsetDp.dp.toPx(), PillFieldBottom.toPx(), true)
+                            translationY = (end - now).coerceAtLeast(0f)
                         }
+                        alpha = if (transition == "space" || grows) ((p - 0.04f) / 0.72f).coerceIn(0f, 1f) else p
+                        val scale = when (transition) {
+                            "lift" -> 0.92f + 0.08f * p
+                            // Comes forward as the home screen falls back.
+                            "zoom" -> 1.08f - 0.08f * p
+                            else -> 1f
+                        }
+                        scaleX = scale
+                        scaleY = scale
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
                     },
                 verticalArrangement = Arrangement.Bottom,
             ) {
                 if (query.isBlank()) {
-                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.Bottom) {
-                        SearchWidgets(controller, widgets, env)
-                    }
-                    if (suggestions.isNotEmpty()) {
-                        Spacer(Modifier.height(10.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            for (app in suggestions) {
-                                Column(
-                                    Modifier.width(64.dp).clip(RoundedCornerShape(16.dp)).clickable { open(SearchResult.App(app)) }.padding(4.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                ) {
-                                    AppIcon(app, false, Modifier.size(48.dp), app.label)
-                                    Text(
-                                        app.label,
-                                        style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 11.sp, textAlign = TextAlign.Center),
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                            }
+                    if (!askMode) {
+                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.Bottom) {
+                            SearchWidgets(controller, widgets, env)
                         }
+                    } else {
+                        Spacer(Modifier.weight(1f))
+                    }
+                    ClipboardChips(controller, config, live)
+                    if (askMode) {
+                        AskClaudeHint(controller, claudeApp)
+                    } else if (suggestions.isNotEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        SuggestionRow(controller, suggestions, transition) { open(SearchResult.App(it)) }
                     }
                 } else {
-                    // The best result nearest the field and the thumb.
+                    // The best result nearest the field and the thumb; rows slide as the ranking changes.
                     LazyColumn(Modifier.fillMaxWidth().weight(1f), reverseLayout = true) {
-                        items(results, key = { resultKey(it) }) { result -> ResultRow(result) { open(result) } }
+                        items(results, key = { resultKey(it) }) { result ->
+                            ResultRow(result, claudeApp, Modifier.animateItem()) { open(result) }
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+/** Where the keyboard would be, for the Search settings' preview: rises as search opens. */
+@Composable
+private fun PreviewKeyboard(controller: HomeController, insets: FieldInsets, modifier: Modifier) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .layout { measurable, constraints ->
+                val h = if (controller.expectKeyboard) controller.searchFieldLine(insets.nav(), 0f, 0f).roundToInt().coerceIn(0, constraints.maxHeight) else 0
+                val placeable = measurable.measure(androidx.compose.ui.unit.Constraints.fixed(constraints.maxWidth, h))
+                layout(constraints.maxWidth, h) { placeable.place(0, 0) }
+            }
+            .graphicsLayer {
+                val k = ((controller.search.value - 0.45f) / 0.55f).coerceIn(0f, 1f)
+                translationY = (1f - k) * (1f - k) * size.height
+            }
+            .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+            .background(Color(0xFF202226).copy(alpha = 0.94f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("Keyboard", style = TextStyle(fontFamily = HomeTheme.font, color = Color.White.copy(alpha = 0.35f), fontSize = 14.sp))
     }
 }
 

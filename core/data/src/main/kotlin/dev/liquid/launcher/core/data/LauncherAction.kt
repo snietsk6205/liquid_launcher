@@ -34,6 +34,9 @@ sealed interface LauncherAction {
     /** Shares today's study log to the Claude app, ready for a note. */
     data object TellClaude : LauncherAction
 
+    /** Opens search ready to ask Claude: what is typed goes to Claude (0.7.2). */
+    data object AskClaude : LauncherAction
+
     /** Opens the study plan link (or the calendar). */
     data object StudyPlan : LauncherAction
 
@@ -73,6 +76,7 @@ sealed interface LauncherAction {
         NextLayout -> "next_layout"
         Today -> "today"
         TellClaude -> "tell_claude"
+        AskClaude -> "ask_claude"
         StudyPlan -> "study_plan"
         FocusTimer -> "focus"
         Widgets -> "widgets"
@@ -88,6 +92,7 @@ sealed interface LauncherAction {
             None to "Nothing",
             OpenDrawer to "Open the app drawer",
             OpenSearch to "Search",
+            AskClaude to "Ask Claude",
             Notifications to "Notifications",
             QuickSettings to "Quick settings",
             LockScreen to "Lock the screen",

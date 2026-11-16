@@ -245,3 +245,43 @@ object WebSearch {
         query,
     )
 }
+
+/**
+ * When search offers to ask Claude (0.7.2, D109): "!c", "!claude" or "!ai" sends the rest straight
+ * away; text that reads as a question or a request (rather than the name of an app or a site) puts
+ * "Ask Claude" first, nearest the thumb.
+ */
+object ClaudeQuery {
+    val triggers = setOf("c", "claude", "ai")
+
+    /** The prompt after "!c ", "!claude " or "!ai " (empty while nothing follows), or null for other text. */
+    fun bang(input: String): String? {
+        val text = input.trim()
+        if (!text.startsWith("!")) return null
+        val space = text.indexOf(' ')
+        val trigger = (if (space < 0) text.substring(1) else text.substring(1, space)).lowercase(Locale.ROOT)
+        if (trigger !in triggers) return null
+        return if (space < 0) "" else text.substring(space + 1).trim()
+    }
+
+    /** Words that start a question or a request, in English and French. */
+    private val starters = setOf(
+        "how", "what", "what's", "whats", "why", "when", "where", "who", "whom", "which", "whose",
+        "is", "are", "am", "was", "were", "can", "could", "should", "would", "will", "do", "does", "did", "has", "have",
+        "explain", "write", "summarize", "summarise", "translate", "define", "describe", "help", "tell", "give",
+        "list", "compare", "rewrite", "fix", "plan", "suggest", "solve", "calculate", "show", "teach", "draft", "make",
+        "comment", "pourquoi", "quoi", "quel", "quelle", "quels", "quelles", "qui", "où", "quand", "combien",
+        "est-ce", "explique", "écris", "ecris", "traduis", "résume", "resume", "aide", "donne", "fais",
+    )
+
+    /** True when [input] reads as a question or a request for Claude rather than a name to find. */
+    fun looksLikeQuestion(input: String): Boolean {
+        val text = input.trim()
+        if (text.isEmpty() || text.startsWith("!")) return false
+        if (text.endsWith("?")) return true
+        val words = text.split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (words.size >= 5) return true
+        val first = words.first().lowercase(Locale.ROOT).trimEnd(',', ':')
+        return words.size >= 2 && first in starters
+    }
+}

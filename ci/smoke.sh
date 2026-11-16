@@ -370,6 +370,22 @@ sleep 1
 peek 10b-search-empty
 dump 10b-search-empty
 if on_screen 10b-search-empty "Add widget" exact; then pass "the search screen offers widgets"; else fail "the search screen offers widgets"; fi
+# 0.7.2: a question offers Ask Claude, and the field sits just above the keyboard (its height is in the log).
+adb shell input text "how%sdo%smagnets%swork"
+sleep 1.5
+peek 10c-search-claude
+dump 10c-search-claude
+if on_screen 10c-search-claude "Ask Claude" exact; then pass "a question offers Ask Claude"; else fail "a question offers Ask Claude"; fi
+KB=$(grep -o "keyboard height [0-9]* px" "$LOG" | tail -1 | grep -o "[0-9][0-9]*")
+SCREEN_H=$(adb shell wm size | grep -o "[0-9]*x[0-9]*" | tail -1 | cut -dx -f2)
+FIELD=$(python3 ci/find_text.py "$OUT/10c-search-claude.xml" "Search" exact | cut -d' ' -f2)
+if [ -n "$KB" ] && [ -n "$FIELD" ] && [ -n "$SCREEN_H" ]; then
+  KB_TOP=$((SCREEN_H - KB))
+  echo "      keyboard top $KB_TOP px, search field centre $FIELD px"
+  if [ "$FIELD" -lt "$KB_TOP" ] && [ "$FIELD" -gt $((KB_TOP - 260)) ]; then pass "the search field sits above the keyboard"; else fail "the search field sits above the keyboard"; fi
+else
+  echo "NOTE: no keyboard height in the log or no field found (keyboard '$KB', field '$FIELD'); field position not checked"
+fi
 adb shell input keyevent KEYCODE_BACK
 sleep 0.5
 adb shell input keyevent KEYCODE_BACK

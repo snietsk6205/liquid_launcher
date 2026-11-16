@@ -370,10 +370,10 @@ internal fun DrawerTabs(
                 Box(
                     Modifier
                         .size(m.height)
+                        .then(if (interactive) Modifier.squishClickable { bar.onButton(id) } else Modifier)
                         .drawBehind { controller.drawer.value }
                         .liquidGlass(backdrop, CircleShape, glass.style(Surfaces.Drawer, lightBackground))
-                        .clip(CircleShape)
-                        .then(if (interactive) Modifier.clickable { bar.onButton(id) } else Modifier),
+                        .clip(CircleShape),
                     contentAlignment = Alignment.Center,
                 ) { LauncherIcon(buttonIcon(id), contentDescription = id, tint = color, size = m.icon) }
             }
@@ -450,7 +450,7 @@ internal fun TabsRow(
             }
             for (id in bar.buttons) {
                 Box(
-                    Modifier.size(buttonSize).clip(CircleShape).then(if (interactive) Modifier.clickable { bar.onButton(id) } else Modifier),
+                    Modifier.size(buttonSize).then(if (interactive) Modifier.squishClickable { bar.onButton(id) } else Modifier).clip(CircleShape),
                     contentAlignment = Alignment.Center,
                 ) { LauncherIcon(buttonIcon(id), contentDescription = id, tint = color, size = m.icon) }
             }
@@ -578,7 +578,7 @@ private fun MenuRow(label: String, icon: Int?, color: Color, indent: Boolean = f
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .squishClickable(onClick = onClick)
             .padding(start = if (indent) 54.dp else 20.dp, end = 20.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

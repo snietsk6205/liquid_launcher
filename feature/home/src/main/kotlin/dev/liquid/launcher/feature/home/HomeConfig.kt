@@ -53,8 +53,11 @@ data class MotionConfig(
     val pickUpTick: Boolean = true,
     /** "reveal", "scale", "fade" or "system". */
     val launch: String = "reveal",
-    /** How search opens: "space" (like the drawer, D99), "depth" or "fade". */
-    val searchTransition: String = "space",
+    /** How search opens: "lift" (D107), "space" (like the drawer, D99), "zoom", "depth" or "fade". */
+    val searchTransition: String = "lift",
+    /** How presses feel: "squishy", "bouncy", "gentle" or "off" (D108). */
+    val press: String = "squishy",
+    val pressDepth: Float = 0.5f,
     /** 1 = normal; 2 = twice as fast. */
     val speed: Float = 1f,
     /** "calm", "liquid" or "lively" (see Motion). */
@@ -68,6 +71,8 @@ fun SettingsStore.motionConfig() = MotionConfig(
     pickUpTick = get(S.HapticPickUp),
     launch = get(S.LaunchAnimation),
     searchTransition = get(S.SearchTransition),
+    press = get(S.PressFeel),
+    pressDepth = get(S.PressDepth) / 100f,
     speed = get(S.MotionSpeed) / 100f,
     style = get(S.MotionStyle),
 )
@@ -384,9 +389,30 @@ fun SettingsStore.glassConfig(): GlassConfig {
     return GlassConfig(quality, get(S.GlassTintMode), surfaces, dev.liquid.launcher.core.settings.ColorSetting.parse(get(S.ThemeGlassColor))?.let { Color(it) }, large, get(S.GlassRim) / 100f)
 }
 
-data class SearchConfig(val engine: String, val keyboard: Boolean, val dim: Float, val blurDp: Int)
+data class SearchConfig(
+    val engine: String,
+    val keyboard: Boolean,
+    val dim: Float,
+    val blurDp: Int,
+    /** "keyboard", "bottom" or "top" (0.7.2, D107). */
+    val field: String = "keyboard",
+    /** How far the home screen falls back as search opens (Lift, Zoom), 0..1. */
+    val homeScale: Float = 0.1f,
+    /** "questions", "always", "first" or "off" (D109). */
+    val claude: String = "questions",
+    val clipboard: Boolean = true,
+)
 
-fun SettingsStore.searchConfig() = SearchConfig(get(S.SearchEngine), get(S.SearchOpenKeyboard), get(S.SearchDim) / 100f, get(S.SearchBlur))
+fun SettingsStore.searchConfig() = SearchConfig(
+    engine = get(S.SearchEngine),
+    keyboard = get(S.SearchOpenKeyboard),
+    dim = get(S.SearchDim) / 100f,
+    blurDp = get(S.SearchBlur),
+    field = get(S.SearchField),
+    homeScale = get(S.SearchHomeScale) / 100f,
+    claude = get(S.SearchClaude),
+    clipboard = get(S.SearchClipboard),
+)
 
 /** Wallpaper treatment on the home screen. */
 data class WallpaperLook(val homeBlurDp: Int, val homeDim: Float)

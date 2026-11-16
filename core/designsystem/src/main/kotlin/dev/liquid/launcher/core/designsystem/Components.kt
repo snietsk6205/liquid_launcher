@@ -68,6 +68,8 @@ object LauncherIcons {
     val HeartOutline = R.drawable.ic_heart_outline
     val Filter = R.drawable.ic_filter
     val Crop = R.drawable.ic_crop
+    val Sparkle = R.drawable.ic_sparkle
+    val Paste = R.drawable.ic_paste
 
     /** Icons a drawer tab or quick pill item can be given, by stable name. */
     val named: Map<String, Int> by lazy {

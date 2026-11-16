@@ -760,12 +760,13 @@ internal fun GraphicsLayerScope.wallpaperInDrawerTransition(p: Float, motion: Dr
  * The wallpaper's part in search opening as "One space" (0.7.0, D99): the drawer's drift, the
  * other way, applied on top of the drawer's own (search and the drawer are never both open).
  */
-internal fun GraphicsLayerScope.wallpaperInSearchTransition(s: Float) {
+internal fun GraphicsLayerScope.wallpaperInSearchTransition(s: Float, drift: Boolean = true) {
     if (s <= 0f) return
     val scale = 1f + 0.07f * s
     scaleX *= scale
     scaleY *= scale
-    translationY += s * 0.028f * size.height
+    // "Lift" and "Zoom" only grow (0.7.2): the home screen falls back, it does not move down.
+    if (drift) translationY += s * 0.028f * size.height
 }
 
 // ---- the list ----

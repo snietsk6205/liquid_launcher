@@ -4,6 +4,10 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imeAnimationTarget
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
@@ -64,9 +68,10 @@ fun MorphingPill(
     modifier: Modifier,
 ) {
     val density = LocalDensity.current
+    val insets = rememberFieldInsets()
     val open by remember { derivedStateOf { controller.drawer.value >= 0.5f } }
-    // Search grows the pill too; the two are never open together.
-    val searchMode by remember { derivedStateOf { controller.search.value > controller.drawer.value && controller.search.value > 0.001f } }
+    // Search grows the pill too (unless its field is at the top); the two are never open together.
+    val searchMode by remember { derivedStateOf { controller.searchInPill && controller.search.value > controller.drawer.value && controller.search.value > 0.001f } }
     val searchOpen by remember { derivedStateOf { controller.search.value >= 0.5f } }
     val showItems by remember { derivedStateOf { controller.morph() < 0.45f } }
     val showSearch by remember { derivedStateOf { controller.morph() > 0.02f } }
@@ -86,7 +91,7 @@ fun MorphingPill(
 
     Box(
         modifier
-            .morphLayout(controller, config, if (searchMode) 0.dp else extra)
+            .morphLayout(controller, config, if (searchMode) 0.dp else extra, insets)
             .liquidGlass(backdrop, shape, glass.style(surface, if (open) drawerLight else lightBackground))
             .clip(shape)
             .then(if (interactive) gestures else Modifier),
@@ -109,6 +114,7 @@ fun MorphingPill(
                 controller = controller,
                 color = homeColor,
                 interactive = interactive && searchOpen,
+                canFocus = interactive,
                 modifier = Modifier
                     .requiredSize(searchWidth, SearchHeight)
                     .graphicsLayer { alpha = ((controller.search.value - 0.35f) / 0.65f).coerceIn(0f, 1f) },
@@ -145,19 +151,66 @@ private class MorphCorner(private val from: Int, private val to: Int, private va
     }
 }
 
-/** Size and bottom margin between the pill's and the search field's, by drawer position. */
-private fun Modifier.morphLayout(controller: HomeController, config: PillConfig, extra: androidx.compose.ui.unit.Dp): Modifier =
+/**
+ * Size and distance from the bottom of the screen between the pill's and the search field's, by
+ * the drawer's or search's position. The bottom includes the navigation bar and the keyboard
+ * (read here, while laying out, so they never recompose anything).
+ */
+private fun Modifier.morphLayout(controller: HomeController, config: PillConfig, extra: androidx.compose.ui.unit.Dp, insets: FieldInsets): Modifier =
     layout { measurable, constraints ->
         val p = controller.morph().coerceIn(0f, 1f)
         val full = constraints.maxWidth.toFloat()
         val width = lerp(full * config.widthFraction, full - SearchSideMargin.toPx() * 2, p)
         val height = lerp(config.heightDp.dp.toPx(), (SearchHeight + extra).toPx(), p)
-        val bottom = lerp(config.offsetDp.dp.toPx(), SearchBottomMargin.toPx(), p)
+        val searchy = controller.searchInPill && controller.search.value > controller.drawer.value
+        val bottom = fieldBottom(controller, insets, p, config.offsetDp.dp.toPx(), SearchBottomMargin.toPx(), searchy)
         val placeable = measurable.measure(Constraints.fixed(width.roundToInt(), height.roundToInt()))
-        layout(constraints.maxWidth, (height + bottom).roundToInt()) {
+        val total = (height + bottom).roundToInt().coerceAtMost(constraints.maxHeight.coerceAtLeast(1))
+        layout(constraints.maxWidth, total) {
             placeable.place(((full - width) / 2f).roundToInt(), 0)
         }
     }
+
+/**
+ * The insets the pill and search's field sit on: navigation bar, keyboard now, and the keyboard
+ * the running animation is heading for. Read while laying out or drawing.
+ */
+@androidx.compose.runtime.Stable
+internal class FieldInsets(
+    private val density: Density,
+    private val nav: WindowInsets,
+    private val ime: WindowInsets,
+    private val target: WindowInsets,
+) {
+    fun nav(): Float = nav.getBottom(density).toFloat()
+    fun ime(): Float = ime.getBottom(density).toFloat()
+    fun imeTarget(): Float = target.getBottom(density).toFloat()
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+internal fun rememberFieldInsets(): FieldInsets {
+    val density = LocalDensity.current
+    val nav = WindowInsets.navigationBars
+    val ime = WindowInsets.ime
+    val target = WindowInsets.imeAnimationTarget
+    return remember(density, nav, ime, target) { FieldInsets(density, nav, ime, target) }
+}
+
+/**
+ * Distance in px from the bottom of the screen to the bottom of the pill turning into a field
+ * at [p] (0 = the pill, 1 = the field). For search (0.7.2, D107) the open field sits above the
+ * keyboard that is coming, so the pill flows straight there and the keyboard slides in under it;
+ * it never dips below a keyboard that is on screen.
+ */
+internal fun fieldBottom(controller: HomeController, insets: FieldInsets, p: Float, closedOffset: Float, openMargin: Float, searchy: Boolean): Float {
+    val nav = insets.nav()
+    val ime = insets.ime()
+    val closed = maxOf(nav, ime) + closedOffset
+    val line = if (searchy) controller.searchFieldLine(nav, ime, insets.imeTarget()) else maxOf(nav, ime)
+    val bottom = lerp(closed, line + openMargin, p.coerceIn(0f, 1f))
+    return if (ime > nav) maxOf(bottom, ime + openMargin) else bottom
+}
 
 private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
 

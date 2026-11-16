@@ -49,9 +49,11 @@ fun Modifier.iconGestures(
     val current by rememberUpdatedState(handler)
     val coords by rememberUpdatedState(coordinates)
     if (!enabled) return this
+    // The item squishes under the finger and springs back when tapped (0.7.2, D108).
+    val feel = rememberPressFeel()
     // Remembered so recompositions (which happen during a drag) never restart the detector:
     // a new pointerInput lambda would cancel the gesture in progress.
-    val gesture = remember { Modifier.iconPointerInput({ current }, { coords() }) }
+    val gesture = remember(feel) { Modifier.iconPointerInput({ current }, { coords() }, feel).pressSquash(feel) }
     return this.then(gesture)
 }
 
@@ -60,11 +62,14 @@ private enum class Early { Tap, Gone, SwipeUp, SwipeDown }
 private fun Modifier.iconPointerInput(
     handler: () -> IconGestureHandler,
     coords: () -> LayoutCoordinates?,
+    feel: PressFeel,
 ): Modifier {
     return pointerInput(Unit) {
         val slop = viewConfiguration.touchSlop
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
+            // A short wait before squashing, so a swipe through the item (pager, drawer list) never does.
+            feel.press(delayMs = 60L)
             // Before the long press: a tap, a swipe of the item's own, or a swipe for a parent.
             val early = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                 var moved = Offset.Zero
@@ -89,6 +94,12 @@ private fun Modifier.iconPointerInput(
                 }
                 @Suppress("UNREACHABLE_CODE")
                 Early.Gone
+            }
+            when (early) {
+                Early.Tap -> feel.release()
+                Early.Gone, Early.SwipeUp, Early.SwipeDown -> feel.cancel()
+                // A long press: the item springs back as the menu opens or it is picked up.
+                null -> feel.release()
             }
             when (early) {
                 Early.Tap -> {

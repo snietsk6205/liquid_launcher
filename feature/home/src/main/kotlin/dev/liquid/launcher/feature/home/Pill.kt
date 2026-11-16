@@ -69,6 +69,7 @@ fun actionIcon(action: LauncherAction): Int = when (action) {
     LauncherAction.SaveLayout -> LauncherIcons.Save
     LauncherAction.Today, LauncherAction.StudyPlan -> LauncherIcons.School
     LauncherAction.TellClaude -> LauncherIcons.Chat
+    LauncherAction.AskClaude -> LauncherIcons.Sparkle
     LauncherAction.FocusTimer -> LauncherIcons.Schedule
     LauncherAction.Widgets -> LauncherIcons.Widgets
     is LauncherAction.Section -> when (action.id) {
@@ -162,13 +163,18 @@ internal fun RowScope.PillSlotView(
     controller: HomeController,
     interactive: Boolean,
 ) {
-    fun Modifier.press(onClick: () -> Unit): Modifier =
-        if (!interactive) this else combinedClickable(
-            interactionSource = null,
+    // Each item squishes under the finger (0.7.2, D108); the pill's glass stays put around it.
+    @Composable
+    fun Modifier.press(onClick: () -> Unit): Modifier {
+        if (!interactive) return this
+        val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+        return combinedClickable(
+            interactionSource = interaction,
             indication = null,
             onClick = onClick,
             onLongClick = { controller.run(config.longPress) },
-        )
+        ).squishOn(interaction)
+    }
 
     val textStyle = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp, fontWeight = FontWeight.Medium)
     when (slot) {
@@ -217,8 +223,8 @@ internal fun RowScope.PillSlotView(
         is PillSlot.Action -> Box(
             Modifier
                 .size((config.iconSizeDp + 16).dp)
-                .clip(CircleShape)
-                .press { controller.run(slot.action) },
+                .press { controller.run(slot.action) }
+                .clip(CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             LauncherIcon(actionIcon(slot.action), contentDescription = null, tint = color, size = config.iconSizeDp.dp)
@@ -229,8 +235,8 @@ internal fun RowScope.PillSlotView(
             Box(
                 Modifier
                     .size((config.iconSizeDp + 16).dp)
-                    .clip(CircleShape)
-                    .press { if (app != null) controller.launch(app) },
+                    .press { if (app != null) controller.launch(app) }
+                    .clip(CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 AppIcon(app, true, Modifier.size((config.iconSizeDp + 6).dp), app?.label)

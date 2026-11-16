@@ -563,6 +563,10 @@ private fun BlockCard(block: StudyEvent, now: Long, prefs: TodayPrefs, focus: de
                 }
             }
             block.link?.let { link -> buttons += { ActionChip("Open link", color, icon = LauncherIcons.Web) { controller.openStudyLink(link) } } }
+            // Help with this block from Claude: its title, steps and notes as the start of a chat (0.7.2, D109).
+            if (block.status == StudyStatus.Open && controller.data.settings.get(dev.liquid.launcher.core.settings.LauncherSettings.SearchClaude) != "off") {
+                buttons += { ActionChip("Ask Claude", color, icon = LauncherIcons.Sparkle) { controller.askClaudeAbout(block) } }
+            }
             Row(
                 Modifier.fillMaxWidth().padding(top = 8.dp).horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp, if (prefs.buttonsEnd) Alignment.End else Alignment.Start),

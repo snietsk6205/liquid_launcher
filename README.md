@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.7.2: search flows straight to the keyboard: the pill becomes the search field just above where the keyboard will be (its height is remembered), the home screen falls back into the blurred, growing wallpaper ("Lift", the new default) and the results grow out of the field, with a live preview and new options in Settings → Search. Icons, pill items, results, menus and buttons squish like a drop when pressed and wobble back (Motion → Pressing icons and buttons). Claude in the launcher: "Ask Claude" in search (questions first, `!c`, or tap the search icon to switch to Claude), an "Ask Claude" action for gestures, the pill and the home menu, Paste / Ask Claude for text you just copied, and "Ask Claude" on each study block in Today.
+
 0.5.0 (Phase 2, part 3 of 3, the end of Phase 2): pinch and two-finger swipes, swipes along the side edges, double tap per home icon, any screen of an app as an action, a Motion and haptics section (ticks, how apps and search open, animation speed) and an in-app updater from GitHub releases.
 
 0.4.2: themed icons change colour in the same frame as the wallpaper (coloured while drawing, palette worked out before the switch, previewed in the wallpaper screen), icons you picked follow too (or keep their colours), a round button opens the tag list with a liquid morph, and the letter column slides with your finger while the app list stays still.

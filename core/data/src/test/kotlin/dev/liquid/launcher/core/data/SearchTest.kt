@@ -83,3 +83,32 @@ class SearchTest {
         assertNull(PillSlot.decode("bogus"))
     }
 }
+
+class ClaudeQueryTest {
+    @Test
+    fun bangsSendTheRestToClaude() {
+        assertEquals("what is entropy", ClaudeQuery.bang("!c what is entropy"))
+        assertEquals("plan my week", ClaudeQuery.bang("!Claude plan my week"))
+        assertEquals("", ClaudeQuery.bang("!ai"))
+        assertNull(ClaudeQuery.bang("!yt cats"))
+        assertNull(ClaudeQuery.bang("chrome"))
+    }
+
+    @Test
+    fun questionsAndRequestsAreRecognised() {
+        assertTrue(ClaudeQuery.looksLikeQuestion("is 91 prime?"))
+        assertTrue(ClaudeQuery.looksLikeQuestion("how do magnets work"))
+        assertTrue(ClaudeQuery.looksLikeQuestion("explain fourier series"))
+        assertTrue(ClaudeQuery.looksLikeQuestion("pourquoi le ciel est bleu"))
+        assertTrue(ClaudeQuery.looksLikeQuestion("the best order to revise thermodynamics chapters"))
+    }
+
+    @Test
+    fun namesAreNotQuestions() {
+        assertTrue(!ClaudeQuery.looksLikeQuestion("chrome"))
+        assertTrue(!ClaudeQuery.looksLikeQuestion("google maps"))
+        assertTrue(!ClaudeQuery.looksLikeQuestion("how"))
+        assertTrue(!ClaudeQuery.looksLikeQuestion("12*7"))
+        assertTrue(!ClaudeQuery.looksLikeQuestion("!yt lofi music"))
+    }
+}

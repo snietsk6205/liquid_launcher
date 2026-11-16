@@ -189,7 +189,7 @@ private fun pageEnv(env: PageEnv, page: dev.liquid.launcher.core.data.HomePage):
 private fun savedImageKey(wallpaper: WallpaperStore): Any? = wallpaper.image.collectAsState().value
 
 /** How the home screen is shown: the real thing, or a miniature inside the settings app. */
-enum class HomeMode { Live, Preview, PreviewDrawer, PreviewDrawerMotion, PreviewDrawerIndex, PreviewMenu, PreviewHomeMenu, PreviewToday }
+enum class HomeMode { Live, Preview, PreviewDrawer, PreviewDrawerMotion, PreviewDrawerIndex, PreviewMenu, PreviewHomeMenu, PreviewToday, PreviewSearch }
 
 @Composable
 fun HomeScreen(
@@ -243,6 +243,8 @@ private fun HomeScreenBody(
         Haptics.config = motionConfig
         MotionScale.speed = motionConfig.speed
         Motion.style = motionConfig.style
+        PressStyle.style = motionConfig.press
+        PressStyle.depth = motionConfig.pressDepth
         if (live) controller.view = rootView
         controller.motionConfig = motionConfig
     }
@@ -397,6 +399,18 @@ private fun HomeScreenBody(
             }
         }
     }
+    if (mode == HomeMode.PreviewSearch) {
+        // Settings → Search: opens and closes search in a loop, so its transition can be tuned.
+        LaunchedEffect(search, motionConfig.searchTransition) {
+            while (true) {
+                delay(700)
+                controller.openSearch()
+                delay(2300)
+                controller.closeSearch()
+                delay(1400)
+            }
+        }
+    }
     if (mode == HomeMode.PreviewMenu) {
         val sample = apps.firstOrNull { !it.hidden }
         LaunchedEffect(sample, controller.screenHeight) {
@@ -414,6 +428,12 @@ private fun HomeScreenBody(
     val overlayBackdrop = rememberCombinedBackdrop(homeBackdrop, drawerLayer)
     val drawerLight = lightBackground && drawerConfig.dim < 0.35f
     val morph = pill.enabled && !pill.top && motion.pillMorph && !controller.editMode
+    // Where search's field goes (0.7.2, D107): in the pill, above the keyboard, unless it is asked for at the top.
+    SideEffect {
+        controller.searchInPill = morph && search.field != "top"
+        controller.searchField = search.field
+        controller.searchKeyboard = search.keyboard
+    }
     val density = LocalDensity.current
     val settle = handover.first
 
@@ -481,7 +501,11 @@ private fun HomeScreenBody(
                 Modifier.fillMaxSize().graphicsLayer {
                     if (placing == null) {
                         wallpaperInDrawerTransition(controller.drawer.value, motionShown)
-                        if (motionConfig.searchTransition == "space") wallpaperInSearchTransition(controller.searchAmount)
+                        when (motionConfig.searchTransition) {
+                            "space" -> wallpaperInSearchTransition(controller.searchAmount)
+                            // Grows into its blur, as for the drawer (D107).
+                            "lift", "zoom" -> wallpaperInSearchTransition(controller.searchAmount, drift = false)
+                        }
                         // A wallpaper or layout change: the new wallpaper settles in under the old picture (D103).
                         if (controller.transitionShot != null) with(WallpaperTransitions) { newWallpaperArriving(controller.transitionProgress.value, transitionStyle) }
                     }
@@ -541,6 +565,13 @@ private fun HomeScreenBody(
                         // Search: the home screen glides down under the finger ("space", D99) or sinks back ("depth").
                         val s = controller.searchAmount
                         if (s > 0f) when (motionConfig.searchTransition) {
+                            "lift" -> {
+                                // Falls back into the blur, sinking a little, while the pill lifts to the keyboard (D107).
+                                val e = 1f - (1f - s) * (1f - s)
+                                alpha *= (1f - s * 1.45f).coerceIn(0f, 1f)
+                                scale *= 1f - search.homeScale * e
+                                translationY += e * 0.035f * size.height
+                            }
                             "space" -> {
                                 alpha *= (1f - s * 1.7f).coerceIn(0f, 1f)
                                 translationY += s * 0.16f * size.height
@@ -552,7 +583,7 @@ private fun HomeScreenBody(
                             }
                             "zoom" -> {
                                 // Falls back into the distance while search comes forward (D104).
-                                scale *= 1f - 0.12f * s
+                                scale *= 1f - search.homeScale * 1.2f * s
                                 alpha *= (1f - s * 1.5f).coerceIn(0f, 1f)
                             }
                         }
@@ -695,8 +726,12 @@ private fun HomeScreenBody(
         val searchShown by remember { derivedStateOf { controller.searchOpen || controller.search.value > 0.001f } }
         val searchEnv = PageEnv(grid, clock, gestures, glass, lightBackground, contentColor, shadow, appIndex, wallpaperBackdrop, false, live)
         // With the pill turning into the search field, search sits under the pill (D104).
-        if (live && searchShown && morph) {
-            SearchOverlay(controller, search, glass, lightBackground, overlayBackdrop, apps, motionConfig.searchTransition, motion, fieldInPill = true, env = searchEnv)
+        val searchHere = live || mode == HomeMode.PreviewSearch
+        if (searchHere && searchShown && controller.searchInPill) {
+            SearchOverlay(
+                controller, search, glass, lightBackground, overlayBackdrop, apps, motionConfig.searchTransition, motion,
+                fieldInPill = true, env = searchEnv, pillOffsetDp = pill.offsetDp, live = live,
+            )
         }
         if (morph) {
             MorphingPill(
@@ -709,23 +744,24 @@ private fun HomeScreenBody(
                 apps = appIndex,
                 controller = controller,
                 interactive = live,
+                // Its distance from the bottom (navigation bar, keyboard) is worked out inside (D107).
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .imePadding()
                     .graphicsLayer {
                         // Only the closed pill makes way for a sheet; a pill turned into a search field (drawer or search) stays.
                         val away = pillAway * (1f - controller.morph()).coerceIn(0f, 1f)
-                        alpha = returnState.progress.floatValue * (1f - away)
-                        translationY = away * 24.dp.toPx()
+                        // With search's field at the top, the pill steps away as search opens.
+                        val s = if (controller.searchInPill) 0f else controller.searchAmount
+                        alpha = returnState.progress.floatValue * (1f - away) * (1f - s * 2f).coerceIn(0f, 1f)
+                        translationY = away * 24.dp.toPx() + s * 40.dp.toPx()
                     },
             )
         }
 
         // Each of these keeps its own entrance and leaves through Presence: a quick fade and sink,
         // the same for all of them.
-        if (live && searchShown && !morph) {
-            SearchOverlay(controller, search, glass, lightBackground, overlayBackdrop, apps, motionConfig.searchTransition, motion, env = searchEnv)
+        if (searchHere && searchShown && !controller.searchInPill) {
+            SearchOverlay(controller, search, glass, lightBackground, overlayBackdrop, apps, motionConfig.searchTransition, motion, env = searchEnv, live = live)
         }
         Presence(controller.openFolder?.let { id -> layout.find(id)?.second?.takeIf { it.kind == ItemKind.FOLDER } }) { folder ->
             FolderOverlay(folder, appIndex, controller, glass, lightBackground, overlayBackdrop, grid)
