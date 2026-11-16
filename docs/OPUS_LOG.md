@@ -661,7 +661,7 @@ keyboard will be before it shows, so 0.7.2 remembers it.
 |---|---|---|
 | `HomeController.kt` | `keyboardHeight` (remembered in `state.keyboardHeight`), `expectKeyboard`, `searchFieldLine` (remembered height, moving to the real one in step with the keyboard), `searchInPill`, `searchField`; `morph()` ignores search when its field is at the top | D107 |
 | `PillMorph.kt` | `FieldInsets` (navigation bar, keyboard, keyboard animation target, read while laying out), `fieldBottom`; the pill computes its whole distance from the bottom instead of `navigationBarsPadding().imePadding()` | D107 |
-| `SearchOverlay.kt` | Rewritten around the field: `KeyboardWatch` (remember height at the end of each animation, follow the keyboard down when put away, give up after 1.2 s), content laid out above the field's final place and riding with it, "Lift"; `SearchResult.Claude`, `FieldModeIcon` (search ↔ Claude), `ClipboardChips`, `AskClaudeHint`, `SuggestionRow` (frequent apps pop in one after another with the finger), result rows slide when the ranking changes (`animateItem`), `PreviewKeyboard` for the settings preview | D107, D109 |
+| `SearchOverlay.kt` | Rewritten around the field: `KeyboardWatch` (remember height at the end of each animation, follow the keyboard down when put away, give up after 3 s, taken back by a keyboard that comes later), content laid out above the field's final place and riding with it, "Lift"; `SearchResult.Claude`, `FieldModeIcon` (search ↔ Claude), `ClipboardChips`, `AskClaudeHint`, `SuggestionRow` (frequent apps pop in one after another with the finger), result rows slide when the ranking changes (`animateItem`), `PreviewKeyboard` for the settings preview | D107, D109 |
 | `HomeScreen.kt`, `Drawer.kt`, `Previews.kt` | "Lift" for the home screen (falls back, fades, sinks a little) and the wallpaper (grows into its blur); `HomeMode.PreviewSearch` loops search in Settings → Search | D107 |
 | `PressFeel.kt` (new), `Gestures.kt`, `Pill.kt`, `Controls.kt`, `HomeMenu.kt`, `AppMenu.kt`, `DrawerParts.kt` | `PressFeel` / `squishOn` / `squishClickable`; every icon through `iconGestures`, pill items, glass buttons, menus, tab buttons | D108 |
 | `core/data/Search.kt`, `LauncherAction.kt` | `ClaudeQuery` (bangs `!c` `!claude` `!ai`, question detection in English and French), `LauncherAction.AskClaude` | D109 |
@@ -673,6 +673,14 @@ keyboard will be before it shows, so 0.7.2 remembers it.
 Not changed: the drawer's field and its keyboard (it keeps `imePadding`; its own "Open the keyboard" is off by
 default), Fable's drawer transition, the 0.7.1 widgets on the search screen, the settings app's own buttons (they are
 Material and live in a module that does not depend on `feature/home`).
+
+**Run 57** (build 57): unit tests and APK green; on the emulator every search check passed, including the new
+ones: a question offers "Ask Claude", and the field's centre sat 108 px above the keyboard (keyboard top 1517 px,
+height 883 px remembered). The log also showed the emulator's keyboard taking 2.7 s to come, after the 1.2 s wait had
+already sent the field down: the wait is now 3 s and a late keyboard takes the field back. The one failure, 12b, was
+the test's: the system launcher was in front when it began (a redirect was lost while the accessibility service
+reconnected, "redirect in 260 ms" with no REDIRECT after it), so its long press opened the Pixel launcher's own widget
+list. 12b now starts the launcher first when it is not in front. No release from run 57.
 
 ### Ideas offered to the user, not built
 1. A Claude home widget: a glass card with the field and the last three questions, so a question starts from the home

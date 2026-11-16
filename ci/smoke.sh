@@ -592,6 +592,14 @@ clear_anr
 # widgets; the system asks once whether the launcher may add widgets ("Create"); the clock widget then runs on the home
 # screen as the app's own views (a TextClock or an AnalogClock in the screen tree).
 echo "== 12b. Another app's widget"
+# The launcher must be in front: on a slow emulator a redirect can be lost while the accessibility service reconnects
+# (run 57: the long press below reached the system launcher and opened its own widget list).
+if ! wait_top "$HOME_ACTIVITY" 2; then
+  echo "NOTE: the launcher was not in front before 12b; starting it"
+  adb shell am start -n "$HOME_ACTIVITY" >/dev/null
+  wait_top "$HOME_ACTIVITY" 6 || echo "NOTE: the launcher is still not in front"
+  sleep 1.5
+fi
 adb shell input swipe 540 1250 540 1250 1000
 sleep 1.5
 dump 12b-menu

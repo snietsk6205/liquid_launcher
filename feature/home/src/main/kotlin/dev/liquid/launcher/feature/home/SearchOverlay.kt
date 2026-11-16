@@ -399,6 +399,10 @@ private fun KeyboardWatch(controller: HomeController) {
         snapshotFlow { insets.imeTarget() > insets.nav() + 1f }.collect { up ->
             if (up) {
                 seenUp = true
+                // A keyboard that came late (after the wait below gave up) takes the field again.
+                if (controller.searchOpen && controller.searchKeyboard && controller.searchField == "keyboard" && controller.searchInPill) {
+                    controller.expectKeyboard = true
+                }
             } else if (seenUp && controller.searchOpen) {
                 // Put away (Back, or the keyboard's own button): the field glides down with it.
                 controller.expectKeyboard = false
@@ -414,7 +418,8 @@ private fun KeyboardWatch(controller: HomeController) {
     }
     LaunchedEffect(controller.searchOpen) {
         if (controller.searchOpen && controller.expectKeyboard) {
-            kotlinx.coroutines.delay(1200)
+            // Generous: on a slow phone the keyboard can take two seconds or more (the emulator: 2.7 s).
+            kotlinx.coroutines.delay(3000)
             if (controller.searchOpen && insets.imeTarget() <= insets.nav() + 1f) {
                 DebugLog.event("Home", "search: no keyboard came, the field goes down")
                 controller.expectKeyboard = false
