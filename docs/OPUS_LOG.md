@@ -744,6 +744,10 @@ came back after 1.6 s, past the launcher's 1.5 s "Home press" window (the emulat
 took 512 ms and just made it), so the drawer stayed open and 12b's long press found an app. 12b now closes a drawer
 left open before its long press.
 
+**Result:** released as **0.8.0 build 60**: https://github.com/snietsk6205/liquid_launcher/releases/tag/v0.8.0. Run 60:
+all 46 emulator checks passed; the keyboard came 2.1 s after the swipe with two gentle retries (run 59: 3.1 s with
+focus-dropping retries; 0.7.2's single request: 2.7 s in run 57).
+
 ### For the next model (review)
 1. The moving wallpaper sits inside the layer glass samples, so with it on the pill and dock redraw every frame. The
    benchmark (81 fps for full glass) suggests it holds; if not, "Speed 0" or "None" stop it.
