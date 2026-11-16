@@ -755,3 +755,15 @@ focus-dropping retries; 0.7.2's single request: 2.7 s in run 57).
    uses `pretend`/`noteDown` first.
 3. The keyboard retries check `rootWindowInsets.isVisible(ime)`; if a keyboard reports itself visible before it
    draws, a retry is skipped, which is harmless.
+
+## Entry 20: 0.8.1, a calendar widget in liquid glass, search's own bounce (2026-11-16)
+
+**Asked by the user:** something more useful and integrated; a liquid glass calendar widget to put in search; a better,
+smoother, controllable bounce for search; build and push. Few tokens: nothing unneeded.
+
+| File | Change | Decision |
+|---|---|---|
+| `feature/home/CalendarWidget.kt` (new), `Study.kt`, `HomeGrid.kt` | Calendar widget (month, dots, arrows, next events, compact form), in the picker for pages and search | D117 |
+| `HomeController.kt`, `PillMorph.kt`, settings | `searchSpring`, `askCalendar`; Search → Bounce, Speed, Liquid stretch | D118 |
+
+Not verified on a phone: the widget's look over the search screen's blur, and the new spring's feel.

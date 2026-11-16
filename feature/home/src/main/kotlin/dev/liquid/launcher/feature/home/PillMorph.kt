@@ -174,11 +174,19 @@ private fun rememberLiquidStretch(controller: HomeController, insets: FieldInset
             lastP = p
             lastLine = line
             lastT = t
-            val target = (kotlin.math.abs(v) * 0.045f).coerceIn(0f, 0.14f)
-            stretch.snapTo(stretch.value + (target - stretch.value) * 0.45f)
-            // No new position for a moment: it has landed.
-            kotlinx.coroutines.delay(34)
-            stretch.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 0.32f, stiffness = MotionScale.stiffness(320f)))
+            // Settings → Search, Liquid stretch and Bounce (0.8.1, D118).
+            val amount = controller.data.settings.get(dev.liquid.launcher.core.settings.LauncherSettings.SearchStretch) / 100f
+            val bounce = controller.data.settings.get(dev.liquid.launcher.core.settings.LauncherSettings.SearchBounce) / 100f
+            if (amount <= 0f) return@collectLatest
+            val target = (kotlin.math.abs(v) * 0.09f * amount).coerceIn(0f, 0.28f * amount)
+            // Eased towards the speed, so the drop swells smoothly instead of jumping with each frame.
+            stretch.animateTo(stretch.value + (target - stretch.value) * 0.5f, androidx.compose.animation.core.tween(16))
+            // No new position for a moment: it has landed, and settles with the bounce chosen for search.
+            kotlinx.coroutines.delay(40)
+            stretch.animateTo(
+                0f,
+                androidx.compose.animation.core.spring(dampingRatio = (0.62f - 0.4f * bounce).coerceIn(0.2f, 1f), stiffness = MotionScale.stiffness(300f)),
+            )
         }
     }
     return stretch

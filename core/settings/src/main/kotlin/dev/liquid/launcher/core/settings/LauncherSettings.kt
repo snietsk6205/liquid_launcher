@@ -660,6 +660,24 @@ object LauncherSettings {
         summary = "How far the home screen shrinks into the distance as search opens (Lift and Zoom)",
         section = "search", keywords = "search zoom scale home depth fall back",
     )
+    val SearchBounce = IntSetting(
+        key = "search.bounce", default = 30, min = 0, max = 100, step = 5, unit = "%",
+        title = "Bounce",
+        summary = "How much search overshoots and settles as it opens. 0: it glides to a stop",
+        section = "search", keywords = "search bounce spring overshoot smooth wobble",
+    )
+    val SearchSpeed = IntSetting(
+        key = "search.speed", default = 100, min = 50, max = 200, step = 10, unit = "%",
+        title = "Speed",
+        summary = "How quickly search opens and closes after you let go",
+        section = "search", keywords = "search speed fast slow spring stiffness",
+    )
+    val SearchStretch = IntSetting(
+        key = "search.stretch", default = 50, min = 0, max = 100, step = 10, unit = "%",
+        title = "Liquid stretch",
+        summary = "The pill stretches like a drop on its way to the keyboard and wobbles as it lands. 0: it keeps its shape",
+        section = "search", keywords = "search stretch liquid drop wobble pill",
+    )
     val PressFeel = ChoiceSetting(
         key = "motion.press", default = "squishy",
         options = listOf(
@@ -1991,7 +2009,7 @@ object LauncherSettings {
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
         TagStripPosition, TagButtonPosition, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
         MenuEntries,
-        SearchTransition, SearchField, SearchOpenKeyboard, SearchBlur, SearchDim, SearchHomeScale,
+        SearchTransition, SearchBounce, SearchSpeed, SearchStretch, SearchField, SearchOpenKeyboard, SearchBlur, SearchDim, SearchHomeScale,
         SearchClaude, SearchClaudeTarget, SearchClipboard, SearchEngine, SearchKeyboardHeight,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,

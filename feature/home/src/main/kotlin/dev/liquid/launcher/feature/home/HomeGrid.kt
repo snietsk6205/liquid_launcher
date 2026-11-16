@@ -469,6 +469,7 @@ internal fun WidgetContent(item: HomeItem, env: PageEnv, controller: HomeControl
         "app" -> AppWidgetItem(item, env, controller)
         "date" -> DateWidget(env.contentColor, env.shadow)
         "battery" -> BatteryWidget(env.contentColor, env.shadow)
+        "calendar" -> CalendarWidget(item, env, controller)
         "next" -> NextBlockWidget(controller, env.contentColor, env.shadow, env.interactive && !env.editMode)
     }
     if (item.widget == "now" || item.widget == "today") {

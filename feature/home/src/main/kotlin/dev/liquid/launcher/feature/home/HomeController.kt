@@ -740,12 +740,30 @@ class HomeController(
     // ---- other overlays ----
 
     /** Opens search; [velocity] in search heights per second, so a flick keeps its momentum (D99). */
+    /**
+     * Search's own spring (0.8.1, D118): Settings → Search, Bounce and Speed. Opening may overshoot
+     * by the bounce; closing never springs past closed.
+     */
+    private fun searchSpring(opening: Boolean): androidx.compose.animation.core.SpringSpec<Float> {
+        val bounce = data.settings.get(LauncherSettings.SearchBounce) / 100f
+        val speed = data.settings.get(LauncherSettings.SearchSpeed) / 100f
+        val damping = 1f - 0.62f * bounce
+        return spring(
+            dampingRatio = if (opening) damping else maxOf(damping, 0.9f),
+            stiffness = MotionScale.stiffness(360f * speed * speed),
+            visibilityThreshold = 0.001f,
+        )
+    }
+
+    /** Asks for the calendar (the Calendar widget), then runs [then] if it may be read. */
+    fun askCalendar(then: () -> Unit) = callbacks.requestCalendar { granted -> if (granted) then() }
+
     fun openSearch(velocity: Float = 0f) {
         menu = null
         searchDragPosition = null
         if (!searchOpen && search.value < 0.001f) startExpectingKeyboard()
         searchOpen = true
-        scope.launch { search.animateTo(1f, drawerSpring(), initialVelocity = velocity) }
+        scope.launch { search.animateTo(1f, searchSpring(opening = true), initialVelocity = velocity) }
     }
 
     fun closeSearch(immediately: Boolean = false, velocity: Float = 0f) {
@@ -753,7 +771,7 @@ class HomeController(
         searchOpen = false
         searchEditing = false
         scope.launch {
-            if (immediately) search.snapTo(0f) else search.animateTo(0f, drawerSpring(), initialVelocity = velocity)
+            if (immediately) search.snapTo(0f) else search.animateTo(0f, searchSpring(opening = false), initialVelocity = velocity)
             if (!searchOpen) {
                 searchQuery = ""
                 askClaudeMode = false

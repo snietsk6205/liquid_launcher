@@ -81,6 +81,7 @@ internal val WidgetTypes = listOf(
     WidgetType("next", "Study block", "The block now or next, as under the clock", 0, 1),
     WidgetType("now", "Now card", "The study block running, its tasks, quick actions", 0, 3),
     WidgetType("today", "Today", "Blocks and tasks of the day", 0, 4),
+    WidgetType("calendar", "Calendar", "The month on liquid glass with your events and what comes next; fits in search too", 0, 4),
     WidgetType("battery", "Battery", "Level as a ring, charging state", 2, 2),
 )
 
