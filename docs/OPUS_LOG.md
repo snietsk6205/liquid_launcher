@@ -736,6 +736,14 @@ Verified here: the unit tests and a release APK build. Not verified: everything 
 no GPU, so its glass is a tint and depth, rainbow edges and glow cannot show there; the splashes, motions, the moving
 wallpaper and the keyboard retries need the phone.
 
+**Run 59** (build 59, started by hand: the workflow builds on its own only for `main` and `claude/**`): unit tests
+and APK green; on the emulator every check passed but 12b. The search checks passed with the new keyboard requests:
+the emulator's keyboard came 3.1 s after the swipe, after three retries that each dropped and took focus anew, which
+may have slowed it; the first two retries now only ask again. 12b failed because 14c's Home press over the open drawer
+came back after 1.6 s, past the launcher's 1.5 s "Home press" window (the emulator's window check took 829 ms; run 58's
+took 512 ms and just made it), so the drawer stayed open and 12b's long press found an app. 12b now closes a drawer
+left open before its long press.
+
 ### For the next model (review)
 1. The moving wallpaper sits inside the layer glass samples, so with it on the pill and dock redraw every frame. The
    benchmark (81 fps for full glass) suggests it holds; if not, "Speed 0" or "None" stop it.

@@ -406,12 +406,16 @@ private fun SearchKeyboard(controller: HomeController, focus: FocusRequester, wa
         runCatching { focus.requestFocus() }
         keyboard?.show()
         fun coming(): Boolean = view.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true
-        for ((i, wait) in listOf(300L, 500L, 900L).withIndex()) {
+        for ((i, wait) in listOf(350L, 600L, 900L).withIndex()) {
             kotlinx.coroutines.delay(wait)
             if (!controller.searchOpen || coming()) return@LaunchedEffect
             DebugLog.event("Home", "search: no keyboard yet, asking again (${i + 1}; window focused: ${if (window.isWindowFocused) "yes" else "no"})")
-            focusManager.clearFocus(force = true)
-            runCatching { focus.requestFocus() }
+            // The first two only ask again, so a keyboard that is merely slow (the emulator's takes ~3 s) is not
+            // interrupted; the last drops focus and takes it anew, for a field that kept focus and asks for nothing.
+            if (i == 2) {
+                focusManager.clearFocus(force = true)
+                runCatching { focus.requestFocus() }
+            }
             keyboard?.show()
             view.windowInsetsController?.show(android.view.WindowInsets.Type.ime())
         }

@@ -600,6 +600,15 @@ if ! wait_top "$HOME_ACTIVITY" 2; then
   wait_top "$HOME_ACTIVITY" 6 || echo "NOTE: the launcher is still not in front"
   sleep 1.5
 fi
+# 14c ends with Home over the open drawer. On a slow emulator the trip through the system launcher can take longer
+# than the launcher's 1.5 s "Home press" window (run 59: an 829 ms window check), so the drawer stays open and the
+# long press below would land on an app. Close it first.
+dump 12b-before
+if on_screen 12b-before "Search apps"; then
+  echo "NOTE: the drawer was still open before 12b (a slow Home press); closing it"
+  adb shell input keyevent KEYCODE_BACK
+  sleep 1.5
+fi
 adb shell input swipe 540 1250 540 1250 1000
 sleep 1.5
 dump 12b-menu
