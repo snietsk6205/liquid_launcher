@@ -18,7 +18,11 @@ import dev.liquid.launcher.core.common.DebugLog
  */
 class AppWidgets(private val context: Context) {
     val manager: AppWidgetManager = AppWidgetManager.getInstance(context)
-    val host: AppWidgetHost = AppWidgetHost(context, HOST_ID)
+    /** Hands out [LiquidWidgetView]s, so the launcher can keep its look on other apps' widgets (P7, 0.9.17). */
+    val host: AppWidgetHost = object : AppWidgetHost(context, HOST_ID) {
+        override fun onCreateView(context: Context, appWidgetId: Int, appWidget: AppWidgetProviderInfo?): android.appwidget.AppWidgetHostView =
+            LiquidWidgetView(context)
+    }
     private var listening = false
 
     /** The host receives widget updates only while listening: from onStart to onStop of the home screen. */

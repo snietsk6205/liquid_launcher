@@ -750,6 +750,13 @@ object LauncherSettings {
         summary = "The Calendar, Now card and Today widgets, on pages and on the search screen",
         section = "home", keywords = "widget background box card glass calendar now today",
     )
+    val WidgetRestyle = BoolSetting(
+        key = "widgets.restyle", default = true,
+        title = "Other apps' widgets in the launcher's look",
+        summary = "Their card and row fills give way to the wallpaper (or the widget's glass plate) and their text takes the " +
+            "launcher's colour. Pictures and icons stay as the app draws them. Switch it off for one widget from its edit chips",
+        section = "home", keywords = "widget restyle colours colors theme liquid third party other apps",
+    )
 
     // ---- Pill ----
 
@@ -2387,7 +2394,7 @@ object LauncherSettings {
         GestureSwipeUp, GestureSwipeDown, GestureDoubleTap, GestureLongPress,
         GesturePinchIn, GesturePinchOut, GestureTwoUp, GestureTwoDown, GestureEdgeLeftUp, GestureEdgeLeftDown, GestureEdgeRightUp, GestureEdgeRightDown, GestureEdgeWidth,
         HapticsEnabled, HapticsStrength, HapticDrawer, HapticPickUp, LaunchAnimation, MotionStyle, MotionSpeed, UpdatesDaily,
-        WidgetBackground,
+        WidgetBackground, WidgetRestyle,
         PillEnabled, PillSlots, PillPosition, PillOffset, PillWidth, PillHeight, PillCorner, PillIconSize,
         SearchCards,
         PillStudyLook, PillStudyGlyph, PillStudyApp, PillStudyPicture, PillStudyFrame, PillStudySize, PillStudyTint, PillStudyRing, PillSlotGestures,

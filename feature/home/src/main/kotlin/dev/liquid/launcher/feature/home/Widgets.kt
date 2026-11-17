@@ -1,5 +1,7 @@
 package dev.liquid.launcher.feature.home
 
+import dev.liquid.launcher.core.settings.derive
+import androidx.compose.ui.graphics.toArgb
 import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetProviderInfo
 import android.content.BroadcastReceiver
@@ -333,8 +335,16 @@ internal fun AppWidgetItem(item: HomeItem, env: PageEnv, controller: HomeControl
         return
     }
     val glassPlate = item.options?.get("plate") == "glass"
+    // P7 (0.9.17): in the launcher's look unless switched off for this widget (or for all, in Settings → Widgets).
+    val restyleAll by controller.data.settings.derive { get(dev.liquid.launcher.core.settings.LauncherSettings.WidgetRestyle) }
+    val restyle = restyleAll && item.options?.get("restyle") != "off"
+    val textArgb = env.contentColor.toArgb()
     val density = LocalDensity.current
     var view by remember(id) { mutableStateOf<AppWidgetHostView?>(null) }
+    LaunchedEffect(view, restyle, textArgb) {
+        val v = view as? dev.liquid.launcher.core.data.LiquidWidgetView ?: return@LaunchedEffect
+        v.restyle = if (restyle) ({ root -> WidgetRestyle.apply(root, textArgb) }) else null
+    }
     var size by remember { mutableStateOf(IntSize.Zero) }
     LaunchedEffect(view, size) {
         val v = view ?: return@LaunchedEffect

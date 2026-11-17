@@ -99,6 +99,11 @@ internal fun BoxScope.ResizeFrame(item: HomeItem, pageIndex: Int, env: PageEnv, 
             EditChip(if (glassOn) "Glass: on" else "Glass: off", LauncherIcons.Layers) {
                 controller.setItemOption(item.id, "plate", if (glassOn) null else "glass")
             }
+            // P7 (0.9.17): this widget in the launcher's look, or as its app draws it.
+            val restyled = item.options?.get("restyle") != "off"
+            EditChip(if (restyled) "Colours: launcher" else "Colours: the app's", LauncherIcons.Tune) {
+                controller.setItemOption(item.id, "restyle", if (restyled) "off" else null)
+            }
         }
     }
 }

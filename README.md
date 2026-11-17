@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.9.17: other apps' widgets in the launcher's look: their card fills give way to the wallpaper or glass and their text takes the launcher's colour, kept after every update; one switch for all, one per widget.
+
 0.9.16: quiet during study blocks (optional): notifications wait until the block ends and come back, except calls, alarms, the people, school email and apps you let through; the home screen sums up what waited.
 
 0.9.15: switching tags glides: the selection slides from chip to chip, and the drawer's apps glide to their new places while others fade.
