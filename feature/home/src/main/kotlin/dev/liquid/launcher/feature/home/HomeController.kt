@@ -1616,6 +1616,10 @@ class HomeController(
             LauncherAction.NextLayout -> data.layouts.next()?.let { switchLayout(it.id) } ?: toast("No saved layouts yet")
             is LauncherAction.SwitchLayout -> switchLayout(action.id)
             LauncherAction.Today -> openToday()
+            LauncherAction.StudyNote -> {
+                hubNoteFocus = true
+                openToday()
+            }
             LauncherAction.TellClaude -> tellClaude()
             LauncherAction.AskClaude -> openAskClaude()
             LauncherAction.StudyPlan -> openStudyPlan()

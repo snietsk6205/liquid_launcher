@@ -404,7 +404,7 @@ private fun HubIcon(icon: Int, description: String, color: Color, size: Dp = 40.
  * with the time gone, the ones to come faint, a skipped one grey, and a gap where a block ended unmarked.
  */
 @Composable
-internal fun DayRing(day: StudyDay, now: Long, color: Color, size: Dp, showCount: Boolean = true) {
+internal fun DayRing(day: StudyDay, now: Long, color: Color, size: Dp, showCount: Boolean = true, strokeFraction: Float = 0.13f) {
     val blocks = day.blocks
     // The ring pops a little each time a block is ticked off.
     val done = day.blocksDone
@@ -419,7 +419,7 @@ internal fun DayRing(day: StudyDay, now: Long, color: Color, size: Dp, showCount
                     scaleY = s
                 },
         ) {
-            val stroke = this.size.minDimension * 0.13f
+            val stroke = this.size.minDimension * strokeFraction
             val topLeft = Offset(stroke / 2f, stroke / 2f)
             val arc = Size(this.size.width - stroke, this.size.height - stroke)
             val n = blocks.size

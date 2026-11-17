@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.9.2: the pill's study item is yours to design: an icon, an app's icon, your own picture or a liquid circle that fills as blocks are done, in a frame of any icon shape, any size and colour (or the next block's), with the day as a ring around it; holding it writes a note for tonight. Every pill item can have its own tap, long press and swipes (Settings → Pill).
+
 0.9.1: Today is now the study hub: it grows out of the pill (or the line under the clock) on a spring and shrinks back into it under the finger; the block now or next with its steps, today's timeline with your classes, the day as a ring, "I'm home" and "shift tonight", a note field for tonight's check-in, prompt templates, Ask Claude with your study header, and one big action right under the thumb. Double tap the clock to write a note. The line under the clock gains one button (focus, or ✓ for a block that ended).
 
 0.9.0: going home during a phone or Messenger call opens Liquid Launcher (the old "do not redirect during calls" default is gone; a floating call window no longer hides the system launcher from the redirect); starting an app from the drawer or search puts the keyboard away at once and coming home shows a clean home screen, with no flash of the drawer and keyboard.

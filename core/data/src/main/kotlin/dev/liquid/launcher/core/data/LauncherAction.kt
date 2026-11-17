@@ -43,6 +43,9 @@ sealed interface LauncherAction {
     /** Starts or stops the focus timer on the block running now. */
     data object FocusTimer : LauncherAction
 
+    /** The study hub with the note field ready: a note for tonight's check-in (0.9.1, D5). */
+    data object StudyNote : LauncherAction
+
     /** The list of built-in widgets to add to the current page. */
     data object Widgets : LauncherAction
     data class SwitchLayout(val id: String) : LauncherAction
@@ -79,6 +82,7 @@ sealed interface LauncherAction {
         AskClaude -> "ask_claude"
         StudyPlan -> "study_plan"
         FocusTimer -> "focus"
+        StudyNote -> "study_note"
         Widgets -> "widgets"
         is SwitchLayout -> "layout:$id"
         is Section -> "section:$id"
@@ -113,6 +117,7 @@ sealed interface LauncherAction {
             TellClaude to "Tell Claude what I studied",
             StudyPlan to "Open my study plan",
             FocusTimer to "Focus timer for the current block",
+            StudyNote to "Write a note for tonight's check-in",
             Widgets to "Add a widget",
             OpenSettings to "Launcher settings",
             SystemLauncher to "Open the system launcher",

@@ -244,7 +244,10 @@ internal fun SectionScreen(store: SettingsStore, sectionId: String, onBack: () -
                 Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             )
             when (sectionId) {
-                "pill" -> PillItemsEditor(store)
+                "pill" -> {
+                    PillItemsEditor(store)
+                    PillStudyEditor(store)
+                }
                 "menu" -> MenuEntriesEditor(store)
                 "tags" -> TabsAndTagsEditor()
                 "icons" -> IconPacksEditor(store)

@@ -873,24 +873,3 @@ private fun StudyLineRow(
         }
     }
 }
-
-/** The pill's study item: ring and a few words, or the school icon when there is nothing to show. */
-@Composable
-internal fun PillStudy(controller: HomeController, color: Color, style: TextStyle, iconSize: Dp) {
-    val glance = rememberStudyGlance(controller)
-    if (glance == null || glance is StudyGlance.Tasks) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            LauncherIcon(LauncherIcons.School, contentDescription = "Today", tint = color, size = iconSize)
-            if (glance is StudyGlance.Tasks) {
-                Spacer(Modifier.width(4.dp))
-                Text(glanceText(glance, short = true), style = style, maxLines = 1)
-            }
-        }
-        return
-    }
-    Row(Modifier.widthIn(max = 170.dp), verticalAlignment = Alignment.CenterVertically) {
-        StudyRing(glance, color, (iconSize.value * 0.8f).dp)
-        Spacer(Modifier.width(6.dp))
-        Text(glanceText(glance, short = true), style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}

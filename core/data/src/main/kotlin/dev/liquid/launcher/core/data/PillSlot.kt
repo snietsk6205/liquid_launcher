@@ -41,3 +41,31 @@ sealed interface PillSlot {
         fun decodeAll(list: List<String>): List<PillSlot> = list.mapNotNull { decode(it) }
     }
 }
+
+/**
+ * Tap, long press and swipes of one pill item (0.9.1). Null means the item's own default: its action for a
+ * tap, the pill's long press, and the pill's swipes. Stored per item code ([PillSlot.encode]).
+ */
+data class SlotGestures(
+    val tap: LauncherAction? = null,
+    val longPress: LauncherAction? = null,
+    val swipeUp: LauncherAction? = null,
+    val swipeDown: LauncherAction? = null,
+) {
+    val isDefault: Boolean get() = tap == null && longPress == null && swipeUp == null && swipeDown == null
+
+    companion object {
+        /** One line per item: its code and the four actions, tab separated (empty = default). */
+        fun decodeAll(lines: List<String>): Map<String, SlotGestures> = lines.mapNotNull { line ->
+            val parts = line.split('\t')
+            if (parts.size < 5 || parts[0].isBlank()) return@mapNotNull null
+            fun action(text: String): LauncherAction? = text.trim().takeIf { it.isNotEmpty() }?.let { LauncherAction.decode(it) }
+            parts[0] to SlotGestures(action(parts[1]), action(parts[2]), action(parts[3]), action(parts[4]))
+        }.toMap()
+
+        fun encodeAll(map: Map<String, SlotGestures>): List<String> = map.filterValues { !it.isDefault }.map { (slot, g) ->
+            listOf(slot, g.tap?.encode().orEmpty(), g.longPress?.encode().orEmpty(), g.swipeUp?.encode().orEmpty(), g.swipeDown?.encode().orEmpty())
+                .joinToString("\t")
+        }
+    }
+}

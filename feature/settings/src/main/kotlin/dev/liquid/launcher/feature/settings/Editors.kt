@@ -53,16 +53,30 @@ internal fun PillItemsEditor(store: SettingsStore) {
     var adding by remember { mutableStateOf(false) }
     var pickAction by remember { mutableStateOf(false) }
     var pickApp by remember { mutableStateOf(false) }
+    var gesturesFor by remember { mutableStateOf<PillSlot?>(null) }
+    val gesturesRaw by store.observe(LauncherSettings.PillSlotGestures)
+    val ownGestures = remember(gesturesRaw) { dev.liquid.launcher.core.data.SlotGestures.decodeAll(gesturesRaw).keys }
 
     fun save(list: List<PillSlot>) = store.set(LauncherSettings.PillSlots, list.map { it.encode() })
 
     InfoCard {
         Text("Items", style = MaterialTheme.typography.titleMedium)
-        BodyText("Shown left to right. Tap and long-press on the pill outside an item use the gestures below.")
+        BodyText(
+            "Shown left to right. Tap and long-press on the pill outside an item use the gestures below; " +
+                "the sliders button gives an item its own tap, long press and swipes.",
+        )
         if (slots.isEmpty()) BodyText("No items: the pill is an empty glass bar.", Modifier.padding(top = 8.dp))
         slots.forEachIndexed { index, slot ->
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("${index + 1}.  ${slotLabel(slot)}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "${index + 1}.  ${slotLabel(slot)}" + if (slot.encode() in ownGestures) "  ·  own gestures" else "",
+                    modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
+                )
+                if (slot != PillSlot.Spacer) {
+                    IconButton(onClick = { gesturesFor = slot }) {
+                        LauncherIcon(LauncherIcons.Tune, contentDescription = "Gestures of this item", size = 20.dp)
+                    }
+                }
                 IconButton(onClick = { save(slots.move(index, -1)) }, enabled = index > 0) {
                     LauncherIcon(LauncherIcons.ArrowUp, contentDescription = "Move left", size = 20.dp)
                 }
@@ -121,6 +135,9 @@ internal fun PillItemsEditor(store: SettingsStore) {
             pickApp = false
             save(slots + PillSlot.App(app.ref))
         }
+    }
+    gesturesFor?.let { slot ->
+        SlotGesturesDialog(slot, "Gestures: " + slotLabel(slot), store) { gesturesFor = null }
     }
 }
 

@@ -806,6 +806,76 @@ object LauncherSettings {
         title = "Swipe down on the pill", section = "pill", keywords = "gesture swipe",
     )
 
+    // ---- Pill: the study item and each item's gestures (0.9.1) ----
+
+    val PillStudyLook = ChoiceSetting(
+        key = "pill.study.look", default = "glyph",
+        options = listOf(
+            "glyph" to "An icon",
+            "app" to "An app's icon (follows your icon pack)",
+            "picture" to "Your picture",
+            "circle" to "A liquid circle that fills as blocks are done",
+            "text" to "The block's name and time",
+        ),
+        title = "Study item: what it shows",
+        summary = "The pill's study item is the \"Today\" button or the \"Study block\" item; tapping it grows the study hub out of the pill. " +
+            "Pick an app or your picture with the buttons above",
+        section = "pill", keywords = "pill study icon picture glyph circle today look item",
+    )
+    val PillStudyGlyph = ChoiceSetting(
+        key = "pill.study.glyph", default = "school",
+        options = listOf(
+            "school" to "Graduation cap", "schedule" to "Clock", "calendar" to "Calendar", "sparkle" to "Sparkle",
+            "chat" to "Speech bubble", "star" to "Star", "heart" to "Heart", "check" to "Tick", "code" to "Code", "layers" to "Layers",
+        ),
+        title = "Study item: icon",
+        section = "pill", keywords = "pill study icon glyph vector symbol",
+    )
+    val PillStudyApp = TextSetting(
+        key = "pill.study.app", default = "", title = "Study item: app", section = "pill", hidden = true,
+    )
+    val PillStudyPicture = TextSetting(
+        key = "pill.study.picture", default = "", title = "Study item: picture", section = "pill", hidden = true,
+    )
+    val PillStudyFrame = ChoiceSetting(
+        key = "pill.study.frame", default = "none",
+        options = listOf(
+            "none" to "No frame", "circle" to "Circle", "squircle" to "Squircle", "pebble" to "Pebble",
+            "rounded" to "Rounded square", "teardrop" to "Drop", "square" to "Square",
+        ),
+        title = "Study item: frame",
+        summary = "A shape filled with the item's colour around the icon",
+        section = "pill", keywords = "pill study frame shape circle squircle drop",
+    )
+    val PillStudySize = IntSetting(
+        key = "pill.study.size", default = 24, min = 16, max = 44, step = 2, unit = "dp",
+        title = "Study item: size",
+        section = "pill", keywords = "pill study size",
+    )
+    val PillStudyTint = ColorSetting(
+        key = "pill.study.tint", autoLabel = "The next block's colour",
+        title = "Study item: colour",
+        summary = "Of the frame, the ring and the liquid. Automatic follows the block now or next (its colour in your calendar)",
+        section = "pill", keywords = "pill study tint colour color module",
+    )
+    val PillStudyRing = ChoiceSetting(
+        key = "pill.study.ring", default = "segments",
+        options = listOf(
+            "segments" to "The day: one arc per block, a gap where one was missed",
+            "continuous" to "The day as one arc",
+            "block" to "Time gone in the block now",
+            "none" to "No ring",
+        ),
+        title = "Study item: progress ring",
+        section = "pill", keywords = "pill study ring progress day",
+    )
+
+    /** One line per pill item: its code and four actions (tap, long press, swipe up, swipe down), tab separated. */
+    val PillSlotGestures = StringListSetting(
+        key = "pill.slotGestures", default = emptyList(),
+        title = "Gestures of each pill item", section = "pill", hidden = true,
+    )
+
     // ---- App drawer ----
 
     val DrawerColumns = IntSetting(
@@ -2108,6 +2178,7 @@ object LauncherSettings {
         GesturePinchIn, GesturePinchOut, GestureTwoUp, GestureTwoDown, GestureEdgeLeftUp, GestureEdgeLeftDown, GestureEdgeRightUp, GestureEdgeRightDown, GestureEdgeWidth,
         HapticsEnabled, HapticsStrength, HapticDrawer, HapticPickUp, LaunchAnimation, MotionStyle, MotionSpeed, UpdatesDaily,
         PillEnabled, PillSlots, PillPosition, PillOffset, PillWidth, PillHeight, PillCorner, PillIconSize,
+        PillStudyLook, PillStudyGlyph, PillStudyApp, PillStudyPicture, PillStudyFrame, PillStudySize, PillStudyTint, PillStudyRing, PillSlotGestures,
         PillHint, PillTap, PillLongPress, PillSwipeUp, PillSwipeDown,
         DrawerColumns, DrawerIconSize, DrawerLabels, DrawerFromBottom, DrawerAutoKeyboard, DrawerSort,
         DrawerWork, DrawerCloseOnLaunch, DrawerSideMargin, DrawerDim, DrawerTabsPosition,

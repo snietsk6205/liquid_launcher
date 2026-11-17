@@ -96,6 +96,10 @@ data class PillConfig(
     val longPress: LauncherAction,
     val swipeUp: LauncherAction,
     val swipeDown: LauncherAction,
+    /** How the study item looks (0.9.1). */
+    val study: StudyItemLook = StudyItemLook(),
+    /** Each item's own gestures, by item code (0.9.1). */
+    val slotGestures: Map<String, dev.liquid.launcher.core.data.SlotGestures> = emptyMap(),
 )
 
 data class DrawerConfig(
@@ -332,6 +336,17 @@ fun SettingsStore.pillConfig() = PillConfig(
     longPress = LauncherAction.decode(get(S.PillLongPress)),
     swipeUp = LauncherAction.decode(get(S.PillSwipeUp)),
     swipeDown = LauncherAction.decode(get(S.PillSwipeDown)),
+    study = StudyItemLook(
+        look = get(S.PillStudyLook),
+        glyph = get(S.PillStudyGlyph),
+        app = get(S.PillStudyApp),
+        picture = get(S.PillStudyPicture),
+        frame = get(S.PillStudyFrame),
+        sizeDp = get(S.PillStudySize),
+        tint = dev.liquid.launcher.core.settings.ColorSetting.parse(get(S.PillStudyTint))?.let { androidx.compose.ui.graphics.Color(it) },
+        ring = get(S.PillStudyRing),
+    ),
+    slotGestures = dev.liquid.launcher.core.data.SlotGestures.decodeAll(get(S.PillSlotGestures)),
 )
 
 fun SettingsStore.drawerConfig() = DrawerConfig(

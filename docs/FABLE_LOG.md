@@ -359,3 +359,21 @@ glass on the phone, Wi-Fi arrival on MagicOS (needs location on), the charger ru
 Wait for this push's CI (0.9.1). Then, in the spec's order of what is left in P2: the pill's full customization (icon:
 own picture / icon-pack glyph / vector / liquid circle / any shape; frame, size, tint, day-ring style; tap / long press /
 swipe per slot), then P3 (search page: finger-tracking transition, the clipped calendar, study-first cards, card order).
+
+---
+
+## Entry 8: 0.9.2, the pill made yours (2026-11-17, Opus 5.5)
+
+Result of entry 7: run 63 green (unit tests, every emulator check including the study checks against a real calendar),
+released as `v0.9.1`.
+
+| File | Change |
+|---|---|
+| `feature/home/PillStudy.kt` (new) | `StudyItemLook`, `StudyPillItem`: glyph / app icon / picture / liquid circle / text; frame in any icon shape; colour from the block now or next unless chosen; ring (day by block, day as one arc, block now, none); the liquid sloshes only when its level changes |
+| `feature/home/Pill.kt` | Every item reads its own gestures (`SlotGestures`); swipes are only caught by an item that has its own; the "Today" button draws the study item; the study item's long press writes a note |
+| `core/data/PillSlot.kt` (+ `SlotGesturesTest`), `LauncherAction.kt` | `SlotGestures` (tab-separated lines per item code), action `StudyNote` ("Write a note for tonight's check-in") |
+| `core/settings` | Pill → Study item: what it shows, icon, frame, size, colour, progress ring; hidden: app, picture, item gestures. `SettingDependencies.choiceParents` hides options that do not apply to the chosen look |
+| `feature/settings/PillStudyEditor.kt` (new), `Editors.kt`, `MainScreen.kt` | Study item card (use an app's icon, use a picture, add it to the pill), sliders button per item for its own tap / long press / swipes |
+| `StudyHub.kt`, `Study.kt` | `DayRing` takes a stroke width; the old `PillStudy` removed |
+
+Not verified on the phone: picture decoding of HEIC photos (the picker hands JPEG for most), the look of the frames at small sizes.

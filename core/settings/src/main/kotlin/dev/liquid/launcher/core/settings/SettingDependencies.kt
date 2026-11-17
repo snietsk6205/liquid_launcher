@@ -25,7 +25,19 @@ object SettingDependencies {
         map
     }
 
+    /** Options that only matter for some values of a choice (0.9.1): the key, the choice and those values. */
+    val choiceParents: Map<String, Pair<ChoiceSetting, Set<String>>> by lazy {
+        val look = LauncherSettings.PillStudyLook
+        mapOf(
+            LauncherSettings.PillStudyGlyph.key to (look to setOf("glyph")),
+            LauncherSettings.PillStudyFrame.key to (look to setOf("glyph", "app", "picture")),
+            LauncherSettings.PillStudyRing.key to (look to setOf("glyph", "app", "picture")),
+            LauncherSettings.PillStudyTint.key to (look to setOf("glyph", "app", "picture", "circle")),
+        )
+    }
+
     fun isVisible(setting: Setting<*>, store: SettingsStore): Boolean {
+        choiceParents[setting.key]?.let { (choice, values) -> if (store.get(choice) !in values) return false }
         val parent = parents[setting.key] ?: return true
         return store.get(parent)
     }

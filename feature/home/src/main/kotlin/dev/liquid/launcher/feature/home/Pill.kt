@@ -73,6 +73,7 @@ fun actionIcon(action: LauncherAction): Int = when (action) {
     LauncherAction.TellClaude -> LauncherIcons.Chat
     LauncherAction.AskClaude -> LauncherIcons.Sparkle
     LauncherAction.FocusTimer -> LauncherIcons.Schedule
+    LauncherAction.StudyNote -> LauncherIcons.Edit
     LauncherAction.Widgets -> LauncherIcons.Widgets
     is LauncherAction.Section -> when (action.id) {
         "icons" -> LauncherIcons.Palette
@@ -166,16 +167,43 @@ internal fun RowScope.PillSlotView(
     controller: HomeController,
     interactive: Boolean,
 ) {
+    // Each item's own gestures (0.9.1): Settings → Pill → an item's gestures; unset ones keep the defaults.
+    val gestures = config.slotGestures[slot.encode()]
+    val isStudy = slot == PillSlot.Study || (slot is PillSlot.Action && slot.action == LauncherAction.Today)
+
     // Each item squishes under the finger (0.7.2, D108); the pill's glass stays put around it.
     @Composable
     fun Modifier.press(onClick: () -> Unit): Modifier {
         if (!interactive) return this
         val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-        return combinedClickable(
+        val tap = gestures?.tap
+        // The study item's own long press writes a note for tonight's check-in (D5) unless set otherwise.
+        val long = gestures?.longPress ?: if (isStudy) LauncherAction.StudyNote else config.longPress
+        val up = gestures?.swipeUp
+        val down = gestures?.swipeDown
+        // A swipe of the item's own is caught here only when one is set; otherwise the pill's swipes work over it.
+        val swipes = if (up == null && down == null) Modifier else Modifier.pointerInput(up, down) {
+            var total = 0f
+            detectVerticalDragGestures(
+                onDragStart = { total = 0f },
+                onVerticalDrag = { change, dy ->
+                    total += dy
+                    change.consume()
+                },
+                onDragEnd = {
+                    val threshold = 32.dp.toPx()
+                    when {
+                        total < -threshold && up != null -> controller.run(up)
+                        total > threshold && down != null -> controller.run(down)
+                    }
+                },
+            )
+        }
+        return this.then(swipes).combinedClickable(
             interactionSource = interaction,
             indication = null,
-            onClick = onClick,
-            onLongClick = { controller.run(config.longPress) },
+            onClick = { if (tap != null) controller.run(tap) else onClick() },
+            onLongClick = { controller.run(long) },
         ).squishOn(interaction)
     }
 
@@ -220,17 +248,27 @@ internal fun RowScope.PillSlotView(
             Modifier.fillMaxHeight().padding(horizontal = 6.dp).press { controller.run(LauncherAction.Today) },
             contentAlignment = Alignment.Center,
         ) {
-            PillStudy(controller, color, textStyle, config.iconSizeDp.dp)
+            StudyPillItem(controller, config.study, color, apps, textStyle, withText = true)
         }
 
-        is PillSlot.Action -> Box(
-            Modifier
-                .size((config.iconSizeDp + 16).dp)
-                .press { controller.run(slot.action) }
-                .clip(CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            LauncherIcon(actionIcon(slot.action), contentDescription = null, tint = color, size = config.iconSizeDp.dp)
+        // The "Today" button is the study item too: its look is Settings → Pill → Study item (0.9.1).
+        is PillSlot.Action -> if (slot.action == LauncherAction.Today) {
+            Box(
+                Modifier.fillMaxHeight().padding(horizontal = 4.dp).press { controller.run(slot.action) },
+                contentAlignment = Alignment.Center,
+            ) {
+                StudyPillItem(controller, config.study, color, apps, textStyle, withText = false)
+            }
+        } else {
+            Box(
+                Modifier
+                    .size((config.iconSizeDp + 16).dp)
+                    .press { controller.run(slot.action) }
+                    .clip(CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                LauncherIcon(actionIcon(slot.action), contentDescription = null, tint = color, size = config.iconSizeDp.dp)
+            }
         }
 
         is PillSlot.App -> {
