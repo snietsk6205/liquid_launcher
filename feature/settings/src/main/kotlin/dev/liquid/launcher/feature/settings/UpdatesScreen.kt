@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import dev.liquid.launcher.core.common.Changelog
 import dev.liquid.launcher.core.settings.LauncherSettings
 import dev.liquid.launcher.core.settings.SettingsStore
 import dev.liquid.launcher.core.settings.observe
@@ -34,7 +35,7 @@ internal object UpdateState {
 
 /** Check for a new build on GitHub, download it and install it over this one. */
 @Composable
-internal fun UpdatesScreen(store: SettingsStore, onBack: () -> Unit) {
+internal fun UpdatesScreen(store: SettingsStore, open: (Screen) -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val daily by store.observe(LauncherSettings.UpdatesDaily)
@@ -79,6 +80,9 @@ internal fun UpdatesScreen(store: SettingsStore, onBack: () -> Unit) {
                             if (release.size > 0) ", ${release.size / (1024 * 1024)} MB." else ".",
                         Modifier.padding(top = 8.dp),
                     )
+                    // W1: what it brings, before installing (the release's changelog section).
+                    val notes = remember(release) { Changelog.parseSection(release.version, null, release.notes) }
+                    if (notes.itemCount > 0) ChangesView(notes, "What's new in ${release.version}", Modifier.padding(top = 12.dp))
                     val p = progress
                     val file = apk
                     when {
@@ -106,6 +110,7 @@ internal fun UpdatesScreen(store: SettingsStore, onBack: () -> Unit) {
             }
             message?.let { BodyText(it, Modifier.padding(top = 8.dp)) }
         }
+        NavRow("All changes", "What each version added, changed, removed and fixed") { open(Screen.Changelog) }
         InfoCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Check once a day", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
@@ -142,4 +147,53 @@ internal fun UpdateBanner(store: SettingsStore, open: () -> Unit) {
     }
     val newer = UpdateState.result as? UpdateCheck.Newer ?: return
     NavRow("Update available: ${newer.release.version} (build ${newer.release.build})", "Tap to download and install", open)
+}
+
+/** One version's changes as the changelog words them (W1, 0.10.0): its note, then Added, Changed, Removed, Fixed. */
+@Composable
+internal fun ChangesView(version: Changelog.Version, heading: String?, modifier: Modifier = Modifier) {
+    androidx.compose.foundation.layout.Column(modifier) {
+        if (heading != null) Text(heading, style = MaterialTheme.typography.titleMedium)
+        version.note?.let { BodyText(it, Modifier.padding(top = 4.dp)) }
+        for (part in version.parts) {
+            Text(
+                part.title,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
+            )
+            for (item in part.items) {
+                Row(Modifier.padding(vertical = 2.dp)) {
+                    Text("•", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(14.dp))
+                    Text(Changelog.plain(item), style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+    }
+}
+
+/** Every version of the changelog shipped in the app, newest first, the installed one marked (W1). */
+@Composable
+internal fun ChangelogScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    val installed = remember { Updater.installedVersion(context) }
+    val versions = remember {
+        runCatching { context.assets.open("CHANGELOG.md").bufferedReader().use { it.readText() } }
+            .map { Changelog.parse(it) }
+            .getOrDefault(emptyList())
+    }
+    ScreenScaffold(title = "Changelog", onBack = onBack) {
+        if (versions.isEmpty()) {
+            BodyText(
+                "This build has no changelog inside. It is on GitHub: github.com/${Updater.REPOSITORY}/blob/HEAD/CHANGELOG.md",
+                Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            )
+        }
+        for (v in versions) {
+            InfoCard {
+                val title = v.version + (v.date?.let { " · $it" } ?: "") + if (v.version == installed) " · installed" else ""
+                ChangesView(v, title)
+            }
+        }
+    }
 }

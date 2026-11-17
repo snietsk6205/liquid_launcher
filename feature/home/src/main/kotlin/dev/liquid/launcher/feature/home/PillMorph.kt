@@ -99,7 +99,13 @@ fun MorphingPill(
         modifier
             .morphLayout(controller, config, if (searchMode) 0.dp else extra, insets)
             // The closed pill's place, which the study hub grows out of (0.9.1).
-            .onGloballyPositioned { if (interactive && controller.morph() < 0.01f) controller.pillBounds = it.boundsInRoot() }
+            .onGloballyPositioned {
+                if (!interactive) return@onGloballyPositioned
+                val m = controller.morph()
+                if (m < 0.01f) controller.pillBounds = it.boundsInRoot()
+                // W2: where the drawer's field sits, so the tag list over the drawer stops above it.
+                controller.drawerPillTop = if (m > 0.99f && !searchMode) it.boundsInRoot().top else null
+            }
             .graphicsLayer {
                 // Search only (the drawer's morph stays as Fable made it): a drop stretching the way it travels.
                 if (!(controller.searchInPill && controller.search.value > controller.drawer.value)) return@graphicsLayer

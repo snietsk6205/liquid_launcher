@@ -1,5 +1,7 @@
 package dev.liquid.launcher.feature.home
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.foundation.Canvas
@@ -385,7 +387,7 @@ internal fun PageSettingsDialog(index: Int, controller: HomeController) {
         onDismissRequest = { controller.pageSettings = null },
         title = { Text("Page ${index + 1}") },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 androidx.compose.material3.OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, label = { Text("Name (optional)") })
                 Row(Modifier.fillMaxWidth().clickable { ownGrid = !ownGrid }.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     androidx.compose.material3.Checkbox(checked = ownGrid, onCheckedChange = { ownGrid = it })

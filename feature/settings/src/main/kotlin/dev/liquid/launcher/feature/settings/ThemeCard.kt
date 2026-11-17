@@ -1,5 +1,7 @@
 package dev.liquid.launcher.feature.settings
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -345,7 +347,7 @@ private fun ArgbPicker(title: String, start: Long, reset: (() -> Unit)?, onDismi
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Swatch(current(), 0xFFE9E9EE, "Aa")
                     Spacer(Modifier.width(10.dp))

@@ -1,5 +1,7 @@
 package dev.liquid.launcher.feature.home
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -524,8 +526,11 @@ internal fun TabMenu(
                 .align(if (atTop) Alignment.TopCenter else Alignment.BottomCenter)
                 .then(if (atTop) Modifier.statusBarsPadding().padding(top = 64.dp) else Modifier.navigationBarsPadding().padding(bottom = SearchZone + 60.dp))
                 .width(270.dp)
+                // W2: a long tab menu (sort choices open) scrolls inside its card.
+                .menuHeightLimit(0.7f)
                 .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground))
                 .clip(shape)
+                .verticalScroll(rememberScrollState())
                 .padding(vertical = 8.dp),
         ) {
             if (tab != null) {

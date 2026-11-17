@@ -1,5 +1,6 @@
 package dev.liquid.launcher.feature.home
 
+import androidx.compose.foundation.verticalScroll
 import android.graphics.Bitmap
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -381,7 +382,7 @@ internal fun WallpaperStudio(
             onDismissRequest = { state.holding = null },
             title = { Text("Wallpaper") },
             text = {
-                Column {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
                     DialogLine(if (item.favourite) "Remove from favourites" else "Add to favourites") {
                         data.wallpapers.setFavourite(item.id, !item.favourite)
                         state.holding = null

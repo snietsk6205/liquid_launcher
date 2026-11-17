@@ -1,5 +1,7 @@
 package dev.liquid.launcher.feature.home
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import kotlinx.coroutines.launch
@@ -141,6 +143,8 @@ fun AppMenu(
                         }
                         .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground))
                         .clip(shape)
+                        // W2: a long menu (many shortcuts and rows) scrolls inside its card.
+                        .verticalScroll(rememberScrollState())
                         .padding(vertical = 8.dp)
                 ) {
                     var rowIndex = 0
@@ -196,7 +200,8 @@ fun AppMenu(
             },
             modifier = Modifier.fillMaxSize(),
         ) { measurables, constraints ->
-            val card = measurables.first().measure(Constraints())
+            // W2: at most 85 % of the screen high; the card scrolls beyond that.
+            val card = measurables.first().measure(Constraints(maxHeight = (constraints.maxHeight * SheetMaxFraction).roundToInt()))
             val margin = 12.dp.roundToPx()
             val anchor = target.anchor
             val x = (anchor.center.x - card.width / 2f).roundToInt()
@@ -227,7 +232,7 @@ fun RenameDialog(app: AppEntry, controller: HomeController) {
         onDismissRequest = { controller.renaming = null },
         title = { Text("Rename") },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(value = text, onValueChange = { text = it }, singleLine = true)
                 if (app.label != app.systemLabel) {
                     Text("Original name: ${app.systemLabel}", modifier = Modifier.padding(top = 8.dp))
@@ -257,14 +262,19 @@ fun RenameDialog(app: AppEntry, controller: HomeController) {
 /**
  * Tags of one app: tick existing tags, or type a new one. A new tag can become a drawer tab
  * at once, which is the quickest way to build pages such as Study, Media or Tools.
+ *
+ * W2 (0.10.0): a sheet instead of a dialog. The list scrolls and the field for a new tag stays fixed
+ * under it, above the keyboard, however many tags there are (from about nine, the dialog's field was out
+ * of reach). A search narrows the list once there are more than eight.
  */
 @Composable
-fun TagsDialog(app: AppEntry, controller: HomeController) {
+fun AppTagsSheet(app: AppEntry, controller: HomeController, glass: GlassConfig, lightBackground: Boolean, backdrop: Backdrop) {
     val org by controller.data.organisation.value.collectAsState()
     val apps by controller.data.apps.apps.collectAsState()
     val current = apps.firstOrNull { it.ref == app.ref } ?: app
     var newName by remember(app) { mutableStateOf("") }
     var asTab by remember(app) { mutableStateOf(true) }
+    var query by remember(app) { mutableStateOf("") }
     fun addNew() {
         val tag = controller.data.organisation.tagNamed(newName) ?: return
         controller.data.apps.setTag(app.ref, tag.id, true)
@@ -273,51 +283,44 @@ fun TagsDialog(app: AppEntry, controller: HomeController) {
         }
         newName = ""
     }
-    AlertDialog(
-        onDismissRequest = { controller.tagging = null },
-        title = { Text("Tags for ${app.label}") },
-        text = {
-            Column {
-                if (org.tags.isEmpty()) {
-                    Text("No tags yet. Type one below, for example Study, Media or Tools.")
-                }
-                for (tag in org.tags) {
-                    val on = tag.id in current.tags
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { controller.data.apps.setTag(app.ref, tag.id, !on) }
-                            .padding(vertical = 2.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                    ) {
-                        androidx.compose.material3.Checkbox(checked = on, onCheckedChange = { controller.data.apps.setTag(app.ref, tag.id, it) })
-                        Text(tag.name)
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = newName,
-                    onValueChange = { newName = it },
-                    singleLine = true,
-                    label = { Text("New tag") },
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
-                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { addNew() }),
-                )
-                Row(
-                    Modifier.fillMaxWidth().clickable { asTab = !asTab },
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                ) {
-                    androidx.compose.material3.Checkbox(checked = asTab, onCheckedChange = { asTab = it })
-                    Text("Also add it as a drawer tab")
+    val shown = org.tags.sortedBy { it.name.lowercase() }.filter { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) }
+    LiquidSheet(
+        onDismiss = { controller.tagging = null },
+        glass = glass,
+        lightBackground = lightBackground,
+        backdrop = backdrop,
+        title = "Tags for ${app.label}",
+        header = if (org.tags.size > 8) ({
+            SheetField(query, { query = it }, "Find a tag", Modifier.padding(horizontal = 14.dp).padding(bottom = 6.dp).fillMaxWidth(), icon = LauncherIcons.Search)
+        }) else null,
+        footer = {
+            Row(Modifier.padding(horizontal = 14.dp).padding(top = 10.dp).fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                SheetField(newName, { newName = it }, "New tag, for example Study", Modifier.weight(1f), icon = LauncherIcons.Label, onDone = { addNew() })
+                if (newName.isNotBlank()) {
+                    Spacer(Modifier.width(8.dp))
+                    GlassButton(null, LocalSheetContent.current, icon = LauncherIcons.Add, contentDescription = "Add tag") { addNew() }
                 }
             }
+            SheetCheckRow("Also add it as a drawer tab", asTab) { asTab = !asTab }
         },
-        confirmButton = {
-            TextButton(onClick = {
+        actions = {
+            Spacer(Modifier.weight(1f))
+            GlassButton(
+                if (newName.isNotBlank()) "Add and close" else "Done", LocalSheetContent.current,
+                emphasis = ControlEmphasis.Main,
+            ) {
                 if (newName.isNotBlank()) addNew()
                 controller.tagging = null
-            }) { Text(if (newName.isNotBlank()) "Add and close" else "Done") }
+            }
         },
-    )
+    ) {
+        if (org.tags.isEmpty()) {
+            SheetText("No tags yet. Type one below, for example Study, Media or Tools.", Modifier.padding(vertical = 8.dp))
+        }
+        for (tag in shown) {
+            val on = tag.id in current.tags
+            SheetCheckRow(tag.name, on) { controller.data.apps.setTag(app.ref, tag.id, !on) }
+        }
+    }
 }
 

@@ -18,8 +18,8 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** A build published on the project's GitHub releases. */
-data class Release(val version: String, val build: Int, val url: String, val size: Long, val page: String)
+/** A build published on the project's GitHub releases; [notes] is its changelog section (W1, 0.10.0). */
+data class Release(val version: String, val build: Int, val url: String, val size: Long, val page: String, val notes: String = "")
 
 sealed interface UpdateCheck {
     data class Newer(val release: Release) : UpdateCheck
@@ -88,7 +88,8 @@ object Updater {
         val build = Regex("build(\\d+)").find(name)?.groupValues?.get(1)?.toIntOrNull() ?: return null
         val url = asset["browser_download_url"]?.jsonPrimitive?.content ?: return null
         val size = asset["size"]?.jsonPrimitive?.longOrNull ?: 0L
-        return Release(tag.removePrefix("v"), build, url, size, page)
+        val notes = (json["body"] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
+        return Release(tag.removePrefix("v"), build, url, size, page, notes)
     }
 
     /** True when the daily check is on and the last check is more than a day old. */

@@ -1,5 +1,7 @@
 package dev.liquid.launcher.feature.home
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -185,7 +187,7 @@ internal fun TabDialogView(dialog: TabDialog, controller: HomeController, onChan
                 onDismissRequest = { onChange(null) },
                 title = { Text("New tag") },
                 text = {
-                    Column {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
                         OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, placeholder = { Text("For example Study, Media or Favourites") })
                         Row(Modifier.fillMaxWidth().clickable { asTab = !asTab }, verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(checked = asTab, onCheckedChange = { asTab = it })

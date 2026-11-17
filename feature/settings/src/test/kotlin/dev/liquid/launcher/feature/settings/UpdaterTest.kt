@@ -27,4 +27,15 @@ class UpdaterTest {
         assertNull(parse("""{"tag_name":"v0.5.0","assets":[]}"""))
         assertNull(parse("""{"tag_name":"v0.5.0","assets":[{"name":"LiquidLauncher.apk","browser_download_url":"x"}]}"""))
     }
+
+    @Test
+    fun keepsTheReleaseNotes() {
+        val release = parse(
+            """{"tag_name":"v0.10.0","body":"### Added\n- A changelog.\n","assets":[
+                {"name":"LiquidLauncher-0.10.0-build80.apk","browser_download_url":"https://example/a.apk"}]}"""
+        )!!
+        assertEquals("### Added\n- A changelog.\n", release.notes)
+        val noBody = parse("""{"tag_name":"v0.10.0","assets":[{"name":"LiquidLauncher-0.10.0-build80.apk","browser_download_url":"x"}]}""")!!
+        assertEquals("", noBody.notes)
+    }
 }

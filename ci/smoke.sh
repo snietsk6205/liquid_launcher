@@ -73,6 +73,7 @@ clear_anr() {
 }
 
 pass() { echo "PASS: $1"; }
+note() { echo "NOTE: $1"; }
 fail() { echo "FAIL: $1"; echo "      top: $(top_activity)"; FAILS=$((FAILS + 1)); }
 redirect_count() { grep -c 'REDIRECT (' "$LOG" || true; }
 
@@ -86,6 +87,12 @@ redirect_trace() {
 
 service_up() {
   [ "$(grep -c 'service connected' "$LOG")" -gt "$(grep -c 'service disconnected' "$LOG")" ]
+}
+
+# service_ready : connected, and the system launcher resolved after the last (re)connection, which is when the
+# service subscribes to its events again (a screen dump disconnects it; runs 74 and 75 pressed Home in between).
+service_ready() {
+  service_up && [ "$(grep -c 'Redirect: system launcher:' "$LOG")" -ge "$(grep -c 'service connected' "$LOG")" ]
 }
 
 # peek <name> : screenshot and a rough character thumbnail.
@@ -151,6 +158,7 @@ home_press_check() {
   close_dialogs
   adb shell am start -n "$HOME_ACTIVITY" >/dev/null
   wait_top "$HOME_ACTIVITY" 8 || true
+  for i in $(seq 1 30); do service_ready && break; sleep 0.5; done
   sleep 2
   BEFORE=$(redirect_count)
   adb shell input keyevent KEYCODE_HOME
@@ -318,6 +326,21 @@ tap_text() {
   adb shell input tap $pos
 }
 
+# 0.10.0 (W1): a fresh install of a version with a changelog entry shows "What's new" once, above the pill.
+echo "== 8b. What's new card"
+adb shell am start -n "$HOME_ACTIVITY" >/dev/null
+sleep 3
+dump 08-whatsnew
+if on_screen 08-whatsnew "What's new in"; then
+  pass "the What's new card shows after an update"
+  tap_text 08-whatsnew "Got it" exact || true
+  sleep 1.5
+  dump 08-whatsnew-after
+  if on_screen 08-whatsnew-after "What's new in"; then fail "Got it closes the What's new card"; else pass "Got it closes the What's new card"; fi
+else
+  fail "the What's new card shows after an update"
+fi
+
 clear_anr
 # Drawer: swipe up on the home screen (a second, slower try if the first does not open it).
 show_drawer_log() { grep -E "Home: (swipe|drawer)" "$LOG" | tail -6 | sed 's/^/        /'; }
@@ -369,6 +392,73 @@ sleep 1
 dump 09-after-back
 if on_screen 09-after-back "Search apps"; then fail "back closes the drawer"; else pass "back closes the drawer"; fi
 wait_top "$HOME_ACTIVITY" 3 || fail "launcher still in front after back"
+
+# 0.10.0 (W2): with 30 tags, the per-app tag sheet still shows its "New tag" field and its button (before, from
+# about nine tags the field fell out of the dialog), and the drawer's tag list keeps its buttons in sight.
+if [ -n "$APP_LABEL" ]; then
+  echo "== 9c. Thirty tags"
+  dump 09c-home
+  POS=$(python3 ci/find_text.py "$OUT/09c-home.xml" "$APP_LABEL" exact) || POS=""
+  if [ -n "$POS" ]; then
+    adb shell input swipe $POS $POS 1000
+    sleep 1.2
+    dump 09c-menu
+    tap_text 09c-menu "Tags" exact || true
+    sleep 1.5
+    dump 09c-sheet
+    if tap_text 09c-sheet "New tag, for example Study"; then
+      sleep 1.5
+      # The "Add tag" button shows beside the field once something is typed, always in the same place.
+      adb shell input text "tag1"
+      sleep 0.8
+      dump 09c-typed
+      ADD=$(python3 ci/find_text.py "$OUT/09c-typed.xml" "Add tag" exact) || ADD=""
+      for i in $(seq 1 30); do
+        [ "$i" -gt 1 ] && adb shell input text "tag$i"
+        if [ -n "$ADD" ]; then adb shell input tap $ADD; else adb shell input keyevent KEYCODE_ENTER; fi
+        sleep 0.3
+      done
+      sleep 1.5
+      peek 09c-thirty
+      dump 09c-thirty
+      if on_screen 09c-thirty "New tag, for example Study" && on_screen 09c-thirty "Done" exact; then
+        pass "30 tags: the new-tag field and Done stay on screen"
+      else
+        fail "30 tags: the new-tag field and Done stay on screen"
+        python3 ci/describe_ui.py "$OUT/09c-thirty.xml" 20
+      fi
+      on_screen 09c-thirty "Also add it as a drawer tab" || note "the drawer-tab switch is not in sight with 30 tags"
+    else
+      fail "the per-app tag sheet opens with its new-tag field"
+    fi
+    adb shell input keyevent KEYCODE_BACK
+    sleep 0.6
+    adb shell input keyevent KEYCODE_BACK
+    sleep 1
+    # The drawer's tag list with those tags: its buttons are on screen (not under the drawer's pill).
+    adb shell input swipe 540 1500 540 400 450
+    sleep 2
+    dump 09c-drawer
+    if tap_text 09c-drawer "All tags" exact; then
+      sleep 1.5
+      peek 09c-tag-list
+      dump 09c-tag-list
+      if on_screen 09c-tag-list "Done" exact && on_screen 09c-tag-list "Clear" exact; then
+        pass "the drawer's tag list keeps Clear and Done in sight with 30 tags"
+      else
+        fail "the drawer's tag list keeps Clear and Done in sight with 30 tags"
+      fi
+      adb shell input keyevent KEYCODE_BACK
+      sleep 0.8
+    else
+      note "no tag button in the drawer (tag strip hidden?)"
+    fi
+    adb shell input keyevent KEYCODE_BACK
+    sleep 1
+  else
+    note "the app placed on the home screen was not found for the tag check"
+  fi
+fi
 
 # Search: swipe down, type a calculation.
 clear_anr
@@ -572,7 +662,12 @@ else
     # With the block done and no task left, the clock line moves on to tomorrow instead of vanishing.
     dump 14b-home2
     peek 14b-home2
-    if on_screen 14b-home2 "· Micro smoke tomorrow"; then pass "with today done the clock line shows tomorrow's first block"; else fail "with today done the clock line shows tomorrow's first block"; fi
+    # From 22:30 to 5:00 (the default wind-down) the line offers the evening check-in first, by design (run 75
+    # ran at 22:46 and failed here), so what is expected depends on the emulator's clock.
+    NOW=$(adb shell date +%H%M | tr -d '\r')
+    if [ "$((10#$NOW))" -ge 2230 ] || [ "$((10#$NOW))" -lt 500 ]; then
+      if on_screen 14b-home2 "Evening check-in"; then pass "after 22:30 the clock line offers the evening check-in"; else fail "after 22:30 the clock line offers the evening check-in"; fi
+    elif on_screen 14b-home2 "· Micro smoke tomorrow"; then pass "with today done the clock line shows tomorrow's first block"; else fail "with today done the clock line shows tomorrow's first block"; fi
   else
     fail "the clock line can be tapped"
   fi

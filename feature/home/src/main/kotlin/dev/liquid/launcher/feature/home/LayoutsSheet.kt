@@ -1,5 +1,6 @@
 package dev.liquid.launcher.feature.home
 
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
@@ -76,99 +77,22 @@ internal fun LayoutsSheet(
     controller: HomeController,
 ) {
     val state by controller.data.layouts.state.collectAsState()
-    val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
-    val shape = RoundedCornerShape(32.dp)
-    val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
+    val color = sheetContentColor(glass, lightBackground)
     var holding by remember { mutableStateOf<SavedLayout?>(null) }
     var renaming by remember { mutableStateOf<SavedLayout?>(null) }
+    val settings = controller.data.settings
+    val timerUntil by settings.derive { get(LauncherSettings.LayoutTimerUntil).toLongOrNull() }
+    val timerBack by settings.derive { get(LauncherSettings.LayoutTimerBack) }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { controller.layoutsSheet = false },
-    ) {
-        Column(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(12.dp)
-                .graphicsLayer {
-                    alpha = appear.value.coerceIn(0f, 1f)
-                    translationY = (1f - appear.value) * 40.dp.toPx()
-                }
-                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground, large = true))
-                .clip(shape)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
-                .padding(vertical = 16.dp),
-        ) {
-            Text(
-                "Layouts",
-                modifier = Modifier.padding(horizontal = 20.dp),
-                style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 17.sp, fontWeight = FontWeight.SemiBold),
-            )
-            Spacer(Modifier.height(12.dp))
-            if (state.layouts.isEmpty()) {
-                Text(
-                    "Save this home screen as a layout (pages, pill, icons, gestures and optionally the wallpaper), " +
-                        "then set up another one and switch between them here or from the home menu.",
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                    style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.8f), fontSize = 14.sp),
-                )
-            } else {
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    for (layout in state.layouts) {
-                        val current = layout.id == state.current
-                        Column(
-                            Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .combinedClickable(
-                                    onClick = {
-                                        controller.layoutsSheet = false
-                                        if (!current) controller.switchLayout(layout.id)
-                                    },
-                                    onLongClick = { holding = layout },
-                                )
-                                .padding(4.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            LayoutMiniature(layout, color, current)
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                layout.name,
-                                modifier = Modifier.width(78.dp),
-                                style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 13.sp, fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            if (layout.wallpaper != null) {
-                                LauncherIcon(LauncherIcons.Image, contentDescription = "Has its own wallpaper", tint = color.copy(alpha = 0.6f), size = 14.dp)
-                            }
-                        }
-                    }
-                }
-            }
-            // P8 (0.9.21): a layout on for a while says until when, and can be kept.
-            val settings = controller.data.settings
-            val timerUntil by settings.derive { get(LauncherSettings.LayoutTimerUntil).toLongOrNull() }
-            val timerBack by settings.derive { get(LauncherSettings.LayoutTimerBack) }
-            val until = timerUntil
-            if (until != null && until > System.currentTimeMillis()) {
-                val backName = state.layouts.firstOrNull { it.id == timerBack }?.name ?: "the layout before"
-                Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Until " + java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(until)) + ", then $backName",
-                        modifier = Modifier.weight(1f),
-                        style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.8f), fontSize = 13.sp),
-                    )
-                    SheetChip("Keep it", LauncherIcons.Check, color) { controller.cancelLayoutTimer() }
-                }
-            }
-            Spacer(Modifier.height(14.dp))
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    // W2: the shared sheet: the layouts scroll if the sheet is short, the buttons stay at the bottom.
+    LiquidSheet(
+        onDismiss = { controller.layoutsSheet = false },
+        glass = glass,
+        lightBackground = lightBackground,
+        backdrop = backdrop,
+        title = "Layouts",
+        actions = {
+            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SheetChip("Save as new…", LauncherIcons.Save, color) { controller.savingLayout = true }
                 if (state.current != null) {
                     SheetChip("Save changes", LauncherIcons.Check, color) {
@@ -183,6 +107,61 @@ internal fun LayoutsSheet(
                     }
                 }
             }
+        },
+    ) {
+        if (state.layouts.isEmpty()) {
+            SheetText(
+                "Save this home screen as a layout (pages, pill, icons, gestures and optionally the wallpaper), " +
+                    "then set up another one and switch between them here or from the home menu.",
+            )
+        } else {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                for (layout in state.layouts) {
+                    val current = layout.id == state.current
+                    Column(
+                        Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .combinedClickable(
+                                onClick = {
+                                    controller.layoutsSheet = false
+                                    if (!current) controller.switchLayout(layout.id)
+                                },
+                                onLongClick = { holding = layout },
+                            )
+                            .padding(4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        LayoutMiniature(layout, color, current)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            layout.name,
+                            modifier = Modifier.width(78.dp),
+                            style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 13.sp, fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (layout.wallpaper != null) {
+                            LauncherIcon(LauncherIcons.Image, contentDescription = "Has its own wallpaper", tint = color.copy(alpha = 0.6f), size = 14.dp)
+                        }
+                    }
+                }
+            }
+        }
+        // P8 (0.9.21): a layout on for a while says until when, and can be kept.
+        val until = timerUntil
+        if (until != null && until > System.currentTimeMillis()) {
+            val backName = state.layouts.firstOrNull { it.id == timerBack }?.name ?: "the layout before"
+            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Until " + java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(until)) + ", then $backName",
+                    modifier = Modifier.weight(1f),
+                    style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.8f), fontSize = 13.sp),
+                )
+                SheetChip("Keep it", LauncherIcons.Check, color) { controller.cancelLayoutTimer() }
+            }
         }
     }
 
@@ -192,7 +171,7 @@ internal fun LayoutsSheet(
             onDismissRequest = { holding = null },
             title = { Text(layout.name) },
             text = {
-                Column {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
                     if (layout.id != state.current && state.current != null) {
                         // P8 (0.9.21): for a while, then back to the layout on now.
                         for ((minutes, label) in listOf(30 to "30 minutes", 60 to "1 hour", 120 to "2 hours")) {
@@ -288,7 +267,7 @@ internal fun SaveLayoutDialog(controller: HomeController) {
         onDismissRequest = { controller.savingLayout = false },
         title = { Text("Save layout") },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, label = { Text("Name, for example Study") })
                 Row(Modifier.fillMaxWidth().clickable { withWallpaper = !withWallpaper }, verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = withWallpaper, onCheckedChange = { withWallpaper = it }, enabled = wallpaper.hasManagedWallpaper)

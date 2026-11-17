@@ -560,7 +560,8 @@ internal fun TagSheet(
                     )
                 }
             }
-            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 380.dp).padding(top = 6.dp)) {
+            // W2: the list takes the height that is left between the search and the buttons, and scrolls.
+            LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false).padding(top = 6.dp)) {
                 for ((title, list) in sections) {
                     item(key = "h:$title") {
                         Text(
@@ -612,11 +613,15 @@ internal fun TagSheet(
         },
       ) { measurables, constraints ->
         val margin = 12.dp.roundToPx()
-        val bottom = insets.getBottom(this) + margin
+        // W2: above the keyboard and the navigation bar, and above the drawer's field when it is at the bottom
+        // (it is drawn over the drawer, so it hid the sheet's buttons).
+        val pillTop = controller.drawerPillTop?.let { (it - origin.y).roundToInt() }?.takeIf { it in 1 until constraints.maxHeight }
+        val bottom = maxOf(insets.getBottom(this) + margin, if (pillTop != null) constraints.maxHeight - pillTop + margin else 0)
         val top = 48.dp.roundToPx()
         val width = constraints.maxWidth - margin * 2
+        val room = (constraints.maxHeight - bottom - top).coerceAtLeast(0)
         val content = measurables[1].measure(
-            Constraints(minWidth = width, maxWidth = width, maxHeight = (constraints.maxHeight - bottom - top).coerceAtLeast(0))
+            Constraints(minWidth = width, maxWidth = width, maxHeight = minOf(room, ((constraints.maxHeight - bottom) * SheetMaxFraction).roundToInt()))
         )
         val end = androidx.compose.ui.geometry.Rect(
             margin.toFloat(), (constraints.maxHeight - bottom - content.height).toFloat(),

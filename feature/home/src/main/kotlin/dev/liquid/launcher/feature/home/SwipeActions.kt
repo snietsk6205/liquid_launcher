@@ -58,7 +58,7 @@ fun SwipeActionsDialog(item: HomeItem, apps: List<AppEntry>, controller: HomeCon
             onDismissRequest = { controller.swipeEditing = null },
             title = { Text("Gestures on this icon") },
             text = {
-                Column {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
                     Text("A tap still opens the app. With a double tap set, a single tap waits a moment to tell the two apart.")
                     for ((id, title) in Gestures) {
                         Column(Modifier.fillMaxWidth().clickable { picking = id }.padding(vertical = 12.dp)) {

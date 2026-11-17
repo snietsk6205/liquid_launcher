@@ -1,5 +1,7 @@
 package dev.liquid.launcher.feature.settings
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -100,7 +102,7 @@ internal fun PillItemsEditor(store: SettingsStore) {
             onDismissRequest = { adding = false },
             title = { Text("Add to the pill") },
             text = {
-                Column {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
                     listOf(
                         "Search field" to { save(slots + PillSlot.Search) },
                         "Date" to { save(slots + PillSlot.Date) },
@@ -373,7 +375,7 @@ internal fun TabsAndTagsEditor() {
             onDismissRequest = { addingTab = false },
             title = { Text("Add a drawer tab") },
             text = {
-                Column {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
                     if (options.isEmpty()) BodyText("Every tag already has a tab. Create a tag first.")
                     for ((name, source, description) in options) {
                         Column(
@@ -449,7 +451,7 @@ internal fun IconPacksEditor(store: SettingsStore) {
             onDismissRequest = { choosing = null },
             title = { Text(setting.title) },
             text = {
-                Column {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
                     for (value in options) {
                         Text(
                             name(value),

@@ -1,5 +1,7 @@
 package dev.liquid.launcher.feature.settings
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 
 import androidx.compose.ui.draw.clip
@@ -90,7 +92,7 @@ private fun ColorRow(setting: ColorSetting, store: SettingsStore) {
             onDismissRequest = { open = false },
             title = { Text(setting.title) },
             text = {
-                Column {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
                     Box(
                         Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(12.dp))
                             .background(androidx.compose.ui.graphics.Color(current))
@@ -275,7 +277,7 @@ private fun ChoiceRow(setting: ChoiceSetting, store: SettingsStore) {
             onDismissRequest = { open = false },
             title = { Text(setting.title) },
             text = {
-                Column {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
                     setting.options.forEach { (optionValue, label) ->
                         Row(
                             Modifier
@@ -347,7 +349,7 @@ private fun ListRow(setting: StringListSetting, store: SettingsStore) {
             onDismissRequest = { open = false },
             title = { Text(setting.title) },
             text = {
-                Column {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
                     Text("One entry per line", style = MaterialTheme.typography.bodyMedium)
                     OutlinedTextField(
                         value = draft,

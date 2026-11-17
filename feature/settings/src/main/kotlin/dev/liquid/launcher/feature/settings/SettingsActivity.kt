@@ -26,6 +26,7 @@ internal sealed interface Screen {
     data object Log : Screen
     data object About : Screen
     data object Updates : Screen
+    data object Changelog : Screen
 }
 
 class SettingsActivity : ComponentActivity() {
@@ -98,6 +99,7 @@ private fun SettingsApp(
         Screen.GlassTune -> GlassBenchScreen(store, window, wallpaper, measureFirst = false, onBack = back)
         Screen.Log -> LogScreen(back)
         Screen.About -> AboutScreen(back)
-        Screen.Updates -> UpdatesScreen(store, back)
+        Screen.Updates -> UpdatesScreen(store, open, back)
+        Screen.Changelog -> ChangelogScreen(back)
     }
 }

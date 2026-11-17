@@ -83,75 +83,56 @@ internal val WidgetParts: Map<String, List<Triple<String, String, Boolean>>> = m
  */
 @Composable
 internal fun WidgetOptionsSheet(item: HomeItem, glass: GlassConfig, lightBackground: Boolean, backdrop: Backdrop, controller: HomeController) {
-    val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
-    val shape = RoundedCornerShape(30.dp)
-    val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
+    val color = sheetContentColor(glass, lightBackground)
     val o = item.options.orEmpty()
     fun set(key: String, value: String?) = controller.setItemOption(item.id, key, value)
-    Box(
-        Modifier
-            .fillMaxSize()
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { controller.widgetOptions = null },
-    ) {
-        Column(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(12.dp)
-                .graphicsLayer {
-                    alpha = appear.value.coerceIn(0f, 1f)
-                    translationY = (1f - appear.value) * 40.dp.toPx()
-                }
-                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground, large = true))
-                .clip(shape)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
-                .padding(vertical = 16.dp),
+    val calendar = item.widget == "calendar"
+    ProvideControls(controller, glass, null) {
+        // W2: the shared sheet: the options scroll, "Done" stays at the bottom.
+        LiquidSheet(
+            onDismiss = { controller.widgetOptions = null },
+            glass = glass,
+            lightBackground = lightBackground,
+            backdrop = backdrop,
+            title = when (item.widget) {
+                "battery" -> "Battery widget"
+                "calendar" -> "Calendar widget"
+                else -> "Date widget"
+            },
+            cornerRadius = 30.dp,
+            actions = {
+                Spacer(Modifier.weight(1f))
+                GlassButton("Done", color, emphasis = ControlEmphasis.Main) { controller.widgetOptions = null }
+            },
         ) {
-            ProvideControls(controller, glass, null) {
-                val calendar = item.widget == "calendar"
+            if (!calendar) {
+                OptionRow("Size", color, listOf("s" to "Small", null to "Medium", "l" to "Large"), o["size"]) { set("size", it) }
+                OptionRow("Weight", color, listOf("light" to "Light", "regular" to "Regular", null to "Medium", "bold" to "Bold"), o["weight"]) { set("weight", it) }
+            }
+            OptionRow("Colour", color, listOf(null to "Text", "accent" to "Accent"), o["tint"]) { set("tint", it) }
+            if (!calendar) {
+                OptionRow("Font", color, listOf(null to "The clock's", "text" to "The launcher's"), o["font"]) { set("font", it) }
+            } else {
+                OptionRow("Card", color, listOf(null to "As for all", "glass" to "Glass card", "none" to "On the wallpaper"), o["card"]) { set("card", it) }
+                OptionRow("Corners", color, listOf("s" to "Small", null to "Medium", "l" to "Large"), o["corner"]) { set("corner", it) }
+            }
+            val parts = WidgetParts[item.widget].orEmpty()
+            if (parts.isNotEmpty()) {
                 Text(
-                    when (item.widget) {
-                        "battery" -> "Battery widget"
-                        "calendar" -> "Calendar widget"
-                        else -> "Date widget"
-                    },
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                    style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 17.sp, fontWeight = FontWeight.SemiBold),
+                    "Shows",
+                    modifier = Modifier.padding(start = 20.dp, top = 12.dp),
+                    style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.7f), fontSize = 13.sp),
                 )
-                if (!calendar) {
-                    OptionRow("Size", color, listOf("s" to "Small", null to "Medium", "l" to "Large"), o["size"]) { set("size", it) }
-                    OptionRow("Weight", color, listOf("light" to "Light", "regular" to "Regular", null to "Medium", "bold" to "Bold"), o["weight"]) { set("weight", it) }
-                }
-                OptionRow("Colour", color, listOf(null to "Text", "accent" to "Accent"), o["tint"]) { set("tint", it) }
-                if (!calendar) {
-                    OptionRow("Font", color, listOf(null to "The clock's", "text" to "The launcher's"), o["font"]) { set("font", it) }
-                } else {
-                    OptionRow("Card", color, listOf(null to "As for all", "glass" to "Glass card", "none" to "On the wallpaper"), o["card"]) { set("card", it) }
-                    OptionRow("Corners", color, listOf("s" to "Small", null to "Medium", "l" to "Large"), o["corner"]) { set("corner", it) }
-                }
-                val parts = WidgetParts[item.widget].orEmpty()
-                if (parts.isNotEmpty()) {
-                    Text(
-                        "Shows",
-                        modifier = Modifier.padding(start = 20.dp, top = 12.dp),
-                        style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.7f), fontSize = 13.sp),
-                    )
-                    Row(
-                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        parts.forEach { (key, label, default) ->
-                            val on = o[key]?.let { it == "on" } ?: default
-                            GlassButton(label, color, emphasis = if (on) ControlEmphasis.Selected else ControlEmphasis.Normal) {
-                                set(key, if (on == default) (if (on) "off" else "on") else null)
-                            }
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    parts.forEach { (key, label, default) ->
+                        val on = o[key]?.let { it == "on" } ?: default
+                        GlassButton(label, color, emphasis = if (on) ControlEmphasis.Selected else ControlEmphasis.Normal) {
+                            set(key, if (on == default) (if (on) "off" else "on") else null)
                         }
                     }
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.End) {
-                    GlassButton("Done", color, emphasis = ControlEmphasis.Main) { controller.widgetOptions = null }
                 }
             }
         }

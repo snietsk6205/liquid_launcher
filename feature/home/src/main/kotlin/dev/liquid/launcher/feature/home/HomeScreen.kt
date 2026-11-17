@@ -936,7 +936,7 @@ private fun HomeScreenBody(
             DragGhost(drag)
         }
         controller.renaming?.let { RenameDialog(it, controller) }
-        controller.tagging?.let { TagsDialog(it, controller) }
+        Presence(controller.tagging) { app -> ProvideControls(controller, glass, null) { AppTagsSheet(app, controller, glass, lightBackground, overlayBackdrop) } }
         controller.iconPicking?.let { IconPickerDialog(it, controller) }
         controller.swipeEditing?.let { id -> layout.find(id)?.let { (_, item) -> SwipeActionsDialog(item, apps, controller) } }
         if (live) TransitionOverlay(controller, transitionStyle)
@@ -944,6 +944,8 @@ private fun HomeScreenBody(
         // What a press throws over the screen (0.8.0, D111), above everything it was pressed on.
         if (touchFx != null) TouchFxLayer(touchFx, touchConfig)
         if (live) NoticeHost(controller, glass, lightBackground, overlayBackdrop)
+        // W1 (0.10.0): after an update, what it brought, once.
+        if (live) WhatsNewHost(controller, glass, lightBackground, overlayBackdrop)
     }
 }
 

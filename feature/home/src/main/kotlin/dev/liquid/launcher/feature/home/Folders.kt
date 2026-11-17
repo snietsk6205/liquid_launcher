@@ -1,5 +1,7 @@
 package dev.liquid.launcher.feature.home
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import android.app.ActivityOptions
 import android.graphics.Rect as AndroidRect
 import androidx.compose.animation.core.Animatable
@@ -198,11 +200,13 @@ internal fun FolderOverlay(
                         scaleY = 0.88f + 0.12f * p
                     }
                 }
+                // W2: a big folder scrolls inside its card instead of running off the screen.
+                .menuHeightLimit()
                 .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground, large = true))
                 .clip(shape)
                 // Taps inside the card do not close it.
                 .pointerInput(Unit) { detectTapGestures { } }
-                .padding(20.dp),
+                .padding(top = 20.dp, start = 20.dp, end = 20.dp),
         ) {
             BasicTextField(
                 value = name,
@@ -215,10 +219,12 @@ internal fun FolderOverlay(
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(16.dp))
-            for (row in entries.chunked(columns)) {
-                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                    for (app in row) FolderApp(app, folder.id, color, grid, controller, Modifier.weight(1f))
-                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(bottom = 20.dp)) {
+                for (row in entries.chunked(columns)) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                        for (app in row) FolderApp(app, folder.id, color, grid, controller, Modifier.weight(1f))
+                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
                 }
             }
         }

@@ -234,6 +234,9 @@ class HomeController(
     /** The pill's bounds (root px), kept up to date by the pill. */
     var pillBounds: androidx.compose.ui.geometry.Rect? = null
 
+    /** W2: the top of the pill while it is the drawer's field (root px), so sheets over the drawer end above it. */
+    var drawerPillTop: Float? = null
+
     /** Finger travel in px between the hub closed and open, from its last layout. */
     var hubTravel = 1f
 
