@@ -106,6 +106,10 @@ internal fun BoxScope.ResizeFrame(item: HomeItem, pageIndex: Int, env: PageEnv, 
 /** A small dark chip over a selected widget in edit mode. */
 @Composable
 private fun EditChip(label: String, icon: Int, onClick: () -> Unit) {
+    if (LocalControls.current?.theme != null) {
+        ThemeChip(label, false, height = 30.dp, icon = icon, onClick = onClick)
+        return
+    }
     Row(
         Modifier
             .clip(RoundedCornerShape(50))

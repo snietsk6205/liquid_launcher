@@ -301,6 +301,13 @@ private fun StripChip(
     onTap: () -> Unit,
     onHold: (() -> Unit)?,
 ) {
+    if (LocalControls.current?.theme != null) {
+        ThemeChip(
+            label, on, height = 34.dp, icon = icon, trailing = count?.toString(),
+            onLongClick = onHold, onClick = if (interactive) onTap else null,
+        )
+        return
+    }
     val shape = RoundedCornerShape(50)
     val accent = HomeTheme.accent
     val textColor = if (on) readableOn(accent) else color

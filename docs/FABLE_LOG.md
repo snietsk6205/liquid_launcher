@@ -582,11 +582,59 @@ to every button, pill and chip, with an editor and JSON import/export).
 
 ---
 
+## Entry 19: 0.9.13, P4 part two: your WM Keyboard theme styles every button and chip (2026-11-17, Opus 5.5)
+
+WM Keyboard (MIT; this time `github.com` answered, so its code was read) keeps a theme as `ThemeSpec` with a
+`FrostSpec`, and derives what a theme leaves out in `KbTheme`. The launcher's `LiquidTheme`
+(`core/data/LiquidTheme.kt`) takes the parts a launcher has, with the same rules:
+
+| WM Keyboard | Launcher | Your theme |
+|---|---|---|
+| keys: fill, gradient, text, pressed, border, elevation, shape, radius | buttons | `#1C3C323E` (11 % plum-grey), text `#E9E9EE`, pressed `#723F61`, pill |
+| enter key | the main button when "Main button colour" is "Like the other buttons" (else the block's colour, as before) | same as the keys |
+| chips: fill, text, on, border, shape, radius | chips | `#322B35`, on `#723F61` with `#E9E9EE` (your accent `#D182AF` does not read on it: under 3:1, so WM's rule picks the key text) |
+| toolbar circles | round icon buttons | `#433D323F`, icon `#E9E9EE` at 65 % |
+| frost: style, blur, saturation, brightness, rim, rim colour, grain, refraction, dispersion, surfaces | the glass under each control (when the control sits on glass) | FROSTED, blur 9, colour 125 %, rim 0.86, no grain, every surface glass |
+| accent | Settings → Theme → Accent | `#D182AF` |
+| (key colour) | Settings → Theme → Glass tint colour | `#3C323E` |
+
+Missing values are derived as WM Keyboard does: pressed = a quarter from the key to its text (in Oklab, as
+Compose), the active tool falls back to the pressed key and the active chip to the active tool, a text on a fill
+is the first candidate with 3:1 contrast, else black or white. Decorative shapes (arch, leaf, hexagon, scallop,
+ticket, slant) are drawn rounded, as WM Keyboard does for containers; squircle as a rounded rectangle with a larger
+radius (Compose has none).
+
+How it draws (`Controls.kt`): every `GlassButton` (Today, the Now card, the hub, sheets, the clock gallery, the
+layouts sheet) and every chip row (drawer tags, wallpaper studio, edit chips) take the theme. Pressed and
+selected colours ease with a spring (never a jump). On glass the frost is drawn with the real glass shader: for
+FROSTED a hairline rim lit on the edge facing the light and shaded on the other, no bend; for LIQUID the edge bends
+and splits colours too. A border, a shadow and a glow are drawn when the theme has them.
+
+**Default:** your theme, from `docs/reference/nice_liquid.wmtheme.json`; a unit test checks that importing that
+file gives exactly the built-in default. Settings → Buttons → "Buttons and chips": Your theme, or the launcher's own
+buttons (the earlier options come back). The theme card there shows its colours and imports (the launcher's
+`.liquidtheme.json`, WM Keyboard themes and backups), exports, and goes back to your keyboard theme; an imported
+theme's accent and glass colour go to Settings → Theme. **Migration:** once, on the first start of 0.9.13, the
+theme's accent and glass colour are written where you never chose your own; a colour you had set is kept.
+
+Correction to 0.9.12: your theme's frost style is FROSTED (no bend; its refraction 0.6 and dispersion 0.25 are
+WM's defaults, used only by LIQUID), and its rim is a hairline lit on one edge and dark on the other. The "Your
+keyboard" glass preset and the "Nice liquid" look now say exactly that: blur 9, colour 125 %, bend 0, edge 4 dp,
+light on the edge 85 %, shading 60 %, no rainbow, no swell, no grain (no glow either: WM has none). The real liquid
+glass stays the launcher's default glass.
+
+Also: Tune the glass is now still unless you press Move (it moves while measuring), which is what let the emulator test read the screen (0.9.12 was not released for that).
+
+Not done: editing the theme surface by surface in the launcher (import/export works; the editor is next), menus
+and popups (your theme's `#443A47` popups are opaque; the long-press menu keeps the glass for now, see Questions).
+
+---
+
 ## End of this session (2026-11-17): state for the next model
 
-**Version shipped:** 0.9.12 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
+**Version shipped:** 0.9.13 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
 0.9.1 (run 63), 0.9.2 (run 64, second attempt; the first failed on a slow emulator, see entry 11). 0.9.3 and 0.9.4 were
-pushed together (run 65); 0.9.5 to 0.9.9 together (run 66, passed); 0.9.10 and 0.9.11 together (run 67, passed); 0.9.12 after it. Check the GitHub releases for the newest `v0.9.x`; if a
+pushed together (run 65); 0.9.5 to 0.9.9 together (run 66, passed); 0.9.10 and 0.9.11 together (run 67, passed); 0.9.12 (run 68: built, unit tests passed, the real glass shader compiled on the emulator, but not released: my new check of the tuning panel found no screen dump, because the bench kept moving after measuring and the screen never settled; 0.9.13 keeps it still unless you press Move); 0.9.13 after it. Check the GitHub releases for the newest `v0.9.x`; if a
 run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Nothing of this session was tried on the phone.
 
 | Workstream | State |
@@ -596,7 +644,7 @@ run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Not
 | P1 b. drawer / keyboard ghost | Done (0.9.0) |
 | P2 study hub, pill, clock notice, A2, A3, B4 | Done (0.9.1, 0.9.2): hub grown out of the pill, drag to close, timeline, arrival, shift tonight, notes, templates, check-in; the pill's study item fully customisable; the clock line with one action |
 | P3 search page | Done (0.9.3): study-first cards in your order, calendar never cut, commands. The transition was already finger-driven and interruptible; unchanged |
-| P4 real liquid glass, WM Keyboard theme engine | Partly (0.9.12): the real glass (AGSL: Snell refraction by the edge's shape, dispersion, swell, specular rim, depth shading, grain), Tune the glass with live sliders and presets incl. your keyboard's frost. **Not:** the theme engine. Your theme backup is in `docs/reference/nice_liquid.wmtheme.json` (keys: pill shape, background 0x1C3C323E (11 % plum-grey), text 0xFFE9E9EE, pressed 0xFF723F61, accent 0xFFD182AF, popups 0xFF443A47, tool circles 0x433D323F, chips 0xFF322B35; touch bloom: squish motion, light 0.5, radius 100 dp, wobble 0.5) |
+| P4 real liquid glass, WM Keyboard theme engine | Mostly (0.9.12, 0.9.13): the real glass (AGSL: Snell refraction by the edge's shape, dispersion, swell, specular rim, depth shading, grain) with Tune the glass (live sliders, presets); the theme engine after WM Keyboard's model, your backup as the default theme of every button, chip and round button, import/export, accent and glass colour. **Not:** a surface-by-surface theme editor in the launcher; menus and popups in the theme |
 | P5 drawer | Partly (0.9.8): bigger tag button, field with the study glance and Ask Claude. Not: command hand-off from the drawer field, tag list as a container transform, the top tabs pill in the home-pill morph |
 | P6 scroll index | Done (0.9.6): the rail |
 | P7 widgets | Partly (0.9.10): no glass box behind the built-in widgets by default. Not: per-widget layout / font / accent / fields options, restyling other apps' widgets (re-tint their view tree) with a per-widget off switch |
@@ -620,13 +668,15 @@ run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Not
    instructions for it? Until then the local copy in settings is used.
 6. Wobble while editing is off by default (you disliked the old wobbles): on, subtle?
 7. Speed-bump tag name: "distracting" assumed; give your apps that tag from their long-press menu.
+8. Your theme's popups are opaque plum (`#443A47`): shall the long-press menu and the home menu take that colour
+   (solid, no glass), or keep the glass? Assumed: keep the glass (only buttons, chips and round buttons are themed).
+9. The default glass is the real liquid glass; your keyboard is frosted (no bend). Assumed: liquid glass for the big
+   surfaces (pill, drawer, menus), your frost for buttons and chips; "Your keyboard" in Tune the glass makes
+   everything frosted in one tap.
 
-**Exact next step:** P4, part two: the theme engine. (1) A `LiquidTheme` model in `core/designsystem` (per-surface
-fill or multi-stop gradient, border colour and width, glow, shadow, corner radius, pressed and focused states, for:
-buttons, main button, chips, pills, cards, popups/menus, tool circles), JSON import/export, and an importer for WM
-Keyboard backups mapping `keyBackground`, `pressedKeyBackground`, `chipBackground`, `popupBackground`,
-`toolCircleBackground`, `accent`, `keyText`, `keyShape` and `frost` onto it. (2) Import
-`docs/reference/nice_liquid.wmtheme.json` as the default theme on first run of that version (settings migrated, not
-reset). (3) Route `controlSurface` (Controls.kt), the pill and the chips through it, keeping "Settings → Buttons" as
-overrides. (4) A theme editor with live preview. wmkeyboard is MIT; `github.com` code browsing was blocked from this
-session's network (403), so the model is reimplemented from the backup's fields.
+**Exact next step:** the theme editor (P4's last part): in Settings → Buttons, under the theme card, one row per
+surface (buttons, main button, chips, round buttons) to change fill, text, pressed, selected and border colours
+(the existing colour picker rows), border width, shape and corner radius, glass on or off, and the frost (style,
+blur, colour, rim, grain, bend, rainbow), each change written to `theme.json` through `ThemeApply.use` so the
+preview above shows it at once. Then P5: the tag list as a container transform and the home pill morphing into the
+drawer's field.

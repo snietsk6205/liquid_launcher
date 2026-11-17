@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -42,6 +45,12 @@ import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.highlight.HighlightStyle
 import com.kyant.backdrop.effects.colorControls
+import com.kyant.backdrop.effects.blur
+import dev.liquid.launcher.core.data.ControlTheme
+import dev.liquid.launcher.core.data.LiquidTheme
+import dev.liquid.launcher.core.data.LiquidThemes
+import dev.liquid.launcher.core.designsystem.GlassEngine
+import dev.liquid.launcher.core.designsystem.LiquidShader
 import dev.liquid.launcher.core.designsystem.GlassQuality
 import dev.liquid.launcher.core.designsystem.GlassStyle
 import dev.liquid.launcher.core.designsystem.realGlass
@@ -98,7 +107,199 @@ internal class ControlEnv(
     val glass: GlassConfig,
     val backdrop: Backdrop?,
     val redraw: (() -> Any?)? = null,
+    /** P4 (0.9.13): the theme of buttons and chips; null draws the launcher's own look (Settings → Buttons). */
+    val theme: LiquidTheme? = null,
 )
+
+/** The theme of buttons and chips (P4, 0.9.13), or null for the launcher's own look. Decoded once per change. */
+fun SettingsStore.controlTheme(): LiquidTheme? =
+    if (get(S.ThemeControls) != "theme") null else ThemeCache.of(get(S.ThemeJson))
+
+private object ThemeCache {
+    private var text: String? = null
+    private var theme: LiquidTheme = LiquidThemes.Keyboard
+
+    @Synchronized
+    fun of(json: String): LiquidTheme {
+        if (json != text) {
+            theme = if (json.isBlank()) LiquidThemes.Keyboard else LiquidThemes.decode(json) ?: LiquidThemes.Keyboard
+            text = json
+        }
+        return theme
+    }
+}
+
+/** The outline of a themed control. CIRCLE is a pill: a round button is as wide as it is high. */
+internal fun themeShape(kind: ControlTheme): CornerBasedShape = when (kind.shape) {
+    "PILL", "CIRCLE" -> RoundedCornerShape(50)
+    "SHARP" -> RoundedCornerShape(0.dp)
+    "CUT" -> CutCornerShape(kind.cornerDp.coerceIn(0, 28).dp)
+    // Compose has no squircle; a rounded rectangle with a larger radius is close at button size.
+    "SQUIRCLE" -> RoundedCornerShape((kind.cornerDp * 1.4f).coerceIn(0f, 40f).dp)
+    else -> RoundedCornerShape(kind.cornerDp.coerceIn(0, 40).dp)
+}
+
+/** The kind of control [emphasis] and [tool] ask for in [theme]. */
+internal fun themeKind(theme: LiquidTheme, look: ControlLook, emphasis: ControlEmphasis, tool: Boolean): ControlTheme = when {
+    tool -> theme.tool
+    emphasis == ControlEmphasis.Main && look.main == "plain" -> theme.main
+    emphasis == ControlEmphasis.Selected -> theme.chip
+    else -> theme.button
+}
+
+/**
+ * A control drawn by the theme (P4, 0.9.13): its fill (the pressed or selected one when pressed or on, eased by a
+ * spring that never jumps), a sheen, border, shadow and glow, and, where the theme makes it glass and a backdrop is
+ * at hand, WM Keyboard's frost under the fill: the backdrop blurred and coloured, with the rim of light on the edge
+ * facing the light and a shadow on the other (the real glass shader, thin), and for a LIQUID theme the bend too.
+ * The main button keeps its block or accent colour unless "Main button colour" is "Like the other buttons".
+ */
+@Composable
+internal fun themedSurface(
+    env: ControlEnv,
+    theme: LiquidTheme,
+    kind: ControlTheme,
+    shape: CornerBasedShape,
+    emphasis: ControlEmphasis,
+    accent: Color?,
+    pressed: Boolean,
+): ControlSurface {
+    val look = env.look
+    val main: Color? = when {
+        emphasis != ControlEmphasis.Main || look.main == "plain" -> null
+        look.main == "accent" || accent == null -> HomeTheme.accent
+        else -> accent
+    }
+    val selected = emphasis == ControlEmphasis.Selected
+    val targetFill = when {
+        main != null -> if (pressed) androidx.compose.ui.graphics.lerp(main, Color(kind.pressed), 0.35f) else main.copy(alpha = 0.86f)
+        selected -> Color(kind.active)
+        pressed -> Color(kind.pressed)
+        else -> Color(kind.fill)
+    }
+    val targetContent = when {
+        main != null -> readableOn(main)
+        selected -> Color(kind.activeText)
+        pressed -> Color(kind.pressedText ?: kind.text)
+        else -> Color(kind.text)
+    }
+    val fill by androidx.compose.animation.animateColorAsState(targetFill, spring(stiffness = 900f), label = "themeFill")
+    val content by androidx.compose.animation.animateColorAsState(targetContent, spring(stiffness = 900f), label = "themeText")
+    val sheen = kind.gradient?.takeIf { it.colors.size >= 2 }?.let { g ->
+        val colors = g.colors.map { Color(it) }
+        when (g.type.uppercase()) {
+            "RADIAL" -> Brush.radialGradient(colors)
+            "SWEEP" -> Brush.sweepGradient(colors)
+            else -> {
+                val rad = Math.toRadians(g.angleDeg.toDouble())
+                val dx = kotlin.math.cos(rad).toFloat()
+                val dy = kotlin.math.sin(rad).toFloat()
+                // A linear sheen across the control along the angle (90° runs top to bottom).
+                Brush.linearGradient(colors, start = Offset(500f - 500f * dx, 500f - 500f * dy), end = Offset(500f + 500f * dx, 500f + 500f * dy))
+            }
+        }
+    }
+    var modifier: Modifier = Modifier
+    if (kind.shadowDp > 0.01f) {
+        val c = kind.shadowColor?.let { Color(it) } ?: Color.Black
+        modifier = modifier.shadow(kind.shadowDp.dp, shape, clip = false, ambientColor = c, spotColor = c)
+    }
+    if (kind.glowDp > 0.01f) {
+        val c = kind.glowColor?.let { Color(it) } ?: HomeTheme.accent
+        modifier = modifier.shadow(kind.glowDp.dp, shape, clip = false, ambientColor = c, spotColor = c)
+    }
+    val backdrop = env.backdrop
+    val frost = theme.frost
+    modifier = if (kind.glass && backdrop != null && env.glass.quality != GlassQuality.Tint) {
+        val full = env.glass.quality == GlassQuality.Full
+        val x = env.glass.extras
+        val rimColor = frost.rimColor?.let { Color(it) } ?: Color.White
+        // The frost as the real glass: no bend for FROSTED (a hairline rim and its shadow), the edge bent for LIQUID.
+        val style = GlassStyle(
+            quality = GlassQuality.Full, blur = 0.dp, refraction = if (frost.liquid) frost.refraction else 0f, tint = Color.Transparent,
+            dispersion = frost.liquid && frost.dispersion > 0.01f, depth = false, rimColor = rimColor, lightAngle = x.lightAngle,
+            engine = GlassEngine.Real, bevel = if (frost.liquid) 12.dp else 2.5.dp, thickness = 2f,
+            dispersionAmount = frost.dispersion, specular = frost.rim, shade = frost.rim * 0.8f, grain = (frost.grain * 4f).coerceAtMost(1f),
+        )
+        val redraw = env.redraw
+        (if (redraw != null) modifier.drawBehind { redraw() } else modifier).drawBackdrop(
+            backdrop = backdrop,
+            shape = { shape },
+            effects = {
+                colorControls(brightness = frost.brightness, contrast = 1f, saturation = frost.saturation)
+                if (frost.blurDp > 0.01f) blur(frost.blurDp.dp.toPx())
+                if (full) realGlass(shape, style)
+            },
+            // Without the shader (or below Full quality) the rim is the library's hairline.
+            highlight = if (frost.rim > 0.01f && !(full && LiquidShader.available)) ({
+                Highlight.Default.copy(alpha = frost.rim, style = HighlightStyle.Default(color = rimColor, angle = x.lightAngle))
+            }) else null,
+            shadow = null,
+            onDrawSurface = {
+                drawRect(fill)
+                if (sheen != null) drawRect(sheen)
+            },
+        )
+    } else {
+        modifier.background(fill, shape).then(if (sheen != null) Modifier.background(sheen, shape) else Modifier)
+    }
+    if (kind.border != null && kind.borderWidthDp > 0.01f) {
+        modifier = modifier.border(kind.borderWidthDp.dp, Color(kind.border), shape)
+    }
+    return ControlSurface(modifier, content)
+}
+
+/**
+ * A chip in the theme (P4, 0.9.13): the theme's chip fill, or its selected fill when [on]; [trailing] is a count
+ * after the label. Used by the launcher's chip rows when a theme is on.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+internal fun ThemeChip(
+    label: String,
+    on: Boolean,
+    modifier: Modifier = Modifier,
+    height: androidx.compose.ui.unit.Dp = 34.dp,
+    icon: Int? = null,
+    trailing: String? = null,
+    onLongClick: (() -> Unit)? = null,
+    onClick: (() -> Unit)?,
+) {
+    val env = LocalControls.current ?: return
+    val theme = env.theme ?: return
+    val kind = theme.chip
+    val shape = themeShape(kind)
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val surface = themedSurface(env, theme, kind, shape, if (on) ControlEmphasis.Selected else ControlEmphasis.Normal, null, pressed)
+    Row(
+        modifier
+            .height(height)
+            .then(
+                if (onClick != null) {
+                    Modifier.combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = onLongClick)
+                } else Modifier
+            )
+            .then(if (env.look.squish) Modifier.squishOn(interaction) else Modifier)
+            .then(surface.modifier)
+            .clip(shape)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            LauncherIcon(icon, contentDescription = null, tint = surface.content, size = 16.dp)
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(
+            label, maxLines = 1,
+            style = TextStyle(fontFamily = HomeTheme.font, color = surface.content, fontSize = 13.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium),
+        )
+        if (trailing != null) {
+            Spacer(Modifier.width(6.dp))
+            Text(trailing, style = TextStyle(fontFamily = HomeTheme.font, color = surface.content.copy(alpha = 0.7f), fontSize = 12.sp))
+        }
+    }
+}
 
 internal val LocalControls = staticCompositionLocalOf<ControlEnv?> { null }
 
@@ -217,9 +418,17 @@ internal fun GlassButton(
 ) {
     val env = LocalControls.current
     val look = env?.look ?: ControlLook()
-    val shape = RoundedCornerShape(percent = look.cornerPercent)
+    val theme = env?.theme
+    // P4: a button with an icon and no text is a round tool button in the theme.
+    val kind = theme?.let { themeKind(it, look, emphasis, tool = text == null && icon != null) }
+    val shape = if (kind != null) themeShape(kind) else RoundedCornerShape(percent = look.cornerPercent)
     val interaction = remember { MutableInteractionSource() }
-    val surface = controlSurface(env, shape, color, emphasis, accent)
+    val pressed by interaction.collectIsPressedAsState()
+    val surface = if (env != null && theme != null && kind != null) {
+        themedSurface(env, theme, kind, shape, emphasis, accent, pressed)
+    } else {
+        controlSurface(env, shape, color, emphasis, accent)
+    }
     val h = look.heightDp
     Row(
         modifier
@@ -263,7 +472,8 @@ internal fun ProvideControls(
     content: @Composable () -> Unit,
 ) {
     val look by controller.data.settings.derive { controlLook() }
-    val env = remember(look, glass, backdrop, redraw) { ControlEnv(look, glass, backdrop, redraw) }
+    val theme by controller.data.settings.derive { controlTheme() }
+    val env = remember(look, glass, backdrop, redraw, theme) { ControlEnv(look, glass, backdrop, redraw, theme) }
     androidx.compose.runtime.CompositionLocalProvider(LocalControls provides env, content = content)
 }
 
@@ -271,6 +481,6 @@ internal fun ProvideControls(
 @Composable
 internal fun WithoutBackdrop(content: @Composable () -> Unit) {
     val env = LocalControls.current
-    val plain = remember(env) { env?.let { ControlEnv(it.look, it.glass, null) } }
+    val plain = remember(env) { env?.let { ControlEnv(it.look, it.glass, null, theme = it.theme) } }
     androidx.compose.runtime.CompositionLocalProvider(LocalControls provides plain, content = content)
 }

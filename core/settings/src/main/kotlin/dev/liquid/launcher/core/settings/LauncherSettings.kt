@@ -1520,6 +1520,17 @@ object LauncherSettings {
 
     // ---- Buttons (0.6.4, D95) ----
 
+    // P4 (0.9.13): the theme of buttons, chips and round buttons, after WM Keyboard's themes.
+    val ThemeControls = ChoiceSetting(
+        key = "theme.controls", default = "theme",
+        options = listOf("theme" to "Your theme", "launcher" to "The launcher's own buttons (the options below)"),
+        title = "Buttons and chips",
+        summary = "Your theme styles every button, chip and round button: fill, text, pressed and selected colours, border, " +
+            "shape and the glass under them. It starts as your WM Keyboard theme (Nice liquid); import another below",
+        section = "buttons", keywords = "theme buttons chips keyboard wm style import export",
+    )
+    val ThemeJson = TextSetting(key = "theme.json", default = "", title = "Theme", section = "buttons", hidden = true)
+    val ThemeColoursApplied = BoolSetting(key = "state.themeColours", default = false, title = "Theme colours applied once", section = "state", hidden = true)
     val ButtonStyle = ChoiceSetting(
         key = "buttons.style", default = "glass",
         options = listOf(
@@ -1568,7 +1579,7 @@ object LauncherSettings {
         options = listOf(
             "block" to "The block's colour",
             "accent" to "The theme's accent",
-            "plain" to "Like the other buttons",
+            "plain" to "Like the other buttons (with your theme: its main button)",
         ),
         title = "Main button colour",
         summary = "The button that matters most where it sits: Done on the block running now, a running focus timer, \"Switch it on\"",
@@ -2377,6 +2388,7 @@ object LauncherSettings {
         GlassQuality, GlassEngine, GlassAuto, GlassCap, GlassFullPercent, GlassTintMode,
         GlassBevel, GlassThickness, GlassSpecular, GlassShade, GlassGrain, GlassRim,
         GlassSaturation, GlassBrightness, GlassDepth, GlassSwell, GlassDispersion, GlassDispersionAmount, GlassGlow, GlassShadow, GlassRimColour, GlassLightAngle,
+        ThemeControls, ThemeJson, ThemeColoursApplied,
         ButtonStyle, ButtonShape, ButtonSize, ButtonTint, ButtonRim, ButtonRefraction, ButtonMain, ButtonSquish,
         TouchEffect, TouchWhere, TouchAmount, TouchSpeed, TouchBrightness, TouchSize, TouchColour, TouchCustomColour,
         PressFeel, PressDepth, PressSpeed, EditWobble, PressWobble, TouchLight,

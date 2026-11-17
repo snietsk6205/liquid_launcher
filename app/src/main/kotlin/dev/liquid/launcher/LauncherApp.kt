@@ -40,6 +40,8 @@ class LauncherApp : Application() {
         installCrashLogger()
 
         settings = SettingsStore.get(this)
+        // P4 (0.9.13): your keyboard theme's accent and glass colour, once, where you never chose your own.
+        dev.liquid.launcher.core.data.ThemeApply.firstRun(settings)
         DebugLog.enabled = settings.get(LauncherSettings.LogEnabled)
         DebugLog.maxEntries = settings.get(LauncherSettings.LogSize)
         DebugLog.verbosity = when (settings.get(LauncherSettings.LogVerbosity)) {

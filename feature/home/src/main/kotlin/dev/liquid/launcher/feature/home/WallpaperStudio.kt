@@ -702,6 +702,10 @@ internal fun Segmented(options: List<Pair<String, String>>, selected: String, co
 
 @Composable
 private fun TabChip(label: String, on: Boolean, color: Color, onClick: () -> Unit) {
+    if (LocalControls.current?.theme != null) {
+        ThemeChip(label, on, height = 32.dp, onClick = onClick)
+        return
+    }
     Box(
         Modifier
             .height(32.dp)
@@ -717,6 +721,10 @@ private fun TabChip(label: String, on: Boolean, color: Color, onClick: () -> Uni
 
 @Composable
 private fun SmallChip(icon: Int, label: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
+    if (LocalControls.current?.theme != null) {
+        ThemeChip(label, false, modifier, height = 38.dp, icon = icon, onClick = onClick)
+        return
+    }
     Row(
         modifier
             .height(38.dp)

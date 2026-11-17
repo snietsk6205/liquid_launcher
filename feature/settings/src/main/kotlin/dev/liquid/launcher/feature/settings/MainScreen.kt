@@ -262,6 +262,7 @@ internal fun SectionScreen(store: SettingsStore, sectionId: String, open: (Scree
                     LooksEditor(store)
                 }
                 "effects" -> LooksEditor(store)
+                "buttons" -> ControlThemeCard(store)
                 "wallpaper" -> WallpaperEditor()
                 "study" -> StudyEditor(store)
                 "layouts" -> LayoutsAndBackupEditor()

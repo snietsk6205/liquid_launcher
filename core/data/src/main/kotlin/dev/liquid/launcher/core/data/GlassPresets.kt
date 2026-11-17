@@ -60,10 +60,13 @@ object GlassPresets {
             ),
         ),
         LookPreset(
-            "Your keyboard", "The frost of your WM Keyboard theme: blur 9, colour 125 %, edge light 0.86, bend 0.6, rainbow 0.25, no grain",
+            "Your keyboard",
+            "The frost of your WM Keyboard theme as it is: frosted, not bent (its style is FROSTED), blur 9, colour 125 %, " +
+                "a thin rim of light 0.86 on the lit edge and its shadow on the other, no grain",
             mapOf(
-                S.GlassDefault.blur.key to i(9), S.GlassDefault.tint.key to i(10), S.GlassSaturation.key to i(125),
-                S.GlassSpecular.key to i(85), S.GlassDispersionAmount.key to i(25), S.GlassGrain.key to i(0),
+                S.GlassDefault.blur.key to i(9), S.GlassDefault.refraction.key to i(0), S.GlassDefault.tint.key to i(10),
+                S.GlassSaturation.key to i(125), S.GlassBevel.key to i(4), S.GlassSpecular.key to i(85), S.GlassShade.key to i(60),
+                S.GlassGrain.key to i(0), S.GlassDispersion.key to b(false), S.GlassDepth.key to b(false),
             ),
         ),
     )

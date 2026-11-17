@@ -112,7 +112,9 @@ internal fun GlassBenchScreen(store: SettingsStore, window: Window, wallpaper: W
     var measuring by remember { mutableStateOf(measureFirst) }
     var tier by remember { mutableStateOf<GlassQuality?>(null) }
     var results by remember { mutableStateOf(DiagnosticsState.glass.value) }
-    var moving by remember { mutableStateOf(true) }
+    // Still unless measuring or asked to move: a moving picture never lets the screen settle (and the tuning is
+    // easier to judge on a still one).
+    var moving by remember { mutableStateOf(measureFirst) }
     val collector = remember { FrameCollector() }
 
     DisposableEffect(window) {
@@ -163,6 +165,7 @@ internal fun GlassBenchScreen(store: SettingsStore, window: Window, wallpaper: W
                 if (full.refreshHz > 0f) store.set(LauncherSettings.GlassFullPercent, (full.fps / full.refreshHz * 100f).toInt().coerceIn(1, 200))
             }
             tier = null
+            moving = false
             measuring = false
         }
     }

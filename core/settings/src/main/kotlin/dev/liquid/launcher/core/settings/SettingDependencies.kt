@@ -41,6 +41,10 @@ object SettingDependencies {
             LauncherSettings.IndexBubbleGap, LauncherSettings.IndexTrack, LauncherSettings.IndexSpring, LauncherSettings.IndexHideDelay,
         )
         val railOnly = listOf(LauncherSettings.IndexRailHeight, LauncherSettings.IndexRailLift, LauncherSettings.IndexRailInset)
+        val launcherButtonsOnly = listOf(
+            LauncherSettings.ButtonStyle, LauncherSettings.ButtonShape, LauncherSettings.ButtonTint, LauncherSettings.ButtonRim,
+            LauncherSettings.ButtonRefraction,
+        )
         val realGlassOnly = listOf(
             LauncherSettings.GlassBevel, LauncherSettings.GlassThickness, LauncherSettings.GlassSpecular, LauncherSettings.GlassShade,
             LauncherSettings.GlassGrain, LauncherSettings.GlassSwell, LauncherSettings.GlassDispersionAmount,
@@ -51,7 +55,8 @@ object SettingDependencies {
             LauncherSettings.PillStudyRing.key to (look to setOf("glyph", "app", "picture")),
             LauncherSettings.PillStudyTint.key to (look to setOf("glyph", "app", "picture", "circle")),
         ) + stringOnly.associate { it.key to (index to setOf("string")) } + railOnly.associate { it.key to (index to setOf("rail")) } +
-            realGlassOnly.associate { it.key to (LauncherSettings.GlassEngine to setOf("real")) }
+            realGlassOnly.associate { it.key to (LauncherSettings.GlassEngine to setOf("real")) } +
+            launcherButtonsOnly.associate { it.key to (LauncherSettings.ThemeControls to setOf("launcher")) }
     }
 
     fun isVisible(setting: Setting<*>, store: SettingsStore): Boolean {

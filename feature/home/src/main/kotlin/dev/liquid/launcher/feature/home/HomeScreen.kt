@@ -212,7 +212,9 @@ fun HomeScreen(
     // The buttons' look (Settings → Buttons, 0.6.4) for every sheet; sheets that export their glass add it as the buttons' backdrop.
     val look by data.settings.derive { controlLook() }
     val glass by data.settings.derive { glassConfig() }
-    val controls = remember(look, glass) { ControlEnv(look, glass, null) }
+    // P4 (0.9.13): the theme of buttons and chips, everywhere on the home screen.
+    val controlTheme by data.settings.derive { controlTheme() }
+    val controls = remember(look, glass, controlTheme) { ControlEnv(look, glass, null, theme = controlTheme) }
     // Presses of this screen, for the touch effect and the moving wallpaper (0.8.0, D111).
     val touchFx = remember { TouchFx() }
     androidx.compose.runtime.CompositionLocalProvider(LocalControls provides controls, LocalTouchFx provides touchFx) {

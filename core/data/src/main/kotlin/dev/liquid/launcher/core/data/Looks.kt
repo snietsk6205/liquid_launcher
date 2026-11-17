@@ -20,7 +20,7 @@ object Looks {
     /** The keys a look sets; any it does not name go back to their defaults. */
     val keys: Set<String> by lazy {
         S.all.filter {
-            it.section == "buttons" || it.section == "effects" ||
+            (it.section == "buttons" && it != S.ThemeControls && it != S.ThemeJson) || it.section == "effects" ||
                 (it.section == "glass" && it != S.GlassQuality && it != S.GlassEngine && it != S.GlassAuto && it != S.GlassCap && it != S.GlassFullPercent && it != S.GlassTintMode)
         }.map { it.key }.toSet()
     }
@@ -28,10 +28,12 @@ object Looks {
     val presets = listOf(
         LookPreset("Liquid", "The default: thick glass with rainbow edges, a ripple under the finger, squish", emptyMap()),
         LookPreset(
-            "Nice liquid", "From your WM Keyboard theme: its frost (blur 9, colour 125 %, edge light 0.86, rainbow 0.25) on the real glass, a slow swoosh and a squish",
+            "Nice liquid",
+            "Your WM Keyboard theme: its frost (frosted, blur 9, colour 125 %, a thin rim of light 0.86, no grain), its slow swoosh and its squish",
             mapOf(
-                S.GlassDefault.blur.key to i(9), S.GlassDefault.tint.key to i(10), S.GlassSaturation.key to i(125),
-                S.GlassSpecular.key to i(85), S.GlassDispersionAmount.key to i(25), S.GlassGrain.key to i(0), S.GlassGlow.key to i(15),
+                S.GlassDefault.blur.key to i(9), S.GlassDefault.refraction.key to i(0), S.GlassDefault.tint.key to i(10),
+                S.GlassSaturation.key to i(125), S.GlassBevel.key to i(4), S.GlassSpecular.key to i(85), S.GlassShade.key to i(60),
+                S.GlassGrain.key to i(0), S.GlassDispersion.key to b(false), S.GlassDepth.key to b(false), S.GlassGlow.key to i(0),
                 S.ButtonRim.key to i(90), S.ButtonTint.key to i(10),
                 S.TouchEffect.key to s("swoosh"), S.TouchSpeed.key to i(40), S.TouchBrightness.key to i(40), S.TouchAmount.key to i(50),
                 S.TouchColour.key to s("rainbow"), S.PressFeel.key to s("squishy"), S.PressDepth.key to i(40), S.PressWobble.key to i(50),
