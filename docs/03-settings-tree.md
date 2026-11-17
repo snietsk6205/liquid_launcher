@@ -32,7 +32,7 @@ Notation: `[type · default]`. Types: toggle, slider (range), choice, color, fon
   - Calibration wizard `[action]`
   - Re-verify after system launcher update `[toggle · on]`
 - Exclusions
-  - Do not redirect while: in a call / split screen / these apps were in front before `[multi-choice + app list]`
+  - During calls `[redirect as usual · / not while ringing / not during any call]`; do not redirect while: split screen / these apps were in front before `[multi-choice + app list]`
   - Pause now for `[1 / 5 / 30 min / until re-enabled]`
   - "Open HONOR Home" pause duration `[slider · 60 s]`
 - Hand-over

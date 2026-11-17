@@ -217,10 +217,21 @@ object LauncherSettings {
 
     // ---- Exclusions and safety ----
 
-    val ExcludeInCall = BoolSetting(
-        key = "exclude.inCall", default = true,
-        title = "Do not redirect during calls",
-        section = "exclusions", keywords = "phone call ringing",
+    /**
+     * Up to 0.8.1 this was a switch ("exclude.inCall", on by default) that stopped every redirect
+     * while the phone's audio was in call or communication mode, so going home during a phone or
+     * Messenger call stayed on the system launcher. The new key starts from "redirect as usual".
+     */
+    val ExcludeCalls = ChoiceSetting(
+        key = "exclude.calls", default = "never",
+        options = listOf(
+            "never" to "Redirect as usual",
+            "ringing" to "Not while the phone rings",
+            "call" to "Not during any call",
+        ),
+        title = "During calls",
+        summary = "Going home during a phone or Messenger call opens Liquid Launcher like at any other time",
+        section = "exclusions", keywords = "phone call ringing messenger whatsapp voip in-call",
     )
     val ExcludeSplitScreen = BoolSetting(
         key = "exclude.splitScreen", default = true,
@@ -1986,7 +1997,7 @@ object LauncherSettings {
         ReopenRecents, ReopenWindow, ReopenOnHint, OnRecentsExit, OnRecentsExitDelay,
         ScreenOffMode, ScreenOffDelay, UnlockCheck,
         SystemLauncherPackage, HomeClasses, RecentsIds, RecentsIdSubstrings, HomeIds, DrawerIds, LearnedIds, PollInterval,
-        ExcludeInCall, ExcludeSplitScreen, SystemHomePause, GuardCount, GuardWindow, GuardPause,
+        ExcludeCalls, ExcludeSplitScreen, SystemHomePause, GuardCount, GuardWindow, GuardPause,
         SettleStyle, SettleDuration, ExcludeFromRecents,
         HomeColumns, HomeRows, HomeIconSize, HomeLabels, HomeLabelSize,
         HomePageTransition,

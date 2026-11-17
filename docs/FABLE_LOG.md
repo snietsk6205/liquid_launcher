@@ -186,3 +186,93 @@ Open points for the user (collected, none blocks the work):
 2. Should ticking the last task of a block mark the block done by itself? Now "Done" is its own tap.
 3. Names of the two calendars your assistant uses, if not "Study" and "Tasks".
 
+
+---
+
+## Session of 2026-11-17 (Fable 5.2): take-over from 0.8.1
+
+Working branch: `claude/exciting-knuth-s83frp`, fast-forwarded from tag `v0.8.1` (`492e59d`). `main` holds only the
+first commit (a README); every release so far was built from a `claude/**` branch, and the updater reads GitHub's
+"latest release", so releases from this branch reach the phone the same way. I did not push to `main` (the session may
+only push to its own branch); see "Questions for Med".
+
+Build path: no local Android build is possible in this session (the proxy refuses `dl.google.com`, which serves both
+the Android SDK and Google's Maven repository), so every compile check is a CI run (push → Build workflow → unit tests,
+release APK, emulator test, GitHub release `v<version>`; about 13 minutes). Nothing here was run on a phone.
+
+### Audit of Opus decisions (entries 12–20 of `OPUS_LOG.md`, against what you asked for)
+
+| # | Opus decision | Verdict |
+|---|---|---|
+| 1 | D89 ticks kept on the phone without write access; focus timer ends with its block | keep |
+| 2 | D90 clock reads the icon palette only for the "tone" colour | keep |
+| 3 | D92/D93 a text line under the clock + a "Study block" pill item as *the* study integration | redo (P2): you asked for a fast daily link, got a label. Kept as one surface, with a countdown and one action, next to a real hub |
+| 4 | D94 Today panel (block cards, Tomorrow, Sync now) | fix (P2): becomes the hub's timeline; the panel no longer pops in from nowhere |
+| 5 | D95 `GlassButton` + "Buttons" section with four styles | fix (P4): the styles are a fixed list; replaced by the theme engine's surfaces, old values migrated |
+| 6 | D96 plan link through a Chrome tab / Claude app | keep |
+| 7 | D97 letters bend past the finger, bubble past them | redo (P6): still on the screen edge, so Back fires |
+| 8 | D99/D104/D107 search as "One space" / "Lift", pill becomes the field above the keyboard | fix (P3): the idea is right, the page it opens is empty and the calendar is clipped |
+| 9 | D100/D105 other apps' widgets, widgets on the search page | keep; restyling added in P7 |
+| 10 | D101 edge light off by default | keep |
+| 11 | D103 wallpaper transitions as AGSL shaders | keep |
+| 12 | D106 `assetsPaths` handled without a rebuild | keep |
+| 13 | D108/D112 `PressFeel`: 11 press motions, wobble, tilt, light from the finger | redo (P9): most motions are noise; one crisp squish stays the base |
+| 14 | D109 Ask Claude in search, `!c`, clipboard chips | keep; extended by D1–D3 of the spec |
+| 15 | D110 "Looks" (Liquid, Nice liquid, Water drop, …) as bundles of slider values | redo (P4): "Nice liquid" only renames sliders of the old glass; it is not your keyboard theme. Replaced by a real shader and your imported theme |
+| 16 | D111/D113 12 touch effects, 5 moving-wallpaper effects | fix (P4/P11): keep ripple, drop, light pool; the rest go behind "More effects" or are removed if they cost frames |
+| 17 | D114 keyboard asked for again when it does not come | keep |
+| 18 | D115/D118 liquid stretch of the search pill, search's own spring | fix (P3/P11): one spring vocabulary instead of per-feature sliders |
+| 19 | D116 menus grow from the pressed icon | keep |
+| 20 | D117 calendar widget | fix (P3): clipped on the search page (your screenshot 1), month grid does not fit its cell |
+| 21 | Redirect: "Do not redirect during calls" left on by default (a Phase-1 setting of mine that Opus kept) | fix (P1a, done in 0.9.0) |
+| 22 | Launch from the drawer closes it 250 ms later, keyboard left to the system | fix (P1b, done in 0.9.0) |
+
+Earlier Opus work (entries 1–11) was reviewed in entries 1–3 above (0.5.1 and 0.6.0).
+
+---
+
+## Entry 6: 0.9.0, P1: the redirect during calls, and the drawer and keyboard that flashed on the way home (2026-11-17)
+
+### P1a. Why going home during a call stayed on HONOR Home
+
+Not the window list, not picture-in-picture: a setting. `exclude.inCall` ("Do not redirect during calls", on by
+default, from Phase 1A) made `exclusionReason()` return "call in progress" whenever the phone's audio mode was
+`MODE_IN_CALL`, `MODE_IN_COMMUNICATION` or `MODE_RINGTONE`. A cellular call sets the first, a Messenger / WhatsApp call
+the second. The engine then retried once a second and never launched; the debug log said "not redirecting: call in
+progress". Opus's log does not mention it.
+
+| File | Change |
+|---|---|
+| `core/settings/LauncherSettings.kt` | `ExcludeInCall` (switch) replaced by `ExcludeCalls` (`exclude.calls`): "Redirect as usual" (default) / "Not while the phone rings" / "Not during any call". A new key, so the old default cannot survive in the stored settings |
+| `feature/redirect/LauncherAccessibilityService.kt` | `exclusionReason()` follows the new setting. `probe()`: when the active window is not the system launcher within 3 s of the system launcher's own window event (or while the engine is already watching it), the window list is asked for the topmost *full-screen application* window; picture-in-picture windows, windows smaller than 90 % × 70 % of the screen, overlays, the status bar and the keyboard are skipped. If that window is the system launcher, it is probed instead. This covers a call shown as a floating window, chat head or picture-in-picture that was touched last and is therefore "active" |
+
+Not changed: the 160 ms delay after HONOR Home appears, the going-home animation fast path, recents detection, the
+reopen logic. The window list is only asked for in the cases above, never on the normal path (D39 still holds); a slow
+answer is caught by the engine's existing "window check took N ms, checking again" guard.
+
+Limits: none known from the OS side. An accessibility service may start activities during a call. If a redirect during
+a call still fails on the phone, the debug log will now say either "not redirecting: …" (a setting) or show no
+"system launcher appeared" line (then the window event itself did not arrive, and the log's `windows:` line at the
+"tree" level will show what was in front).
+
+### P1b. Why the drawer and keyboard flashed after coming home
+
+From Android 13 the system takes the picture of a task that is going to the background at the *start* of the opening
+animation of the app that replaces it, keyboard included (`Transition.onTransactionReady`: "take task snapshots before
+the animation so that we can capture IME"). When the redirect brings the launcher back, that picture is shown as the
+starting window until the launcher's first frame, and the keyboard is restored with it. The launcher closed its drawer
+250 ms *after* starting the app, too late for the picture.
+
+| File | Change |
+|---|---|
+| `feature/home/HomeController.kt` | `launch()` → `leaveForApp()`: the keyboard is hidden and the field's focus dropped at once; `tidyAfterLeaving()` closes menu, tag sheet, search and (if "Close after opening an app" is on) the drawer after 250 ms or when the launcher stops being visible, whichever comes first; `closesWhileAway`, `hideKeyboard()` |
+| `feature/home/HomeScreen.kt` (`HomeReturnState`) | `closesWhileAway` and `onLeft` hooks between the activity and the home screen |
+| `app/MainActivity.kt` | `onPause`: `RedirectStatus.staleSnapshot` = keyboard visible or something that will be closed; `onStop` and a redirect's `onNewIntent`: `onLeft()` |
+| `feature/redirect` | `RedirectStatus.staleSnapshot`; the redirect intent carries an extra when it is set. AOSP's `ActivityRecord.allowTaskSnapshot()` refuses the old picture for an intent with extras that is not a plain launcher start, so the launcher's own first frame is the first thing shown |
+| `app/AndroidManifest.xml`, `themes.xml` | `windowSoftInputMode="stateHidden|adjustNothing"` (the keyboard is not restored when the launcher comes forward), `windowDisablePreview` (no splash in place of the picture) |
+
+When nothing was open the old picture is still used, as before: it is what makes the launcher appear before its first
+frame (about 100 ms earlier), and it is identical to what the first frame will show.
+
+Not verified on a device: both fixes. `allowTaskSnapshot()` is AOSP behaviour (13–15); if MagicOS changed it, the
+state reset still makes the first real frame clean and only the system's one-frame picture could remain.

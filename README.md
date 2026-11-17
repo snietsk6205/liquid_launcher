@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.9.0: going home during a phone or Messenger call opens Liquid Launcher (the old "do not redirect during calls" default is gone; a floating call window no longer hides the system launcher from the redirect); starting an app from the drawer or search puts the keyboard away at once and coming home shows a clean home screen, with no flash of the drawer and keyboard.
+
 0.8.1: a Calendar widget on liquid glass (month with your events, next events, opens the calendar) for pages and the search screen; search has its own Bounce, Speed and Liquid stretch.
 
 0.8.0: liquid that is more liquid, customisable like a keyboard theme. Looks set the glass, the buttons and the effects in one tap (Liquid, Nice liquid, Water drop, Frosted ice, Neon, Bubble, Calm, Glass of 0.7). Glass gains thickness, rainbow edges, an inner glow, colour and brightness controls, and coloured, angled edge light. Presses throw a touch effect (ripple, drop, light pool, ink, paint, colour flood, smoke, glint, pop, swoosh, specks, bubbles) and move the way you choose (squish, jelly, sink, grow, shrink, rise, tilt, pop, fade) with a light from the finger; colour orbs, bubbles, motes, snow or rain can move over the wallpaper. Search asks for the keyboard again when it does not come, its pill stretches like a drop on the way, and menus grow out of what you pressed. Settings → Effects and touch has a live preview.

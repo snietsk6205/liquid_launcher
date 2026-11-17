@@ -208,6 +208,8 @@ class MainActivity : ComponentActivity() {
             returnState.request = it
             return
         }
+        // A return after the drawer or keyboard was left open: make sure nothing of it is left.
+        returnState.onLeft()
         // Home on the launcher passes through the system launcher and the redirect brings us
         // straight back. A quick return without having started an app counts as a Home press.
         val now = SystemClock.uptimeMillis()
@@ -242,6 +244,14 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         resumed = false
         pausedAt = SystemClock.uptimeMillis()
+        // The system takes its picture of this screen about now. If it shows the keyboard, or something
+        // that is closed while the launcher is away, the redirect must not bring that picture back.
+        val keyboard = try {
+            window.decorView.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true
+        } catch (e: Exception) {
+            false
+        }
+        RedirectStatus.staleSnapshot = keyboard || returnState.closesWhileAway()
         RedirectStatus.onLauncherPaused()
         super.onPause()
     }
@@ -264,6 +274,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        // Nothing of the launcher is visible any more: close what an app was started from.
+        returnState.onLeft()
         (application as LauncherApp).data.widgets.listen(false)
     }
 

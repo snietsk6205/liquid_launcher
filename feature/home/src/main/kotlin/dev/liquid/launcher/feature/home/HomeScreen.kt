@@ -37,6 +37,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
@@ -125,6 +126,15 @@ class HomeReturnState {
 
     /** Something another screen asked the home screen to open ("wallpaper"), or null. */
     var request by mutableStateOf<String?>(null)
+
+    /**
+     * Asked by the activity as it is paused: is something showing that will be closed while the
+     * launcher is away (drawer, search, a menu)? Set by the home screen.
+     */
+    var closesWhileAway: () -> Boolean = { false }
+
+    /** Called by the activity once the launcher is no longer visible. Set by the home screen. */
+    var onLeft: () -> Unit = {}
 }
 
 /**
@@ -352,6 +362,14 @@ private fun HomeScreenBody(
                 }
             }
             returnState.request = null
+        }
+        DisposableEffect(controller, returnState) {
+            returnState.closesWhileAway = { controller.closesWhileAway }
+            returnState.onLeft = { controller.tidyAfterLeaving() }
+            onDispose {
+                returnState.closesWhileAway = { false }
+                returnState.onLeft = {}
+            }
         }
         LaunchedEffect(returnState.homePresses) {
             if (returnState.homePresses == 0) return@LaunchedEffect

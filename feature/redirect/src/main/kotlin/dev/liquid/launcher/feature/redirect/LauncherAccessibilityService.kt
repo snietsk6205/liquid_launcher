@@ -79,6 +79,10 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
     private var wakeLock: PowerManager.WakeLock? = null
     private var recheckAttempts = 0
     private var lastSlowLogAt = 0L
+    private var lastFloatingLogAt = 0L
+
+    /** When a home activity of the system launcher last reported a window change (engine thread). */
+    private var lastHomeWindowEventAt = -1_000_000L
 
     /** Until when (uptime) the engine listens to what the system launcher does behind the launcher. */
     @Volatile private var afterglowUntil = 0L
@@ -376,6 +380,7 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
                         engine.onActivityBehindLauncher(if (home) seen ?: false else seen)
                     }
                     if (home) {
+                        lastHomeWindowEventAt = SystemClock.uptimeMillis()
                         refreshSplitScreen()
                         engine.onSystemLauncherWindow()
                     } else {
@@ -504,9 +509,61 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
 
     override fun probe(): Probe {
         val start = SystemClock.uptimeMillis()
-        val result = RecentsDetector.probe(activeRoot(), detectConfig)
+        var result = RecentsDetector.probe(activeRoot(), detectConfig)
+        val watching = RedirectStatus.engineState.value != EngineState.IDLE ||
+            start - lastHomeWindowEventAt <= FLOATING_LOOK_MS
+        if (!result.isSystemLauncher && result.activePackage != packageName && watching) {
+            // During a call the "active" window is often not the app in front: a picture-in-picture
+            // call, a chat head, the dialer's floating call button or the status bar's call chip
+            // was touched last, or the active window cannot be read at all. Then look for the
+            // full-screen app window on top instead.
+            val behind = systemLauncherUnderFloatingWindow(result.activePackage)
+            if (behind != null) {
+                val seen = RecentsDetector.probe(behind, detectConfig)
+                if (seen.isSystemLauncher) {
+                    val now = SystemClock.uptimeMillis()
+                    if (now - lastFloatingLogAt >= 5000) {
+                        lastFloatingLogAt = now
+                        DebugLog.decision(
+                            TAG,
+                            "active window is ${result.activePackage ?: "unreadable"}, a floating window; " +
+                                "the system launcher is the app in front",
+                        )
+                    }
+                    result = seen
+                }
+            }
+        }
         noteIfSlow("window check", start)
         return result
+    }
+
+    /**
+     * The system launcher's root when its window is the topmost full-screen application window
+     * although the active window ([activePackage]) is something else; null otherwise. Windows
+     * come front to back. Application windows that are picture-in-picture or clearly smaller
+     * than the screen (floating calls, bubbles, pop-up windows) are skipped, as is everything
+     * that is not an application window (overlays, the status bar, the keyboard).
+     */
+    private fun systemLauncherUnderFloatingWindow(activePackage: String?): AccessibilityNodeInfo? {
+        if (systemLauncher.isEmpty()) return null
+        return try {
+            val screen = resources.displayMetrics
+            val bounds = android.graphics.Rect()
+            for (window in windows) {
+                if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+                if (window.isInPictureInPictureMode) continue
+                window.getBoundsInScreen(bounds)
+                val full = bounds.width() >= screen.widthPixels * 0.9f && bounds.height() >= screen.heightPixels * 0.7f
+                if (!full) continue
+                val root = window.root ?: return null
+                // The first full-screen app window decides: the system launcher, or not.
+                return if (root.packageName?.toString() == systemLauncher) root else null
+            }
+            null
+        } catch (e: Exception) {
+            null
+        }
     }
 
     /** A slow look at the system launcher delays the redirect, so it is worth seeing in the log. */
@@ -540,11 +597,16 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
     }
 
     override fun exclusionReason(): String? {
-        if (store.get(LauncherSettings.ExcludeInCall)) {
-            val mode = getSystemService(AudioManager::class.java).mode
-            if (mode == AudioManager.MODE_IN_CALL ||
-                mode == AudioManager.MODE_IN_COMMUNICATION ||
-                mode == AudioManager.MODE_RINGTONE
+        val calls = store.get(LauncherSettings.ExcludeCalls)
+        if (calls != "never") {
+            val mode = try {
+                getSystemService(AudioManager::class.java).mode
+            } catch (e: Exception) {
+                AudioManager.MODE_NORMAL
+            }
+            if (mode == AudioManager.MODE_RINGTONE) return "phone ringing"
+            if (calls == "call" &&
+                (mode == AudioManager.MODE_IN_CALL || mode == AudioManager.MODE_IN_COMMUNICATION)
             ) {
                 return "call in progress"
             }
@@ -573,6 +635,14 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
             val intent = Intent(Intent.ACTION_MAIN)
                 .setComponent(component)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            if (RedirectStatus.staleSnapshot) {
+                // The system shows the task's last picture while the launcher comes to the front, unless
+                // the intent "asks for something else" (ActivityRecord.allowTaskSnapshot: an intent with
+                // extras that is not a plain launcher start). That picture shows the drawer and keyboard
+                // the launcher has closed since, so it is not wanted this time.
+                intent.putExtra(EXTRA_FRESH, true)
+                DebugLog.decision(TAG, "the launcher's last picture is out of date (drawer, search or keyboard was open): asking for none")
+            }
             startActivity(intent, ActivityOptions.makeCustomAnimation(this, 0, 0).toBundle())
         } catch (e: Exception) {
             DebugLog.error(TAG, "launch failed: $e")
@@ -665,6 +735,12 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         const val SLOW_MS = 40L
         const val REOPEN_DELAY_MS = 60L
         const val BEHIND_LOOK_MS = 60L
+
+        /** Extra on the launch intent: do not show the task's old picture while coming to the front. */
+        const val EXTRA_FRESH = "dev.liquid.launcher.FRESH"
+
+        /** How long after the system launcher's window event the full window list may be asked for. */
+        const val FLOATING_LOOK_MS = 3000L
         const val RECHECK_MS = 5000L
         const val MAX_RECHECKS = 24
         val STATS = listOf(

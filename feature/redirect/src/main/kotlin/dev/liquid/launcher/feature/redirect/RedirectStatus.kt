@@ -54,6 +54,14 @@ object RedirectStatus {
     @Volatile var lastEventWall = 0L
         internal set
 
+    /**
+     * The launcher left the front with something open that it closed afterwards (the drawer, search,
+     * a menu, the keyboard). Android 13+ takes the task's picture at the start of the app-opening
+     * animation, keyboard included, and shows it while the launcher comes back: the drawer and
+     * keyboard would flash over the home screen. The next redirect then asks for no such picture.
+     */
+    @Volatile var staleSnapshot = false
+
     @Volatile private var launcherResumed = false
     @Volatile private var lastPausedAt = 0L
     @Volatile private var pendingLaunchAt = 0L

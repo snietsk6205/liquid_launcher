@@ -930,11 +930,54 @@ class HomeController(
             toast(if (app.isWorkProfile) "Could not open: is the work profile paused?" else "Could not open ${app.label}")
             return
         }
-        if (fromDrawer && data.settings.get(LauncherSettings.DrawerCloseOnLaunch)) {
-            scope.launch {
-                kotlinx.coroutines.delay(250)
-                closeDrawer(immediately = true)
-            }
+        leaveForApp()
+    }
+
+    /** An app was started: something here will be closed once it covers the launcher. */
+    private var tidyPending = false
+
+    /**
+     * True when the launcher is about to leave the front with the drawer, search or a menu showing
+     * that [tidyAfterLeaving] will close: the system's picture of this screen will then be out of date.
+     */
+    val closesWhileAway: Boolean
+        get() = tidyPending && (drawerOpen || searchOpen || search.value > 0.01f || menu != null)
+
+    /**
+     * Called right after an app was started from anywhere in the launcher. The keyboard goes away at
+     * once (so it is neither in the system's picture of this screen nor brought back on return);
+     * the drawer, search and menus are closed once the app's opening animation covers them, and at
+     * the latest when the launcher is no longer visible. Coming home then shows a clean home screen.
+     */
+    fun leaveForApp() {
+        hideKeyboard()
+        tidyPending = true
+        scope.launch {
+            kotlinx.coroutines.delay(LEAVE_TIDY_MS)
+            tidyAfterLeaving()
+        }
+    }
+
+    /** Closes what [leaveForApp] left open. Safe to call at any time; does nothing unless an app was just started. */
+    fun tidyAfterLeaving() {
+        if (!tidyPending) return
+        tidyPending = false
+        menu = null
+        tagSheet = false
+        if (searchOpen || search.value > 0f) closeSearch(immediately = true)
+        if (drawerOpen && data.settings.get(LauncherSettings.DrawerCloseOnLaunch)) closeDrawer(immediately = true)
+        hideKeyboard()
+    }
+
+    /** Drops the focus of the launcher's text fields and puts the keyboard away, now. */
+    fun hideKeyboard() {
+        drawerFocusReset++
+        expectKeyboard = false
+        val v = view ?: return
+        try {
+            v.windowInsetsController?.hide(android.view.WindowInsets.Type.ime())
+        } catch (e: Exception) {
+            DebugLog.error("Home", "could not hide the keyboard: $e")
         }
     }
 
@@ -1446,6 +1489,9 @@ private const val EDGE_DWELL_MS = 650L
 private const val OPEN_POINT = 0.4f
 
 /** What the home screen asks the activity to do. */
+/** How long after starting an app the drawer, search and menus are closed (its opening animation covers them by then). */
+private const val LEAVE_TIDY_MS = 250L
+
 class HomeCallbacks(
     val openSettings: () -> Unit,
     val openSetup: () -> Unit,
