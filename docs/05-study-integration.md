@@ -70,6 +70,46 @@ several days is an all-day event over those days and shows on each of them until
 
 Nothing else is touched: not the time, not the wording, not the notes. Undoing in the launcher removes the mark again.
 
+Since 0.9.1 the launcher also writes, each on its own line right after the block's `P2-BLOCK <date> <id>` line (the
+status line stays last):
+
+| Line | When |
+|---|---|
+| `— launcher: home HH:MM` | On tonight's first block, when Med got home (home Wi-Fi, charger after the last class, or "I'm home") |
+| `— launcher: shifted +N min` (and ` · shortened N min` for the one block cut short) | On every block "shift tonight" moved; its start and end are changed, never its title marks, task lines or `P2-BLOCK` line |
+
+And these all-day events in the Tasks calendar (titles start with `Note:`; they are not tasks):
+
+| Title | Written by |
+|---|---|
+| `Note: <text>` | Quick capture: the note field of the study hub, or a double tap on the clock |
+| `Note: absent <module> <HH:MM>` | ✗ on "present?" five minutes after a class |
+| `Note: flashcard wrong <module>: <question>` | "Wrong" on the daily flashcard |
+
+### launcher-data (version 1), from the evening check-in to the launcher
+
+One all-day event dated today, titled exactly `launcher-data`, in a calendar whose name contains `Launcher` (a setting),
+with this JSON as its description (every part optional; unknown fields are ignored):
+
+```json
+{"v":1,"updated":"2026-11-16T20:50",
+ "exams":[{"label":"DS + Examens P2","date":"2027-01-07","confirmed":false}],
+ "absences":{"rule_confirmed":false,"limit":0.20,
+   "modules":[{"name":"Intégration et Probabilité TD","absent":3,"total":null}]},
+ "flashcard":{"module":"Micro","q":"…","a":"…"},
+ "grades":[{"module":"Stat Des","type":"DS","mark":null,"coef":null}]}
+```
+
+| Part | What the launcher does with it |
+|---|---|
+| `exams` | The exam countdown and `!exam`; `"confirmed": false` shows `≈` before the count. Without exams here, the timetable's events named DS, Examen, Partiel or Contrôle are used |
+| `absences` | One tube per module: rate = absent ÷ total, fill = rate ÷ limit; green below 0.5, amber to 0.8, red above; a grey UNVERIFIED badge while `rule_confirmed` is false; only the count while `total` is null |
+| `flashcard` | The daily card on the search page (face down, question, answer, right or wrong) |
+| `grades` | The weighted average Σ coef × mark ÷ Σ coef, shown only once every mark has its coefficient |
+
+When today's event is missing, the latest earlier one (up to the overdue window, 14 days) is used; when that is not
+valid JSON, the local copy kept in Settings → Study companion → launcher-data; when neither, these parts are hidden.
+
 ### Rules for the evening check-in
 
 1. Read the day's events in both calendars. `✓ ` in front of a title = done, `✗ ` = skipped, neither = not done.

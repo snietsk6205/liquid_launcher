@@ -812,7 +812,7 @@ object LauncherSettings {
 
     /** Ids of the search page's cards, top to bottom (see SearchCards in core/data). Edited with its own editor. */
     val SearchCards = StringListSetting(
-        key = "search.cards", default = listOf("widgets", "timeline", "exam", "next", "commands", "claude", "apps"),
+        key = "search.cards", default = listOf("widgets", "timeline", "exam", "absences", "grades", "flashcard", "next", "commands", "claude", "apps"),
         title = "Search page cards", section = "search", hidden = true,
     )
 
@@ -1964,6 +1964,19 @@ object LauncherSettings {
         summary = "A tag name, or several separated by commas. Give apps the tag from their long-press menu (Tags)",
         section = "study", keywords = "study distracting tag speed bump",
     )
+    val StudyFeedCalendar = TextSetting(
+        key = "study.feedCalendar", default = "Launcher",
+        placeholder = "Launcher",
+        title = "Calendar with \"launcher-data\"",
+        summary = "Part of the calendar's name. The evening check-in writes one all-day event \"launcher-data\" there, with exams, absences, " +
+            "a flashcard and grades as JSON (docs/05-study-integration.md)",
+        section = "study", keywords = "study launcher-data calendar json claude exams absences flashcard grades",
+    )
+
+    /** The local copy of launcher-data, used while the calendar has none (edited in the Study companion screen). */
+    val StudyFeedLocal = TextSetting(
+        key = "study.feedLocal", default = "", title = "Local launcher-data", section = "study", hidden = true,
+    )
     val StudyRest = IntSetting(
         key = "study.rest", default = 20, min = 0, max = 45, step = 5, unit = "min",
         title = "Rest after getting home",
@@ -2250,7 +2263,7 @@ object LauncherSettings {
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
         StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyPlanLink, StudyLinkOpener,
-        StudyAttendance, StudyLeaveBy, StudyCommute, StudyRest, StudyWindDown, StudySpeedBump, StudySpeedBumpTags,
+        StudyAttendance, StudyLeaveBy, StudyCommute, StudyRest, StudyWindDown, StudySpeedBump, StudySpeedBumpTags, StudyFeedCalendar, StudyFeedLocal,
         StudyArrival, StudyHomeWifi, StudyArrivalCharger, StudyShiftLead, StudyLatestEnd, StudyClassCalendars, StudyHeader, StudyCheckin, StudyTemplates,
         StudyHubSize, StudyHubBounce, StudyClockAction,
         NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,

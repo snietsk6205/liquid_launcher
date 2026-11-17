@@ -276,6 +276,12 @@ data class StudyDay(
     val exams: List<StudyEvent> = emptyList(),
     /** Absences recorded as "Note: absent <module> <time>" in the task calendars this semester, by module. 0.9.3. */
     val absences: Map<String, Int> = emptyMap(),
+    /** What the evening check-in wrote in "launcher-data" (or the local copy), when there is a valid one. 0.9.5. */
+    val feed: StudyFeed? = null,
+    /** Where [feed] came from: "calendar" or "local"; null without one. */
+    val feedSource: String? = null,
+    /** Keys of the [exams] whose date is not confirmed yet ("≈", B1). */
+    val unconfirmedExams: Set<String> = emptySet(),
 ) {
     /** When today's last class ends, or null on a day without classes. */
     val lastClassEnd: Long? get() = classes.maxOfOrNull { it.end }

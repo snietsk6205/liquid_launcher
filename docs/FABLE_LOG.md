@@ -439,3 +439,26 @@ Also in 0.9.4 (P10, study workflow):
 | C1 speed bump | During a running, open block, an app tagged `distracting` (Settings: Tag of the apps that wait; any names, comma separated) opened from the launcher (home, dock, drawer, search, pill, folders: everything goes through `launch`) waits behind a glass card grown from its icon: "Micro · 23 min left", "Back to Micro" (the hub) and "Open anyway" unlocking after 5 s. Back closes it. **Limit:** apps opened from notifications, recents or another app are not held back; a launcher cannot intercept those without an accessibility service that watches every app, which this launcher deliberately does not do (it only watches the system launcher, D2) |
 
 Tests: rest window and progress, no rest without a block to come, wind-down before everything but a running block, the wind-down hours.
+
+---
+
+## Entry 11: 0.9.5, launcher-data: confirmed exams, absence meter, grades, the daily flashcard (2026-11-17, Opus 5.5)
+
+Result of the earlier pushes: run 64 (0.9.2) failed on the emulator with 19 checks and 11 "Liquid Launcher isn't
+responding" dialogs from step 2 on. Nothing in 0.9.2 runs on the default home screen's path in a way that could block
+(the pill's new code only works for items with their own gestures or the study item, neither is on by default), the
+log showed a very slow emulator (window checks of 500+ ms, the launcher drawn 2.4 s after launch), and the re-run of
+the same build passed every check. So: an emulator flake, as in run 39. 0.9.2 was released by the re-run; 0.9.3 and
+0.9.4 were pushed together after it.
+
+| File | Change |
+|---|---|
+| `core/data/StudyFeed.kt` (new, + `StudyFeedTest`) | `StudyFeed` and its parts (spec part 1), `StudyFeedParser` (plain or Google HTML descriptions, text around the JSON ignored), `AbsenceMeter.levels` (B2 bands), `Grades.average` (E2, null until every mark has its coefficient) |
+| `core/data/StudyCalendar.kt`, `StudyFormat.kt` | `load()` finds today's "launcher-data" event (else the latest earlier one), else the local copy; `StudyDay.feed`, `feedSource`, `unconfirmedExams`; launcher-data's exams come first; `answerCard` (wrong → `Note: flashcard wrong …`) |
+| `feature/home/SearchStudy.kt` | New cards: absence meter (liquid tubes, UNVERIFIED badge, never "safe"), grade average, daily flashcard (face down; each tap turns it a half turn on a spring; right / wrong); `≈` on unconfirmed exam dates; `!abs` reads launcher-data first; an exam without an event opens the calendar on its day |
+| `core/data/SearchCards.kt`, settings | The three cards in the card list (default order: widgets, timeline, exam, absences, grades, flashcard, next, commands, claude, apps); "Calendar with launcher-data" (Launcher); the local copy |
+| `feature/settings/HomeSetupEditors.kt` | Study companion → launcher-data: where it is read from now, the local copy with "Check and keep" (invalid JSON is not kept) and "Start from the example" |
+| `docs/05-study-integration.md` | The launcher's new lines and notes, and launcher-data version 1, for the check-in's instructions |
+
+**For the evening check-in (outside this repository):** its instructions must add writing the `launcher-data` event in
+a calendar named "Launcher" (create it once in Google Calendar). Until then the local copy in settings works.

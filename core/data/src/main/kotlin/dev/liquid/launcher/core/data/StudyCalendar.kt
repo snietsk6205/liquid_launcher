@@ -102,6 +102,7 @@ class StudyCalendar(
             _homeAt.value = storedHome()
             _attendance.value = storedAttendance()
             _checkedIn.value = storedCheckin()
+            _cardAnswered.value = storedCard()
             // Not part of this job: a newer refresh must not cancel the write of the minutes.
             if (_focus.value != null) scope.launch(Dispatchers.IO) { finishFocusIfOver() }
         }
@@ -165,6 +166,11 @@ class StudyCalendar(
             .map { it.id }.toSet() - blockCalendars - taskCalendars
         val classes = ArrayList<StudyEvent>()
         val notes = ArrayList<StudyEvent>()
+        // "launcher-data" (0.9.5): an all-day event in the calendar named like the setting ("Launcher").
+        val feedWords = words(LauncherSettings.StudyFeedCalendar)
+        val feedCalendars = all.filter { cal -> feedWords.any { it in cal.name.lowercase() } }.map { it.id }.toSet()
+        var feedText: String? = null
+        var feedDay: LocalDate? = null
 
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
@@ -195,6 +201,17 @@ class StudyCalendar(
             )?.use { c ->
                 while (c.moveToNext()) {
                     val calendarId = c.getLong(7)
+                    if (calendarId in feedCalendars && c.getString(4).orEmpty().trim().equals("launcher-data", ignoreCase = true)) {
+                        // Today's, else the latest one before today (the check-in may not have run yet).
+                        val begin = c.getLong(1)
+                        val day = if (c.getInt(3) != 0) Instant.ofEpochMilli(begin).atZone(ZoneOffset.UTC).toLocalDate() else Instant.ofEpochMilli(begin).atZone(zone).toLocalDate()
+                        val previous = feedDay
+                        if (!day.isAfter(today) && (previous == null || day.isAfter(previous))) {
+                            feedDay = day
+                            feedText = c.getString(5)
+                        }
+                        continue
+                    }
                     val isBlockCalendar = calendarId in blockCalendars
                     val isClassCalendar = calendarId in classCalendars
                     if (!isBlockCalendar && !isClassCalendar && calendarId !in taskCalendars) continue
@@ -242,6 +259,23 @@ class StudyCalendar(
         } catch (e: Exception) {
             DebugLog.error("Study", "reading the calendar failed: $e")
         }
+        val fromCalendar = StudyFeedParser.parse(feedText)
+        if (feedText != null && fromCalendar == null) DebugLog.error("Study", "launcher-data of $feedDay is not valid JSON; using the local copy")
+        val feed = fromCalendar ?: StudyFeedParser.parse(settings.get(LauncherSettings.StudyFeedLocal))
+        val feedSource = when {
+            fromCalendar != null -> "calendar"
+            feed != null -> "local"
+            else -> null
+        }
+        val startOfToday = today.atStartOfDay(zone).toInstant().toEpochMilli()
+        val feedExams = feed?.exams.orEmpty().mapIndexedNotNull { i, e ->
+            val date = runCatching { LocalDate.parse(e.date.trim()) }.getOrNull() ?: return@mapIndexedNotNull null
+            // Counted from the morning of the day, like the timetable's all-day exams.
+            val begin = date.atTime(8, 0).atZone(zone).toInstant().toEpochMilli()
+            StudyEvent(-(i + 1).toLong(), 0, begin, begin + 2 * 60 * 60_000L, true, e.label.trim().ifEmpty { "Exam" }) to e.confirmed
+        }.filter { it.first.begin >= startOfToday }.sortedBy { it.first.begin }
+        val unconfirmed = feedExams.filter { !it.second }.map { it.first.key }.toSet()
+        val examsFromFeed = feedExams.map { it.first }
         // Drop the phone's copies of events that changed in the calendar, and old ones.
         val oldest = System.currentTimeMillis() - (overdueDays + 2) * 24 * 60 * 60_000L
         if (local.keys.removeAll { it in stale || local[it]!!.savedAt < oldest }) saveLocal(local)
@@ -254,8 +288,11 @@ class StudyCalendar(
             waitingToSync = waitingToSync(blockCalendars + taskCalendars),
             classes = classes.sortedBy { it.begin },
             notes = notes,
-            // Only the timetable's calendars: a study block "préparer le DS" is not an exam.
-            exams = exams(classCalendars, zone),
+            // launcher-data's exams first (B1); else the timetable's calendars (a study block "préparer le DS" is not an exam).
+            exams = examsFromFeed.ifEmpty { exams(classCalendars, zone) },
+            feed = feed,
+            feedSource = feedSource,
+            unconfirmedExams = unconfirmed,
             absences = absences(taskCalendars + blockCalendars, today, zone),
         )
     }
@@ -620,6 +657,25 @@ class StudyCalendar(
         prefs.all.keys.filter { it.startsWith("checkin:") && it != today }.forEach { edit.remove(it) }
         edit.putBoolean(today, true).apply()
         _checkedIn.value = true
+    }
+
+    private fun storedCard(): String? = prefs.getString("card:" + LocalDate.now(), null)
+
+    private val _cardAnswered = MutableStateFlow(storedCard())
+
+    /** The question of the flashcard answered today (E4), or null. */
+    val cardAnswered: StateFlow<String?> = _cardAnswered
+
+    /** E4: the day's flashcard was answered; a wrong answer becomes "Note: flashcard wrong <module>: <question>". */
+    suspend fun answerCard(card: FeedCard, right: Boolean): Boolean {
+        val today = "card:" + LocalDate.now()
+        val edit = prefs.edit()
+        prefs.all.keys.filter { it.startsWith("card:") && it != today }.forEach { edit.remove(it) }
+        edit.putString(today, card.q).apply()
+        _cardAnswered.value = card.q
+        if (right) return true
+        val module = card.module.trim().ifEmpty { "card" }
+        return addNote("flashcard wrong $module: " + card.q.trim().replace('\n', ' ').take(90))
     }
 
     /** Forgets today's arrival (the manual chip was a mistake). The mark already written stays. */

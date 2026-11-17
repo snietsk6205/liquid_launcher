@@ -163,8 +163,12 @@ fun SearchOverlay(
                         controller.openToday()
                         return
                     }
-                    key.startsWith("exam:") -> key.removePrefix("exam:").toLongOrNull()?.let { id ->
-                        controller.start(Intent(Intent.ACTION_VIEW, android.content.ContentUris.withAppendedId(android.provider.CalendarContract.Events.CONTENT_URI, id)))
+                    key.startsWith("exam:") -> {
+                        // "exam:<event id>:<begin>"; an exam from launcher-data has no event and opens the calendar on its day.
+                        val parts = key.removePrefix("exam:").split(':')
+                        val id = parts.getOrNull(0)?.toLongOrNull()
+                        val begin = parts.getOrNull(1)?.toLongOrNull()
+                        if (id != null && begin != null) controller.start(examIntent(dev.liquid.launcher.core.data.StudyEvent(id, 0, begin, begin, true, "")))
                     }
                     key == "plan" -> controller.run(LauncherAction.StudyPlan)
                     key == "checkin" -> controller.eveningCheckin()

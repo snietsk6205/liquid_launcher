@@ -200,6 +200,74 @@ internal fun StudyEditor(store: SettingsStore) {
             Modifier.padding(top = 8.dp),
         )
     }
+    LauncherDataEditor(store)
+}
+
+/** The example of docs/05 and the spec, to start a local copy from. */
+private const val FEED_EXAMPLE = """{"v":1,"updated":"2026-11-16T20:50",
+ "exams":[{"label":"DS + Examens P2","date":"2027-01-07","confirmed":false}],
+ "absences":{"rule_confirmed":false,"limit":0.20,
+   "modules":[{"name":"Intégration et Probabilité TD","absent":3,"total":null}]},
+ "flashcard":{"module":"Micro","q":"…","a":"…"},
+ "grades":[{"module":"Stat Des","type":"DS","mark":null,"coef":null}]}"""
+
+/**
+ * launcher-data (0.9.5): where it comes from right now, and the local copy used while the calendar has none
+ * (edited here, checked before it is kept).
+ */
+@Composable
+private fun LauncherDataEditor(store: SettingsStore) {
+    val context = LocalContext.current
+    val data = remember { LauncherData.get(context) }
+    val day by data.study.day.collectAsState()
+    val saved by store.observe(LauncherSettings.StudyFeedLocal)
+    var text by remember(saved) { mutableStateOf(saved) }
+    var message by remember { mutableStateOf<String?>(null) }
+    InfoCard {
+        Text("launcher-data", style = MaterialTheme.typography.titleMedium)
+        BodyText(
+            "Exams, absences, a flashcard and grades the evening check-in writes as JSON in an all-day event \"launcher-data\" " +
+                "of the calendar named in \"Calendar with launcher-data\". Until it is there, the launcher reads the copy below.",
+        )
+        val feed = day.feed
+        BodyText(
+            when (day.feedSource) {
+                "calendar" -> "Now read from the calendar" + (feed?.updated?.let { ", written $it" } ?: "") + ": " + dev.liquid.launcher.core.data.StudyFeedParser.describe(feed!!) + "."
+                "local" -> "Not in the calendar: the local copy is used (" + dev.liquid.launcher.core.data.StudyFeedParser.describe(feed!!) + ")."
+                else -> "None yet: exams come from your calendar's DS / Examen events, absences from your \"Note: absent\" records."
+            },
+            Modifier.padding(top = 6.dp),
+        )
+        androidx.compose.material3.OutlinedTextField(
+            value = text,
+            onValueChange = {
+                text = it
+                message = null
+            },
+            label = { Text("Local copy (JSON)") },
+            textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
+            minLines = 4,
+            maxLines = 12,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        )
+        message?.let { BodyText(it, Modifier.padding(top = 4.dp)) }
+        Row(Modifier.padding(top = 6.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+            Button(onClick = {
+                val parsed = dev.liquid.launcher.core.data.StudyFeedParser.parse(text)
+                if (text.isNotBlank() && parsed == null) {
+                    message = "Not valid JSON: nothing was kept."
+                } else {
+                    store.set(LauncherSettings.StudyFeedLocal, text.trim())
+                    data.study.refresh()
+                    message = if (parsed == null) "Local copy removed." else "Kept: " + dev.liquid.launcher.core.data.StudyFeedParser.describe(parsed) + "."
+                }
+            }) { Text("Check and keep") }
+            OutlinedButton(onClick = {
+                text = FEED_EXAMPLE
+                message = null
+            }) { Text("Start from the example") }
+        }
+    }
 }
 
 /** Saved layouts (list, export, import) and the full backup. */

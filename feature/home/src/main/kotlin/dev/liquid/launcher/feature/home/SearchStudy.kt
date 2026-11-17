@@ -43,6 +43,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.TextStyle
@@ -107,7 +108,10 @@ internal fun SearchPage(
                 when (id) {
                     "widgets" -> Column { SearchWidgets(controller, widgets, env, room) }
                     "timeline" -> if (loaded) DayStrip(controller, day, now)
-                    "exam" -> if (loaded) ExamCountdown(controller, day.exams, now)
+                    "exam" -> if (loaded) ExamCountdown(controller, day.exams, day.unconfirmedExams, now)
+                    "absences" -> if (loaded) AbsenceCard(day)
+                    "grades" -> if (loaded) GradeCard(day)
+                    "flashcard" -> if (loaded) FlashcardCard(controller, day)
                     "next" -> if (loaded) NextBlockCard(controller, day, now)
                     "commands" -> if (loaded) CommandChips(controller)
                     "claude" -> ClaudeChips(controller, if (loaded) heroBlock(day, now) else null)
@@ -285,13 +289,13 @@ internal fun examCountdown(begin: Long, now: Long): Pair<String, String> {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ExamCountdown(controller: HomeController, exams: List<StudyEvent>, now: Long) {
+private fun ExamCountdown(controller: HomeController, exams: List<StudyEvent>, unconfirmed: Set<String>, now: Long) {
     val first = exams.firstOrNull() ?: return
     var open by remember { mutableStateOf(false) }
     val dayFormat = remember { DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefault()) }
     fun date(e: StudyEvent) = Instant.ofEpochMilli(e.begin).atZone(ZoneId.systemDefault()).format(dayFormat) +
         if (e.allDay) "" else " · " + studyClock(e.begin)
-    fun openEvent(e: StudyEvent) = controller.start(Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, e.eventId)))
+    fun openEvent(e: StudyEvent) = controller.start(examIntent(e))
     Box(
         Modifier
             .fillMaxWidth()
@@ -311,11 +315,11 @@ private fun ExamCountdown(controller: HomeController, exams: List<StudyEvent>, n
             .animateContentSize(spring(dampingRatio = 0.84f, stiffness = 480f)),
     ) {
         Column {
-            ExamRow(first, now, big = true, date(first))
+            ExamRow(first, now, big = true, date(first), first.key in unconfirmed)
             if (open) {
                 exams.drop(1).take(3).forEach { e ->
                     Spacer(Modifier.height(8.dp))
-                    Box(Modifier.squishClickable { openEvent(e) }) { ExamRow(e, now, big = false, date(e)) }
+                    Box(Modifier.squishClickable { openEvent(e) }) { ExamRow(e, now, big = false, date(e), e.key in unconfirmed) }
                 }
                 if (exams.size == 1) Text("No other exam in your calendar in the next six months", style = searchText(11, alpha = 0.55f), modifier = Modifier.padding(top = 6.dp))
             }
@@ -324,10 +328,12 @@ private fun ExamCountdown(controller: HomeController, exams: List<StudyEvent>, n
 }
 
 @Composable
-private fun ExamRow(exam: StudyEvent, now: Long, big: Boolean, date: String) {
+private fun ExamRow(exam: StudyEvent, now: Long, big: Boolean, date: String, unconfirmed: Boolean) {
     val days = (exam.begin - now) / 86_400_000L
     val color = examColor(days)
-    val (number, unit) = examCountdown(exam.begin, now)
+    val (count, unit) = examCountdown(exam.begin, now)
+    // B1: "≈" while launcher-data says the date is not confirmed.
+    val number = if (unconfirmed) "≈$count" else count
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.width(if (big) 64.dp else 52.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(number, style = searchText(if (big) 28 else 20, FontWeight.SemiBold, color = color))
@@ -336,10 +342,175 @@ private fun ExamRow(exam: StudyEvent, now: Long, big: Boolean, date: String) {
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(exam.rawTitle.trim(), style = searchText(if (big) 15 else 13, FontWeight.SemiBold), maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(date + if (big) "  ·  hold for the next ones" else "", style = searchText(11, alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                date + (if (unconfirmed) "  ·  date not confirmed" else "") + if (big) "  ·  hold for the next ones" else "",
+                style = searchText(11, alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
+
+/** An exam's event in the calendar app; an exam from launcher-data (no event) opens the calendar on its day. */
+internal fun examIntent(e: StudyEvent): Intent =
+    if (e.eventId > 0) {
+        Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, e.eventId))
+    } else {
+        val uri = CalendarContract.CONTENT_URI.buildUpon().appendPath("time").also { ContentUris.appendId(it, e.begin) }.build()
+        Intent(Intent.ACTION_VIEW, uri)
+    }
+
+// ---- absence meter (B2), grades (E2), flashcard (E4): from launcher-data ----
+
+private val Green = Color(0xFF66D19E)
+private val Amber = Color(0xFFFFB74D)
+
+private fun bandColor(band: String): Color = when (band) {
+    "green" -> Green
+    "amber" -> Amber
+    "red" -> LeaveRed
+    else -> Ink.copy(alpha = 0.45f)
+}
+
+/**
+ * B2: one liquid tube per module, filled to absences ÷ (limit × sessions), green below half, amber to 0.8, red
+ * above; a permanent grey UNVERIFIED badge while the rule is not confirmed, and never a "safe". Without a session
+ * count only the number of absences is shown. Without launcher-data, the launcher's own "Note: absent" records.
+ */
+@Composable
+private fun AbsenceCard(day: StudyDay) {
+    val feedAbsences = day.feed?.absences
+    val levels = remember(feedAbsences) { feedAbsences?.let { dev.liquid.launcher.core.data.AbsenceMeter.levels(it) }.orEmpty() }
+    if (levels.isEmpty() && day.absences.isEmpty()) return
+    SearchPane(onClick = null) {
+        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Absences", style = searchText(13, FontWeight.SemiBold), modifier = Modifier.weight(1f))
+                if (feedAbsences?.ruleConfirmed != true) {
+                    Text(
+                        "UNVERIFIED",
+                        style = searchText(10, FontWeight.SemiBold, alpha = 0.75f),
+                        modifier = Modifier.clip(RoundedCornerShape(50)).background(Ink.copy(alpha = 0.16f)).padding(horizontal = 8.dp, vertical = 2.dp),
+                    )
+                }
+            }
+            if (levels.isNotEmpty()) {
+                for (level in levels) AbsenceTube(level, (feedAbsences?.limit ?: 0.2))
+            } else {
+                for ((module, n) in day.absences.entries.sortedByDescending { it.value }) {
+                    Row {
+                        Text(module, style = searchText(13), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (n == 1) "1 absence" else "$n absences", style = searchText(12, alpha = 0.7f))
+                    }
+                }
+                Text("Counted from your \"Note: absent\" records; launcher-data adds the limit per module.", style = searchText(11, alpha = 0.55f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun AbsenceTube(level: dev.liquid.launcher.core.data.AbsenceLevel, limit: Double) {
+    val color = bandColor(level.band)
+    val fill by androidx.compose.animation.core.animateFloatAsState(
+        (level.fill ?: 0.0).toFloat().coerceIn(0f, 1.2f), spring(dampingRatio = 0.6f, stiffness = 120f), label = "tube",
+    )
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(level.module, style = searchText(13, FontWeight.Medium), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                if (level.total != null) "${level.absent} of ${level.total} · limit ${(limit * 100).toInt()} %" else "${level.absent} absences · sessions unknown",
+                style = searchText(11, alpha = 0.7f),
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        Canvas(Modifier.fillMaxWidth().height(12.dp)) {
+            val r = CornerRadius(size.height / 2f, size.height / 2f)
+            drawRoundRect(Ink.copy(alpha = 0.12f), cornerRadius = r)
+            if (level.fill != null) {
+                val w = (size.width * fill.coerceAtMost(1f)).coerceAtLeast(size.height)
+                drawRoundRect(color.copy(alpha = 0.9f), size = Size(w, size.height), cornerRadius = r)
+                // The liquid's light: a brighter line along its top.
+                drawRoundRect(Color.White.copy(alpha = 0.28f), topLeft = Offset(size.height / 3f, 2.dp.toPx()), size = Size((w - size.height * 2f / 3f).coerceAtLeast(0f), 2.dp.toPx()), cornerRadius = CornerRadius(1.dp.toPx(), 1.dp.toPx()))
+            }
+            drawRoundRect(Ink.copy(alpha = 0.3f), cornerRadius = r, style = Stroke(1.dp.toPx()))
+        }
+    }
+}
+
+/** E2: the weighted average, only once every mark has its coefficient. */
+@Composable
+private fun GradeCard(day: StudyDay) {
+    val grades = day.feed?.grades.orEmpty()
+    val average = remember(grades) { dev.liquid.launcher.core.data.Grades.average(grades) } ?: return
+    val marks = grades.count { it.mark != null }
+    SearchPane(onClick = null) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("%.1f".format(Locale.getDefault(), average), style = searchText(26, FontWeight.SemiBold, color = if (average >= 10.0) Green else Amber))
+            Text(" /20", style = searchText(13, alpha = 0.6f))
+            Spacer(Modifier.width(12.dp))
+            Text("Weighted average · " + (if (marks == 1) "1 mark" else "$marks marks"), style = searchText(13, alpha = 0.8f))
+        }
+    }
+}
+
+/**
+ * E4: the day's flashcard from launcher-data, face down. A tap turns it over to the question, another to the
+ * answer, each turn a spring around the vertical axis; then right or wrong (wrong writes a note for the check-in).
+ */
+@Composable
+private fun FlashcardCard(controller: HomeController, day: StudyDay) {
+    val card = day.feed?.flashcard?.takeIf { it.q.isNotBlank() } ?: return
+    val answered by controller.data.study.cardAnswered.collectAsState()
+    if (answered == card.q) return
+    var side by remember(card.q) { mutableStateOf(0) }
+    val turn by androidx.compose.animation.core.animateFloatAsState(
+        side * 180f, spring(dampingRatio = 0.72f, stiffness = 260f), label = "flip",
+    )
+    // The face shown is the one turned towards you: the content swaps at the half turn and is mirrored back.
+    val shown = ((turn + 90f) / 180f).toInt().coerceIn(0, 2)
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .flipAround(turn)
+            .clip(RoundedCornerShape(22.dp))
+            .background(Ink.copy(alpha = if (shown == 0) 0.14f else 0.09f))
+            .squishClickable(delayMs = 40L) { if (side < 2) side++ }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+    ) {
+        Column(Modifier.readableWhenFlipped(turn)) {
+            Text(card.module.ifBlank { "Flashcard" } + " · flashcard of the day", style = searchText(11, FontWeight.Medium, alpha = 0.65f))
+            Spacer(Modifier.height(4.dp))
+            when (shown) {
+                0 -> Text("Tap to turn it over", style = searchText(16, FontWeight.SemiBold))
+                1 -> Text(card.q, style = searchText(15, FontWeight.Medium))
+                else -> {
+                    Text(card.a, style = searchText(15, FontWeight.Medium))
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        GlassButton("Wrong", Ink, icon = LauncherIcons.Close) { controller.answerCard(card, right = false) }
+                        GlassButton("Right", Ink, icon = LauncherIcons.Check, emphasis = ControlEmphasis.Main) { controller.answerCard(card, right = true) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Turns the card around the vertical axis by [degrees] (a little perspective). */
+private fun Modifier.flipAround(degrees: Float): Modifier = this.then(
+    Modifier.graphicsLayer {
+        rotationY = degrees
+        cameraDistance = 14f * density
+    }
+)
+
+/** Mirrors the content back on odd half turns, so the side facing you reads the right way round. */
+private fun Modifier.readableWhenFlipped(degrees: Float): Modifier = this.then(
+    Modifier.graphicsLayer {
+        val half = ((degrees + 90f) / 180f).toInt()
+        if (half % 2 == 1) rotationY = 180f
+    }
+)
 
 // ---- study commands (D3) and Claude ----
 
@@ -443,20 +614,36 @@ internal fun studyRows(command: String, day: StudyDay, now: Long, loaded: Boolea
         "exam" -> day.exams.take(4).map { e ->
             val (n, unit) = examCountdown(e.begin, now)
             val date = Instant.ofEpochMilli(e.begin).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefault()))
-            StudyRow("exam:" + e.eventId, e.rawTitle.trim(), "in $n $unit · $date", LauncherIcons.School, examColor((e.begin - now) / 86_400_000L))
+            val about = if (e.key in day.unconfirmedExams) "≈ " else ""
+            StudyRow("exam:" + e.eventId + ":" + e.begin, e.rawTitle.trim(), "${about}in $n $unit · $date" + if (about.isNotEmpty()) " · not confirmed" else "", LauncherIcons.School, examColor((e.begin - now) / 86_400_000L))
         }.ifEmpty { listOf(StudyRow("none", "No exam found", "Events named DS, Examen, Partiel or Contrôle in your calendar in the next six months", LauncherIcons.Info)) }
         "plan" -> listOf(
             StudyRow("plan", "Open my study plan", "The plan link from Settings → Study companion", LauncherIcons.Calendar),
             StudyRow("today", "Today", "${day.blocksDone}/${day.blocks.size} blocks done", LauncherIcons.School),
             StudyRow("checkin", "Evening check-in", "Today's log to Claude", LauncherIcons.Chat),
         )
-        "abs" -> if (day.absences.isEmpty()) {
+        "abs" -> absenceRows(day)
+        else -> emptyList()
+    }
+}
+
+/** !abs: the tubes of launcher-data when there are some, else the launcher's own records. */
+private fun absenceRows(day: StudyDay): List<StudyRow> {
+    val absences = day.feed?.absences
+    return if (absences != null && absences.modules.isNotEmpty()) {
+            dev.liquid.launcher.core.data.AbsenceMeter.levels(absences).map { level ->
+                val detail = if (level.total != null) {
+                    "${level.absent} of ${level.total} sessions · ${(level.fill!! * 100).toInt()} % of the limit"
+                } else {
+                    "${level.absent} absences · sessions unknown"
+                }
+                StudyRow("abs:" + level.module, level.module, detail + if (!absences.ruleConfirmed) " · UNVERIFIED" else "", LauncherIcons.Info, if (level.fill != null) bandColor(level.band) else null)
+            }
+        } else if (day.absences.isEmpty()) {
             listOf(StudyRow("none", "No absence recorded", "Each \"Note: absent <module> <time>\" in your task calendar counts here · UNVERIFIED", LauncherIcons.Info))
         } else {
             day.absences.entries.sortedByDescending { it.value }.map { (module, n) ->
                 StudyRow("abs:$module", module, (if (n == 1) "1 absence" else "$n absences") + " recorded · UNVERIFIED (the rule is not confirmed)", LauncherIcons.Info)
             }
         }
-        else -> emptyList()
-    }
 }

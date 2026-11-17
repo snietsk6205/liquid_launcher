@@ -380,6 +380,15 @@ class HomeController(
         }
     }
 
+    /** E4: the day's flashcard, right or wrong (wrong becomes a note for the check-in). */
+    fun answerCard(card: dev.liquid.launcher.core.data.FeedCard, right: Boolean) {
+        if (right) Haptics.tick(view) else Haptics.confirm(view)
+        scope.launch {
+            val ok = data.study.answerCard(card, right)
+            if (!right && !ok) toast("Could not write the note to the calendar")
+        }
+    }
+
     /** "I'm home" (A2, by hand). */
     fun markHomeNow() {
         Haptics.confirm(view)
