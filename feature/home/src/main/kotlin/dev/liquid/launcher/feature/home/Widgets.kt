@@ -334,6 +334,16 @@ internal fun AppWidgetItem(item: HomeItem, env: PageEnv, controller: HomeControl
         }
         return
     }
+    if (controller.batterySaving && !env.editMode) {
+        // A4: on the trip home under 30 %, other apps' widgets rest (they update and draw on their own).
+        Box(Modifier.fillMaxSize().padding(4.dp).clip(shape).background(env.contentColor.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
+            Text(
+                "Resting to save battery",
+                style = TextStyle(fontFamily = HomeTheme.font, color = env.contentColor.copy(alpha = 0.7f), fontSize = 12.sp, textAlign = TextAlign.Center, shadow = env.shadow),
+            )
+        }
+        return
+    }
     val glassPlate = item.options?.get("plate") == "glass"
     // P7 (0.9.17): in the launcher's look unless switched off for this widget (or for all, in Settings → Widgets).
     val restyleAll by controller.data.settings.derive { get(dev.liquid.launcher.core.settings.LauncherSettings.WidgetRestyle) }

@@ -284,8 +284,21 @@ private fun HomeScreenBody(
         if (moduleGlass) heroBlock(tintDay, System.currentTimeMillis())?.let { eventColor(it) } else null
     }
     val tintShown by androidx.compose.animation.animateColorAsState(blockColour ?: Color.Transparent, tween(1400), label = "moduleGlass")
-    val glass = remember(glassBase, tintShown) {
-        if (tintShown.alpha < 0.01f) glassBase else glassBase.copy(accentTint = tintShown.copy(alpha = 1f), accentAmount = 0.42f * tintShown.alpha)
+    // A4 (0.9.18): on the trip home, under 30 % and not charging, the glass is frosted (no shader), other apps'
+    // widgets and the moving wallpaper rest, until home or charging.
+    val onTrip by store.derive { get(LauncherSettings.ContextActive) == dev.liquid.launcher.core.data.ContextLayouts.COMMUTE }
+    val battery = rememberBattery(live && onTrip)
+    val saving = onTrip && battery != null && battery.first in 0..29 && !battery.second
+    SideEffect { controller.batterySaving = saving }
+    LaunchedEffect(saving) {
+        if (saving) controller.notice(dev.liquid.launcher.core.common.NoticeKind.Info, "Battery under 30 %", "Widgets and moving effects rest until you are home or charging")
+    }
+    val glass = remember(glassBase, tintShown, saving) {
+        val base = if (!saving) glassBase else glassBase.copy(
+            quality = glassBase.quality.cappedAt(GlassQuality.Frosted),
+            largeQuality = glassBase.largeQuality.cappedAt(GlassQuality.Frosted),
+        )
+        if (tintShown.alpha < 0.01f) base else base.copy(accentTint = tintShown.copy(alpha = 1f), accentAmount = 0.42f * tintShown.alpha)
     }
     val search by store.derive { searchConfig() }
     val menuEntries by store.derive { MenuEntry.fromIds(get(LauncherSettings.MenuEntries)) }
@@ -616,7 +629,7 @@ private fun HomeScreenBody(
                 WallpaperFxLayer(
                     wallpaperFx, touchFx,
                     running = {
-                        (!live || windowInfo.isWindowFocused) &&
+                        (!live || windowInfo.isWindowFocused) && !controller.batterySaving &&
                             controller.drawer.value < 0.98f && controller.searchAmount < 0.98f && controller.transitionShot == null
                     },
                 )

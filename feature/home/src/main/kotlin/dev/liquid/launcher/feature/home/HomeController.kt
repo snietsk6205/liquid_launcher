@@ -1266,6 +1266,9 @@ class HomeController(
     /** C1: an app tagged as distracting was asked for during a study block; it waits here. */
     var speedBump by mutableStateOf<SpeedBump?>(null)
 
+    /** A4 (0.9.18): on the trip home with the battery under 30 % (not charging): heavy things rest. */
+    var batterySaving by mutableStateOf(false)
+
     /** The block running now when [app] carries a "distracting" tag (C1, Settings → Study companion); else null. */
     private fun speedBumpFor(app: AppEntry): dev.liquid.launcher.core.data.StudyEvent? {
         if (!data.study.enabled || !data.settings.get(LauncherSettings.StudySpeedBump)) return null

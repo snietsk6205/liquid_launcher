@@ -73,3 +73,33 @@ internal object WidgetRestyle {
         return Color.argb(a, Color.red(text), Color.green(text), Color.blue(text))
     }
 }
+
+/**
+ * The battery's level (0..100) and whether it charges, while [on]; null when off or unknown. Read from the
+ * system's sticky battery broadcast (A4, 0.9.18).
+ */
+@androidx.compose.runtime.Composable
+internal fun rememberBattery(on: Boolean): Pair<Int, Boolean>? {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val state = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Pair<Int, Boolean>?>(null) }
+    androidx.compose.runtime.DisposableEffect(on) {
+        if (!on) {
+            state.value = null
+            return@DisposableEffect onDispose { }
+        }
+        fun read(intent: android.content.Intent?) {
+            if (intent == null) return
+            val raw = intent.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+            val scale = intent.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100).coerceAtLeast(1)
+            val status = intent.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1)
+            val charging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING || status == android.os.BatteryManager.BATTERY_STATUS_FULL
+            state.value = if (raw < 0) null else (raw * 100 / scale) to charging
+        }
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context, intent: android.content.Intent) = read(intent)
+        }
+        read(context.registerReceiver(receiver, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED)))
+        onDispose { runCatching { context.unregisterReceiver(receiver) } }
+    }
+    return state.value
+}

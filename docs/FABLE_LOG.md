@@ -699,9 +699,19 @@ Not done for P7: the options of the launcher's own widgets (layout, density, fon
 
 ---
 
+## Entry 24: 0.9.18, A4's battery rule (2026-11-17, Opus 5.5)
+
+On the trip home (the commute layout is on, entry 17) with the battery under 30 % and not charging: the glass is
+drawn frosted (no shader pass), other apps' widgets rest behind a small "Resting to save battery" card (they update
+and draw on their own), and the moving wallpaper stops; a notice says so once. Everything comes back when you are
+home (the trip ends) or the phone charges. The battery is read from the system's battery broadcast only while a
+trip is on.
+
+---
+
 ## End of this session (2026-11-17): state for the next model
 
-**Version shipped:** 0.9.17 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
+**Version shipped:** 0.9.18 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
 0.9.1 (run 63), 0.9.2 (run 64, second attempt; the first failed on a slow emulator, see entry 11). 0.9.3 and 0.9.4 were
 pushed together (run 65); 0.9.5 to 0.9.9 together (run 66, passed); 0.9.10 and 0.9.11 together (run 67, passed); 0.9.12 (run 68: built, unit tests passed, the real glass shader compiled on the emulator, but not released: my new check of the tuning panel found no screen dump, because the bench kept moving after measuring and the screen never settled; 0.9.13 keeps it still unless you press Move); 0.9.13 (run 69: did not compile, a smart cast across modules in `Controls.kt`; fixed) and 0.9.14 together after it. Check the GitHub releases for the newest `v0.9.x`; if a
 run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Nothing of this session was tried on the phone.
@@ -719,7 +729,7 @@ run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Not
 | P7 widgets | Partly: no glass box behind the built-in widgets by default (0.9.10); other apps' widgets in the launcher's look, re-applied after every update, with a global and a per-widget switch (0.9.17). Not: the options of the launcher's own widgets (layout, density, font, accent, corners, fields) |
 | P8 layouts and wallpaper | Partly: context triggers for layouts (trip home, exam week; 0.9.11). Not: layout previews, per-layout wallpaper choice UI, switch timer, time windows, the LayoutsSheet redesign, per-wallpaper blur/dim/saturation/vignette, tone feeding the glass, wallpaper quick tools |
 | P9 icon animations | Done (0.9.4) |
-| P10 rest of Phase 5 | Done: A4 (layout switch + trip line), A5, A6, B1 (+ ≈), B2, B3, C1, C3, C4 (layout switch), C5 (0.9.16), D3, D4, E1, E2, E3, E4, E5, launcher-data. Not: A4's battery rule, C4's annales folders |
+| P10 rest of Phase 5 | Done: A4 (layout switch + trip line), A5, A6, B1 (+ ≈), B2, B3, C1, C3, C4 (layout switch), C5 (0.9.16), A4's battery rule (0.9.18), D3, D4, E1, E2, E3, E4, E5, launcher-data. Not: C4's annales folders |
 | P11 motion pass | Partly: drawer, search and hub springs keep their speed when turned round (D125); the rest of the pass not done |
 
 **Known bugs and risks**
@@ -748,5 +758,5 @@ the options the brief lists (layout, density, font and weight, accent, corners, 
 per-widget option in the widget's edit menu (`setItemOption`, as "plate" and "restyle" already are) with the
 preview of the home screen. After that P8 (layout previews, per-layout wallpaper UI, a switch-back timer,
 per-wallpaper blur/dim/saturation), then the last bits: the drawer's top tabs pill rising out of the home pill, an
-emulator check of C5 (grant access with `cmd notification allow_listener`, post during the 14b block), A4's battery
-rule and C4's folders, and the P11 pass.
+emulator check of C5 (grant access with `cmd notification allow_listener`, post during the 14b block), C4's
+folders, and the P11 pass.
