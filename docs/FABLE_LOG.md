@@ -491,3 +491,18 @@ Not verified on the phone: the rail's height for your thumb, whether MagicOS hon
 |---|---|---|
 | E3 | Every glass surface mixes 42 % of the block now or next's colour (its event colour, which the check-in sets from its colour map) into its tint, easing over 1.4 s when the block changes; dark and light glass keep their character (the mix is into each surface's own tint). Setting "Glass in the colour of the block" (on) | `GlassConfig.accentTint`, `HomeScreen.kt` |
 | E1 | Action "Photo of the board" (gestures, pill, home menu) and a "Board · <module>" chip in the hub while a class is on or ended less than 30 min ago: the camera writes straight into `Pictures/ESSAI/<module>/<yyyy-MM-dd>_<module>.jpg` (a pending MediaStore entry, kept when the photo is taken, removed when not; Android numbers a second photo of the same day). The module is the class now, else the block now, else "Notes". No storage or camera permission is needed | `HomeController.boardPhoto`, `MainActivity` (TakePicture) |
+
+---
+
+## Entry 14: 0.9.8, P5 (part): a bigger tag button, a drawer field with a purpose (2026-11-17, Opus 5.5)
+
+| What | How |
+|---|---|
+| Tag button | Settings → Drawer tabs and tags → Tag button size (36–64 dp, default 50, was a fixed 36): the round button at the end of the chip row, bottom right by default, under the thumb; the row and the drawer's padding grow with it; the icon and the filter dot scale with it |
+| Drawer field, empty | Its hint is the study glance in a few words ("Micro · 23 min", "Leave 6:30", "Present?") with its ring in place of the magnifying glass; tapping the ring opens the study hub. Without a glance it stays "Search apps". The field's accessibility name is still "Search apps" |
+| Drawer field, Ask Claude | A sparkle button in the field: closes the drawer and opens search in Claude mode |
+
+Not done in P5 (next session): handing `!next !exam !plan !abs ?` typed in the drawer field over to search (needs the
+keyboard to move from one field to the other without dropping: test on the phone first), the tag list opening as a
+container transform from the button (today it grows from the button's centre with a spring, 0.4.2), and the drawer's
+top tabs pill taking part in the home-pill morph.

@@ -96,6 +96,8 @@ data class TagFilterConfig(
     /** "any" or "all". */
     val match: String,
     val swipe: Boolean,
+    /** Size of the round button for the full tag list in the chip row (0.9.8, P5). */
+    val buttonDp: Int = 50,
     val keep: Boolean,
     val pinned: List<String>,
 )
@@ -114,7 +116,11 @@ fun SettingsStore.tagFilterConfig() = TagFilterConfig(
     swipe = get(LauncherSettings.TagSwipe),
     keep = get(LauncherSettings.TagFilterKeep),
     pinned = get(LauncherSettings.TagPinned),
+    buttonDp = get(LauncherSettings.TagButtonSize),
 )
+
+/** The chip row's height: room for the tag button (0.9.8). */
+internal fun TagFilterConfig.stripHeight(): androidx.compose.ui.unit.Dp = maxOf(46, buttonDp + 6).dp
 
 /** Height the chip row takes above the search field. */
 internal val TagStripHeight = 46.dp
@@ -195,11 +201,11 @@ internal fun TagStrip(
     val color = if (glass.lightGlass(Surfaces.Drawer, lightBackground)) Color(0xFF16181C) else Color.White
     val filter = controller.tagFilter
     val shown = if (config.count > 0) tags.take(config.count) else tags
-    Row(modifier.fillMaxWidth().height(TagStripHeight), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.fillMaxWidth().height(config.stripHeight()), verticalAlignment = Alignment.CenterVertically) {
         // The list button is fixed at one end, so it never scrolls away with the chips.
         if (config.button == "rowStart") {
             Spacer(Modifier.width(14.dp))
-            TagsButton(controller, color, Modifier.liquidGlass(backdrop, CircleShape, glass.style(Surfaces.Drawer, lightBackground)), interactive)
+            TagsButton(controller, color, Modifier.liquidGlass(backdrop, CircleShape, glass.style(Surfaces.Drawer, lightBackground)), interactive, size = config.buttonDp.dp)
         }
         // One glass surface for the whole row. Up to 0.5.0 every chip was its own glass (a
         // shader pass each, redrawn whenever the list under them scrolled), against D8.
@@ -239,7 +245,7 @@ internal fun TagStrip(
             }
         }
         if (config.button == "rowEnd") {
-            TagsButton(controller, color, Modifier.liquidGlass(backdrop, CircleShape, glass.style(Surfaces.Drawer, lightBackground)), interactive)
+            TagsButton(controller, color, Modifier.liquidGlass(backdrop, CircleShape, glass.style(Surfaces.Drawer, lightBackground)), interactive, size = config.buttonDp.dp)
             Spacer(Modifier.width(14.dp))
         }
     }
@@ -266,12 +272,12 @@ internal fun TagsButton(controller: HomeController, color: Color, surface: Modif
             ),
         contentAlignment = Alignment.Center,
     ) {
-        LauncherIcon(LauncherIcons.Filter, contentDescription = "All tags", tint = color, size = 18.dp)
+        LauncherIcon(LauncherIcons.Filter, contentDescription = "All tags", tint = color, size = (size * 0.46f).coerceAtLeast(18.dp))
         if (active) {
             Box(
                 Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 7.dp, end = 7.dp)
+                    .padding(top = size * 0.19f, end = size * 0.19f)
                     .size(7.dp)
                     .clip(CircleShape)
                     .background(HomeTheme.accent)

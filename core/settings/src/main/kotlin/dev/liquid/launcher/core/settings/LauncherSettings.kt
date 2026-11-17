@@ -1017,6 +1017,12 @@ object LauncherSettings {
         summary = "A round button that opens the list of all your tags, growing out of the button. In the chip row it never scrolls away",
         section = "tags", keywords = "tag list button all tags position search field",
     )
+    val TagButtonSize = IntSetting(
+        key = "tags.buttonSize", default = 50, min = 36, max = 64, step = 2, unit = "dp",
+        title = "Tag button size",
+        summary = "The round button at the end of the chip row that opens all your tags; the row grows with it",
+        section = "tags", keywords = "tag button size big thumb reach",
+    )
     val TagStripOrder = ChoiceSetting(
         key = "tags.stripOrder", default = "used",
         options = listOf("used" to "Pinned first, then most used", "az" to "Pinned first, then A to Z", "pinned" to "Only pinned tags"),
@@ -2288,7 +2294,7 @@ object LauncherSettings {
         DrawerScrollbar, DrawerScrollBubble, DrawerScrollEffect, DrawerScrollStrength, DrawerOverscroll,
         IndexStyle, IndexRailHeight, IndexRailLift, IndexRailInset, IndexVisibility, IndexSide, IndexTrack, IndexReach, IndexEnds, IndexLetterSize, IndexSpacing, IndexBubble, IndexBubblePlace, IndexLetterGap, IndexBubbleGap, IndexHaptics, IndexFollow, IndexSpring, IndexHideDelay, IndexFocus, DrawerTopSections,
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
-        TagStripPosition, TagButtonPosition, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
+        TagStripPosition, TagButtonPosition, TagButtonSize, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
         MenuEntries,
         SearchTransition, SearchBounce, SearchSpeed, SearchStretch, SearchField, SearchOpenKeyboard, SearchBlur, SearchDim, SearchHomeScale,
         SearchClaude, SearchClaudeTarget, SearchClipboard, SearchEngine, SearchKeyboardHeight,

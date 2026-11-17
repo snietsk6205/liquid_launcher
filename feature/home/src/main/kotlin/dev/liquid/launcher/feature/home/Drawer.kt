@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberOverscrollEffect
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -416,13 +417,13 @@ fun AppDrawer(
     val stripTop = stripShown && tagConfig.position == "top"
     val stripAbove = stripShown && !stripTop
     val baseHeader = if (tabsTop) maxOf(HandleHeight, tabsH + 16.dp) else HandleHeight
-    val headerHeight = baseHeader + if (stripTop) TagStripHeight else 0.dp
+    val headerHeight = baseHeader + if (stripTop) tagConfig.stripHeight() else 0.dp
     val belowStrip = when {
         tabsBottom -> tabsH + 10.dp
         inPill -> tabsRowHeight(config.tabsSize)
         else -> 0.dp
     }
-    val bottomExtra = SearchZone + belowStrip + if (stripAbove) TagStripHeight else 0.dp
+    val bottomExtra = SearchZone + belowStrip + if (stripAbove) tagConfig.stripHeight() else 0.dp
     val statusInsets = WindowInsets.statusBars
     val padding = remember(keyboardOrNav, statusInsets, density, bottomExtra, headerHeight, config.sideMarginDp) {
         DrawerPadding(
@@ -964,9 +965,16 @@ internal fun DrawerSearchField(
             TagsButton(controller, color, Modifier.background(color.copy(alpha = 0.1f), RoundedCornerShape(50)), interactive, size = 34.dp)
             Spacer(Modifier.width(8.dp))
         }
+        // P5 (0.9.8): with nothing typed, the field says where the day is instead of "Search apps".
+        val glance = if (!filtering && controller.drawerQuery.isEmpty()) rememberStudyGlance(controller) else null
         if (filtering) {
             // The active tag filter, with one tap to clear it.
             ActiveTagChip(controller, controller.tagFilterLabel, interactive)
+        } else if (glance != null) {
+            Box(
+                Modifier.size(30.dp).clip(CircleShape).then(if (interactive) Modifier.squishClickable { controller.openToday() } else Modifier),
+                contentAlignment = Alignment.Center,
+            ) { StudyRing(glance, color, 18.dp) }
         } else {
             LauncherIcon(LauncherIcons.Search, contentDescription = null, tint = color, size = 22.dp)
         }
@@ -974,7 +982,11 @@ internal fun DrawerSearchField(
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (controller.drawerQuery.isEmpty()) {
                 Text(
-                    if (filtering) "Search in ${controller.tagFilterLabel}" else "Search apps",
+                    when {
+                        filtering -> "Search in ${controller.tagFilterLabel}"
+                        glance != null -> glanceText(glance, short = true)
+                        else -> "Search apps"
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.65f), fontSize = 16.sp),
@@ -994,6 +1006,16 @@ internal fun DrawerSearchField(
                     .focusRequester(focus)
                     .semantics { contentDescription = "Search apps" },
             )
+        }
+        if (controller.drawerQuery.isEmpty() && interactive && controller.data.settings.get(dev.liquid.launcher.core.settings.LauncherSettings.SearchClaude) != "off") {
+            // One tap to Claude, from the drawer too (P5).
+            Box(
+                Modifier.size(36.dp).clip(CircleShape).squishClickable {
+                    controller.closeDrawer()
+                    controller.openAskClaude()
+                },
+                contentAlignment = Alignment.Center,
+            ) { LauncherIcon(LauncherIcons.Sparkle, contentDescription = "Ask Claude", tint = color, size = 20.dp) }
         }
         if (controller.drawerQuery.isNotEmpty()) {
             Box(Modifier.size(36.dp).clip(RoundedCornerShape(50)).clickable { controller.drawerQuery = "" }, contentAlignment = Alignment.Center) {

@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.9.8: in the drawer, the search field shows where your day is (tap the ring for the study hub) and has a one-tap Ask Claude; the tag button is bigger (its size is a setting).
+
 0.9.7: the glass takes a touch of the colour of the block now or next; a board-photo button during and just after class saves straight into Pictures/ESSAI/<module>/ with the date.
 
 0.9.6: the drawer's letter index is a short glass rail in thumb reach that never triggers Back: a few letters with dots, a drop marking where the list is, and a magnifier that turns like a wheel through the letters while you drag, with a tick per letter. The old full-edge index is still in Settings → Drawer index.
