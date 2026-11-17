@@ -1,5 +1,12 @@
 # 6. Roadmap
 
+## State as of 0.9.9 (2026-11-17)
+
+The session of 2026-11-17 worked from the priority list P1–P11 in Med's brief (see `FABLE_LOG.md`, "End of this
+session", for what is done, partly done and not started). In short: P1, P2, P3, P6, P9 and most of Phase 5 (P10) are
+built; P5 and P11 partly; P4 (real AGSL glass and the WM Keyboard theme engine), P7 (widgets) and P8 (layouts and
+wallpaper, which A4 and C4 depend on) are next.
+
 ## Plan as of 0.6.0 (2026-11-15, Fable)
 
 | Phase | Content | Release | State |

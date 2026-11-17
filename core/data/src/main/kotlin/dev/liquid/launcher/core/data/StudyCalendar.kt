@@ -293,6 +293,7 @@ class StudyCalendar(
             feed = feed,
             feedSource = feedSource,
             unconfirmedExams = unconfirmed,
+            week = if (today.dayOfWeek == java.time.DayOfWeek.SUNDAY) week(blockCalendars, taskCalendars, today, zone) else null,
             absences = absences(taskCalendars + blockCalendars, today, zone),
         )
     }
@@ -331,6 +332,43 @@ class StudyCalendar(
             DebugLog.error("Study", "reading exams failed: $e")
         }
         return out.sortedBy { it.begin }
+    }
+
+    /** E5: Monday to the end of today: blocks done and planned, focus minutes from the status lines, absences noted. */
+    private fun week(blockCalendars: Set<Long>, taskCalendars: Set<Long>, today: LocalDate, zone: ZoneId): StudyWeek? {
+        if (blockCalendars.isEmpty()) return null
+        val monday = today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
+        val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also {
+            ContentUris.appendId(it, monday.atStartOfDay(zone).toInstant().toEpochMilli())
+            ContentUris.appendId(it, today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli())
+        }.build()
+        var done = 0
+        var planned = 0
+        var focus = 0
+        var absent = 0
+        try {
+            context.contentResolver.query(
+                uri,
+                arrayOf(CalendarContract.Instances.CALENDAR_ID, CalendarContract.Instances.ALL_DAY, CalendarContract.Instances.TITLE, CalendarContract.Instances.DESCRIPTION),
+                null, null, null,
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val calendar = c.getLong(0)
+                    val title = c.getString(2).orEmpty()
+                    if (calendar in blockCalendars && c.getInt(1) == 0) {
+                        planned++
+                        if (StudyFormat.parseTitle(title).status == StudyStatus.Done) done++
+                        focus += StudyFormat.note(c.getString(3).orEmpty()).focusMinutes
+                    } else if (calendar in taskCalendars && StudyFormat.absentModule(title) != null) {
+                        absent++
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            DebugLog.error("Study", "reading the week failed: $e")
+            return null
+        }
+        return StudyWeek(done, planned, focus, absent)
     }
 
     /** "Note: absent <module> …" events of the last five months, counted by module (B2 from the launcher's own records). */

@@ -112,6 +112,7 @@ internal fun SearchPage(
                     "absences" -> if (loaded) AbsenceCard(day)
                     "grades" -> if (loaded) GradeCard(day)
                     "flashcard" -> if (loaded) FlashcardCard(controller, day)
+                    "review" -> if (loaded) ReviewCard(controller, day, now)
                     "next" -> if (loaded) NextBlockCard(controller, day, now)
                     "commands" -> if (loaded) CommandChips(controller)
                     "claude" -> ClaudeChips(controller, if (loaded) heroBlock(day, now) else null)
@@ -511,6 +512,45 @@ private fun Modifier.readableWhenFlipped(degrees: Float): Modifier = this.then(
         if (half % 2 == 1) rotationY = 180f
     }
 )
+
+/** E5, on Sundays: the week in four numbers; a tap goes through it with Claude. */
+@Composable
+private fun ReviewCard(controller: HomeController, day: StudyDay, now: Long) {
+    val week = day.week ?: return
+    val exam = day.exams.firstOrNull()
+    val daysToExam = exam?.let { ((it.begin - now) / 86_400_000L).coerceAtLeast(0) }
+    SearchPane(onClick = {
+        controller.closeSearch(immediately = true)
+        val prompt = buildString {
+            append("Weekly review (Sunday). This week: ${week.blocksDone} of ${week.blocksPlanned} study blocks done, ")
+            append("${week.focusMinutes} min of focus timer, ${week.absences} absences noted.")
+            if (exam != null) append(" Next exam: ${exam.rawTitle.trim()} in $daysToExam days.")
+            append(" Ask me what went well and what did not, then propose next week's plan without touching fixed dates.")
+        }
+        controller.askClaude(controller.withStudyHeader(prompt))
+    }) {
+        Column {
+            Text("Week review", style = searchText(13, FontWeight.SemiBold))
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                ReviewNumber("${week.blocksDone}/${week.blocksPlanned}", "blocks")
+                ReviewNumber("${week.focusMinutes}", "min focus")
+                ReviewNumber("${week.absences}", if (week.absences == 1) "absence" else "absences")
+                if (daysToExam != null) ReviewNumber("$daysToExam", "days to exam", examColor(daysToExam))
+            }
+            Spacer(Modifier.height(6.dp))
+            Text("Tap to go through the week with Claude", style = searchText(11, alpha = 0.6f))
+        }
+    }
+}
+
+@Composable
+private fun ReviewNumber(value: String, label: String, color: Color = Ink) {
+    Column {
+        Text(value, style = searchText(20, FontWeight.SemiBold, color = color))
+        Text(label, style = searchText(11, alpha = 0.65f))
+    }
+}
 
 // ---- study commands (D3) and Claude ----
 

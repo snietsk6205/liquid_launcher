@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.9.9: on Sundays the search page shows the week in four numbers (blocks done of planned, focus minutes, absences, days to the next exam); a tap reviews the week with Claude.
+
 0.9.8: in the drawer, the search field shows where your day is (tap the ring for the study hub) and has a one-tap Ask Claude; the tag button is bigger (its size is a setting).
 
 0.9.7: the glass takes a touch of the colour of the block now or next; a board-photo button during and just after class saves straight into Pictures/ESSAI/<module>/ with the date.

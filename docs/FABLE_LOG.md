@@ -506,3 +506,62 @@ Not done in P5 (next session): handing `!next !exam !plan !abs ?` typed in the d
 keyboard to move from one field to the other without dropping: test on the phone first), the tag list opening as a
 container transform from the button (today it grows from the button's centre with a spring, 0.4.2), and the drawer's
 top tabs pill taking part in the home-pill morph.
+
+---
+
+## Entry 15: 0.9.9, E5 Sunday review (2026-11-17, Opus 5.5)
+
+On Sundays `load()` also reads Monday to today: study blocks planned and done (✓), focus minutes from the status
+lines, and "Note: absent" records. A search card "Sunday review" (in the card list, before Next block) shows the four
+numbers with the days to the next exam in its B1 colour; a tap sends a weekly-review prompt (with the study header) to
+Claude. On other days the card is not there.
+
+---
+
+## End of this session (2026-11-17): state for the next model
+
+**Version shipped:** 0.9.9 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
+0.9.1 (run 63), 0.9.2 (run 64, second attempt; the first failed on a slow emulator, see entry 11). 0.9.3 and 0.9.4 were
+pushed together (run 65); 0.9.5 to 0.9.9 together after it. Check the GitHub releases for the newest `v0.9.x`; if a
+run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Nothing of this session was tried on the phone.
+
+| Workstream | State |
+|---|---|
+| Audit | Done (top of this session) |
+| P1 a. redirect during calls | Done (0.9.0) |
+| P1 b. drawer / keyboard ghost | Done (0.9.0) |
+| P2 study hub, pill, clock notice, A2, A3, B4 | Done (0.9.1, 0.9.2): hub grown out of the pill, drag to close, timeline, arrival, shift tonight, notes, templates, check-in; the pill's study item fully customisable; the clock line with one action |
+| P3 search page | Done (0.9.3): study-first cards in your order, calendar never cut, commands. The transition was already finger-driven and interruptible; unchanged |
+| P4 real liquid glass, WM Keyboard theme engine | **Not started.** Your theme backup is in `docs/reference/nice_liquid.wmtheme.json` (its `frost` block: frosted style, backdrop blur 9, saturation 1.25, rim 0.86, refraction 0.6, dispersion 0.25; keys: pill shape, background 0x1C3C323E (11 % plum-grey), text 0xFFE9E9EE, pressed 0xFF723F61, accent 0xFFD182AF, popups 0xFF443A47, tool circles 0x433D323F, chips 0xFF322B35; touch bloom: squish motion, light 0.5, radius 100 dp, wobble 0.5) |
+| P5 drawer | Partly (0.9.8): bigger tag button, field with the study glance and Ask Claude. Not: command hand-off from the drawer field, tag list as a container transform, the top tabs pill in the home-pill morph |
+| P6 scroll index | Done (0.9.6): the rail |
+| P7 widgets | Not started |
+| P8 layouts and wallpaper | Not started (wind-down's colour filter on the wallpaper is the only wallpaper change) |
+| P9 icon animations | Done (0.9.4) |
+| P10 rest of Phase 5 | Done: A5, A6, B1 (+ ≈), B2, B3, C1, C3, D3, D4, E1, E2, E3, E4, E5, launcher-data. Not: A4 Trajet layout and C4 Exam mode (both need P8's layout triggers), C5 notification triage (needs a notification listener: a new permission and service) |
+| P11 motion pass | Partly: drawer, search and hub springs keep their speed when turned round (D125); the rest of the pass not done |
+
+**Known bugs and risks**
+- The emulator in CI is sometimes too slow (run 64: "isn't responding" dialogs and redirects missed); a re-run passes.
+- Exclusion rects on MagicOS: the rail assumes AOSP's 200 dp rule; if Back still fires on the rail, lower "Rail height".
+- The study hub's glass, the rail's magnifier and the module tint are unmeasured on the phone (frame rate).
+- `Note:` events are written to the first writable calendar whose name contains your task-calendar word ("Tasks").
+
+**Questions for Med** (each with the assumption used)
+1. Merge into `main`? Assumed no: releases come from this branch, as always.
+2. "Lowest-priority block" when shortening the evening: assumed catch-up / Sunday check / checkpoint, else the last block.
+3. Your timetable is in your main Google calendar? Assumed yes (for "end of last class", attendance and leave-by).
+4. Claude package `com.anthropic.claude` and pre-filled shared text: assumed both work; tell me if the text arrives empty.
+5. The evening check-in must now also write the `launcher-data` event in a calendar named "Launcher": shall I write the
+   instructions for it? Until then the local copy in settings is used.
+6. Wobble while editing is off by default (you disliked the old wobbles): on, subtle?
+7. Speed-bump tag name: "distracting" assumed; give your apps that tag from their long-press menu.
+
+**Exact next step:** P4. (1) In `core/designsystem/Glass.kt`, add an AGSL `RuntimeShader` pass (Android 13+) for the
+edge: refraction by the shape's distance field, dispersion per channel, a specular rim from `lightAngle`, depth
+shading and grain, applied with `RenderEffect.createRuntimeShaderEffect` on the backdrop layer; keep Kyant's
+lens as the fallback; every parameter in `GlassBenchScreen` with presets. (2) Theme engine: map the backup's
+fields (surfaces, gradients, borders, glows, shadows, radii, pressed/focused) onto a `LiquidTheme` model with JSON
+import/export, import `docs/reference/nice_liquid.wmtheme.json` as the default, and route `GlassButton`,
+pills and chips through it. wmkeyboard is MIT (README credits it); `github.com` code browsing was blocked from this
+session's network (403), so read it from a session that can reach GitHub or reimplement from the backup's fields.

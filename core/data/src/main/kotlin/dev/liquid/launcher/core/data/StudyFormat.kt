@@ -254,6 +254,9 @@ data class StudyEvent(
     val key: String get() = "$eventId@$begin"
 }
 
+/** The week so far for the Sunday review (E5). */
+data class StudyWeek(val blocksDone: Int, val blocksPlanned: Int, val focusMinutes: Int, val absences: Int)
+
 /** What the study companion shows for one moment in time. */
 data class StudyDay(
     /** Today's blocks, in time order. */
@@ -282,6 +285,8 @@ data class StudyDay(
     val feedSource: String? = null,
     /** Keys of the [exams] whose date is not confirmed yet ("≈", B1). */
     val unconfirmedExams: Set<String> = emptySet(),
+    /** The week so far, Monday to now (E5, 0.9.9); read on Sundays only, null otherwise. */
+    val week: StudyWeek? = null,
 ) {
     /** When today's last class ends, or null on a day without classes. */
     val lastClassEnd: Long? get() = classes.maxOfOrNull { it.end }
