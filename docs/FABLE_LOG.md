@@ -816,3 +816,48 @@ Today: tomorrow, tasks) and corners for their glass card (`StudySurface`).
 After that P8 (layout previews, per-layout wallpaper choice, time windows, per-wallpaper blur/dim/saturation), then
 the last bits: the drawer's top tabs pill rising out of the home pill (check it on the phone: it depends on where
 both pills are drawn), and the rest of the P11 pass (frame times on the phone).
+---
+
+## Session of 2026-11-17, evening (Opus 5.5): 0.10.0 safety release
+
+Working branch: `claude/exciting-knuth-s83frp-1jp272` (fast-forwarded from `claude/exciting-knuth-s83frp`, tip `58a090c`).
+The old branch gets the log commits too (marked to skip CI), so "continue from FABLE_LOG" works from either.
+
+**Local type check (new, saves CI cycles):** Google's Maven is blocked, but Maven Central has JetBrains' Compose
+desktop 1.8.2, Robolectric's `android-all` 17 and the backdrop library's desktop jar. A harness in the session's
+scratchpad (`tc/tc.sh`) compiles every source with Kotlin 2.4.10 against them plus ~15 stubs (androidx.core,
+activity, datastore, `LocalContext`, the R class) in ~20 s and prints only errors not in a baseline of 14 known
+API-gap ones; `tc/ut.sh` compiles core/common, core/settings, core/data and feature/redirect with their tests and
+runs JUnit locally (188 tests). `tc/modlint.py` checks module boundaries. The scratchpad is not in the repo: the next
+session can rebuild it from this description (`fetch.sh` downloads the jar set with retries; Maven Central rate-limits).
+
+**W0.** Run 74 (0.9.22 + 0.9.23) built and passed the unit tests; the emulator failed checks 2 and 3 (Home pressed
+while the accessibility service re-subscribed after a screen dump). The test now waits for the service to be ready,
+prints the redirect trace on failure, and expects the evening check-in on the clock line after 22:30 (run 75 ran at
+22:46). CI publishes a release only when the pushed head commit's message contains the release marker; release
+notes are the version's CHANGELOG.md section (`ci/release_notes.py`), checked before building.
+
+**W1.** `CHANGELOG.md` (0.9.0 to 0.10.0, plain words), `core/common/Changelog.kt` (+ test against the real file), the
+Updates screen shows a newer release's notes and has "All changes" (Changelog screen), a one-time What's new card
+(`feature/home/WhatsNew.kt`); CI bundles the changelog into the APK's assets. Emulator check 8b.
+
+**W2.** `feature/home/Sheets.kt`: `LiquidSheet` (≤ 85 % of the space above the keyboard, fixed header/footer/actions,
+scrolling body, keyboard lifts it, `bringIntoViewWhenFocused`), `SheetField`, `SheetCheckRow`. The per-app Tags dialog
+became `AppTagsSheet` (field fixed at the bottom with a + button); the drawer's tag list fills the height and ends
+above the drawer pill (`controller.drawerPillTop`); layouts and widget options use the sheet; app menu, tab menu and
+folders scroll; dialog bodies scroll. Emulator check 9c types 30 tags and checks the field and Done stay on screen.
+
+**W3 (started, not in 0.10.0's behaviour):** the theme model is in: `core/data/ThemeDoc.kt` (the theme kept as WM
+Keyboard's own JSON, every field round-trips, the launcher's additions under `liquidLauncher`), `ThemeFields.kt`
+(every option once: group, section, title, meaning, range, condition), `ThemeResolve.kt` (WM's derivation rules and
+material presets, per-colour wallpaper roles), `core/common/WallpaperPalette.kt` (dominant, vibrant, muted, dark,
+light from the picture). The drawing, the lab and the migration are in progress on top of 0.10.0.
+
+**Questions for Med (this session so far)**
+1. Only 5 of the 8 screenshots arrived (the wallpaper quick strip, the drawer alone and the search page at the
+   calendar are missing). I worked from your text for those.
+2. Screenshot 1: the green arrows point at the album chips (Recent, Favourites…) and at Place and Add to
+   favourites, while your text lists Place and Add to favourites as red. I took the text: everything goes through the
+   theme, and the chips' current look (your keyboard's chip colours) stays the default.
+3. The blue you marked is your Proba 2 block colour (Google Calendar's Blueberry, #5484ED). It is now the fixed
+   default accent; the main button keeps the block's colour as before ("Main button colour").

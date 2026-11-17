@@ -43,6 +43,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
@@ -236,7 +238,9 @@ internal fun SheetField(
                 cursorBrush = androidx.compose.ui.graphics.SolidColor(color),
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onDone?.invoke() }),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp).bringIntoViewWhenFocused(),
+                // The hint is the field's label too (screen readers, and the emulator test finds the field by it).
+                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp).bringIntoViewWhenFocused()
+                    .semantics { contentDescription = hint },
             )
         }
     }

@@ -9,17 +9,30 @@ Versions marked *not published on its own* were built but came to the phone insi
 ## 0.10.0 — 2026-11-17
 
 ### Added
-- This changelog. The Updates screen shows what a new version brings before you install it, and after an
-  update a "What's new" card appears once on the home screen.
+- This changelog. The Updates screen shows what a new version brings before you install it, and lists every
+  version under "All changes". After an update, a "What's new" card appears once above the pill ("Read all" shows
+  everything, "Got it" hides it).
 
 ### Changed
-- A new version is published only when it is meant to be: two releases at most per working session, each
-  with its changelog entry. Builds in between are only tested.
+- Sheets can no longer run off the screen: at most 85 % of the space above the keyboard, the title and the
+  buttons stay in place and the middle scrolls. The keyboard lifts the whole sheet, so the field you type in stays
+  in sight.
+- An app's Tags (from its long-press menu) open as a sheet: the list of tags scrolls, and the "New tag" field stays
+  at the bottom with a + button, however many tags you have. With more than eight tags, a search narrows the list.
+- The drawer's tag list uses the whole height left and ends above the drawer's pill, so Clear and Done are always
+  visible.
+- The layouts sheet and a widget's Customise sheet use the same sheet.
+- Long menus (an app's long press, a tab's menu) and big folders scroll inside their card.
+- Lists in dialogs (choices in Settings, colour pickers, list editors) scroll.
+- A new version is published only when it is meant to be: two releases at most per working session, each with
+  its changelog entry. Builds in between are only tested.
 
 ### Fixed
-- 0.9.22 and 0.9.23 were never published: their build was fine but the emulator test failed on the first
-  two Home-button checks (a slow emulator right after start; the same checks passed later in the run). They
-  arrive with this version. The test now prints what the redirect was doing when such a check fails.
+- With nine tags or more, the "New tag" field of an app's Tags could not be reached.
+- The drawer's tag list hid its Clear and Done buttons behind the drawer's pill.
+- 0.9.22 and 0.9.23 were never published: their build was fine but the emulator test failed on a Home-button check
+  that ran while the accessibility service was reconnecting, and on a clock-line check that did not expect the
+  evening check-in after 22:30. Both checks were wrong, not the launcher; they arrive with this version.
 
 ## 0.9.23 — 2026-11-17
 
