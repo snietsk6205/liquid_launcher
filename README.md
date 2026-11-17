@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.9.22: the date and battery widgets have a Customise sheet: size, weight, colour, font and the parts they show.
+
 0.9.21: switch to a layout for 30 minutes, 1 or 2 hours, and the launcher switches back by itself (or keep it).
 
 0.9.20: every animation follows the motion speed setting and every vibration the haptics switch.

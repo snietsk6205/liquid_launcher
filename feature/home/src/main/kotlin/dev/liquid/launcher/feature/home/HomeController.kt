@@ -192,6 +192,9 @@ class HomeController(
     /** The clock gallery, open on one clock widget; the widget draws its draft style meanwhile. */
     var clockStudio by mutableStateOf<ClockStudioState?>(null)
 
+    /** P7 (0.9.22): the date or battery widget whose "Customise" sheet is open (its item id). */
+    var widgetOptions by mutableStateOf<String?>(null)
+
     fun openClockStudio(itemId: String) {
         val item = data.layout.layout.value.find(itemId)?.second ?: return
         val base = ClockStyle.fromSettings(data.settings.clockConfig())

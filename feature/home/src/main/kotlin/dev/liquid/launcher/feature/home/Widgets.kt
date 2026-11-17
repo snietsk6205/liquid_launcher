@@ -417,14 +417,20 @@ internal fun AppWidgetItem(item: HomeItem, env: PageEnv, controller: HomeControl
 
 /** The day and date in the clock's font and colour, sized to its cells. */
 @Composable
-internal fun DateWidget(color: Color, shadow: Shadow?) {
+internal fun DateWidget(color: Color, shadow: Shadow?, look: WidgetLook = WidgetLook.of(null)) {
     val tick = rememberMinuteTick()
-    val text = remember(tick / 3_600_000) { LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault())) }
+    // P7 (0.9.22): the parts it shows, from its Customise sheet.
+    val weekday = look.shows("weekday", true)
+    val month = look.shows("month", true)
+    val year = look.shows("year", false)
+    val pattern = listOfNotNull(if (weekday) "EEEE" else null, "d", if (month) "MMMM" else "MM", if (year) "yyyy" else null)
+        .joinToString(" ").let { if (!month) it.replace("d MM", "d/MM") else it }
+    val text = remember(tick / 3_600_000, pattern) { LocalDate.now().format(DateTimeFormatter.ofPattern(pattern, Locale.getDefault())) }
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        val size = (maxHeight.value * 0.5f).coerceIn(14f, 40f)
+        val size = (maxHeight.value * 0.5f * look.scale).coerceIn(12f, 52f)
         Text(
             text,
-            style = TextStyle(fontFamily = HomeTheme.clockFont ?: HomeTheme.font, color = color, fontSize = size.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center, shadow = shadow),
+            style = TextStyle(fontFamily = look.font(), color = look.color(color), fontSize = size.sp, fontWeight = look.weight, textAlign = TextAlign.Center, shadow = shadow),
             maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }
@@ -432,7 +438,7 @@ internal fun DateWidget(color: Color, shadow: Shadow?) {
 
 /** The battery as a ring with the level inside, and "charging" while it charges. */
 @Composable
-internal fun BatteryWidget(color: Color, shadow: Shadow?) {
+internal fun BatteryWidget(color: Color, shadow: Shadow?, look: WidgetLook = WidgetLook.of(null)) {
     val context = LocalContext.current
     var level by remember { mutableIntStateOf(-1) }
     var charging by remember { mutableStateOf(false) }
@@ -458,21 +464,28 @@ internal fun BatteryWidget(color: Color, shadow: Shadow?) {
         level in 0..15 -> Color(0xFFE5675C)
         else -> color
     }
+    // P7 (0.9.22): its size, weight, colour, font and parts, from its Customise sheet.
+    val ring = look.shows("ring", true)
+    val percent = look.shows("percent", true)
+    val chargingLine = look.shows("charging", true)
+    val text = look.color(color)
     BoxWithConstraints(Modifier.fillMaxSize().padding(8.dp), contentAlignment = Alignment.Center) {
-        val side = minOf(maxWidth, maxHeight)
+        val side = minOf(maxWidth, maxHeight) * look.scale.coerceAtMost(1f)
         Box(Modifier.size(side), contentAlignment = Alignment.Center) {
-            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            if (ring) androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
                 val stroke = this.size.minDimension * 0.08f
                 val inset = stroke / 2f
                 drawArc(color.copy(alpha = 0.2f), 0f, 360f, false, topLeft = androidx.compose.ui.geometry.Offset(inset, inset), size = androidx.compose.ui.geometry.Size(this.size.width - stroke, this.size.height - stroke), style = Stroke(stroke))
                 drawArc(accent, -90f, 360f * shown, false, topLeft = androidx.compose.ui.geometry.Offset(inset, inset), size = androidx.compose.ui.geometry.Size(this.size.width - stroke, this.size.height - stroke), style = Stroke(stroke, cap = StrokeCap.Round))
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Text(
-                    if (level < 0) "–" else "$level %",
-                    style = TextStyle(fontFamily = HomeTheme.clockFont ?: HomeTheme.font, color = color, fontSize = (side.value * 0.2f).sp, fontWeight = FontWeight.Medium, shadow = shadow),
-                )
-                if (charging) Text("charging", style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.75f), fontSize = (side.value * 0.08f).coerceAtLeast(10f).sp, shadow = shadow))
+                if (percent) {
+                    Text(
+                        if (level < 0) "–" else "$level %",
+                        style = TextStyle(fontFamily = look.font(), color = text, fontSize = (side.value * 0.2f * (if (look.scale > 1f) look.scale else 1f)).sp, fontWeight = look.weight, shadow = shadow),
+                    )
+                }
+                if (charging && chargingLine) Text("charging", style = TextStyle(fontFamily = HomeTheme.font, color = text.copy(alpha = 0.75f), fontSize = (side.value * 0.08f).coerceAtLeast(10f).sp, shadow = shadow))
             }
         }
     }

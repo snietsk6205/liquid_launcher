@@ -876,6 +876,9 @@ private fun HomeScreenBody(
         Presence(if (live && controller.layoutsSheet) Unit else null) {
             LayoutsSheet(glass, lightBackground, overlayBackdrop, controller)
         }
+        Presence(if (live) controller.widgetOptions?.let { id -> layout.find(id)?.second } else null) { item ->
+            WidgetOptionsSheet(item, glass, lightBackground, overlayBackdrop, controller)
+        }
         Presence(if (live && controller.wallpaperStrip) Unit else null) {
             WallpaperStrip(glass, lightBackground, overlayBackdrop, controller)
         }

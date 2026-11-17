@@ -748,9 +748,19 @@ to stay. `LayoutTimerTest` covers the way back and the hand switch.
 
 ---
 
+## Entry 28: 0.9.22, P7: options for the date and battery widgets (2026-11-17, Opus 5.5)
+
+In edit mode, the date and battery widgets have a "Customise" chip (as the clock has): a sheet with size (small,
+medium, large), weight (light to bold), colour (text or accent), font (the clock's or the launcher's) and the parts
+shown (date: weekday, month, year; battery: ring, percentage, "charging"). Each choice is written to the widget at
+once (`setItemOption`), so it changes behind the sheet. The calendar, Now card and Today widgets already have their
+settings (Settings → Home screen, their own screens); their per-widget options are left for later.
+
+---
+
 ## End of this session (2026-11-17): state for the next model
 
-**Version shipped:** 0.9.21 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
+**Version shipped:** 0.9.22 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
 0.9.1 (run 63), 0.9.2 (run 64, second attempt; the first failed on a slow emulator, see entry 11). 0.9.3 and 0.9.4 were
 pushed together (run 65); 0.9.5 to 0.9.9 together (run 66, passed); 0.9.10 and 0.9.11 together (run 67, passed); 0.9.12 (run 68: built, unit tests passed, the real glass shader compiled on the emulator, but not released: my new check of the tuning panel found no screen dump, because the bench kept moving after measuring and the screen never settled; 0.9.13 keeps it still unless you press Move); 0.9.13 (run 69: did not compile, a smart cast across modules in `Controls.kt`; fixed) and 0.9.14 (run 70: the editor's name clashed with Settings → Theme's; fixed) released together by run 71 (passed, emulator included); 0.9.15 to 0.9.18 by run 72 (passed); 0.9.19 to 0.9.21 together after it. Check the GitHub releases for the newest `v0.9.x`; if a
 run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Nothing of this session was tried on the phone.
@@ -765,7 +775,7 @@ run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Not
 | P4 real liquid glass, WM Keyboard theme engine | Done (0.9.12 to 0.9.14): the real glass (AGSL: Snell refraction by the edge's shape, dispersion, swell, specular rim, depth shading, grain) with Tune the glass (live sliders, presets); the theme engine after WM Keyboard's model, your backup as the default theme of every button, chip and round button, import/export, the editor, accent and glass colour. Menus and popups keep the glass (question 8) |
 | P5 drawer | Mostly: bigger tag button, field with the study glance and Ask Claude (0.9.8); the tag selection slides between chips and the list glides when tags change (0.9.15); the tag list was already a container transform and the pill already morphs into the field. commands typed in the drawer field go to the search page (0.9.15). Not: the top tabs pill rising out of the home pill |
 | P6 scroll index | Done (0.9.6): the rail |
-| P7 widgets | Partly: no glass box behind the built-in widgets by default (0.9.10); other apps' widgets in the launcher's look, re-applied after every update, with a global and a per-widget switch (0.9.17). Not: the options of the launcher's own widgets (layout, density, font, accent, corners, fields) |
+| P7 widgets | Partly: no glass box behind the built-in widgets by default (0.9.10); other apps' widgets in the launcher's look, re-applied after every update, with a global and a per-widget switch (0.9.17); size, weight, colour, font and parts for the date and battery widgets (0.9.22). Not: per-widget options of the calendar, Now card and Today widgets |
 | P8 layouts and wallpaper | Partly: context triggers for layouts (trip home, exam week; 0.9.11); a layout for a while, then back (0.9.21). Not: layout previews beyond the miniatures, per-layout wallpaper choice UI beyond "give it the current wallpaper", time windows, the LayoutsSheet redesign, per-wallpaper blur/dim/saturation/vignette, tone feeding the glass, wallpaper quick tools |
 | P9 icon animations | Done (0.9.4) |
 | P10 rest of Phase 5 | Done: A4 (layout switch + trip line), A5, A6, B1 (+ ≈), B2, B3, C1, C3, C4 (layout switch), C5 (0.9.16), A4's battery rule (0.9.18), C4's annales (0.9.19, as a search card), D3, D4, E1, E2, E3, E4, E5, launcher-data. Phase 5 is complete |
@@ -792,9 +802,9 @@ run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Not
    surfaces (pill, drawer, menus), your frost for buttons and chips; "Your keyboard" in Tune the glass makes
    everything frosted in one tap.
 
-**Exact next step:** P7, your widgets: give the Calendar, Study blocks, Now card, Today and Clock & date widgets
-the options the brief lists (layout, density, font and weight, accent, corners, which fields show), each as a
-per-widget option in the widget's edit menu (`setItemOption`, as "plate" and "restyle" already are) with the
-preview of the home screen. After that P8 (layout previews, per-layout wallpaper UI, a switch-back timer,
-per-wallpaper blur/dim/saturation), then the last bits: the drawer's top tabs pill rising out of the home pill, an
-and the rest of the P11 pass (frame times on the phone).
+**Exact next step:** P7, the Calendar, Now card and Today widgets: the same "Customise" sheet as the date and
+battery widgets (`WidgetOptions.kt`: `WidgetLook` and `WidgetParts`), with their parts (calendar: week numbers,
+event dots, the agenda line; Now card: tasks, buttons; Today: tomorrow, tasks) and corners for their glass card.
+After that P8 (layout previews, per-layout wallpaper choice, time windows, per-wallpaper blur/dim/saturation), then
+the last bits: the drawer's top tabs pill rising out of the home pill (check it on the phone: it depends on where
+both pills are drawn), and the rest of the P11 pass (frame times on the phone).

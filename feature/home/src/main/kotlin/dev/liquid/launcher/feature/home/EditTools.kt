@@ -90,6 +90,23 @@ internal fun BoxScope.ResizeFrame(item: HomeItem, pageIndex: Int, env: PageEnv, 
             Text("Customise", style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium))
         }
     }
+    if (item.widget == "date" || item.widget == "battery") {
+        // P7 (0.9.22): size, weight, colour, font and parts, changing on the widget as you choose.
+        Row(
+            Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color.Black.copy(alpha = 0.55f))
+                .clickable { controller.widgetOptions = item.id }
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LauncherIcon(LauncherIcons.Tune, contentDescription = null, tint = Color.White, size = 16.dp)
+            Spacer(Modifier.width(6.dp))
+            Text("Customise", style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium))
+        }
+    }
     if (item.widget == "app") {
         // Another app's widget: its own settings screen (when it has one) and a glass plate behind it (0.7.0, D100).
         val info = remember(item.options) { dev.liquid.launcher.core.data.AppWidgets.idOf(item)?.let { controller.data.widgets.info(it) } }

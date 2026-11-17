@@ -489,8 +489,8 @@ internal fun WidgetContent(item: HomeItem, env: PageEnv, controller: HomeControl
     }
     when (item.widget) {
         "app" -> AppWidgetItem(item, env, controller)
-        "date" -> DateWidget(env.contentColor, env.shadow)
-        "battery" -> BatteryWidget(env.contentColor, env.shadow)
+        "date" -> DateWidget(env.contentColor, env.shadow, WidgetLook.of(item))
+        "battery" -> BatteryWidget(env.contentColor, env.shadow, WidgetLook.of(item))
         "calendar" -> CalendarWidget(item, env, controller)
         "next" -> NextBlockWidget(controller, env.contentColor, env.shadow, env.interactive && !env.editMode)
     }
