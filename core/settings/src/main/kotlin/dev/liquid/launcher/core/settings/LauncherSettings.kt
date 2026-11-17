@@ -2128,6 +2128,10 @@ object LauncherSettings {
     val ContextActive = TextSetting(key = "state.ctxActive", default = "", title = "Context layout on", section = "state", hidden = true)
     val ContextApplied = TextSetting(key = "state.ctxApplied", default = "", title = "Context layout applied", section = "state", hidden = true)
     val ContextBase = TextSetting(key = "state.ctxBase", default = "", title = "Layout before the context", section = "state", hidden = true)
+    /** P8 (0.9.21): a layout switched to for a while: until when (ms), which layout, and the one to go back to. */
+    val LayoutTimerUntil = TextSetting(key = "state.layoutTimerUntil", default = "", title = "Timed layout ends", section = "state", hidden = true)
+    val LayoutTimerLayout = TextSetting(key = "state.layoutTimerLayout", default = "", title = "Timed layout", section = "state", hidden = true)
+    val LayoutTimerBack = TextSetting(key = "state.layoutTimerBack", default = "", title = "Layout after the timed one", section = "state", hidden = true)
     val StudyRest = IntSetting(
         key = "study.rest", default = 20, min = 0, max = 45, step = 5, unit = "min",
         title = "Rest after getting home",
@@ -2416,7 +2420,7 @@ object LauncherSettings {
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
         StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyPlanLink, StudyLinkOpener,
         StudyAttendance, StudyLeaveBy, StudyCommute, StudyRest, StudyWindDown, StudySpeedBump, StudySpeedBumpTags, StudyFeedCalendar, StudyFeedLocal, StudyGlassTint,
-        StudyCommuteLayout, StudyExamLayout, ContextActive, ContextApplied, ContextBase,
+        StudyCommuteLayout, StudyExamLayout, ContextActive, ContextApplied, ContextBase, LayoutTimerUntil, LayoutTimerLayout, LayoutTimerBack,
         StudyQuiet, StudyQuietPeople, StudyQuietEmail, StudyQuietTags, StudyAnnales,
         StudyArrival, StudyHomeWifi, StudyArrivalCharger, StudyShiftLead, StudyLatestEnd, StudyClassCalendars, StudyHeader, StudyCheckin, StudyTemplates,
         StudyHubSize, StudyHubBounce, StudyClockAction,

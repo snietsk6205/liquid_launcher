@@ -58,6 +58,7 @@ import dev.liquid.launcher.core.designsystem.LauncherIcons
 import dev.liquid.launcher.core.designsystem.WallpaperStore
 import dev.liquid.launcher.core.designsystem.liquidGlass
 import dev.liquid.launcher.core.settings.LauncherSettings
+import dev.liquid.launcher.core.settings.derive
 
 /** Grid size stored in a saved layout's settings, or the defaults. */
 private fun SavedLayout.gridSize(): Pair<Int, Int> {
@@ -150,6 +151,22 @@ internal fun LayoutsSheet(
                     }
                 }
             }
+            // P8 (0.9.21): a layout on for a while says until when, and can be kept.
+            val settings = controller.data.settings
+            val timerUntil by settings.derive { get(LauncherSettings.LayoutTimerUntil).toLongOrNull() }
+            val timerBack by settings.derive { get(LauncherSettings.LayoutTimerBack) }
+            val until = timerUntil
+            if (until != null && until > System.currentTimeMillis()) {
+                val backName = state.layouts.firstOrNull { it.id == timerBack }?.name ?: "the layout before"
+                Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Until " + java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(until)) + ", then $backName",
+                        modifier = Modifier.weight(1f),
+                        style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.8f), fontSize = 13.sp),
+                    )
+                    SheetChip("Keep it", LauncherIcons.Check, color) { controller.cancelLayoutTimer() }
+                }
+            }
             Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SheetChip("Save as new…", LauncherIcons.Save, color) { controller.savingLayout = true }
@@ -176,6 +193,16 @@ internal fun LayoutsSheet(
             title = { Text(layout.name) },
             text = {
                 Column {
+                    if (layout.id != state.current && state.current != null) {
+                        // P8 (0.9.21): for a while, then back to the layout on now.
+                        for ((minutes, label) in listOf(30 to "30 minutes", 60 to "1 hour", 120 to "2 hours")) {
+                            DialogRow("Switch to it for $label") {
+                                holding = null
+                                controller.layoutsSheet = false
+                                controller.switchLayoutFor(layout.id, minutes)
+                            }
+                        }
+                    }
                     DialogRow("Rename") { renaming = layout; holding = null }
                     DialogRow("Duplicate") { controller.data.layouts.duplicate(layout.id); holding = null }
                     DialogRow(if (layout.wallpaper != null) "Stop switching the wallpaper with it" else "Give it the current wallpaper") {

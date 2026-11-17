@@ -379,7 +379,11 @@ private fun HomeScreenBody(
         val contextTick = rememberMinuteTick()
         val contextDay by data.study.day.collectAsState()
         val contextHome by data.study.homeAt.collectAsState()
-        LaunchedEffect(contextTick, contextDay, contextHome) { controller.applyContextLayout() }
+        LaunchedEffect(contextTick, contextDay, contextHome) {
+            controller.applyContextLayout()
+            // P8 (0.9.21): a layout switched to for a while goes back when its time is up.
+            controller.checkLayoutTimer()
+        }
         // The edit-mode wobble's clock runs only while editing with the wobble on (0.9.4).
         if (controller.editMode && motionConfig.editWobble > 0f) {
             LaunchedEffect(Unit) {

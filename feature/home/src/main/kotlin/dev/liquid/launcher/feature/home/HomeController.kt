@@ -474,6 +474,46 @@ class HomeController(
         }
     }
 
+    /** P8 (0.9.21): switches to [id] for [minutes], then back to the layout on now (see [checkLayoutTimer]). */
+    fun switchLayoutFor(id: String, minutes: Int) {
+        val s = data.settings
+        val back = data.layouts.state.value.current
+        if (back == null || back == id) {
+            switchLayout(id)
+            return
+        }
+        val until = System.currentTimeMillis() + minutes * 60_000L
+        s.set(LauncherSettings.LayoutTimerUntil, until.toString())
+        s.set(LauncherSettings.LayoutTimerLayout, id)
+        s.set(LauncherSettings.LayoutTimerBack, back)
+        DebugLog.event("Home", "layout $id for $minutes min, then $back")
+        switchLayout(id)
+    }
+
+    /** P8: the timed layout's time is up: back to the one before, unless another layout was chosen meanwhile. */
+    fun checkLayoutTimer() {
+        val s = data.settings
+        val until = s.get(LauncherSettings.LayoutTimerUntil).toLongOrNull() ?: return
+        val timed = s.get(LauncherSettings.LayoutTimerLayout)
+        val back = s.get(LauncherSettings.LayoutTimerBack)
+        val now = System.currentTimeMillis()
+        val current = data.layouts.state.value.current
+        val to = dev.liquid.launcher.core.data.LayoutTimer.due(now, until, timed, back, current)
+        if (dev.liquid.launcher.core.data.LayoutTimer.stale(now, until, timed, current)) cancelLayoutTimer()
+        if (to != null && data.layouts.find(to) != null) {
+            DebugLog.event("Home", "timed layout over: back to $to")
+            switchLayout(to)
+        }
+    }
+
+    /** P8: keeps the timed layout ("Keep it"). */
+    fun cancelLayoutTimer() {
+        val s = data.settings
+        s.reset(LauncherSettings.LayoutTimerUntil)
+        s.reset(LauncherSettings.LayoutTimerLayout)
+        s.reset(LauncherSettings.LayoutTimerBack)
+    }
+
     /** "I'm home" (A2, by hand). */
     fun markHomeNow() {
         Haptics.confirm(view)
