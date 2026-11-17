@@ -28,6 +28,15 @@ object StudyFormat {
     const val SKIPPED_MARK = "✗"
     const val STATUS_PREFIX = "— launcher:"
 
+    /** "— launcher: home HH:MM": when Med got home, on tonight's first block. */
+    const val MARK_HOME = "home"
+
+    /** "— launcher: shifted +N min": the block was moved by the launcher's "shift tonight". */
+    const val MARK_SHIFTED = "shifted"
+
+    /** Title prefix of a quick note: an all-day event in the task calendar that is not a task. */
+    const val NOTE_PREFIX = "Note:"
+
     private val doneMarks = listOf("✓", "✔", "✅", "☑")
     private val skippedMarks = listOf("✗", "✘", "❌")
 
@@ -130,10 +139,51 @@ object StudyFormat {
 
     // ---- the launcher's status line ----
 
-    private val statusLine = Regex("(?:\\r?\\n|(?i)<br\\s*/?>)?[ \\t]*" + Regex.escape(STATUS_PREFIX) + "[^\\n<]*")
+    // The status line, but not the launcher's other lines ("home 19:20", "shifted +30 min"), which stay as written.
+    private val statusLine = Regex("(?:\\r?\\n|<[bB][rR]\\s*/?>)?[ \\t]*" + Regex.escape(STATUS_PREFIX) + "(?!\\s*(?:home|shifted)\\b)[^\\n<]*")
+
+    /** Kinds of launcher line that are facts of their own, each on its own line (0.9.1): arrival home and a shifted evening. */
+    private val markKinds = listOf(MARK_HOME, MARK_SHIFTED)
+
+    private fun markKind(line: String): String? {
+        if (!line.startsWith(STATUS_PREFIX)) return null
+        val body = line.removePrefix(STATUS_PREFIX).trim()
+        return markKinds.firstOrNull { body == it || body.startsWith("$it ") }
+    }
+
+    /** What the "[kind]" line says after its keyword ("19:20", "+30 min"), or null when there is none. */
+    fun mark(description: String, kind: String): String? =
+        lines(description).lastOrNull { markKind(it) == kind }?.removePrefix(STATUS_PREFIX)?.trim()?.removePrefix(kind)?.trim()
+
+    /** Minutes the block was shifted by so far (0 when never). */
+    fun shiftedBy(description: String): Int =
+        mark(description, MARK_SHIFTED)?.let { Regex("([+-]?\\d+) min").find(it)?.groupValues?.get(1)?.toIntOrNull() } ?: 0
+
+    /**
+     * [description] with the line "— launcher: [kind] [text]" (0.9.1). It goes right after the `P2-BLOCK` line
+     * when there is one, else at the end; an earlier line of the same kind is replaced; the status line stays
+     * last. Nothing else changes: not the title marks, not the task lines, not the `P2-BLOCK` line.
+     */
+    fun withMark(description: String, kind: String, text: String): String {
+        val status = lines(description).lastOrNull { it.startsWith(STATUS_PREFIX) && markKind(it) == null }
+        val old = Regex("(?:\\r?\\n|<[bB][rR]\\s*/?>)?[ \\t]*" + Regex.escape(STATUS_PREFIX) + "\\s*" + Regex.escape(kind) + "\\b[^\\n<]*")
+        val body = description.replace(statusLine, "").replace(old, "").trimEnd()
+        val line = "$STATUS_PREFIX $kind $text".trimEnd()
+        val html = isHtml(body)
+        val anchor = if (html) null else Regex("(?m)^.*P2-BLOCK.*$").find(body)
+        val withLine = when {
+            body.isEmpty() -> line
+            anchor != null -> {
+                val cut = anchor.range.last + 1
+                body.substring(0, cut).trimEnd('\r') + "\n" + line + body.substring(cut)
+            }
+            else -> body + (if (html) "<br>" else "\n") + line
+        }
+        return if (status == null) withLine else withStatusLine(withLine, status)
+    }
 
     fun note(description: String): StudyNote {
-        val line = lines(description).lastOrNull { it.startsWith(STATUS_PREFIX) } ?: return StudyNote()
+        val line = lines(description).lastOrNull { it.startsWith(STATUS_PREFIX) && markKind(it) == null } ?: return StudyNote()
         return StudyNote(
             doneAt = Regex("done (\\d{1,2}:\\d{2})").find(line)?.groupValues?.get(1),
             skipped = "skipped" in line,
@@ -207,7 +257,17 @@ data class StudyDay(
     val tomorrowTasks: List<StudyEvent> = emptyList(),
     /** Edits of study events on the phone that the calendar sync has not sent to the account yet. */
     val waitingToSync: Int = 0,
+    /** Today's classes: timed events of the class calendars (the primary calendar unless set), in time order. 0.9.1. */
+    val classes: List<StudyEvent> = emptyList(),
+    /** Today's quick notes ("Note: …" all-day events of the task calendar), newest last. 0.9.1. */
+    val notes: List<StudyEvent> = emptyList(),
 ) {
+    /** When today's last class ends, or null on a day without classes. */
+    val lastClassEnd: Long? get() = classes.maxOfOrNull { it.end }
+
+    /** Blocks of today marked done, out of all of them (the day pill, C2). */
+    val blocksDone: Int get() = blocks.count { it.status == StudyStatus.Done }
+
     val isEmpty: Boolean get() = blocks.isEmpty() && tasks.isEmpty() && overdue.isEmpty()
 
     /** The first block of tomorrow, if any. */

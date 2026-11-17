@@ -276,3 +276,42 @@ frame (about 100 ms earlier), and it is identical to what the first frame will s
 
 Not verified on a device: both fixes. `allowTaskSnapshot()` is AOSP behaviour (13–15); if MagicOS changed it, the
 state reset still makes the first real frame clean and only the system's one-frame picture could remain.
+
+---
+
+## End of session (2026-11-17, cut short: the usage limit was reached during P2)
+
+**Version shipped:** 0.9.0 (run 62 on `claude/exciting-knuth-s83frp`; it was still building when the session ended:
+check that the release `v0.9.0` exists, and if run 62 failed, read its log first).
+
+| Workstream | State |
+|---|---|
+| Audit | done (table above) |
+| P1a redirect during calls | done, in 0.9.0, not verified on the phone |
+| P1b drawer / keyboard ghost | done, in 0.9.0, not verified on the phone |
+| P2 study hub | started: only `StudyFormat.kt` is changed (pushed with `[skip ci]`, **never compiled**): `withMark`, `mark`, `shiftedBy` for `— launcher: home HH:MM` and `— launcher: shifted +N min` (kept on their own lines, after the `P2-BLOCK` line; the status line stays last), `StudyDay.classes`, `notes`, `lastClassEnd`, `blocksDone`. Nothing reads them yet |
+| P3–P11 | not started |
+
+**Design decided for P2, not built yet** (so the next session does not start from zero):
+1. Hub: `controller.todaySheet` stays the open flag; a new `controller.hub` Animatable follows it with a spring. The hub is one
+   glass surface laid out between `controller.pillBounds` (recorded by `Pill` / `MorphingPill` with `onGloballyPositioned`) and
+   its open rectangle inside a `layout {}` block reading `hub.value` (as `morphLayout` does), the pill fading out under it.
+   Content: day ring (C2) and date; arrival / shift chip; the block now or next, open, with its ticks (reuse `BlockCard`, make it
+   internal); the timeline (blocks, tasks, `TomorrowSection`); a fixed bottom bar in thumb reach: quick note field (D5),
+   Ask Claude, prompt templates, Evening check-in. Keep the texts the emulator test taps: "Switch it on", "Done", "Tomorrow · ".
+2. A2: `StudyCalendar.homeSign()` (home Wi-Fi name → needs `ACCESS_FINE_LOCATION`; charger 45 min after the last class;
+   manual chip), checked on the minute tick in `StudyNotices`; `markHome()` writes the mark on the first block not yet over.
+3. A3: a pure `StudyShift.plan(blocks, homeAt, latestEnd)` in `core/data` with tests (delta rounded up to 5 min; blocks that are
+   open, untouched and not over move; past 23:00 the lowest-priority block, Catch-up / Checkpoint / else the last, is shortened);
+   `StudyCalendar.applyShift()` updates `DTSTART` / `DTEND` and adds the `shifted` mark.
+4. D5: `StudyCalendar.addNote()` inserts an all-day `Note: …` event in the Tasks calendar; `load()` must keep such events out of the task list.
+
+**Known issues:** the P2 code in `StudyFormat.kt` is uncompiled; `StudyFormatTest` has no case for the new marks yet.
+
+**Questions for Med**
+1. Releases are built from `claude/**` branches; `main` only holds the first README commit. Should the code be merged into `main`? (Assumed: no, keep releasing from the working branch, as every earlier session did.)
+2. "Lowest-priority block" for shortening an evening: assumed Catch-up, then Checkpoint, then the last block. Is there a better rule?
+3. Is the timetable in your primary Google calendar? (Assumed yes, for "end of the last class".)
+
+**Exact next step:** push any commit without `[skip ci]` to compile the `StudyFormat.kt` change, add its tests, then build the
+hub as described above (P2), then P3 (search page transition and calendar clipping), then the motion pass.
