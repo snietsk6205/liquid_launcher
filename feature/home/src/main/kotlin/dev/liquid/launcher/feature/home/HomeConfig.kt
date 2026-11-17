@@ -167,6 +167,12 @@ fun SettingsStore.folderConfig() = FolderConfig(
 
 /** The drawer's letter index. */
 data class IndexConfig(
+    /** "rail" (0.9.6, P6: short, inset, inside the edge's gesture exclusion) or "string" (0.6.0, the whole edge). */
+    val style: String = "rail",
+    val railHeightDp: Int = 176,
+    /** Lower end of the rail, as a fraction of the screen from the bottom. */
+    val railLift: Float = 0.26f,
+    val railInsetDp: Int = 12,
     /** "always", "scroll" or "touch". */
     val visibility: String,
     /** "right", "left" or "both": the edges the letters can be pulled from. */
@@ -381,6 +387,10 @@ fun SettingsStore.drawerConfig() = DrawerConfig(
 )
 
 fun SettingsStore.indexConfig() = IndexConfig(
+    style = get(S.IndexStyle),
+    railHeightDp = get(S.IndexRailHeight),
+    railLift = get(S.IndexRailLift) / 100f,
+    railInsetDp = get(S.IndexRailInset),
     visibility = get(S.IndexVisibility),
     side = get(S.IndexSide),
     reach = get(S.IndexReach) / 100f,

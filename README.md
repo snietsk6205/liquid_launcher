@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.9.6: the drawer's letter index is a short glass rail in thumb reach that never triggers Back: a few letters with dots, a drop marking where the list is, and a magnifier that turns like a wheel through the letters while you drag, with a tick per letter. The old full-edge index is still in Settings → Drawer index.
+
 0.9.5: launcher-data from the evening check-in: exam dates (≈ until confirmed), an absence meter with one liquid tube per module (always UNVERIFIED until the rule is confirmed), your weighted average once the coefficients are known, and a daily flashcard that turns over on the search page; a local copy you can edit in settings works until the check-in writes it.
 
 0.9.4: icons move better: a crisp squish and rebound or a subtle tilt with a highlight (or off), with intensity, speed and wobble; an optional wobble while editing, each icon at its own pace; and the icon you opened an app from lands softly when you come back. Study: a 20-minute rest after you get home, then one tap to start tonight's first block; from 22:30 the colours soften and the evening check-in is one tap under the clock.

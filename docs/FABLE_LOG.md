@@ -462,3 +462,23 @@ the same build passed every check. So: an emulator flake, as in run 39. 0.9.2 wa
 
 **For the evening check-in (outside this repository):** its instructions must add writing the `launcher-data` event in
 a calendar named "Launcher" (create it once in Google Calendar). Until then the local copy in settings works.
+
+---
+
+## Entry 12: 0.9.6, P6: the letter index as a short rail that never triggers Back (2026-11-17, Opus 5.5)
+
+Why Back fired: the index's touch strip ran the whole height of the screen edge with `systemGestureExclusion`, but
+Android honours at most 200 dp of exclusion per edge (it keeps the lowest 200 dp of what an app asks for and
+ignores the rest), so most of the strip still belonged to the Back gesture.
+
+| What | How |
+|---|---|
+| Rail (new default, Settings → Drawer index → Letter index) | A glass capsule 30 dp wide and at most 180 dp tall (Rail height), its lower end at 26 % of the drawer's height from the bottom (Rail position), 12 dp in from the edge (Rail distance). Its touch area (rail + 18 dp towards the middle, to the edge, 8 dp above and below) stays under 200 dp tall and is wholly excluded from Back |
+| Letters | As many as fit at 17 dp (about ten), dots between; a drop of the accent marks where the list is and glides as it scrolls; letters on the drop take its readable colour |
+| Magnifier | While the finger is on the rail, a glass capsule beside it turns like a wheel through the letters around the finger's continuous position: the one under the finger large and in the accent, the neighbours smaller, fainter and bending away in a wave; it opens and closes on springs from the rail's side |
+| Haptics, glide, highlight | As before: a tick per letter (Feedback setting), the list glides with the Follow delay (now one helper for both styles), the apps of the letter are highlighted |
+| String | The 0.6.0 index stays as the other style; its own options are hidden while the rail is chosen, and the rail's while the string is |
+| Preview | Settings → Drawer index runs a pretend thumb up and down the rail |
+
+Not verified on the phone: the rail's height for your thumb, whether MagicOS honours exclusion rects the same way
+(AOSP does; the strip keeps working either way, the risk is only Back firing near it).

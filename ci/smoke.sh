@@ -578,7 +578,8 @@ if ! on_screen 14c-drawer "Search apps"; then
   dump 14c-drawer
 fi
 on_screen 14c-drawer "Search apps" || echo "NOTE: the drawer did not open; the picture below shows the home screen"
-adb shell input swipe 1072 700 1066 1500 3000 &
+# 0.9.6: the index is a short rail low on the right (Rail position 26 % from the bottom); drag along it slowly.
+adb shell input swipe 1060 1720 1060 1360 3000 &
 SWIPE_PID=$!
 sleep 1.6
 peek 14c-index

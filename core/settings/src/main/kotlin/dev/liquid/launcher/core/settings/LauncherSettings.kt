@@ -1170,6 +1170,33 @@ object LauncherSettings {
 
     // ---- Scroll index ----
 
+    val IndexStyle = ChoiceSetting(
+        key = "index.style", default = "rail",
+        options = listOf(
+            "rail" to "Rail: short, in thumb reach, away from the edge's Back gesture",
+            "string" to "String: letters along the whole edge, pulled by the finger",
+        ),
+        title = "Letter index",
+        summary = "Android lets an app keep at most 200 dp of each edge from the Back gesture: the rail fits inside that, so it never " +
+            "triggers Back; a magnifier shows the exact letter while you drag. The string covers the whole edge and can trigger Back outside those 200 dp",
+        section = "drawerIndex", keywords = "index letters rail back gesture thumb short magnifier string edge",
+    )
+    val IndexRailHeight = IntSetting(
+        key = "index.railHeight", default = 176, min = 120, max = 180, step = 4, unit = "dp",
+        title = "Rail height",
+        section = "drawerIndex", keywords = "index rail height size",
+    )
+    val IndexRailLift = IntSetting(
+        key = "index.railLift", default = 26, min = 8, max = 60, step = 2, unit = "% from the bottom",
+        title = "Rail position",
+        summary = "Where the rail's lower end sits, measured from the bottom of the screen: low for the thumb",
+        section = "drawerIndex", keywords = "index rail position height thumb reach",
+    )
+    val IndexRailInset = IntSetting(
+        key = "index.railInset", default = 12, min = 4, max = 40, step = 2, unit = "dp",
+        title = "Rail distance from the edge",
+        section = "drawerIndex", keywords = "index rail inset edge margin",
+    )
     val IndexVisibility = ChoiceSetting(
         key = "index.visibility", default = "scroll",
         options = listOf(
@@ -2253,7 +2280,7 @@ object LauncherSettings {
         DrawerWork, DrawerCloseOnLaunch, DrawerSideMargin, DrawerDim, DrawerTabsPosition,
         DrawerTransition, DrawerTravel, DrawerPillMorph, DrawerSpeed, DrawerBounce, DrawerRise, DrawerHomeScale, DrawerHomeBlur, DrawerBlurLive,
         DrawerScrollbar, DrawerScrollBubble, DrawerScrollEffect, DrawerScrollStrength, DrawerOverscroll,
-        IndexVisibility, IndexSide, IndexTrack, IndexReach, IndexEnds, IndexLetterSize, IndexSpacing, IndexBubble, IndexBubblePlace, IndexLetterGap, IndexBubbleGap, IndexHaptics, IndexFollow, IndexSpring, IndexHideDelay, IndexFocus, DrawerTopSections,
+        IndexStyle, IndexRailHeight, IndexRailLift, IndexRailInset, IndexVisibility, IndexSide, IndexTrack, IndexReach, IndexEnds, IndexLetterSize, IndexSpacing, IndexBubble, IndexBubblePlace, IndexLetterGap, IndexBubbleGap, IndexHaptics, IndexFollow, IndexSpring, IndexHideDelay, IndexFocus, DrawerTopSections,
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
         TagStripPosition, TagButtonPosition, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
         MenuEntries,
