@@ -6,6 +6,15 @@ on:
       - main
       - 'claude/**'
   workflow_dispatch:
+    inputs:
+      release:
+        description: Publish a release from this build
+        type: boolean
+        default: false
+
+# A push only builds, runs the unit tests and the emulator test. It publishes a release only when the
+# message of the pushed (head) commit contains "[release]"; a manual run publishes one when asked to.
+# The release notes are that version's section of CHANGELOG.md, which must exist (checked first).
 
 concurrency:
   group: build-${{ github.ref }}
@@ -21,6 +30,7 @@ jobs:
     timeout-minutes: 30
     outputs:
       version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.release.outputs.release }}
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +44,31 @@ jobs:
       - name: Read version
         id: version
         run: echo "version=$(grep '^app.versionName=' gradle.properties | cut -d= -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Release or only build
+        id: release
+        env:
+          EVENT: ${{ github.event_name }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+          ASKED: ${{ inputs.release }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            release="${ASKED:-false}"
+          elif printf '%s' "$MESSAGE" | grep -qF '[release]'; then
+            release=true
+          else
+            release=false
+          fi
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "Publishes a release: $release"
+
+      - name: Check the changelog has this version
+        if: steps.release.outputs.release == 'true'
+        run: python3 ci/release_notes.py "${{ steps.version.outputs.version }}" > /dev/null
+
+      # The app shows "What's new" after an update from its own copy of the changelog.
+      - name: Bundle the changelog in the app
+        run: mkdir -p app/src/main/assets && cp CHANGELOG.md app/src/main/assets/CHANGELOG.md
 
       - name: Unit tests and release APK
         run: >
@@ -109,13 +144,23 @@ jobs:
   release:
     name: Publish release
     needs: [build, smoke]
+    if: needs.build.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: apk
           path: out
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          python3 ci/release_notes.py "${{ needs.build.outputs.version }}" > notes.md
+          printf '\n---\nBuild %s from `%s`. Install the APK below: it installs over the previous build and keeps everything.\n' \
+            "${{ github.run_number }}" "${{ github.sha }}" >> notes.md
+          cat notes.md
 
       # One APK per release: remove the previous build's file before adding the new one.
       - name: Remove older APKs from this release
@@ -134,8 +179,5 @@ jobs:
           name: Liquid Launcher ${{ needs.build.outputs.version }}
           target_commitish: ${{ github.sha }}
           files: out/*.apk
-          body: |
-            Build ${{ github.run_number }} from `${{ github.sha }}`.
-
-            Install the APK below. Newer builds of the same version replace the file here and install over the old one.
+          body_path: notes.md
           make_latest: true

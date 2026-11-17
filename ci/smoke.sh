@@ -76,6 +76,14 @@ pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; echo "      top: $(top_activity)"; FAILS=$((FAILS + 1)); }
 redirect_count() { grep -c 'REDIRECT (' "$LOG" || true; }
 
+# redirect_trace : what the redirect engine said last, without the service's reconnect noise
+# (every screen dump suspends accessibility services), to tell a slow emulator from a real miss.
+redirect_trace() {
+  echo "      last redirect lines:"
+  sed -E 's/^([0-9-]+ )?([0-9:.]+) .*LiquidLauncher[^:]*: /\2 /' "$LOG" | grep 'Redirect:' \
+    | grep -vE 'service (dis)?connected|system launcher:' | tail -12 | sed 's/^/        /'
+}
+
 service_up() {
   [ "$(grep -c 'service connected' "$LOG")" -gt "$(grep -c 'service disconnected' "$LOG")" ]
 }
@@ -160,6 +168,7 @@ elif echo "      retrying once after closing system dialogs" && home_press_check
   pass "home press redirected on retry ($BEFORE -> $AFTER)"
 else
   fail "home press redirected ($BEFORE -> $AFTER)"
+  redirect_trace
 fi
 
 echo "== 3. Going home from another app redirects"
@@ -171,7 +180,7 @@ adb shell input keyevent KEYCODE_HOME
 if wait_top "$HOME_ACTIVITY" 6; then pass "app -> home redirected"; else fail "app -> home redirected"; fi
 sleep 1
 AFTER=$(redirect_count)
-[ "$AFTER" -gt "$BEFORE" ] || fail "redirect was logged ($BEFORE -> $AFTER)"
+[ "$AFTER" -gt "$BEFORE" ] || { fail "redirect was logged ($BEFORE -> $AFTER)"; redirect_trace; }
 
 echo "== 4. Recents opened from an app is not interrupted"
 adb shell am start -a android.settings.SETTINGS >/dev/null
