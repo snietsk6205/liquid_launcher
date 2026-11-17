@@ -10,6 +10,12 @@ object ThemeApply {
     fun current(settings: SettingsStore): LiquidTheme =
         settings.get(LauncherSettings.ThemeJson).takeIf { it.isNotBlank() }?.let { LiquidThemes.decode(it) } ?: LiquidThemes.Keyboard
 
+    /** Stores [theme] as the theme of buttons and chips (an edit), leaving Settings → Theme alone. */
+    fun save(settings: SettingsStore, theme: LiquidTheme) {
+        if (theme == LiquidThemes.Keyboard) settings.reset(LauncherSettings.ThemeJson) else settings.set(LauncherSettings.ThemeJson, LiquidThemes.encode(theme))
+        settings.set(LauncherSettings.ThemeControls, "theme")
+    }
+
     /** Makes [theme] the theme of buttons and chips, and the launcher's accent and glass colour. */
     fun use(settings: SettingsStore, theme: LiquidTheme) {
         if (theme == LiquidThemes.Keyboard) settings.reset(LauncherSettings.ThemeJson) else settings.set(LauncherSettings.ThemeJson, LiquidThemes.encode(theme))

@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.9.14: the theme editor: every colour (with its opacity), border, shape, corners, sheen, glass, shadow and glow of buttons, the main button, chips and round buttons, and the frost under them, live in Settings → Buttons.
+
 0.9.13: your WM Keyboard theme (Nice liquid) styles every button, chip and round button by default: its colours, pressed and selected states, pill shapes and its frosted glass with a rim of light; Settings → Buttons imports other themes (the launcher's or WM Keyboard's) and exports yours.
 
 0.9.12: real liquid glass: a shader of its own bends the light through the rounded edge (Snell's law), splits it into colours, catches the light on one side and shades the other, with a fine grain; Settings → Liquid glass → Tune the glass shows every value live over your wallpaper, with presets (one is your WM Keyboard theme's frost).

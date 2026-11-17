@@ -190,13 +190,7 @@ internal fun themedSurface(
         when (g.type.uppercase()) {
             "RADIAL" -> Brush.radialGradient(colors)
             "SWEEP" -> Brush.sweepGradient(colors)
-            else -> {
-                val rad = Math.toRadians(g.angleDeg.toDouble())
-                val dx = kotlin.math.cos(rad).toFloat()
-                val dy = kotlin.math.sin(rad).toFloat()
-                // A linear sheen across the control along the angle (90° runs top to bottom).
-                Brush.linearGradient(colors, start = Offset(500f - 500f * dx, 500f - 500f * dy), end = Offset(500f + 500f * dx, 500f + 500f * dy))
-            }
+            else -> AngleGradient(colors, g.angleDeg)
         }
     }
     var modifier: Modifier = Modifier
@@ -247,6 +241,23 @@ internal fun themedSurface(
         modifier = modifier.border(kind.borderWidthDp.dp, Color(kind.border), shape)
     }
     return ControlSurface(modifier, content)
+}
+
+/** A linear gradient across whatever it fills, along [angleDeg] (90° runs top to bottom), as WM Keyboard's sheens. */
+private class AngleGradient(private val colors: List<Color>, private val angleDeg: Float) : androidx.compose.ui.graphics.ShaderBrush() {
+    override fun createShader(size: androidx.compose.ui.geometry.Size): androidx.compose.ui.graphics.Shader {
+        val rad = Math.toRadians(angleDeg.toDouble())
+        val dx = kotlin.math.cos(rad).toFloat()
+        val dy = kotlin.math.sin(rad).toFloat()
+        val half = (kotlin.math.abs(dx) * size.width + kotlin.math.abs(dy) * size.height) / 2f
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        return androidx.compose.ui.graphics.LinearGradientShader(Offset(cx - dx * half, cy - dy * half), Offset(cx + dx * half, cy + dy * half), colors)
+    }
+
+    override fun equals(other: Any?): Boolean = other is AngleGradient && other.colors == colors && other.angleDeg == angleDeg
+
+    override fun hashCode(): Int = colors.hashCode() * 31 + angleDeg.hashCode()
 }
 
 /**

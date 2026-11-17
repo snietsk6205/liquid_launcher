@@ -630,9 +630,26 @@ and popups (your theme's `#443A47` popups are opaque; the long-press menu keeps 
 
 ---
 
+## Entry 20: 0.9.14, the theme editor (P4 done) (2026-11-17, Opus 5.5)
+
+Settings → Buttons → "Edit the theme…", under the theme card: for buttons, the main button, chips and round buttons,
+every colour of the theme with its opacity (fill, text, pressed, text when pressed, selected, text when selected,
+border, glow colour), the border width, the shape (pill, rounded, squircle, cut, sharp; circle for round buttons),
+the corner radius, a sheen (none, soft, bright, smoked: WM Keyboard's frost-preset sheens; a theme's own sheen is
+kept and shown), glass under it on or off, shadow and glow. Then the frost under the controls (frosted or liquid,
+blur, colour, brightness, rim of light and its colour, grain; bend and rainbow for liquid), and the theme's accent
+and glass tint (written to Settings → Theme). Every change is written as the slider moves, so the buttons in the
+preview at the top of the section follow; a colour picker's Cancel puts the colour back. The sheen now spans the
+control whatever its size (it was drawn over a fixed 1000 px box in 0.9.13).
+
+With this, P4 is done: the real glass, Tune the glass, and the theme engine with your theme as the default, import,
+export and the editor.
+
+---
+
 ## End of this session (2026-11-17): state for the next model
 
-**Version shipped:** 0.9.13 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
+**Version shipped:** 0.9.14 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
 0.9.1 (run 63), 0.9.2 (run 64, second attempt; the first failed on a slow emulator, see entry 11). 0.9.3 and 0.9.4 were
 pushed together (run 65); 0.9.5 to 0.9.9 together (run 66, passed); 0.9.10 and 0.9.11 together (run 67, passed); 0.9.12 (run 68: built, unit tests passed, the real glass shader compiled on the emulator, but not released: my new check of the tuning panel found no screen dump, because the bench kept moving after measuring and the screen never settled; 0.9.13 keeps it still unless you press Move); 0.9.13 after it. Check the GitHub releases for the newest `v0.9.x`; if a
 run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Nothing of this session was tried on the phone.
@@ -644,7 +661,7 @@ run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Not
 | P1 b. drawer / keyboard ghost | Done (0.9.0) |
 | P2 study hub, pill, clock notice, A2, A3, B4 | Done (0.9.1, 0.9.2): hub grown out of the pill, drag to close, timeline, arrival, shift tonight, notes, templates, check-in; the pill's study item fully customisable; the clock line with one action |
 | P3 search page | Done (0.9.3): study-first cards in your order, calendar never cut, commands. The transition was already finger-driven and interruptible; unchanged |
-| P4 real liquid glass, WM Keyboard theme engine | Mostly (0.9.12, 0.9.13): the real glass (AGSL: Snell refraction by the edge's shape, dispersion, swell, specular rim, depth shading, grain) with Tune the glass (live sliders, presets); the theme engine after WM Keyboard's model, your backup as the default theme of every button, chip and round button, import/export, accent and glass colour. **Not:** a surface-by-surface theme editor in the launcher; menus and popups in the theme |
+| P4 real liquid glass, WM Keyboard theme engine | Done (0.9.12 to 0.9.14): the real glass (AGSL: Snell refraction by the edge's shape, dispersion, swell, specular rim, depth shading, grain) with Tune the glass (live sliders, presets); the theme engine after WM Keyboard's model, your backup as the default theme of every button, chip and round button, import/export, the editor, accent and glass colour. Menus and popups keep the glass (question 8) |
 | P5 drawer | Partly (0.9.8): bigger tag button, field with the study glance and Ask Claude. Not: command hand-off from the drawer field, tag list as a container transform, the top tabs pill in the home-pill morph |
 | P6 scroll index | Done (0.9.6): the rail |
 | P7 widgets | Partly (0.9.10): no glass box behind the built-in widgets by default. Not: per-widget layout / font / accent / fields options, restyling other apps' widgets (re-tint their view tree) with a per-widget off switch |
@@ -674,9 +691,9 @@ run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Not
    surfaces (pill, drawer, menus), your frost for buttons and chips; "Your keyboard" in Tune the glass makes
    everything frosted in one tap.
 
-**Exact next step:** the theme editor (P4's last part): in Settings → Buttons, under the theme card, one row per
-surface (buttons, main button, chips, round buttons) to change fill, text, pressed, selected and border colours
-(the existing colour picker rows), border width, shape and corner radius, glass on or off, and the frost (style,
-blur, colour, rim, grain, bend, rainbow), each change written to `theme.json` through `ThemeApply.use` so the
-preview above shows it at once. Then P5: the tag list as a container transform and the home pill morphing into the
-drawer's field.
+**Exact next step:** P5's transitions. (1) The tag list as a container transform: the tag button in the drawer
+grows into the tag sheet (shared bounds, corner radius and glass morphing with one spring, interruptible; the chosen
+tag shrinks back into the button's dot). (2) The home pill and the drawer's search field as one element: while the
+drawer opens, the pill's bounds, corners and content cross into the field's (`DrawerMotion` progress drives both),
+instead of the pill fading and the field appearing. (3) Commands typed in the drawer field (`!abs`, `!next`,
+`!exam`, `!plan`, `?`) hand over to the search page's study commands. Then P7 (per-widget options) and P8.
