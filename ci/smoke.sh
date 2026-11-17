@@ -588,11 +588,12 @@ CAL2EOF
   wait_top "SettingsActivity" 8 || true
   sleep 2
   QUIET_ON=0
-  for i in 1 2 3 4 5 6 7 8 9 10; do
+  # The row's text is its title and summary together, so the title is matched as a part.
+  for i in $(seq 1 18); do
     dump 14d-settings
-    if tap_text 14d-settings "Quiet during blocks" exact; then QUIET_ON=1; break; fi
-    adb shell input swipe 540 1700 540 700 400
-    sleep 1
+    if tap_text 14d-settings "Quiet during blocks"; then QUIET_ON=1; break; fi
+    adb shell input swipe 540 1700 540 800 350
+    sleep 0.8
   done
   sleep 1
   adb shell am start -n "$HOME_ACTIVITY" >/dev/null
