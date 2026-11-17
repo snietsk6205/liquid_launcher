@@ -250,6 +250,9 @@ data class GlassConfig(
     val rim: Float = 0f,
     /** What every glass surface adds on top of blur, refraction and tint (0.8.0, D110). */
     val extras: GlassExtras = GlassExtras(),
+    /** E3 (0.9.7): a colour mixed into every tint, by [accentAmount] (0..1): the block now or next. */
+    val accentTint: Color? = null,
+    val accentAmount: Float = 0f,
 ) {
     private fun values(surface: String) = surfaces[surface] ?: surfaces.getValue(S.GlassDefault.id)
 
@@ -271,7 +274,8 @@ data class GlassConfig(
             "dark" -> false
             else -> lightBackground
         }
-        val base = tintColor ?: if (light) Color.White else Color.Black
+        val plain = tintColor ?: if (light) Color.White else Color.Black
+        val base = if (accentTint != null && accentAmount > 0.001f) androidx.compose.ui.graphics.lerp(plain, accentTint, accentAmount.coerceIn(0f, 1f)) else plain
         return extras.applyTo(GlassStyle(if (large) largeQuality else quality, v.blurDp.dp, v.refraction / 100f, base.copy(alpha = v.tint / 100f), rim))
     }
 }

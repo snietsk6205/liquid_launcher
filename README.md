@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.9.7: the glass takes a touch of the colour of the block now or next; a board-photo button during and just after class saves straight into Pictures/ESSAI/<module>/ with the date.
+
 0.9.6: the drawer's letter index is a short glass rail in thumb reach that never triggers Back: a few letters with dots, a drop marking where the list is, and a magnifier that turns like a wheel through the letters while you drag, with a tick per letter. The old full-edge index is still in Settings → Drawer index.
 
 0.9.5: launcher-data from the evening check-in: exam dates (≈ until confirmed), an absence meter with one liquid tube per module (always UNVERIFIED until the rule is confirmed), your weighted average once the coefficients are known, and a daily flashcard that turns over on the search page; a local copy you can edit in settings works until the check-in writes it.

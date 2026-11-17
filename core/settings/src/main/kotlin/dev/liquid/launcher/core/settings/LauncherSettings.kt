@@ -2004,6 +2004,12 @@ object LauncherSettings {
     val StudyFeedLocal = TextSetting(
         key = "study.feedLocal", default = "", title = "Local launcher-data", section = "study", hidden = true,
     )
+    val StudyGlassTint = BoolSetting(
+        key = "study.glassTint", default = true,
+        title = "Glass in the colour of the block",
+        summary = "Every glass surface takes a touch of the colour of the block now or next (its colour in your calendar), easing from one block to the next",
+        section = "study", keywords = "study glass tint colour module block e3",
+    )
     val StudyRest = IntSetting(
         key = "study.rest", default = 20, min = 0, max = 45, step = 5, unit = "min",
         title = "Rest after getting home",
@@ -2290,7 +2296,7 @@ object LauncherSettings {
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
         StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyPlanLink, StudyLinkOpener,
-        StudyAttendance, StudyLeaveBy, StudyCommute, StudyRest, StudyWindDown, StudySpeedBump, StudySpeedBumpTags, StudyFeedCalendar, StudyFeedLocal,
+        StudyAttendance, StudyLeaveBy, StudyCommute, StudyRest, StudyWindDown, StudySpeedBump, StudySpeedBumpTags, StudyFeedCalendar, StudyFeedLocal, StudyGlassTint,
         StudyArrival, StudyHomeWifi, StudyArrivalCharger, StudyShiftLead, StudyLatestEnd, StudyClassCalendars, StudyHeader, StudyCheckin, StudyTemplates,
         StudyHubSize, StudyHubBounce, StudyClockAction,
         NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,

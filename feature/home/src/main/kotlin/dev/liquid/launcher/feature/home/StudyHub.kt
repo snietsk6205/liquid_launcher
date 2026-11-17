@@ -740,6 +740,9 @@ private fun HubBar(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                controller.classForPhoto(now)?.let { cls ->
+                    ActionChip("Board · ${cls.title.subject}", color, icon = LauncherIcons.Camera) { controller.boardPhoto() }
+                }
                 ActionChip("Evening check-in", color, icon = LauncherIcons.Chat) { controller.eveningCheckin() }
                 templates.forEach { line ->
                     val label = line.substringBefore('|').trim()

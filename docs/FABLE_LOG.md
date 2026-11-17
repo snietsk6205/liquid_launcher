@@ -482,3 +482,12 @@ ignores the rest), so most of the strip still belonged to the Back gesture.
 
 Not verified on the phone: the rail's height for your thumb, whether MagicOS honours exclusion rects the same way
 (AOSP does; the strip keeps working either way, the risk is only Back firing near it).
+
+---
+
+## Entry 13: 0.9.7, E3 module-coloured glass and E1 board photo (2026-11-17, Opus 5.5)
+
+| Spec | What | Where |
+|---|---|---|
+| E3 | Every glass surface mixes 42 % of the block now or next's colour (its event colour, which the check-in sets from its colour map) into its tint, easing over 1.4 s when the block changes; dark and light glass keep their character (the mix is into each surface's own tint). Setting "Glass in the colour of the block" (on) | `GlassConfig.accentTint`, `HomeScreen.kt` |
+| E1 | Action "Photo of the board" (gestures, pill, home menu) and a "Board · <module>" chip in the hub while a class is on or ended less than 30 min ago: the camera writes straight into `Pictures/ESSAI/<module>/<yyyy-MM-dd>_<module>.jpg` (a pending MediaStore entry, kept when the photo is taken, removed when not; Android numbers a second photo of the same day). The module is the class now, else the block now, else "Notes". No storage or camera permission is needed | `HomeController.boardPhoto`, `MainActivity` (TakePicture) |

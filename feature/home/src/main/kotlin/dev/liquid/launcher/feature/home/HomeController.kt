@@ -389,6 +389,48 @@ class HomeController(
         }
     }
 
+    /** The class running now or ended in the last 30 minutes (E1: what a board photo belongs to), else null. */
+    fun classForPhoto(now: Long = System.currentTimeMillis()): dev.liquid.launcher.core.data.StudyEvent? =
+        data.study.day.value.classes.lastOrNull { now >= it.begin - 10 * 60_000L && now <= it.end + 30 * 60_000L }
+
+    /**
+     * E1: the camera, writing straight into Pictures/ESSAI/<module>/<date>_<module>.jpg (the module of the class
+     * now, else of the block now or next, else "Notes"). The entry is kept pending until the photo is taken and
+     * removed when it is not.
+     */
+    fun boardPhoto() {
+        val now = System.currentTimeMillis()
+        val module = (classForPhoto(now)?.title?.subject ?: data.study.day.value.current(now)?.title?.subject ?: "Notes")
+            .replace(Regex("[^\\p{L}\\p{N} _-]"), "").trim().ifEmpty { "Notes" }
+        val date = java.time.LocalDate.now().toString()
+        val resolver = context.contentResolver
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "${date}_$module.jpg")
+            put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/ESSAI/$module")
+            put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
+        }
+        val uri = try {
+            resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+        } catch (e: Exception) {
+            DebugLog.error("Home", "board photo: could not create the file: $e")
+            null
+        } ?: return toast("Could not create the photo file")
+        Haptics.tick(view)
+        callbacks.takePicture(uri) { taken ->
+            try {
+                if (taken) {
+                    resolver.update(uri, android.content.ContentValues().apply { put(android.provider.MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+                    notice(dev.liquid.launcher.core.common.NoticeKind.Study, "Board photo: $module", "Pictures/ESSAI/$module")
+                } else {
+                    resolver.delete(uri, null, null)
+                }
+            } catch (e: Exception) {
+                DebugLog.error("Home", "board photo: $e")
+            }
+        }
+    }
+
     /** "I'm home" (A2, by hand). */
     fun markHomeNow() {
         Haptics.confirm(view)
@@ -1708,6 +1750,7 @@ class HomeController(
                 hubNoteFocus = true
                 openToday()
             }
+            LauncherAction.BoardPhoto -> boardPhoto()
             LauncherAction.TellClaude -> tellClaude()
             LauncherAction.AskClaude -> openAskClaude()
             LauncherAction.StudyPlan -> openStudyPlan()
@@ -1796,6 +1839,8 @@ class HomeCallbacks(
     val pickFolder: ((android.net.Uri?) -> Unit) -> Unit = { it(null) },
     /** Asks for calendar access (read and write); the callback gets whether reading was granted. */
     val requestCalendar: ((Boolean) -> Unit) -> Unit = { it(false) },
+    /** Opens the camera to take a picture into [Uri]; the callback gets whether one was taken (E1). */
+    val takePicture: (android.net.Uri, (Boolean) -> Unit) -> Unit = { _, done -> done(false) },
     /** Asks for location access (Android's condition for reading the Wi-Fi name); the callback gets whether it was given. */
     val requestLocation: ((Boolean) -> Unit) -> Unit = { it(false) },
     /** Shows the system file picker for a font file; the callback gets it or null. */

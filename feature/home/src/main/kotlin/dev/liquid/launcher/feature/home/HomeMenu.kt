@@ -80,6 +80,7 @@ internal fun menuLabel(action: LauncherAction, apps: Map<AppRef, AppEntry>, layo
     LauncherAction.StudyPlan -> "Plan"
     LauncherAction.FocusTimer -> "Focus"
     LauncherAction.StudyNote -> "Note"
+    LauncherAction.BoardPhoto -> "Board"
     LauncherAction.Widgets -> "Widgets"
     LauncherAction.OpenDrawer -> "Apps"
     LauncherAction.OpenSearch -> "Search"

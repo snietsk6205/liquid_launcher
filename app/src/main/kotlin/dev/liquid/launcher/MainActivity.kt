@@ -50,6 +50,11 @@ class MainActivity : ComponentActivity() {
         calendarCallback?.invoke(result[android.Manifest.permission.READ_CALENDAR] == true)
         calendarCallback = null
     }
+    private var pictureCallback: ((Boolean) -> Unit)? = null
+    private val takePictureLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.TakePicture()) { taken ->
+        pictureCallback?.invoke(taken)
+        pictureCallback = null
+    }
     private var locationCallback: ((Boolean) -> Unit)? = null
     private val askLocation = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()) { result ->
         locationCallback?.invoke(result[android.Manifest.permission.ACCESS_FINE_LOCATION] == true)
@@ -139,6 +144,16 @@ class MainActivity : ComponentActivity() {
                         calendarCallback = null
                         callback(read)
                     }
+                }
+            },
+            takePicture = { uri, callback ->
+                pictureCallback = callback
+                try {
+                    takePictureLauncher.launch(uri)
+                } catch (e: Exception) {
+                    DebugLog.error("App", "camera failed: $e")
+                    pictureCallback = null
+                    callback(false)
                 }
             },
             requestLocation = { callback ->

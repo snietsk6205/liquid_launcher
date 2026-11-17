@@ -273,7 +273,18 @@ private fun HomeScreenBody(
     LaunchedEffect(iconPalette) { IconPaint.fromData(iconPalette, this) }
     if (live) IconPaintTiming()
     LaunchedEffect(theme, colourTick, savedImageKey(wallpaper)) { HomeTheme.apply(context, theme) }
-    val glass by store.derive { glassConfig() }
+    val glassBase by store.derive { glassConfig() }
+    // E3 (0.9.7): every glass surface takes a touch of the block now or next's colour, easing from one to the next.
+    val moduleGlass by store.derive { get(LauncherSettings.StudyGlassTint) }
+    val tintDay by data.study.day.collectAsState()
+    val tintMinute = rememberMinuteTick()
+    val blockColour = remember(tintDay, tintMinute, moduleGlass) {
+        if (moduleGlass) heroBlock(tintDay, System.currentTimeMillis())?.let { eventColor(it) } else null
+    }
+    val tintShown by androidx.compose.animation.animateColorAsState(blockColour ?: Color.Transparent, tween(1400), label = "moduleGlass")
+    val glass = remember(glassBase, tintShown) {
+        if (tintShown.alpha < 0.01f) glassBase else glassBase.copy(accentTint = tintShown.copy(alpha = 1f), accentAmount = 0.42f * tintShown.alpha)
+    }
     val search by store.derive { searchConfig() }
     val menuEntries by store.derive { MenuEntry.fromIds(get(LauncherSettings.MenuEntries)) }
     val handover by store.derive { get(LauncherSettings.SettleStyle) to get(LauncherSettings.SettleDuration) }

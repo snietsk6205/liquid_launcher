@@ -74,6 +74,7 @@ fun actionIcon(action: LauncherAction): Int = when (action) {
     LauncherAction.AskClaude -> LauncherIcons.Sparkle
     LauncherAction.FocusTimer -> LauncherIcons.Schedule
     LauncherAction.StudyNote -> LauncherIcons.Edit
+    LauncherAction.BoardPhoto -> LauncherIcons.Camera
     LauncherAction.Widgets -> LauncherIcons.Widgets
     is LauncherAction.Section -> when (action.id) {
         "icons" -> LauncherIcons.Palette

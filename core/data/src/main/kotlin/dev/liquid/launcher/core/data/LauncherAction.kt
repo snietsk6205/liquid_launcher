@@ -46,6 +46,9 @@ sealed interface LauncherAction {
     /** The study hub with the note field ready: a note for tonight's check-in (0.9.1, D5). */
     data object StudyNote : LauncherAction
 
+    /** E1 (0.9.7): a photo of the board, saved under the class it was taken in. */
+    data object BoardPhoto : LauncherAction
+
     /** The list of built-in widgets to add to the current page. */
     data object Widgets : LauncherAction
     data class SwitchLayout(val id: String) : LauncherAction
@@ -83,6 +86,7 @@ sealed interface LauncherAction {
         StudyPlan -> "study_plan"
         FocusTimer -> "focus"
         StudyNote -> "study_note"
+        BoardPhoto -> "board_photo"
         Widgets -> "widgets"
         is SwitchLayout -> "layout:$id"
         is Section -> "section:$id"
@@ -118,6 +122,7 @@ sealed interface LauncherAction {
             StudyPlan to "Open my study plan",
             FocusTimer to "Focus timer for the current block",
             StudyNote to "Write a note for tonight's check-in",
+            BoardPhoto to "Photo of the board (saved under the class)",
             Widgets to "Add a widget",
             OpenSettings to "Launcher settings",
             SystemLauncher to "Open the system launcher",
