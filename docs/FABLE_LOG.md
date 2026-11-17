@@ -671,8 +671,9 @@ a card there opens that switch and says whether it is on).
 | After the block | A notice on the home screen: "Micro is over · 14 notifications waited", with "WhatsApp 6 · Instagram 5 · Gmail 3 · back in your notifications" |
 | Tests | `QuietRulesTest`: what gets through, names as whole words, school mail by account, tags, the summary |
 
-Not tested on the emulator (the CI would need to grant access and post notifications during a block; next step if
-wanted). Risk: MagicOS may stop the listener in the background; the launcher is the home app, which usually keeps
+Emulator check (added with 0.9.21, `ci/smoke.sh` 14d): a block running now, access given with
+`cmd notification allow_listener`, the setting switched on in Settings, a notification posted from the shell; it must
+be held. Risk: MagicOS may stop the listener in the background; the launcher is the home app, which usually keeps
 it alive. If notifications ever stay away after a block, turn the setting off: snoozed ones come back on their own
 at the end of the block in any case.
 
@@ -796,5 +797,4 @@ the options the brief lists (layout, density, font and weight, accent, corners, 
 per-widget option in the widget's edit menu (`setItemOption`, as "plate" and "restyle" already are) with the
 preview of the home screen. After that P8 (layout previews, per-layout wallpaper UI, a switch-back timer,
 per-wallpaper blur/dim/saturation), then the last bits: the drawer's top tabs pill rising out of the home pill, an
-emulator check of C5 (grant access with `cmd notification allow_listener`, post during the 14b block), and the
-P11 pass.
+and the rest of the P11 pass (frame times on the phone).

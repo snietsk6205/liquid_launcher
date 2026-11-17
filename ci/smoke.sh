@@ -570,6 +570,51 @@ else
 fi
 
 clear_anr
+# 0.9.21 (C5, entry 22): "Quiet during blocks" holds a notification while a block runs. A second block running now
+# goes into the test calendar, notification access is given with adb, the setting is switched on in Settings →
+# Study companion, and a test notification is posted from the shell. Set-up problems print a NOTE (the emulator's
+# fault, not the launcher's); a notification that was not held fails.
+echo "== 14d. Quiet during blocks holds a notification"
+if [ -n "$EVENT_ID" ]; then
+  cat > "$OUT/cal2.sh" <<CAL2EOF
+CAL=\$(content query --uri content://com.android.calendar/calendars --projection _id:calendar_displayName | grep 'calendar_displayName=Study' | sed -E 's/.*_id=([0-9]+).*/\1/' | head -1)
+content insert --uri content://com.android.calendar/events --bind calendar_id:i:\$CAL --bind 'title:s:Stat Des quiet smoke' \
+  --bind dtstart:l:$(( ($(adb shell date +%s | tr -d '\r') - 600) * 1000 )) --bind dtend:l:$(( ($(adb shell date +%s | tr -d '\r') + 3000) * 1000 )) --bind eventTimezone:s:UTC
+CAL2EOF
+  adb push "$OUT/cal2.sh" /data/local/tmp/cal2.sh >/dev/null 2>&1
+  adb shell su 0 sh /data/local/tmp/cal2.sh >/dev/null 2>&1 || adb shell sh /data/local/tmp/cal2.sh >/dev/null 2>&1
+  adb shell cmd notification allow_listener "$PKG/dev.liquid.launcher.QuietService" >/dev/null 2>&1
+  adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen section:study >/dev/null
+  wait_top "SettingsActivity" 8 || true
+  sleep 2
+  QUIET_ON=0
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    dump 14d-settings
+    if tap_text 14d-settings "Quiet during blocks" exact; then QUIET_ON=1; break; fi
+    adb shell input swipe 540 1700 540 700 400
+    sleep 1
+  done
+  sleep 1
+  adb shell am start -n "$HOME_ACTIVITY" >/dev/null
+  wait_top "$HOME_ACTIVITY" 8 || true
+  sleep 5
+  if [ "$QUIET_ON" = 1 ] && grep -q "Quiet: notification access on" "$LOG"; then
+    adb shell cmd notification post -t "Quiet smoke" quietsmoke "This should wait until the block ends" >/dev/null 2>&1
+    sleep 3
+    if grep -q "Quiet: held a notification" "$LOG"; then
+      pass "a notification posted during a block waits until it ends"
+    else
+      fail "a notification posted during a block waits until it ends"
+      grep -E "Quiet:|Study:" "$LOG" | tail -8 | sed 's/^/        /'
+    fi
+  else
+    echo "NOTE: quiet during blocks not checked (setting found: $QUIET_ON; access: $(grep -c 'Quiet: notification access on' "$LOG"))"
+  fi
+else
+  echo "NOTE: quiet during blocks not checked (no test calendar)"
+fi
+
+clear_anr
 # 0.6.4: the letter index bends out from under the finger and the bubble sits past the letters. A picture only:
 # the screenshot is taken while a slow swipe holds the right edge of the drawer.
 echo "== 14c. Letter index while held"
