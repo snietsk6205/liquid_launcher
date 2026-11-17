@@ -24,7 +24,12 @@ data class WallpaperTone(
     /** Dark text reads better than light text on this wallpaper. */
     val light: Boolean,
     val systemId: Int,
-)
+    /** W3 (0.10.0): its colours by role, for theme colours that follow the wallpaper; null for an older saved tone. */
+    val palette: WallpaperPalette? = null,
+) {
+    /** The roles, from the picture when known, else spread from its main colour. */
+    val roles: WallpaperPalette get() = palette ?: WallpaperPalette.fromSeed(primary)
+}
 
 object WallpaperTones {
     private const val PREFS = "wallpaper_tone"
@@ -52,6 +57,7 @@ object WallpaperTones {
             tertiary = prefs.getInt("tertiary", 0).takeIf { prefs.contains("tertiary") },
             light = prefs.getBoolean("light", false),
             systemId = prefs.getInt("systemId", -1),
+            palette = WallpaperPalette.decode(prefs.getString("palette", null)),
         )
     }
 
@@ -65,6 +71,7 @@ object WallpaperTones {
             tone.tertiary?.let { putInt("tertiary", it) }
             putBoolean("light", tone.light)
             putInt("systemId", tone.systemId)
+            tone.palette?.let { putString("palette", it.encode()) }
         }.apply()
     }
 
@@ -77,9 +84,24 @@ object WallpaperTones {
             tertiary = colors.tertiaryColor?.toArgb(),
             light = (colors.colorHints and WallpaperColors.HINT_SUPPORTS_DARK_TEXT) != 0,
             systemId = systemId,
+            palette = paletteOf(bitmap),
         )
     } catch (e: Throwable) {
         DebugLog.error("Wallpaper", "colours from image failed: $e")
+        null
+    }
+
+    /** The roles of [bitmap]'s colours, from a 48 px copy (a few thousand pixels, under a millisecond). */
+    fun paletteOf(bitmap: Bitmap): WallpaperPalette? = try {
+        val w = 48
+        val h = (48f * bitmap.height / bitmap.width.coerceAtLeast(1)).toInt().coerceIn(8, 160)
+        val small = Bitmap.createScaledBitmap(bitmap, w, h, true)
+        val pixels = IntArray(w * h)
+        small.getPixels(pixels, 0, w, 0, 0, w, h)
+        if (small !== bitmap) small.recycle()
+        WallpaperPalette.extract(pixels)
+    } catch (e: Throwable) {
+        DebugLog.error("Wallpaper", "palette from image failed: $e")
         null
     }
 

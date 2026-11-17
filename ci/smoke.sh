@@ -397,13 +397,16 @@ wait_top "$HOME_ACTIVITY" 3 || fail "launcher still in front after back"
 # about nine tags the field fell out of the dialog), and the drawer's tag list keeps its buttons in sight.
 if [ -n "$APP_LABEL" ]; then
   echo "== 9c. Thirty tags"
-  dump 09c-home
-  POS=$(python3 ci/find_text.py "$OUT/09c-home.xml" "$APP_LABEL" exact) || POS=""
+  # From the drawer's long-press menu, which check 9 found offering "Tags".
+  adb shell input swipe 540 1500 540 400 450
+  sleep 2
+  dump 09c-drawer-open
+  POS=$(python3 ci/find_text.py "$OUT/09c-drawer-open.xml" "$APP_LABEL" exact) || POS=""
   if [ -n "$POS" ]; then
     adb shell input swipe $POS $POS 1000
     sleep 1.2
     dump 09c-menu
-    tap_text 09c-menu "Tags" exact || true
+    tap_text 09c-menu "Tags" exact || note "no Tags row in the menu"
     sleep 1.5
     dump 09c-sheet
     if tap_text 09c-sheet "New tag, for example Study"; then
@@ -430,7 +433,10 @@ if [ -n "$APP_LABEL" ]; then
       on_screen 09c-thirty "Also add it as a drawer tab" || note "the drawer-tab switch is not in sight with 30 tags"
     else
       fail "the per-app tag sheet opens with its new-tag field"
+      python3 ci/describe_ui.py "$OUT/09c-sheet.xml" 25
     fi
+    adb shell input keyevent KEYCODE_BACK
+    sleep 0.6
     adb shell input keyevent KEYCODE_BACK
     sleep 0.6
     adb shell input keyevent KEYCODE_BACK
@@ -456,7 +462,9 @@ if [ -n "$APP_LABEL" ]; then
     adb shell input keyevent KEYCODE_BACK
     sleep 1
   else
-    note "the app placed on the home screen was not found for the tag check"
+    note "the app was not found in the drawer for the tag check"
+    adb shell input keyevent KEYCODE_BACK
+    sleep 1
   fi
 fi
 

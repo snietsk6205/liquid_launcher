@@ -16,8 +16,37 @@ class LiquidThemeTest {
         assertNotNull(imported)
         assertEquals("wallpaper stoped", imported!!.name)
         assertEquals("WM Keyboard: wallpaper stoped", imported.source)
-        // The bundled default is exactly the import, renamed after the file.
-        assertEquals(LiquidThemes.Keyboard, imported.copy(name = "Nice liquid"))
+        // The four kinds 0.9.13 drew are as they were.
+        val k = LiquidThemes.Keyboard
+        for ((a, b) in listOf(imported.button to k.button, imported.main to k.main, imported.chip to k.chip, imported.tool to k.tool)) {
+            assertEquals(b.fill, a.fill)
+            assertEquals(b.text, a.text)
+            assertEquals(b.pressed, a.pressed)
+            assertEquals(b.active, a.active)
+            assertEquals(b.activeText, a.activeText)
+            assertEquals(b.shape, a.shape)
+            assertEquals(b.cornerDp, a.cornerDp)
+            assertEquals(b.glass, a.glass)
+        }
+        assertEquals(k.accent, imported.accent)
+        assertEquals(k.glassTint, imported.glassTint)
+        assertEquals(k.frost.blurDp, imported.frost.blurDp, 0.0001f)
+        assertEquals(k.frost.rim, imported.frost.rim, 0.0001f)
+        // 0.10.0 (W3): the rest of the file is read too.
+        val m = imported.material!!
+        assertEquals("LETTERPRESS", m.kind)
+        assertEquals("PAPER", m.texture)
+        assertEquals("INSET", m.edge)
+        assertEquals("DEBOSS", m.label)
+        assertEquals("SQUISH", imported.bloom!!.motion)
+        assertEquals(0.5f, imported.bloom!!.light, 0.0001f)
+        assertEquals("SWOOSH", imported.effect!!.kind)
+        assertTrue(imported.effect!!.onPress)
+        assertEquals(0xFF443A47, imported.popup!!.fill)
+        assertEquals(3.3675797f, imported.board!!.imageBlurDp, 0.0001f)
+        assertEquals(0.96f, imported.button.textureOpacity, 0.0001f)
+        assertEquals("NONE", imported.frost.backdrop)
+        assertTrue(imported.frost.on("KEYS") && imported.frost.on("POPUPS"))
     }
 
     @Test

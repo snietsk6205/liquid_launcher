@@ -56,7 +56,118 @@ data class ControlTheme(
     val cornerDp: Int = 12,
     /** The glass ([LiquidTheme.frost]) under the fill; off draws the fill alone. */
     val glass: Boolean = true,
+    // W3 (0.10.0): the rest of WM Keyboard's options for a kind of control.
+    /** A picture over the fill (a local file), and the one shown while pressed; null for none. */
+    val texture: String? = null,
+    val pressedTexture: String? = null,
+    /** "crop", "stretch" or "tile". */
+    val textureScale: String = "crop",
+    val textureOpacity: Float = 1f,
+    /** Height in dp; null keeps the launcher's (Settings → Buttons → Size). */
+    val heightDp: Int? = null,
+    /** Small extra text (counts); null: the text, fainter. */
+    val hint: Long? = null,
+    /** Whether the theme's material ([LiquidTheme.material]) dresses this kind (buttons and pills, as WM's keys). */
+    val material: Boolean = false,
 )
+
+/** Sheets and panels (W3): WM Keyboard's board under the launcher's sheets. */
+@Serializable
+data class ThemeBoard(
+    val background: Long,
+    val gradient: ThemeGradient? = null,
+    val text: Long,
+    val secondaryText: Long,
+    val divider: Long,
+    /** A local picture behind sheets, its opacity and blur. */
+    val image: String? = null,
+    val imageOpacity: Float = 1f,
+    val imageBlurDp: Float = 0f,
+    val shape: String = "ROUNDED",
+    val cornerDp: Int = 32,
+    val glass: Boolean = true,
+)
+
+/** What controls look made of (WM Keyboard's KeyMaterialSpec, resolved over its kind's preset). */
+@Serializable
+data class ThemeMaterial(
+    val kind: String,
+    val bevelDp: Float,
+    val topInsetDp: Float,
+    val skirtShade: Float,
+    val gloss: Float,
+    val lightAngleDeg: Float,
+    val texture: String,
+    val textureOpacity: Float,
+    val edge: String,
+    val edgeColor: Long?,
+    val edgeWidthDp: Float,
+    val label: String,
+    val labelColor: Long?,
+    val iridescence: Float,
+    val softShadow: Float,
+) {
+    val plain: Boolean
+        get() = bevelDp == 0f && gloss == 0f && (texture == "NONE" || textureOpacity == 0f) && edge == "NONE" && label == "NONE" &&
+            iridescence == 0f && softShadow == 0f
+}
+
+/** Light from the finger and controls that move under it (WM Keyboard's touch bloom). */
+@Serializable
+data class ThemeBloom(
+    val color: Long?,
+    val light: Float,
+    val radiusDp: Float,
+    val dip: Float,
+    val wobble: Float,
+    /** SINK, GROW, SHRINK, RISE, TILT, JELLY, POP, SQUISH, FADE; null: no motion. */
+    val motion: String?,
+)
+
+/** A burst of particles from each press (WM Keyboard's key press effect). */
+@Serializable
+data class ThemeParticles(
+    /** STARS, HEARTS, SPARKLE, CONFETTI, EMOJI, CUSTOM_IMAGE. */
+    val kind: String,
+    val emoji: String? = null,
+    val images: List<String> = emptyList(),
+    /** NATURAL, KEY_TEXT, ACCENT, GESTURE_TRAIL, CUSTOM, RANDOM. */
+    val colorMode: String = "NATURAL",
+    val color: Long,
+    val intensity: Float = 1f,
+    val size: Float = 1f,
+    val speed: Float = 1f,
+    val spread: Float = 0.5f,
+    val gravity: Float = 1f,
+    val durationMs: Int = 650,
+)
+
+@Serializable
+data class ThemeOrb(val x: Float, val y: Float, val radius: Float)
+
+/** Something moving over the home wallpaper, or a splash thrown by presses (WM Keyboard's board effect). */
+@Serializable
+data class ThemeEffect(
+    val kind: String,
+    val colors: List<Long>,
+    val density: Float,
+    val speed: Float,
+    val intensity: Float,
+    val scale: Float,
+    val reactive: Float,
+    val halfLifeMs: Int,
+    val orbs: List<ThemeOrb> = emptyList(),
+) {
+    val onPress: Boolean get() = kind in ThemeEffect.splashKinds
+
+    companion object {
+        val splashKinds = setOf("PAINT", "INK", "LIGHT_POOL", "FLOOD", "PUFF", "GLINT", "POP", "SWOOSH", "SPECKS", "MELD")
+    }
+}
+
+/** A sticker on sheets (WM Keyboard's decal): its centre and width as fractions of the sheet. */
+@Serializable
+data class ThemeDecal(val image: String, val x: Float, val y: Float, val scale: Float, val rotationDeg: Float, val opacity: Float)
 
 /** The glass under the controls, as WM Keyboard's frost. */
 @Serializable
@@ -74,8 +185,19 @@ data class ThemeFrost(
     /** LIQUID only: how far the edge bends, 0..1, and how far colours split there, 0..1. */
     val refraction: Float = 0.6f,
     val dispersion: Float = 0.25f,
+    // W3 (0.10.0)
+    val enabled: Boolean = true,
+    /** Which kinds are glass: KEYS, MODIFIER_KEYS, ENTER_KEY, SPACE_BAR, BARS, TOOLS, CHIPS, CARDS, POPUPS (sheets), MENUS. */
+    val surfaces: Set<String> = setOf("KEYS", "MODIFIER_KEYS", "ENTER_KEY", "SPACE_BAR", "BARS", "TOOLS", "CHIPS", "CARDS", "POPUPS", "MENUS"),
+    /** AUTO, WALLPAPER, IMAGE or NONE. */
+    val backdrop: String = "AUTO",
+    /** How solid surfaces are where glass is not drawn. */
+    val fallbackOpacity: Float = 0.92f,
 ) {
     val liquid: Boolean get() = style.equals("LIQUID", ignoreCase = true)
+
+    /** Whether [surface] is glass. [backdrop] is about what sheets show behind them, not whether controls are glass. */
+    fun on(surface: String): Boolean = enabled && surface in surfaces
 }
 
 @Serializable
@@ -95,6 +217,39 @@ data class LiquidTheme(
     val frost: ThemeFrost = ThemeFrost(),
     /** Where it came from, e.g. "WM Keyboard: wallpaper stoped". */
     val source: String? = null,
+    // W3 (0.10.0): the other kinds of control and the theme's effects. Null where a 0.9.13 theme had none.
+    /** Secondary buttons (WM Keyboard's modifier keys); null: as [button]. */
+    val modifier: ControlTheme? = null,
+    /** The three pills (the space bar). */
+    val space: ControlTheme? = null,
+    val card: ControlTheme? = null,
+    /** Menus and their rows (WM Keyboard's popups): fill, text, selected row. */
+    val popup: ControlTheme? = null,
+    val board: ThemeBoard? = null,
+    val material: ThemeMaterial? = null,
+    val bloom: ThemeBloom? = null,
+    val particles: ThemeParticles? = null,
+    val effect: ThemeEffect? = null,
+    val decals: List<ThemeDecal> = emptyList(),
+    /** The launcher's fonts by id ("" the launcher's), scale and bold labels. */
+    val fontId: String = "",
+    val fontScale: Float = 1f,
+    val boldLabels: Boolean = false,
+    val hintScale: Float = 1f,
+    val gapScale: Float = 1f,
+    val padScale: Float = 1f,
+    val toolSizeDp: Int? = null,
+    val menuRowDp: Int? = null,
+    val trail: Long? = null,
+    /** NONE, FLOW or HUE_CYCLE, and its speed. */
+    val animation: String = "NONE",
+    val animationSpeed: Float = 1f,
+    /** "block", "accent" or "plain": what the main button of a screen is filled with. */
+    val mainColor: String = "block",
+    /** Blur of the home screen behind an open sheet, in dp; 0 for none. */
+    val windowBlurDp: Int = 0,
+    /** Each pill's own theme when the pills are individual (home, drawer, search), resolved. */
+    val pills: Map<String, LiquidTheme> = emptyMap(),
 )
 
 object LiquidThemes {
@@ -134,6 +289,9 @@ object LiquidThemes {
 
     fun encode(theme: LiquidTheme): String = json.encodeToString(LiquidTheme.serializer(), theme)
 
+    /** A 0.9.13 launcher theme (the "liquidTheme" format), or null. */
+    fun decodeV1(obj: JsonObject): LiquidTheme? = runCatching { json.decodeFromJsonElement(LiquidTheme.serializer(), obj) }.getOrNull()
+
     /**
      * A theme from [text]: the launcher's own format, or a WM Keyboard theme or backup (recognised by its
      * `keyBackground`). Null when it is neither. [fallbackName] names a WM theme that has no name.
@@ -157,106 +315,11 @@ object LiquidThemes {
     }
 
     /**
-     * A WM Keyboard theme as a launcher theme, deriving what it leaves out the way WM Keyboard does (KbTheme): the
-     * pressed key from the key and its text, the active chip from the active tool circle, then the pressed key,
-     * texts that must read on their fill from the first legible candidate.
+     * A WM Keyboard theme as a launcher theme, deriving what it leaves out the way WM Keyboard does (KbTheme). Since
+     * 0.10.0 (W3) this is [ThemeResolve.resolve] on the theme as a document, which reads every option.
      */
-    fun fromWmKeyboard(spec: JsonObject, fallbackName: String = "Imported theme"): LiquidTheme {
-        fun long(key: String): Long? = (spec[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.longOrNull
-        fun float(key: String): Float? = (spec[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.floatOrNull
-        fun int(key: String): Int? = (spec[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.intOrNull
-        fun string(key: String): String? = (spec[key] as? JsonPrimitive)?.takeIf { it !is JsonNull && it.isString }?.content
-        fun bool(key: String): Boolean? = (spec[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.booleanOrNull
-        fun gradient(key: String): ThemeGradient? {
-            val g = spec[key] as? JsonObject ?: return null
-            val colors = (g["colors"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.longOrNull }.orEmpty()
-            if (colors.size < 2) return null
-            return ThemeGradient(
-                colors,
-                (g["type"] as? JsonPrimitive)?.content ?: "LINEAR",
-                (g["angleDeg"] as? JsonPrimitive)?.floatOrNull ?: 45f,
-            )
-        }
-
-        val dark = bool("dark") ?: true
-        val board = long("boardBackground") ?: 0xFF17181C
-        val key = long("keyBackground") ?: 0xFF303338
-        val keyText = long("keyText") ?: 0xFFE9E9EE
-        val accent = long("accent") ?: 0xFF8AB4F8
-        val pressed = long("pressedKeyBackground") ?: ThemeColors.lerp(key, keyText, 0.25f)
-        val stripText = long("suggestionText") ?: ThemeColors.legibleOn(board, listOf(keyText))
-        val secondary = ThemeColors.withAlpha(stripText, 0.65f)
-        val toolActive = long("toolCircleActiveBackground") ?: pressed
-        val chipActive = long("chipActiveBackground") ?: toolActive
-        val modifier = long("modifierKeyBackground") ?: 0xFF222428
-        val enter = long("enterKeyBackground") ?: 0xFF4C8DF6
-        val enterText = long("enterKeyText") ?: 0xFF0B1220
-        val keyShape = shapeName(string("keyShape"), "ROUNDED", allowCircle = false)
-        val keyCorner = int("keyCornerRadiusDp") ?: 12
-        val frostObj = spec["frost"] as? JsonObject
-        val frostOn = frostObj != null && ((frostObj["enabled"] as? JsonPrimitive)?.booleanOrNull ?: true)
-        val surfaces = if (!frostOn) emptySet() else
-            (frostObj!!["surfaces"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content?.uppercase() }?.toSet()
-                ?: setOf("KEYS", "MODIFIER_KEYS", "SPACE_BAR", "BARS", "TOOLS", "CHIPS", "CARDS", "POPUPS", "MENUS")
-        fun frostFloat(name: String, default: Float) = (frostObj?.get(name) as? JsonPrimitive)?.floatOrNull ?: default
-        val frost = ThemeFrost(
-            style = (frostObj?.get("style") as? JsonPrimitive)?.takeIf { it.isString }?.content?.uppercase() ?: "FROSTED",
-            blurDp = frostFloat("backdropBlur", 14f).coerceIn(0f, 25f),
-            saturation = frostFloat("saturation", 1.25f).coerceIn(0.5f, 2f),
-            brightness = frostFloat("brightness", 0f).coerceIn(-0.3f, 0.3f),
-            rim = frostFloat("rim", 0.5f).coerceIn(0f, 1f),
-            rimColor = (frostObj?.get("rimColor") as? JsonPrimitive)?.longOrNull,
-            grain = frostFloat("grain", 0.06f).coerceIn(0f, 0.25f),
-            refraction = frostFloat("refraction", 0.6f).coerceIn(0f, 1f),
-            dispersion = frostFloat("dispersion", 0.25f).coerceIn(0f, 1f),
-        )
-        val button = ControlTheme(
-            fill = key, text = keyText, pressed = pressed, pressedText = long("pressedKeyText"),
-            active = chipActive, activeText = long("chipActiveText") ?: ThemeColors.legibleOn(chipActive, listOf(accent, keyText)),
-            gradient = gradient("keyGradient"), border = long("keyBorderColor"), borderWidthDp = float("keyBorderWidthDp") ?: 0f,
-            shadowDp = (float("keyElevationDp") ?: 0f).coerceIn(0f, 8f), shadowColor = long("keyShadowColor"),
-            shape = keyShape, cornerDp = keyCorner, glass = "KEYS" in surfaces,
-        )
-        val main = ControlTheme(
-            // WM Keyboard presses every key, the enter key included, in the pressed key colour.
-            fill = enter, text = enterText, pressed = pressed, pressedText = long("pressedEnterKeyText"),
-            active = chipActive, activeText = button.activeText,
-            border = long("keyBorderColor"), borderWidthDp = float("keyBorderWidthDp") ?: 0f,
-            shape = keyShape, cornerDp = int("actionKeyCornerRadiusDp") ?: keyCorner, glass = "ENTER_KEY" in surfaces,
-        )
-        val chip = ControlTheme(
-            fill = long("chipBackground") ?: modifier,
-            text = long("chipText") ?: long("modifierKeyText") ?: keyText,
-            pressed = pressed, active = chipActive,
-            activeText = long("chipActiveText") ?: ThemeColors.legibleOn(chipActive, listOf(accent, keyText)),
-            border = long("chipBorderColor"), borderWidthDp = float("chipBorderWidthDp") ?: 0f,
-            shape = shapeName(string("chipShape"), "ROUNDED", allowCircle = false), cornerDp = int("chipCornerRadiusDp") ?: 12,
-            glass = "CHIPS" in surfaces,
-        )
-        val tool = ControlTheme(
-            fill = long("toolCircleBackground") ?: ThemeColors.blendOver(keyText, board, 0.14f),
-            text = long("toolbarIcon") ?: secondary,
-            pressed = toolActive, active = toolActive,
-            activeText = long("toolCircleActiveIcon") ?: ThemeColors.legibleOn(toolActive, listOf(accent, keyText)),
-            border = long("toolBorderColor"), borderWidthDp = float("toolBorderWidthDp") ?: 0f,
-            shadowDp = (float("toolElevationDp") ?: 0f).coerceIn(0f, 8f),
-            shape = shapeName(string("toolShape"), "CIRCLE", allowCircle = true), cornerDp = int("toolCircleRadiusDp") ?: 12,
-            glass = "TOOLS" in surfaces,
-        )
-        val name = string("name")?.takeIf { it.isNotBlank() }
-        return LiquidTheme(
-            name = name ?: fallbackName,
-            dark = dark,
-            accent = accent,
-            glassTint = ThemeColors.opaque(key),
-            button = button,
-            main = main,
-            chip = chip,
-            tool = tool,
-            frost = frost,
-            source = "WM Keyboard: " + (name ?: "unnamed theme"),
-        )
-    }
+    fun fromWmKeyboard(spec: JsonObject, fallbackName: String = "Imported theme"): LiquidTheme =
+        ThemeResolve.resolve(ThemeDoc(spec), null, fallbackName)
 
     /**
      * A WM Keyboard shape as one the launcher draws: the four plain outlines and the pill pass through, a circle
@@ -284,6 +347,9 @@ object ThemeColors {
     }
 
     fun opaque(c: Long): Long = c or 0xFF000000
+
+    /** The opacity of [c], 0..1. */
+    fun alpha(c: Long): Float = a(c)
 
     fun withAlpha(c: Long, alpha: Float): Long = argb(alpha, r(c), g(c), b(c))
 
