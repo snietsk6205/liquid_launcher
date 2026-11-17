@@ -128,8 +128,19 @@ internal fun studyText(color: Color, size: Int, weight: FontWeight = FontWeight.
 internal fun eventColor(event: StudyEvent): Color = if (event.color != 0) Color(event.color or 0xFF000000.toInt()) else HomeTheme.accent
 
 /** What a study widget needs from its page. */
-internal class StudySurface(val glass: GlassConfig, val lightBackground: Boolean, val backdrop: Backdrop?, val interactive: Boolean) {
-    val color: Color get() = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
+internal class StudySurface(
+    val glass: GlassConfig,
+    val lightBackground: Boolean,
+    val backdrop: Backdrop?,
+    val interactive: Boolean,
+    /** On a glass card (true) or straight on the wallpaper like the clock (false, the default since 0.9.10). */
+    val boxed: Boolean = true,
+) {
+    val color: Color get() = when {
+        !boxed -> if (lightBackground) Color(0xFF16181C) else Color.White
+        glass.lightGlass(Surfaces.Menu, lightBackground) -> Color(0xFF16181C)
+        else -> Color.White
+    }
 }
 
 /** The glass card every study widget sits on; its buttons are glass on that glass (0.6.4). */
@@ -142,14 +153,19 @@ private fun StudyCard(surface: StudySurface, controller: HomeController, onClick
             .fillMaxSize()
             .padding(6.dp)
             .then(
-                if (surface.backdrop != null) Modifier.liquidGlass(surface.backdrop, shape, surface.glass.style(Surfaces.Menu, surface.lightBackground), exported = layer)
-                else Modifier.background(surface.color.copy(alpha = 0.12f), shape)
+                when {
+                    // No box: on the wallpaper, as the clock is (P7, 0.9.10).
+                    !surface.boxed -> Modifier
+                    surface.backdrop != null -> Modifier.liquidGlass(surface.backdrop, shape, surface.glass.style(Surfaces.Menu, surface.lightBackground), exported = layer)
+                    else -> Modifier.background(surface.color.copy(alpha = 0.12f), shape)
+                }
             )
             .clip(shape)
             .then(if (onClick != null && surface.interactive) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick) else Modifier)
             .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
-        ProvideControls(controller, surface.glass, if (surface.backdrop != null) layer else null) { content() }
+        // Unboxed, the buttons sample the wallpaper itself.
+        ProvideControls(controller, surface.glass, if (!surface.boxed) surface.backdrop else if (surface.backdrop != null) layer else null) { content() }
     }
 }
 

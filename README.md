@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.9.10: the calendar and study widgets sit straight on the wallpaper like the clock, without a glass box (the box is an option in Settings → Home screen).
+
 0.9.9: on Sundays the search page shows the week in four numbers (blocks done of planned, focus minutes, absences, days to the next exam); a tap reviews the week with Claude.
 
 0.9.8: in the drawer, the search field shows where your day is (tap the ring for the study hub) and has a one-tap Ask Claude; the tag button is bigger (its size is a setting).

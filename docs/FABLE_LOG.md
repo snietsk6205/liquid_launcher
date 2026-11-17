@@ -518,9 +518,18 @@ Claude. On other days the card is not there.
 
 ---
 
+## Entry 16: 0.9.10, P7 (part): no glass box behind the widgets (2026-11-17, Opus 5.5)
+
+You did not like a liquid background box behind the clock or widgets. The clock had none by default already; the
+Calendar, Now card and Today widgets sat on a glass card. Settings → Home screen → "Behind the calendar and study
+widgets": **None** (new default: on the wallpaper in the clock's text colour; their buttons sample the wallpaper)
+or "A liquid glass card" (as before). Applies on pages and on the search screen.
+
+---
+
 ## End of this session (2026-11-17): state for the next model
 
-**Version shipped:** 0.9.9 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
+**Version shipped:** 0.9.10 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
 0.9.1 (run 63), 0.9.2 (run 64, second attempt; the first failed on a slow emulator, see entry 11). 0.9.3 and 0.9.4 were
 pushed together (run 65); 0.9.5 to 0.9.9 together after it. Check the GitHub releases for the newest `v0.9.x`; if a
 run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Nothing of this session was tried on the phone.
@@ -535,7 +544,7 @@ run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Not
 | P4 real liquid glass, WM Keyboard theme engine | **Not started.** Your theme backup is in `docs/reference/nice_liquid.wmtheme.json` (its `frost` block: frosted style, backdrop blur 9, saturation 1.25, rim 0.86, refraction 0.6, dispersion 0.25; keys: pill shape, background 0x1C3C323E (11 % plum-grey), text 0xFFE9E9EE, pressed 0xFF723F61, accent 0xFFD182AF, popups 0xFF443A47, tool circles 0x433D323F, chips 0xFF322B35; touch bloom: squish motion, light 0.5, radius 100 dp, wobble 0.5) |
 | P5 drawer | Partly (0.9.8): bigger tag button, field with the study glance and Ask Claude. Not: command hand-off from the drawer field, tag list as a container transform, the top tabs pill in the home-pill morph |
 | P6 scroll index | Done (0.9.6): the rail |
-| P7 widgets | Not started |
+| P7 widgets | Partly (0.9.10): no glass box behind the built-in widgets by default. Not: per-widget layout / font / accent / fields options, restyling other apps' widgets (re-tint their view tree) with a per-widget off switch |
 | P8 layouts and wallpaper | Not started (wind-down's colour filter on the wallpaper is the only wallpaper change) |
 | P9 icon animations | Done (0.9.4) |
 | P10 rest of Phase 5 | Done: A5, A6, B1 (+ ≈), B2, B3, C1, C3, D3, D4, E1, E2, E3, E4, E5, launcher-data. Not: A4 Trajet layout and C4 Exam mode (both need P8's layout triggers), C5 notification triage (needs a notification listener: a new permission and service) |

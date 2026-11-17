@@ -743,6 +743,14 @@ object LauncherSettings {
         section = "motion", keywords = "animation speed duration fast slow motion",
     )
 
+    val WidgetBackground = ChoiceSetting(
+        key = "widgets.background", default = "none",
+        options = listOf("none" to "None: on the wallpaper, like the clock", "glass" to "A liquid glass card"),
+        title = "Behind the calendar and study widgets",
+        summary = "The Calendar, Now card and Today widgets, on pages and on the search screen",
+        section = "home", keywords = "widget background box card glass calendar now today",
+    )
+
     // ---- Pill ----
 
     val PillEnabled = BoolSetting(
@@ -2284,6 +2292,7 @@ object LauncherSettings {
         GestureSwipeUp, GestureSwipeDown, GestureDoubleTap, GestureLongPress,
         GesturePinchIn, GesturePinchOut, GestureTwoUp, GestureTwoDown, GestureEdgeLeftUp, GestureEdgeLeftDown, GestureEdgeRightUp, GestureEdgeRightDown, GestureEdgeWidth,
         HapticsEnabled, HapticsStrength, HapticDrawer, HapticPickUp, LaunchAnimation, MotionStyle, MotionSpeed, UpdatesDaily,
+        WidgetBackground,
         PillEnabled, PillSlots, PillPosition, PillOffset, PillWidth, PillHeight, PillCorner, PillIconSize,
         SearchCards,
         PillStudyLook, PillStudyGlyph, PillStudyApp, PillStudyPicture, PillStudyFrame, PillStudySize, PillStudyTint, PillStudyRing, PillSlotGestures,

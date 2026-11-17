@@ -496,7 +496,8 @@ internal fun WidgetContent(item: HomeItem, env: PageEnv, controller: HomeControl
     }
     if (item.widget == "now" || item.widget == "today") {
         // Ticks and buttons work on the live home screen, not while editing or in a preview.
-        val surface = StudySurface(env.glass, env.lightBackground, env.wallpaperBackdrop, env.interactive && !env.editMode)
+        val boxed by controller.data.settings.derive { get(LauncherSettings.WidgetBackground) == "glass" }
+        val surface = StudySurface(env.glass, env.lightBackground, env.wallpaperBackdrop, env.interactive && !env.editMode, boxed)
         if (item.widget == "now") NowCard(controller, surface) else TodayWidget(controller, surface)
     }
 }

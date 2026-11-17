@@ -53,6 +53,7 @@ import dev.liquid.launcher.core.data.HomeItem
 import dev.liquid.launcher.core.designsystem.LauncherIcon
 import dev.liquid.launcher.core.designsystem.LauncherIcons
 import dev.liquid.launcher.core.designsystem.liquidGlass
+import dev.liquid.launcher.core.settings.derive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -131,13 +132,19 @@ internal fun CalendarWidget(item: HomeItem, env: PageEnv, controller: HomeContro
     }
     val shape = RoundedCornerShape(28.dp)
     val style = env.glass.style(Surfaces.Clock, env.lightBackground)
-    val color = if (env.glass.lightGlass(Surfaces.Clock, env.lightBackground)) Color(0xFF16181C) else Color.White
+    // No box by default (P7, 0.9.10): on the wallpaper in the clock's colour; "Liquid glass" puts it back on a card.
+    val boxed by controller.data.settings.derive { get(dev.liquid.launcher.core.settings.LauncherSettings.WidgetBackground) == "glass" }
+    val color = when {
+        !boxed -> env.contentColor
+        env.glass.lightGlass(Surfaces.Clock, env.lightBackground) -> Color(0xFF16181C)
+        else -> Color.White
+    }
     val live = env.interactive && !env.editMode
     Box(
         Modifier
             .fillMaxSize()
             .padding(4.dp)
-            .liquidGlass(env.wallpaperBackdrop, shape, style)
+            .then(if (boxed) Modifier.liquidGlass(env.wallpaperBackdrop, shape, style) else Modifier)
             .clip(shape)
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
