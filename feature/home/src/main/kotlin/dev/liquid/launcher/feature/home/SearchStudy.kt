@@ -109,6 +109,7 @@ internal fun SearchPage(
                     "widgets" -> Column { SearchWidgets(controller, widgets, env, room) }
                     "timeline" -> if (loaded) DayStrip(controller, day, now)
                     "exam" -> if (loaded) ExamCountdown(controller, day.exams, day.unconfirmedExams, now)
+                    "annales" -> if (loaded) AnnalesCard(controller, day, now)
                     "absences" -> if (loaded) AbsenceCard(day)
                     "grades" -> if (loaded) GradeCard(day)
                     "flashcard" -> if (loaded) FlashcardCard(controller, day)
@@ -119,6 +120,76 @@ internal fun SearchPage(
                     "apps" -> if (suggestions.isNotEmpty()) SuggestionRow(controller, suggestions, transition, openApp)
                 }
             }
+        }
+    }
+}
+
+/**
+ * C4 (0.9.19): in the week before an exam, your past papers, one folder per module (Settings → Study companion →
+ * Annales); the module of the next exam first and open. A tap on a paper opens it in your PDF app.
+ */
+@Composable
+private fun AnnalesCard(controller: HomeController, day: StudyDay, now: Long) {
+    val folder by controller.data.settings.derive { get(LauncherSettings.StudyAnnales) }
+    if (folder.isBlank()) return
+    val next = day.exams.firstOrNull { it.end > now } ?: return
+    val left = next.begin - now
+    if (left > 7L * 24 * 3_600_000L) return
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var modules by remember(folder) { mutableStateOf<List<dev.liquid.launcher.core.data.Annales.Module>?>(null) }
+    androidx.compose.runtime.LaunchedEffect(folder) {
+        modules = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            dev.liquid.launcher.core.data.Annales.read(context, android.net.Uri.parse(folder))
+        }
+    }
+    val list = modules ?: return
+    if (list.isEmpty()) return
+    val first = dev.liquid.launcher.core.data.Annales.matching(list, next.title.subject)
+    val ordered = if (first == null) list else listOf(first) + list.filter { it != first }
+    var open by remember(folder, first) { mutableStateOf(first?.name) }
+    val days = (left / 86_400_000L).toInt()
+    SearchPane(onClick = null) {
+        Column {
+            Text(
+                "Annales · ${next.title.subject} " + when {
+                    left <= 0 -> "today"
+                    days == 0 -> "in ${left / 3_600_000L} h"
+                    days == 1 -> "tomorrow"
+                    else -> "in $days days"
+                },
+                style = searchText(12, FontWeight.Medium, alpha = 0.7f),
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                ordered.forEach { m ->
+                    GlassButton(
+                        "${m.name} ${m.docs.size}", Ink,
+                        emphasis = if (open == m.name) ControlEmphasis.Selected else ControlEmphasis.Normal,
+                    ) { open = if (open == m.name) null else m.name }
+                }
+            }
+            val shown = ordered.firstOrNull { it.name == open }
+            shown?.docs?.take(6)?.forEach { doc ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp)
+                        .squishClickable(delayMs = 40L) {
+                            val view = Intent(Intent.ACTION_VIEW).setDataAndType(doc.uri, "application/pdf")
+                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                            runCatching { context.startActivity(view) }.onFailure {
+                                controller.notice(dev.liquid.launcher.core.common.NoticeKind.Info, "No app here opens PDFs")
+                            }
+                        },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    LauncherIcon(LauncherIcons.Folder, contentDescription = null, tint = Ink.copy(alpha = 0.8f), size = 18.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(doc.name, style = searchText(14), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            val more = (shown?.docs?.size ?: 0) - 6
+            if (more > 0) Text("and $more more in the folder", style = searchText(12, alpha = 0.6f), modifier = Modifier.padding(top = 4.dp))
         }
     }
 }

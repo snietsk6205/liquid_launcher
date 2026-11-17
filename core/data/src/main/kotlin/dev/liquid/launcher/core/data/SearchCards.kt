@@ -11,6 +11,7 @@ object SearchCards {
         Card("widgets", "Your widgets", "The search page's own widgets (calendar, music, notes…), with Add and Edit"),
         Card("timeline", "Today's timeline", "Classes and study blocks of the day on one line, with the time now"),
         Card("exam", "Exam countdown", "The next exam from your calendar; grey, amber from 14 days, red from 3"),
+        Card("annales", "Annales", "In the week before an exam: your past papers, one folder per module (choose the folder in Study companion)"),
         Card("absences", "Absence meter", "One tube per module from launcher-data, against the absence limit; always UNVERIFIED until the rule is confirmed"),
         Card("grades", "Grade average", "Your weighted average, once every mark has its coefficient"),
         Card("flashcard", "Daily flashcard", "Face down; tap to turn it over, then right or wrong"),
@@ -21,7 +22,7 @@ object SearchCards {
         Card("apps", "Frequent apps", "The apps you open most, just above the field"),
     )
 
-    val defaultOrder: List<String> = listOf("widgets", "timeline", "exam", "absences", "grades", "flashcard", "review", "next", "commands", "claude", "apps")
+    val defaultOrder: List<String> = listOf("widgets", "timeline", "exam", "annales", "absences", "grades", "flashcard", "review", "next", "commands", "claude", "apps")
 
     /** Known ids of [stored], in order, without repeats. */
     fun shown(stored: List<String>): List<String> = stored.filter { id -> all.any { it.id == id } }.distinct()

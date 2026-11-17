@@ -202,7 +202,43 @@ internal fun StudyEditor(store: SettingsStore) {
     }
     LauncherDataEditor(store)
     ContextLayoutsEditor(store)
+    AnnalesFolderCard(store)
     QuietAccessCard(store)
+}
+
+/** C4 (0.9.19): the folder of past exam papers, one sub-folder per module, read through the documents provider. */
+@Composable
+private fun AnnalesFolderCard(store: SettingsStore) {
+    val context = LocalContext.current
+    val folder by store.observe(LauncherSettings.StudyAnnales)
+    var summary by remember(folder) { mutableStateOf<String?>(null) }
+    androidx.compose.runtime.LaunchedEffect(folder) {
+        summary = if (folder.isBlank()) null else withContext(Dispatchers.IO) {
+            val modules = dev.liquid.launcher.core.data.Annales.read(context, android.net.Uri.parse(folder))
+            if (modules.isEmpty()) {
+                "No PDFs found in it (or it cannot be read any more: choose it again)"
+            } else {
+                "${modules.size} module(s), ${modules.sumOf { it.docs.size }} PDF(s): " + modules.joinToString(", ") { it.name }
+            }
+        }
+    }
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        store.set(LauncherSettings.StudyAnnales, uri.toString())
+    }
+    InfoCard {
+        Text("Annales for exam week", style = MaterialTheme.typography.titleMedium)
+        BodyText(
+            "A folder with one sub-folder per module and its past papers as PDFs. In the seven days before an exam, the " +
+                "search page lists them (card \"Annales\"), the module of the next exam first; a tap opens a paper.",
+        )
+        summary?.let { BodyText(it, Modifier.padding(top = 6.dp)) }
+        Row(Modifier.padding(top = 8.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { pick.launch(null) }) { Text(if (folder.isBlank()) "Choose the folder…" else "Change…") }
+            if (folder.isNotBlank()) TextButton(onClick = { store.reset(LauncherSettings.StudyAnnales) }) { Text("Forget it") }
+        }
+    }
 }
 
 /** C5 (0.9.16): whether "Quiet during blocks" may hold notifications, and the way to the system switch. */

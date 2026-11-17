@@ -827,7 +827,7 @@ object LauncherSettings {
 
     /** Ids of the search page's cards, top to bottom (see SearchCards in core/data). Edited with its own editor. */
     val SearchCards = StringListSetting(
-        key = "search.cards", default = listOf("widgets", "timeline", "exam", "absences", "grades", "flashcard", "review", "next", "commands", "claude", "apps"),
+        key = "search.cards", default = listOf("widgets", "timeline", "exam", "annales", "absences", "grades", "flashcard", "review", "next", "commands", "claude", "apps"),
         title = "Search page cards", section = "search", hidden = true,
     )
 
@@ -2093,6 +2093,8 @@ object LauncherSettings {
         summary = "Every glass surface takes a touch of the colour of the block now or next (its colour in your calendar), easing from one block to the next",
         section = "study", keywords = "study glass tint colour module block e3",
     )
+    /** C4 (0.9.19): the folder of past exam papers (a documents-provider tree), chosen in the Study companion screen. */
+    val StudyAnnales = TextSetting(key = "study.annales", default = "", title = "Annales folder", section = "study", hidden = true)
     // C5 (0.9.16): notification triage during blocks.
     val StudyQuiet = BoolSetting(
         key = "study.quiet", default = false,
@@ -2415,7 +2417,7 @@ object LauncherSettings {
         StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyPlanLink, StudyLinkOpener,
         StudyAttendance, StudyLeaveBy, StudyCommute, StudyRest, StudyWindDown, StudySpeedBump, StudySpeedBumpTags, StudyFeedCalendar, StudyFeedLocal, StudyGlassTint,
         StudyCommuteLayout, StudyExamLayout, ContextActive, ContextApplied, ContextBase,
-        StudyQuiet, StudyQuietPeople, StudyQuietEmail, StudyQuietTags,
+        StudyQuiet, StudyQuietPeople, StudyQuietEmail, StudyQuietTags, StudyAnnales,
         StudyArrival, StudyHomeWifi, StudyArrivalCharger, StudyShiftLead, StudyLatestEnd, StudyClassCalendars, StudyHeader, StudyCheckin, StudyTemplates,
         StudyHubSize, StudyHubBounce, StudyClockAction,
         NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,
