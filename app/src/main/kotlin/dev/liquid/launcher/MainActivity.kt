@@ -50,6 +50,11 @@ class MainActivity : ComponentActivity() {
         calendarCallback?.invoke(result[android.Manifest.permission.READ_CALENDAR] == true)
         calendarCallback = null
     }
+    private var locationCallback: ((Boolean) -> Unit)? = null
+    private val askLocation = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        locationCallback?.invoke(result[android.Manifest.permission.ACCESS_FINE_LOCATION] == true)
+        locationCallback = null
+    }
     private var fontCallback: ((android.net.Uri?) -> Unit)? = null
     private val pickFontFile = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
         fontCallback?.invoke(uri)
@@ -133,6 +138,21 @@ class MainActivity : ComponentActivity() {
                         DebugLog.error("App", "calendar permission request failed: $e")
                         calendarCallback = null
                         callback(read)
+                    }
+                }
+            },
+            requestLocation = { callback ->
+                if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    callback(true)
+                } else {
+                    locationCallback = callback
+                    try {
+                        // Android 12+ wants the coarse permission asked for together with the fine one.
+                        askLocation.launch(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION))
+                    } catch (e: Exception) {
+                        DebugLog.error("App", "location permission request failed: $e")
+                        locationCallback = null
+                        callback(false)
                     }
                 }
             },

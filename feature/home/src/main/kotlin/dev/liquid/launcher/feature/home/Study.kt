@@ -9,7 +9,27 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Constraints
+import dev.liquid.launcher.core.data.StudyShift
+import kotlin.math.roundToInt
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -94,8 +114,18 @@ private fun minutes(millis: Long): String {
     return if (m >= 90) "${m / 60} h ${m % 60} min" else "$m min"
 }
 
+/** [time] and [minutes] for the study hub (StudyHub.kt). */
+internal fun studyClock(millis: Long): String = time(millis)
+
+internal fun studyDuration(millis: Long): String = minutes(millis)
+
+/** [label] for the study hub. */
+@Composable
+internal fun studyText(color: Color, size: Int, weight: FontWeight = FontWeight.Normal, alpha: Float = 1f, struck: Boolean = false) =
+    label(color, size, weight, alpha, struck)
+
 /** The block's own colour when it has one that stands out, else the accent. */
-private fun eventColor(event: StudyEvent): Color = if (event.color != 0) Color(event.color or 0xFF000000.toInt()) else HomeTheme.accent
+internal fun eventColor(event: StudyEvent): Color = if (event.color != 0) Color(event.color or 0xFF000000.toInt()) else HomeTheme.accent
 
 /** What a study widget needs from its page. */
 internal class StudySurface(val glass: GlassConfig, val lightBackground: Boolean, val backdrop: Backdrop?, val interactive: Boolean) {
@@ -145,7 +175,7 @@ private fun StudySetup(surface: StudySurface, controller: HomeController) {
 
 /** A round tick box; ticking fills it and the check pops in with a small overshoot (0.7.0). */
 @Composable
-private fun Tick(done: Boolean, color: Color, size: Dp = 18.dp) {
+internal fun Tick(done: Boolean, color: Color, size: Dp = 18.dp) {
     val fill by animateFloatAsState(if (done) 1f else 0f, spring(dampingRatio = 0.9f, stiffness = 700f), label = "tickFill")
     val pop by animateFloatAsState(if (done) 1f else 0f, spring(dampingRatio = 0.45f, stiffness = 600f), label = "tickPop")
     Box(
@@ -174,7 +204,7 @@ private fun Tick(done: Boolean, color: Color, size: Dp = 18.dp) {
 }
 
 @Composable
-private fun TaskRow(text: String, done: Boolean, color: Color, enabled: Boolean, onToggle: () -> Unit) {
+internal fun TaskRow(text: String, done: Boolean, color: Color, enabled: Boolean, onToggle: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -190,7 +220,7 @@ private fun TaskRow(text: String, done: Boolean, color: Color, enabled: Boolean,
 
 /** A study button: a [GlassButton]; [filled] makes it the main one, in [accent] (the block's colour) when given. */
 @Composable
-private fun ActionChip(text: String, color: Color, filled: Boolean = false, accent: Color? = null, icon: Int? = null, onClick: () -> Unit) {
+internal fun ActionChip(text: String, color: Color, filled: Boolean = false, accent: Color? = null, icon: Int? = null, onClick: () -> Unit) {
     GlassButton(text, color, icon = icon, emphasis = if (filled) ControlEmphasis.Main else ControlEmphasis.Normal, accent = accent, onClick = onClick)
 }
 
@@ -345,119 +375,7 @@ internal fun TodayWidget(controller: HomeController, surface: StudySurface) {
 }
 
 /** How the Today panel shows blocks and tomorrow (Settings → Study companion, 0.6.4). */
-private data class TodayPrefs(val cards: String, val buttonsEnd: Boolean, val tomorrow: String)
-
-/**
- * The Today panel: overdue tasks, today's blocks with their tasks, notes and links, today's tasks,
- * tomorrow, and the quick actions. 0.6.4 (D94): a block opens and closes with a tap on its title
- * (the notes in full), Done and Skip sit on the right by default with the main one last, tomorrow
- * opens to its blocks and tasks, and the buttons are glass on the panel's glass.
- */
-@Composable
-internal fun TodaySheet(glass: GlassConfig, lightBackground: Boolean, backdrop: Backdrop, controller: HomeController) {
-    val study = controller.data.study
-    val day by study.day.collectAsState()
-    val loaded by study.loaded.collectAsState()
-    val focus by study.focus.collectAsState()
-    val tick = rememberMinuteTick()
-    val now = remember(tick, day) { System.currentTimeMillis() }
-    val prefs by controller.data.settings.derive {
-        TodayPrefs(get(LauncherSettings.StudyBlockCards), get(LauncherSettings.StudyButtonSide) != "start", get(LauncherSettings.StudyTomorrow))
-    }
-    val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
-    val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
-    val shape = RoundedCornerShape(32.dp)
-    val layer = rememberLayerBackdrop()
-    val scroll = rememberScrollState()
-    val redraw = remember(scroll) { { scroll.value } }
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.2f))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { controller.todaySheet = false }
-    ) {
-        Column(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(12.dp)
-                .graphicsLayer {
-                    val p = appear.value
-                    alpha = p.coerceIn(0f, 1f)
-                    translationY = (1f - p) * 60.dp.toPx()
-                }
-                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground, large = true), exported = layer)
-                .clip(shape)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-        ) {
-            ProvideControls(controller, glass, layer, redraw) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Today", style = label(color, 18, FontWeight.SemiBold))
-                        Text(LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault())), style = label(color, 12, alpha = 0.7f))
-                    }
-                    ActionChip("Tell Claude", color, icon = LauncherIcons.Chat) { controller.run(LauncherAction.TellClaude) }
-                    Spacer(Modifier.width(6.dp))
-                    ActionChip("Plan", color, icon = LauncherIcons.Calendar) { controller.run(LauncherAction.StudyPlan) }
-                }
-                Spacer(Modifier.height(8.dp))
-                if (!loaded) {
-                    Text(
-                        "The study companion is off, or it may not read the calendar yet.",
-                        style = label(color, 13, alpha = 0.8f), modifier = Modifier.padding(vertical = 8.dp),
-                    )
-                    ActionChip("Switch it on", color, filled = true) { controller.setupStudy() }
-                    return@ProvideControls
-                }
-                Column(Modifier.heightIn(max = 520.dp).verticalScroll(scroll)) {
-                    if (day.isEmpty) {
-                        Text(
-                            "Nothing in your study and task calendars today. Blocks come from calendars named like \"${controller.data.settings.get(LauncherSettings.StudyBlockCalendars)}\", " +
-                                "tasks from \"${controller.data.settings.get(LauncherSettings.StudyTaskCalendars)}\" (Settings → Study companion).",
-                            style = label(color, 13, alpha = 0.8f),
-                        )
-                    }
-                    if (day.overdue.isNotEmpty()) {
-                        SectionLabel("Still open from earlier", color)
-                        day.overdue.forEach { task ->
-                            TaskRow(task.title.text, false, color, true) { controller.studyStatus(task, StudyStatus.Done) }
-                        }
-                    }
-                    if (day.blocks.isNotEmpty()) SectionLabel("Blocks", color)
-                    day.blocks.forEach { block -> BlockCard(block, now, prefs, focus, color, controller) }
-                    if (day.tasks.isNotEmpty()) SectionLabel("Tasks", color)
-                    day.tasks.forEach { task ->
-                        val done = task.status != StudyStatus.Open
-                        TaskRow(task.title.text, done, color, true) { controller.studyStatus(task, if (done) StudyStatus.Open else StudyStatus.Done) }
-                    }
-                    if (prefs.tomorrow != "off" && (day.tomorrowBlocks.isNotEmpty() || day.tomorrowTasks.isNotEmpty())) {
-                        TomorrowSection(day, prefs, color)
-                    }
-                }
-                if (day.waitingToSync > 0) {
-                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            (if (day.waitingToSync == 1) "1 change" else "${day.waitingToSync} changes") + " not sent to Google yet",
-                            style = label(color, 11, alpha = 0.75f), modifier = Modifier.weight(1f),
-                        )
-                        ActionChip("Sync now", color) {
-                            study.requestSync(force = true)
-                            controller.toast("Asked the phone to sync the calendar")
-                        }
-                    }
-                }
-                if (!study.canWrite) {
-                    Text(
-                        "Ticks are not written to the calendar yet (no permission), so your assistant cannot see them.",
-                        style = label(color, 11, alpha = 0.7f), modifier = Modifier.padding(top = 6.dp),
-                    )
-                }
-            }
-        }
-    }
-}
+internal data class TodayPrefs(val cards: String, val buttonsEnd: Boolean, val tomorrow: String)
 
 /** A thin glass rim for the panes inside the Today panel, as bright as the buttons' edge light. */
 @Composable
@@ -478,13 +396,16 @@ private fun paneRim(color: Color): Modifier {
  * the main one nearest that edge.
  */
 @Composable
-private fun BlockCard(block: StudyEvent, now: Long, prefs: TodayPrefs, focus: dev.liquid.launcher.core.data.StudyFocus?, color: Color, controller: HomeController) {
+internal fun BlockCard(
+    block: StudyEvent, now: Long, prefs: TodayPrefs, focus: dev.liquid.launcher.core.data.StudyFocus?, color: Color, controller: HomeController,
+    startOpen: Boolean = false,
+) {
     val running = now >= block.begin && now < block.end
     val done = block.status != StudyStatus.Open
     val accent = eventColor(block)
     val notes = block.notes
     val canOpen = prefs.cards != "full"
-    var open by remember(block.key, prefs.cards) { mutableStateOf(prefs.cards == "full" || (prefs.cards == "compact" && running)) }
+    var open by remember(block.key, prefs.cards, startOpen) { mutableStateOf(startOpen || prefs.cards == "full" || (prefs.cards == "compact" && running)) }
     val showBody = open || prefs.cards == "preview"
     val shape = RoundedCornerShape(20.dp)
     Column(
@@ -582,7 +503,7 @@ private fun BlockCard(block: StudyEvent, now: Long, prefs: TodayPrefs, focus: de
 
 /** Tomorrow: the first block, opening to all of tomorrow's blocks and tasks; each block opens to its steps and notes. */
 @Composable
-private fun TomorrowSection(day: StudyDay, prefs: TodayPrefs, color: Color) {
+internal fun TomorrowSection(day: StudyDay, prefs: TodayPrefs, color: Color) {
     var open by remember(prefs.tomorrow) { mutableStateOf(prefs.tomorrow == "all") }
     val blocks = day.tomorrowBlocks
     val more = blocks.size - 1 + day.tomorrowTasks.size
@@ -657,7 +578,7 @@ private fun TomorrowBlock(block: StudyEvent, color: Color) {
 }
 
 @Composable
-private fun SectionLabel(text: String, color: Color) {
+internal fun SectionLabel(text: String, color: Color) {
     Text(text, style = label(color, 12, FontWeight.SemiBold, alpha = 0.7f), modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))
 }
 
@@ -713,6 +634,17 @@ internal fun StudyNotices(controller: HomeController) {
             if (lead > 0 && current.end - now in 1..lead && study.firstToday("end:" + current.key)) {
                 Notices.post(NoticeKind.Study, "${minutes(current.end - now)} left: ${current.title.subject}", "Tap to tick off what you did", LauncherAction.Today.encode())
             }
+        }
+        // A2: home after the last class (Wi-Fi, charger). The manual chip is in the hub.
+        val sign = study.homeSign(now)
+        if (sign != null) {
+            val at = study.markHome(now, sign)
+            val delta = StudyShift.deltaFor(day.blocks, now, controller.data.settings.get(LauncherSettings.StudyShiftLead))
+            Notices.post(
+                NoticeKind.Study, "Home $at",
+                if (delta > 0) "Shift tonight +$delta min? Tap to decide" else "Noted on tonight's first block",
+                LauncherAction.Today.encode(),
+            )
         }
         if (day.openTasks > 0 && study.firstToday("tasks")) {
             val overdue = day.overdue.size
@@ -800,7 +732,7 @@ internal fun rememberStudyGlance(controller: HomeController): StudyGlance? {
  * next block; a full ring for a block that ended unmarked; a faint dot for tomorrow; a ring for tasks.
  */
 @Composable
-private fun StudyRing(glance: StudyGlance, color: Color, size: Dp) {
+internal fun StudyRing(glance: StudyGlance, color: Color, size: Dp) {
     val accent = when (glance) {
         is StudyGlance.Running -> eventColor(glance.block)
         is StudyGlance.Next -> eventColor(glance.block)
@@ -885,15 +817,18 @@ private fun StudyLineRow(
     interactive: Boolean,
     focusing: Boolean,
 ) {
+    val bounds = remember { arrayOfNulls<androidx.compose.ui.geometry.Rect>(1) }
     Row(
         Modifier
             .height(30.dp)
+            .onGloballyPositioned { bounds[0] = it.boundsInRoot() }
             .clip(RoundedCornerShape(50))
             .then(
                 if (interactive) Modifier.clickable(
                     interactionSource = null,
                     indication = null,
-                    onClick = { controller.run(LauncherAction.Today) },
+                    // The hub grows out of the line itself (0.9.1).
+                    onClick = { controller.openToday(bounds[0]) },
                 ) else Modifier
             )
             .padding(horizontal = 6.dp),
@@ -905,7 +840,37 @@ private fun StudyLineRow(
             glanceText(glance) + if (focusing) " · focus" else "",
             style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp, fontWeight = FontWeight.Medium, shadow = shadow),
             maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
         )
+        // One action on the line itself (0.9.1): no need to open anything for the most likely next tap.
+        val wanted by controller.data.settings.derive { get(LauncherSettings.StudyClockAction) }
+        val block = when (glance) {
+            is StudyGlance.Running -> glance.block
+            is StudyGlance.Unmarked -> glance.block
+            is StudyGlance.Next -> glance.block
+            else -> null
+        }
+        val action: Triple<Int, String, () -> Unit>? = when {
+            !interactive || block == null || wanted == "none" -> null
+            wanted == "claude" -> Triple(LauncherIcons.Sparkle, "Ask Claude about this block") { controller.askClaudeAbout(block) }
+            glance is StudyGlance.Unmarked && wanted != "focus" -> Triple(LauncherIcons.Check, "Mark the block done") { controller.studyStatus(block, StudyStatus.Done) }
+            glance is StudyGlance.Running && wanted == "done" -> Triple(LauncherIcons.Check, "Mark the block done") { controller.studyStatus(block, StudyStatus.Done) }
+            glance is StudyGlance.Running -> Triple(LauncherIcons.Schedule, if (focusing) "Stop the focus timer" else "Start the focus timer") { controller.studyFocus(block) }
+            else -> null
+        }
+        if (action != null) {
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier
+                    .size(26.dp)
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = if (focusing) 0.34f else 0.18f))
+                    .squishClickable(onClick = action.third),
+                contentAlignment = Alignment.Center,
+            ) {
+                LauncherIcon(action.first, contentDescription = action.second, tint = color, size = 16.dp)
+            }
+        }
     }
 }
 

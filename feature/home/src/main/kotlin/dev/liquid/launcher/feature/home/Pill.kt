@@ -27,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.text.TextStyle
@@ -103,6 +105,7 @@ fun Pill(
         modifier = modifier
             .fillMaxWidth(config.widthFraction)
             .height(config.heightDp.dp)
+            .then(if (interactive) Modifier.onGloballyPositioned { controller.pillBounds = it.boundsInRoot() } else Modifier)
             .liquidGlass(backdrop, shape, glass.style(Surfaces.Pill, lightBackground))
             .clip(shape)
             .then(if (interactive) gestures else Modifier)

@@ -351,6 +351,16 @@ private fun widgetHandler(item: HomeItem, holder: CoordinatesHolder, controller:
             }
 
             override fun onLongPress() = controller.editItem(item.id)
+
+            // Quick capture (D5, 0.9.1): a double tap on a clock opens the study hub with the note field ready.
+            override fun hasDoubleTap(): Boolean = item.widget == "clock" && !controller.editMode && controller.data.study.enabled
+
+            override fun onDoubleTap() {
+                if (!hasDoubleTap()) return
+                controller.hubNoteFocus = true
+                controller.openToday(holder.value?.takeIf { it.isAttached }?.boundsInRoot())
+            }
+
             override fun onDragStart(grab: Offset, finger: Offset) = startHomeDrag(item, null, grab, finger, holder, controller)
             override fun onDrag(finger: Offset) = controller.moveDrag(finger)
             override fun onDragEnd() = controller.endDrag()

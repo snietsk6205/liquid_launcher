@@ -315,3 +315,47 @@ check that the release `v0.9.0` exists, and if run 62 failed, read its log first
 
 **Exact next step:** push any commit without `[skip ci]` to compile the `StudyFormat.kt` change, add its tests, then build the
 hub as described above (P2), then P3 (search page transition and calendar clipping), then the motion pass.
+
+---
+
+## Entry 7: 0.9.1, P2 study hub, arrival and shift tonight (2026-11-17, written by Opus 5.5)
+
+The user switched this session to Opus 5.5 after Fable's usage ran out and asked to continue Fable's work here. I kept
+logging in this file (not `OPUS_LOG.md`) because it is the same session and the same plan. Fable's design notes above
+were followed; where I changed them it says so.
+
+State found: 0.9.0 (run 62) passed every unit test and every emulator check and was released as `v0.9.0`. Fable had left
+uncommitted, uncompiled P2 code (`StudyShift.kt` and its test, arrival / shift / note functions in `StudyCalendar.kt`,
+new settings, an arrival notice and a one-button clock line in `Study.kt`). I reviewed it, fixed two risks (the
+`isPrimary` column, read through `OWNER_ACCOUNT` instead; `WifiManager.UNKNOWN_SSID`, not public API) and built the rest.
+
+| File | Change | Spec |
+|---|---|---|
+| `feature/home/StudyHub.kt` (new) | The hub: `HubGeometry` (origin = the pill or what was tapped; target = above nav bar and keyboard, `Study hub height` of the screen), `hubBounds` / `hubContent` layout modifiers (only this surface re-measures per frame), corner from capsule to 30 dp, scrim with the hub's own progress, `draggable` + `NestedScrollConnection` so the finger can shrink it back into the pill from anywhere; content: header with day ring (C2), "Now / Next" block opened with its steps, timeline (B4: classes grey, blocks on a rail, a now line), arrival and shift callout (A2, A3), tasks, notes, tomorrow, sync state; bottom bar: Evening check-in and template chips (D2), note-or-question field (D5, D1), Ask Claude, and a main action under the thumb (I'm home / Focus / Mark done / Start / Evening check-in) | P2, A2, A3, B4, C2, D1, D2, D5 |
+| `HomeController.kt` | `hub` Animatable, `openHub` / `closeHub` (spring keeps the current velocity, so an interrupted open or close never jumps), `dragHubBy` / `settleHub`, `openToday(from)`, `studyHeader` / `withStudyHeader`, `blockContext`, `askTemplate`, `eveningCheckin`, `addStudyNote`, `markHomeNow`, `applyShift`, `keepEvening`, `rememberHomeWifi`; leaving for another app through `start()` tidies like a launch (P1b) | |
+| `HomeScreen.kt` | Hub composed while open or shrinking; the pill fades as the hub covers it (no slide away); the home screen sinks with the hub's own progress; Settings preview replays the opening when size or bounce change | D121 |
+| `Study.kt` | Old `TodaySheet` removed (the hub replaces it); shared parts made internal; the clock line opens the hub from its own bounds and has one button (Settings: "Button on the line under the clock") | |
+| `HomeGrid.kt` | Double tap on a clock widget opens the hub with the note field focused | D5 |
+| `SearchOverlay.kt` | "Ask Claude" from search is sent with the study header | D1 |
+| `core/data/StudyCalendar.kt` | Classes from the main calendar (or the named ones), notes kept out of tasks, `homeSign` / `markHome` / `applyShift` / `addNote` / `latestEnd` / `shiftAnswered` | A2, A3, D5 |
+| `core/data/StudyFormat.kt`, `StudyShift.kt`, `StudyShiftTest.kt` | `withMark` / `mark` / `shiftedBy` (home and shifted lines after `P2-BLOCK`, status line still last); the shift planner | Part 0 contract |
+| `LauncherSettings.kt` | Study: Notice when I get home, Home Wi-Fi name, The charger also means home, shift offer threshold, An evening ends by, Calendars with classes, Header of what is sent to Claude, Evening check-in message, Prompt templates, Study hub height, Study hub bounce, Button on the line under the clock | |
+| `MainActivity.kt`, manifest | Location permission request (only from "This Wi-Fi is home"), `ACCESS_WIFI_STATE`, `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION` | A2 |
+
+Calendar contract: unchanged for everything the check-in already reads (title marks, `[x]`, the status line). The two
+new lines are exactly the spec's `— launcher: home HH:MM` and `— launcher: shifted +N min` (with " · shortened N min"
+appended when a block was cut). A shift needs write access; without it nothing moves and a message says why.
+
+Not verified on a device (CI has no calendar with classes, no Wi-Fi name, no GPU glass): the morph's feel, the hub's
+glass on the phone, Wi-Fi arrival on MagicOS (needs location on), the charger rule, shifting a synced Google event.
+
+### Questions for Med (added)
+4. The Claude app package is assumed to be `com.anthropic.claude`, and shared text is assumed to pre-fill a new chat.
+   If it does not, tell me: the fallback (copy to the clipboard, then open the app) is one line away.
+5. "End of the last class" uses every timed event of your main Google calendar today. If exams or personal events
+   sit there in the evening, name your timetable calendar in Settings → Study companion → Calendars with classes.
+
+### Next step
+Wait for this push's CI (0.9.1). Then, in the spec's order of what is left in P2: the pill's full customization (icon:
+own picture / icon-pack glyph / vector / liquid circle / any shape; frame, size, tint, day-ring style; tap / long press /
+swipe per slot), then P3 (search page: finger-tracking transition, the clipped calendar, study-first cards, card order).

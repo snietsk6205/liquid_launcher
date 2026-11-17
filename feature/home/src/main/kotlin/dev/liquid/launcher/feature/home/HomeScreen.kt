@@ -319,7 +319,7 @@ private fun HomeScreenBody(
     // The home screen sinks back a little behind the home menu and behind sheets that cover it
     // (Today, layouts, the widget list), so they read as layers of one space (0.7.0).
     val menuSink by androidx.compose.animation.core.animateFloatAsState(
-        if ((controller.homeMenu || controller.todaySheet || controller.layoutsSheet || controller.widgetPicker) && homeMenuConfig.sink) 1f else 0f,
+        if ((controller.homeMenu || controller.layoutsSheet || controller.widgetPicker) && homeMenuConfig.sink) 1f else 0f,
         label = "menuSink",
     )
 
@@ -599,7 +599,8 @@ private fun HomeScreenBody(
                         var scale = scaleX
                         if (settle == "scale") scale *= 0.94f + 0.06f * back
                         if (controller.editMode) scale *= 0.9f
-                        scale *= 1f - 0.06f * menuSink
+                        // The study hub moves the home screen back with its own spring, frame for frame (0.9.1).
+                        scale *= 1f - 0.06f * maxOf(menuSink, if (homeMenuConfig.sink) controller.hubAmount else 0f)
                         // Search: the home screen glides down under the finger ("space", D99) or sinks back ("depth").
                         val s = controller.searchAmount
                         if (s > 0f) when (motionConfig.searchTransition) {
@@ -681,7 +682,8 @@ private fun HomeScreenBody(
         // ---- Pill, or the edit toolbar in its place ----
         // A sheet rising from the bottom (Today, layouts, clock gallery) puts the pill away instead of
         // showing it through its glass (0.6.4).
-        val sheetUp = !pill.top && (controller.todaySheet || controller.layoutsSheet || controller.widgetPicker || controller.clockStudio != null)
+        // The study hub is not one of them: it grows out of the pill itself, which fades under it (0.9.1).
+        val sheetUp = !pill.top && (controller.layoutsSheet || controller.widgetPicker || controller.clockStudio != null)
         val pillAway by androidx.compose.animation.core.animateFloatAsState(if (sheetUp) 1f else 0f, label = "pillAway")
         val barModifier = Modifier
             .align(if (pill.top) Alignment.TopCenter else Alignment.BottomCenter)
@@ -690,7 +692,8 @@ private fun HomeScreenBody(
             .graphicsLayer {
                 val p = controller.drawer.value
                 val s = controller.searchAmount
-                alpha = (1f - p * 2f).coerceIn(0f, 1f) * (1f - s * 2f).coerceIn(0f, 1f) * returnState.progress.floatValue * (1f - pillAway)
+                alpha = (1f - p * 2f).coerceIn(0f, 1f) * (1f - s * 2f).coerceIn(0f, 1f) * returnState.progress.floatValue * (1f - pillAway) *
+                    (1f - controller.hubAmount * 3f).coerceIn(0f, 1f)
                 translationY = (p * 40.dp.toPx() + pillAway * 24.dp.toPx() + s * 40.dp.toPx()) * (if (pill.top) -1 else 1)
             }
         if (controller.editMode && live) {
@@ -790,7 +793,8 @@ private fun HomeScreenBody(
                         val away = pillAway * (1f - controller.morph()).coerceIn(0f, 1f)
                         // With search's field at the top, the pill steps away as search opens.
                         val s = if (controller.searchInPill) 0f else controller.searchAmount
-                        alpha = returnState.progress.floatValue * (1f - away) * (1f - s * 2f).coerceIn(0f, 1f)
+                        alpha = returnState.progress.floatValue * (1f - away) * (1f - s * 2f).coerceIn(0f, 1f) *
+                            (1f - controller.hubAmount * 3f).coerceIn(0f, 1f)
                         translationY = away * 24.dp.toPx() + s * 40.dp.toPx()
                     },
             )
@@ -821,12 +825,20 @@ private fun HomeScreenBody(
             WallpaperStudio(studio, glass, lightBackground, overlayBackdrop, controller)
         }
         if (mode == HomeMode.PreviewToday) {
-            // Settings → Buttons and Study companion: the Today panel, open, with the real day.
-            SideEffect { controller.todaySheet = true }
-            LaunchedEffect(Unit) { data.study.refresh() }
+            // Settings → Buttons and Study companion: the study hub, open, with the real day.
+            // Replayed when the hub's size or bounce changes, so the setting is seen doing what it says.
+            val replay by store.derive { get(LauncherSettings.StudyHubBounce) to get(LauncherSettings.StudyHubSize) }
+            LaunchedEffect(replay) {
+                data.study.refresh()
+                controller.closeHub(immediately = true)
+                kotlinx.coroutines.delay(160)
+                controller.openHub()
+            }
         }
-        Presence(if ((live || mode == HomeMode.PreviewToday) && controller.todaySheet) Unit else null) {
-            TodaySheet(glass, lightBackground, overlayBackdrop, controller)
+        // The study hub (0.9.1): composed while open and while it shrinks back into the pill.
+        val hubShown by remember { derivedStateOf { controller.todaySheet || controller.hub.value > 0.001f } }
+        if ((live || mode == HomeMode.PreviewToday) && hubShown) {
+            StudyHub(glass, lightBackground, overlayBackdrop, controller)
         }
         Presence(if (live && controller.widgetPicker) Unit else null) {
             WidgetPicker(glass, lightBackground, overlayBackdrop, controller)

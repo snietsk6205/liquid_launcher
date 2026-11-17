@@ -146,7 +146,8 @@ fun SearchOverlay(
             }
             is SearchResult.Bang -> controller.openUrl(result.url)
             is SearchResult.Web -> controller.openUrl(result.url)
-            is SearchResult.Claude -> controller.askClaude(result.prompt)
+            // D1: sent with "[1A ESSAI · P2 · now: <block or free>]" in front while the study companion is on.
+            is SearchResult.Claude -> controller.askClaude(controller.withStudyHeader(result.prompt))
         }
         controller.closeSearch()
     }

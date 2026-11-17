@@ -31,7 +31,7 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 /** A calendar on the phone, for choosing which ones hold study blocks and tasks. */
-data class StudyCalendarInfo(val id: Long, val name: String, val account: String, val color: Int, val writable: Boolean)
+data class StudyCalendarInfo(val id: Long, val name: String, val account: String, val color: Int, val writable: Boolean, val primary: Boolean = false)
 
 /** A focus timer running on a block. */
 data class StudyFocus(val eventKey: String, val eventId: Long, val startedAt: Long)
@@ -99,6 +99,7 @@ class StudyCalendar(
             if (delayMs > 0) delay(delayMs)
             _day.value = if (enabled && canRead) load() else StudyDay()
             _loaded.value = enabled && canRead
+            _homeAt.value = storedHome()
             // Not part of this job: a newer refresh must not cancel the write of the minutes.
             if (_focus.value != null) scope.launch(Dispatchers.IO) { finishFocusIfOver() }
         }
@@ -126,6 +127,7 @@ class StudyCalendar(
                 arrayOf(
                     CalendarContract.Calendars._ID, CalendarContract.Calendars.CALENDAR_DISPLAY_NAME, CalendarContract.Calendars.ACCOUNT_NAME,
                     CalendarContract.Calendars.CALENDAR_COLOR, CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL,
+                    CalendarContract.Calendars.OWNER_ACCOUNT,
                 ),
                 null, null, null,
             )?.use { c ->
@@ -133,6 +135,9 @@ class StudyCalendar(
                     out += StudyCalendarInfo(
                         c.getLong(0), c.getString(1).orEmpty(), c.getString(2).orEmpty(), c.getInt(3),
                         c.getInt(4) >= CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR,
+                        // An account's main calendar belongs to the account itself (what the provider's isPrimary is computed from).
+                        primary = c.getString(5).orEmpty().equals(c.getString(2).orEmpty(), ignoreCase = true) ||
+                            c.getString(1).orEmpty().equals(c.getString(2).orEmpty(), ignoreCase = true),
                     )
                 }
             }
@@ -152,6 +157,12 @@ class StudyCalendar(
         val blockCalendars = all.filter { cal -> blockWords.any { it in cal.name.lowercase() } }.map { it.id }.toSet()
         val taskCalendars = all.filter { cal -> taskWords.any { it in cal.name.lowercase() } }.map { it.id }.toSet() - blockCalendars
         if (blockCalendars.isEmpty() && taskCalendars.isEmpty()) return StudyDay()
+        // Classes (0.9.1): the calendars named in the setting, else the account's main calendar.
+        val classWords = words(LauncherSettings.StudyClassCalendars)
+        val classCalendars = all.filter { cal -> if (classWords.isEmpty()) cal.primary else classWords.any { it in cal.name.lowercase() } }
+            .map { it.id }.toSet() - blockCalendars - taskCalendars
+        val classes = ArrayList<StudyEvent>()
+        val notes = ArrayList<StudyEvent>()
 
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
@@ -183,9 +194,18 @@ class StudyCalendar(
                 while (c.moveToNext()) {
                     val calendarId = c.getLong(7)
                     val isBlockCalendar = calendarId in blockCalendars
-                    if (!isBlockCalendar && calendarId !in taskCalendars) continue
+                    val isClassCalendar = calendarId in classCalendars
+                    if (!isBlockCalendar && !isClassCalendar && calendarId !in taskCalendars) continue
                     if (c.getInt(10) == CalendarContract.Events.STATUS_CANCELED) continue
                     val allDay = c.getInt(3) != 0
+                    if (isClassCalendar) {
+                        // Only today's timed events matter: when the last class ends.
+                        val begin = c.getLong(1)
+                        if (!allDay && Instant.ofEpochMilli(begin).atZone(zone).toLocalDate() == today) {
+                            classes += StudyEvent(c.getLong(0), calendarId, begin, c.getLong(2), false, c.getString(4).orEmpty(), location = c.getString(6).orEmpty(), color = c.getInt(8))
+                        }
+                        continue
+                    }
                     val fromCalendar = StudyEvent(
                         eventId = c.getLong(0), calendarId = calendarId, begin = c.getLong(1), end = c.getLong(2), allDay = allDay,
                         rawTitle = c.getString(4).orEmpty(), description = c.getString(5).orEmpty(), location = c.getString(6).orEmpty(),
@@ -200,6 +220,11 @@ class StudyCalendar(
                     val firstDay = if (allDay) Instant.ofEpochMilli(event.begin).atZone(ZoneOffset.UTC).toLocalDate() else Instant.ofEpochMilli(event.begin).atZone(zone).toLocalDate()
                     val dayAfter = if (allDay) Instant.ofEpochMilli(event.end).atZone(ZoneOffset.UTC).toLocalDate() else Instant.ofEpochMilli(event.end - 1).atZone(zone).toLocalDate().plusDays(1)
                     val isToday = !today.isBefore(firstDay) && today.isBefore(dayAfter)
+                    // A quick note ("Note: …") is for the assistant, not a task to tick.
+                    if (event.rawTitle.trimStart().startsWith(StudyFormat.NOTE_PREFIX, ignoreCase = true)) {
+                        if (isToday) notes += event
+                        continue
+                    }
                     when {
                         isBlockCalendar && !allDay -> when {
                             isToday -> blocks += event
@@ -225,6 +250,8 @@ class StudyCalendar(
             tomorrowBlocks = tomorrowBlocks.sortedBy { it.begin },
             tomorrowTasks = tomorrowTasks.sortedBy { it.rawTitle },
             waitingToSync = waitingToSync(blockCalendars + taskCalendars),
+            classes = classes.sortedBy { it.begin },
+            notes = notes,
         )
     }
 
@@ -413,6 +440,164 @@ class StudyCalendar(
             ok
         } catch (e: Exception) {
             DebugLog.error("Study", "writing to the calendar failed: $e")
+            false
+        }
+    }
+
+    // ---- arrival, shift tonight, quick notes (0.9.1) ----
+
+    private val _homeAt = MutableStateFlow(storedHome())
+
+    /** When Med got home today (milliseconds), or null while that is not known. */
+    val homeAt: StateFlow<Long?> = _homeAt
+
+    private fun storedHome(): Long? =
+        prefs.getLong("home:" + LocalDate.now(), 0L).takeIf { it > 0 }
+
+    /** The name of the Wi-Fi network the phone is on, or null when it cannot be read (no location permission, location off, no Wi-Fi). */
+    fun currentWifi(): String? = try {
+        val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+        @Suppress("DEPRECATION")
+        val ssid = wifi.connectionInfo?.ssid?.trim('"')
+        ssid?.takeIf { it.isNotBlank() && it != "<unknown ssid>" }
+    } catch (e: Exception) {
+        null
+    }
+
+    val canSeeWifi: Boolean get() = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    private fun charging(): Boolean = try {
+        val battery = context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+        (battery?.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
+    } catch (e: Exception) {
+        false
+    }
+
+    /**
+     * A sign that Med is home (A2), looked for only after today's last class: the home Wi-Fi ("wifi"),
+     * or the charger plugged in at least 45 minutes after the last class ("charger"). Null when there is
+     * none, on a day without classes, or once the arrival is known.
+     */
+    fun homeSign(now: Long = System.currentTimeMillis()): String? {
+        if (!enabled || !settings.get(LauncherSettings.StudyArrival)) return null
+        if (storedHome() != null) return null
+        val lastClass = _day.value.lastClassEnd ?: return null
+        if (now < lastClass) return null
+        val home = settings.get(LauncherSettings.StudyHomeWifi).trim()
+        if (home.isNotEmpty() && canSeeWifi && currentWifi().equals(home, ignoreCase = true)) return "wifi"
+        if (settings.get(LauncherSettings.StudyArrivalCharger) && now >= lastClass + 45 * 60_000L && charging()) return "charger"
+        return null
+    }
+
+    /**
+     * Records the arrival ([how]: "wifi", "charger" or "manual") and writes `— launcher: home HH:MM` after the
+     * `P2-BLOCK` line of tonight's first block (the first one not over yet). Returns the time written.
+     */
+    suspend fun markHome(at: Long = System.currentTimeMillis(), how: String): String {
+        val text = Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm"))
+        prefs.edit().putLong("home:" + LocalDate.now(), at).apply()
+        _homeAt.value = at
+        DebugLog.event("Study", "home at $text ($how)")
+        val first = _day.value.blocks.firstOrNull { it.end > at }
+        if (first != null) edit(first) { title, description -> title to StudyFormat.withMark(description, StudyFormat.MARK_HOME, text) }
+        return text
+    }
+
+    /** True once "shift tonight" was answered today (shifted, or kept as planned): it is not offered again. */
+    fun shiftAnswered(): Boolean = prefs.getBoolean("shift:" + LocalDate.now(), false)
+
+    fun answerShift() {
+        prefs.edit().putBoolean("shift:" + LocalDate.now(), true).apply()
+        _shiftTick.value++
+    }
+
+    private val _shiftTick = MutableStateFlow(0)
+
+    /** Changes when "shift tonight" is answered, so the hub can hide its chip. */
+    val shiftTick: StateFlow<Int> = _shiftTick
+
+    /** Forgets today's arrival (the manual chip was a mistake). The mark already written stays. */
+    fun forgetHome() {
+        prefs.edit().remove("home:" + LocalDate.now()).apply()
+        _homeAt.value = null
+    }
+
+    /** The latest time an evening may end today (Settings → Study companion), in milliseconds. */
+    fun latestEnd(): Long = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() +
+        (settings.get(LauncherSettings.StudyLatestEnd).toIntOrNull() ?: 1380) * 60_000L
+
+    /**
+     * Moves the blocks of [plan] (A3): new start and end, lengths kept (or cut for the shortened one), and
+     * `— launcher: shifted +N min` after each block's `P2-BLOCK` line. Title marks and task lines are not
+     * touched. Needs write access: a shift cannot be kept on the phone alone. Returns how many blocks moved.
+     */
+    suspend fun applyShift(plan: ShiftPlan): Int = withContext(Dispatchers.IO) {
+        if (!(settings.get(LauncherSettings.StudyWriteBack) && canWrite)) return@withContext 0
+        val resolver = context.contentResolver
+        var moved = 0
+        for (move in plan.moves) {
+            try {
+                val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, move.event.eventId)
+                var description = move.event.description
+                resolver.query(uri, arrayOf(CalendarContract.Events.DESCRIPTION), null, null, null)?.use { c ->
+                    if (c.moveToFirst()) description = c.getString(0).orEmpty()
+                }
+                val total = StudyFormat.shiftedBy(description) + plan.deltaMinutes
+                val text = (if (total >= 0) "+$total" else "$total") + " min" +
+                    if (move.shortenedMinutes > 0) " · shortened ${move.shortenedMinutes} min" else ""
+                val values = ContentValues().apply {
+                    put(CalendarContract.Events.DTSTART, move.begin)
+                    put(CalendarContract.Events.DESCRIPTION, StudyFormat.withMark(description, StudyFormat.MARK_SHIFTED, text))
+                }
+                val ok = if (move.event.recurring) {
+                    // One evening of a repeating block: an exception of the series, which keeps the series' length.
+                    values.put(CalendarContract.Events.ORIGINAL_INSTANCE_TIME, move.event.begin)
+                    resolver.insert(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_EXCEPTION_URI, move.event.eventId), values) != null
+                } else {
+                    values.put(CalendarContract.Events.DTEND, move.end)
+                    resolver.update(uri, values, null, null) > 0
+                }
+                if (ok) moved++
+                DebugLog.event("Study", "block ${move.event.eventId} " + if (ok) "shifted $text" else "could not be shifted")
+            } catch (e: Exception) {
+                DebugLog.error("Study", "shifting block ${move.event.eventId} failed: $e")
+            }
+        }
+        if (moved > 0) {
+            _day.value = load()
+            scheduleUpload()
+        }
+        moved
+    }
+
+    /**
+     * Quick capture (D5): an all-day event "Note: [text]" today in the first writable task calendar,
+     * where the evening check-in reads it. Returns false when there is no such calendar or no write access.
+     */
+    suspend fun addNote(text: String): Boolean = withContext(Dispatchers.IO) {
+        val note = text.trim()
+        if (note.isEmpty() || !canWrite) return@withContext false
+        try {
+            val taskWords = words(LauncherSettings.StudyTaskCalendars)
+            val calendar = calendars().firstOrNull { cal -> cal.writable && taskWords.any { it in cal.name.lowercase() } } ?: return@withContext false
+            val start = LocalDate.now().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+            val values = ContentValues().apply {
+                put(CalendarContract.Events.CALENDAR_ID, calendar.id)
+                put(CalendarContract.Events.TITLE, StudyFormat.NOTE_PREFIX + " " + note)
+                put(CalendarContract.Events.DTSTART, start)
+                put(CalendarContract.Events.DTEND, start + 24 * 60 * 60_000L)
+                put(CalendarContract.Events.ALL_DAY, 1)
+                put(CalendarContract.Events.EVENT_TIMEZONE, "UTC")
+            }
+            val ok = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values) != null
+            DebugLog.event("Study", if (ok) "note added to ${calendar.name}" else "note could not be added")
+            if (ok) {
+                _day.value = load()
+                scheduleUpload()
+            }
+            ok
+        } catch (e: Exception) {
+            DebugLog.error("Study", "adding a note failed: $e")
             false
         }
     }

@@ -26,7 +26,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -96,6 +98,8 @@ fun MorphingPill(
     Box(
         modifier
             .morphLayout(controller, config, if (searchMode) 0.dp else extra, insets)
+            // The closed pill's place, which the study hub grows out of (0.9.1).
+            .onGloballyPositioned { if (interactive && controller.morph() < 0.01f) controller.pillBounds = it.boundsInRoot() }
             .graphicsLayer {
                 // Search only (the drawer's morph stays as Fable made it): a drop stretching the way it travels.
                 if (!(controller.searchInPill && controller.search.value > controller.drawer.value)) return@graphicsLayer

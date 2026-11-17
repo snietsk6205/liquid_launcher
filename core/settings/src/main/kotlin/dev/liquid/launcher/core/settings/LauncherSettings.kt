@@ -1829,6 +1829,103 @@ object LauncherSettings {
         section = "study", keywords = "study plan link url open",
     )
 
+    // ---- Study companion: the hub, arrival and the evening (0.9.1) ----
+
+    val StudyArrival = BoolSetting(
+        key = "study.arrival", default = true,
+        title = "Notice when I get home",
+        summary = "After the last class of the day: by your home Wi-Fi, by the charger, or by the \"I'm home\" chip in the study hub. " +
+            "The time is written into tonight's first block as \"— launcher: home HH:MM\"",
+        section = "study", keywords = "study arrival home commute wifi charger trajet",
+    )
+    val StudyHomeWifi = TextSetting(
+        key = "study.homeWifi", default = "",
+        placeholder = "Not set",
+        title = "Home Wi-Fi name",
+        summary = "Being on this network after the last class means you are home. Reading the network's name needs the location permission " +
+            "(Android's rule); the study hub asks for it when you tap \"Use this Wi-Fi as home\"",
+        section = "study", keywords = "study home wifi ssid network arrival location",
+    )
+    val StudyArrivalCharger = BoolSetting(
+        key = "study.arrivalCharger", default = true,
+        title = "The charger also means home",
+        summary = "Plugged in at least 45 minutes after the last class",
+        section = "study", keywords = "study arrival charger plugged home",
+    )
+    val StudyShiftLead = IntSetting(
+        key = "study.shiftLead", default = 20, min = 0, max = 60, step = 5, unit = "min",
+        title = "Offer to shift the evening when home later than this before the first block",
+        summary = "The shift moves every block you have not started so the first one begins this long after you got home",
+        section = "study", keywords = "study shift tonight late home delay move blocks",
+    )
+    val StudyLatestEnd = ChoiceSetting(
+        key = "study.latestEnd", default = "1380",
+        options = listOf("1290" to "21:30", "1320" to "22:00", "1350" to "22:30", "1380" to "23:00", "1410" to "23:30", "1440" to "Midnight"),
+        title = "An evening ends by",
+        summary = "A shift that would run past it offers to shorten the lowest-priority block instead",
+        section = "study", keywords = "study shift latest end 23:00 shorten",
+    )
+    val StudyClassCalendars = TextSetting(
+        key = "study.classCalendars", default = "",
+        placeholder = "Your main calendar",
+        title = "Calendars with classes",
+        summary = "Part of the calendar's name; several separated by commas. Empty: the account's main calendar. " +
+            "Timed events in them are classes; the end of the last one starts the trip home",
+        section = "study", keywords = "study class timetable calendar school last class",
+    )
+    val StudyHeader = TextSetting(
+        key = "study.header", default = "1A ESSAI · P2",
+        placeholder = "No header",
+        title = "Header of what is sent to Claude",
+        summary = "Sent as \"[header · now: block or free]\" in front of questions and templates",
+        section = "study", keywords = "study claude header prompt context",
+    )
+    val StudyCheckin = TextSetting(
+        key = "study.checkin", default = "Evening check-in. Here is my day; ask me what you need, then plan tomorrow.",
+        placeholder = "Evening check-in",
+        title = "Evening check-in message",
+        summary = "The study hub's Evening check-in button sends this with today's log to Claude",
+        section = "study", keywords = "study evening check-in claude prompt",
+    )
+
+    /** "Label|prompt" lines; the hub shows the labels as chips. */
+    val StudyTemplates = StringListSetting(
+        key = "study.templates",
+        default = listOf(
+            "Explain|Explain this to me step by step, with one worked example:",
+            "Quiz me|Quiz me on the block I am working on: five short questions, one at a time.",
+            "Stuck|I am stuck on this step. Give me a hint, not the answer:",
+            "Reschedule|I missed a block today. Suggest how to reschedule it this week without touching fixed dates.",
+            "Résumé|Fais-moi un résumé en 5 points de ce que je viens d'étudier :",
+        ),
+        title = "Prompt templates",
+        summary = "One per line as \"Label|prompt\". Shown as chips in the study hub; a tap sends the prompt to Claude with the header",
+        section = "study", keywords = "study claude prompt templates chips",
+    )
+    val StudyHubSize = IntSetting(
+        key = "study.hubSize", default = 76, min = 50, max = 92, step = 2, unit = "% of the screen",
+        title = "Study hub height",
+        section = "study", keywords = "study hub size height pill",
+    )
+    val StudyHubBounce = IntSetting(
+        key = "study.hubBounce", default = 35, min = 0, max = 100, step = 5, unit = "%",
+        title = "Study hub bounce",
+        summary = "How much the hub overshoots as it grows out of the pill. 0: none",
+        section = "study", keywords = "study hub spring bounce animation motion",
+    )
+    val StudyClockAction = ChoiceSetting(
+        key = "study.clockAction", default = "auto",
+        options = listOf(
+            "auto" to "What fits: Focus while a block runs, ✓ for one that ended",
+            "focus" to "Focus timer",
+            "done" to "Mark the block done",
+            "claude" to "Ask Claude about the block",
+            "none" to "No button",
+        ),
+        title = "Button on the line under the clock",
+        section = "study", keywords = "study clock line action button focus done",
+    )
+
     // ---- Glass notices ----
 
     val NoticesEnabled = BoolSetting(
@@ -2026,6 +2123,8 @@ object LauncherSettings {
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
         StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyPlanLink, StudyLinkOpener,
+        StudyArrival, StudyHomeWifi, StudyArrivalCharger, StudyShiftLead, StudyLatestEnd, StudyClassCalendars, StudyHeader, StudyCheckin, StudyTemplates,
+        StudyHubSize, StudyHubBounce, StudyClockAction,
         NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,
         NoticeLayout, NoticeWallpaper, NoticeTags, NoticeRedirect, NoticeUpdate, NoticeStudy, NoticeTask, NoticeInfo,
         GlassQuality, GlassAuto, GlassCap, GlassFullPercent, GlassTintMode, GlassRim,

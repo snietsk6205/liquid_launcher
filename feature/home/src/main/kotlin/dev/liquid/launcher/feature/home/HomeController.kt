@@ -219,6 +219,199 @@ class HomeController(
     /** The Today panel (study blocks and tasks). */
     var todaySheet by mutableStateOf(false)
 
+    // ---- the study hub (0.9.1): Today grows out of the pill and shrinks back into it ----
+
+    /** 0 = closed (the pill), 1 = open; a little over 1 while the spring overshoots. Follows the finger while dragged. */
+    val hub = Animatable(0f)
+    val hubAmount: Float get() = hub.value.coerceIn(0f, 1f)
+
+    /** What the hub grows from and shrinks back into (root px): the pill, or what was tapped. Null: the pill's usual place. */
+    var hubOrigin: androidx.compose.ui.geometry.Rect? = null
+
+    /** The pill's bounds (root px), kept up to date by the pill. */
+    var pillBounds: androidx.compose.ui.geometry.Rect? = null
+
+    /** Finger travel in px between the hub closed and open, from its last layout. */
+    var hubTravel = 1f
+
+    /** Asks the hub's note field for the keyboard once it is open (double tap on the clock, D5). */
+    var hubNoteFocus by mutableStateOf(false)
+
+    /** Where the finger has put the hub, ahead of [hub] itself (its snaps run on the main thread's queue). */
+    private var hubDragPos: Float? = null
+    val hubDragging: Boolean get() = hubDragPos != null
+
+    private fun hubSpring(opening: Boolean): androidx.compose.animation.core.SpringSpec<Float> {
+        val bounce = data.settings.get(LauncherSettings.StudyHubBounce) / 100f
+        return spring(
+            dampingRatio = if (opening) (1f - 0.55f * bounce).coerceIn(0.42f, 1f) else 1f,
+            stiffness = MotionScale.stiffness(if (opening) 360f else 480f),
+            visibilityThreshold = 0.001f,
+        )
+    }
+
+    /**
+     * Opens Today as the study hub, growing out of [from] (root px; null: the pill). [velocity] in hub heights per
+     * second, so a flick or an interrupted close hands its momentum to the spring instead of restarting from rest.
+     */
+    fun openHub(from: androidx.compose.ui.geometry.Rect? = null, velocity: Float? = null) {
+        hubOrigin = from ?: pillBounds
+        hubDragPos = null
+        menu = null
+        todaySheet = true
+        scope.launch { hub.animateTo(1f, hubSpring(opening = true), initialVelocity = velocity ?: hub.velocity) }
+    }
+
+    fun closeHub(immediately: Boolean = false, velocity: Float? = null) {
+        hubDragPos = null
+        if (todaySheet) hideKeyboard()
+        todaySheet = false
+        hubNoteFocus = false
+        scope.launch {
+            if (immediately) hub.snapTo(0f) else hub.animateTo(0f, hubSpring(opening = false), initialVelocity = velocity ?: hub.velocity)
+        }
+    }
+
+    /** Moves the hub by [deltaPx] of finger travel (down closes). Returns the px it used, for nested scrolling. */
+    fun dragHubBy(deltaPx: Float): Float {
+        val travel = hubTravel.coerceAtLeast(1f)
+        val before = hubDragPos ?: hub.value.coerceIn(0f, 1f)
+        val next = (before - deltaPx / travel).coerceIn(0f, 1f)
+        if (next == before) return 0f
+        hubDragPos = next
+        scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { hub.snapTo(next) }
+        return (before - next) * travel
+    }
+
+    /** Finger released while moving the hub: open or close by position and speed (px per second, down positive). */
+    fun settleHub(velocityPxPerSec: Float) {
+        val position = hubDragPos ?: hub.value
+        val velocity = (-velocityPxPerSec / hubTravel.coerceAtLeast(1f)).coerceIn(-12f, 12f)
+        val open = when {
+            velocityPxPerSec > 900f -> false
+            velocityPxPerSec < -900f -> true
+            else -> position > 0.55f
+        }
+        if (open) openHub(hubOrigin, velocity) else closeHub(velocity = velocity)
+    }
+
+    /** Today from anywhere: the hub, grown out of [from] (the clock line, a notice) or the pill. */
+    fun openToday(from: androidx.compose.ui.geometry.Rect? = null) {
+        if (drawerOpen) closeDrawer(immediately = true)
+        if (searchOpen || search.value > 0f) closeSearch(immediately = true)
+        homeMenu = false
+        wallpaperStrip = false
+        layoutsSheet = false
+        widgetPicker = false
+        openFolder = null
+        if (editMode) exitEdit()
+        if (!data.study.loaded.value) data.study.refresh()
+        data.study.requestSync()
+        openHub(from)
+    }
+
+    // ---- Claude from the study companion (0.9.1, D1–D2) ----
+
+    /** "[1A ESSAI · P2 · now: Micro: chapitre 3]" (D1); empty when the companion is off or the header is empty. */
+    fun studyHeader(now: Long = System.currentTimeMillis()): String {
+        val header = data.settings.get(LauncherSettings.StudyHeader).trim()
+        if (header.isEmpty() || !data.study.enabled) return ""
+        val block = data.study.day.value.current(now)?.takeIf { it.status == dev.liquid.launcher.core.data.StudyStatus.Open }
+        return "[" + header + " · now: " + (block?.title?.text ?: "free") + "]"
+    }
+
+    /** [text] with the study header in front (D1). */
+    fun withStudyHeader(text: String): String {
+        val header = studyHeader()
+        return if (header.isEmpty()) text else header + "\n" + text
+    }
+
+    /** A block as a few lines of context: title, time, steps, the start of its notes. */
+    fun blockContext(block: dev.liquid.launcher.core.data.StudyEvent): String {
+        val time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT)
+        return buildString {
+            append(block.title.text).append(" (").append(time.format(java.util.Date(block.begin))).append("–").append(time.format(java.util.Date(block.end))).append(")")
+            block.tasks.forEach { append("\n").append(if (it.done) "[x] " else "[ ] ").append(it.text) }
+            val notes = block.notes.trim()
+            if (notes.isNotEmpty()) append("\n").append(notes.take(600))
+        }
+    }
+
+    /** A prompt template (D2) with the header and, when there is one, the block it is about. */
+    fun askTemplate(prompt: String, block: dev.liquid.launcher.core.data.StudyEvent?) {
+        Haptics.tick(view)
+        askClaude(withStudyHeader(prompt.trim() + (block?.let { "\n\n" + blockContext(it) } ?: "")))
+    }
+
+    /** The evening check-in: the message from the settings and today's log, to Claude. */
+    fun eveningCheckin() {
+        Haptics.confirm(view)
+        val message = data.settings.get(LauncherSettings.StudyCheckin).trim()
+        askClaude(withStudyHeader(message + "\n\n" + studyReport(data.study.day.value)))
+    }
+
+    // ---- arrival, shift tonight, quick notes (0.9.1, A2, A3, D5) ----
+
+    /** Quick capture (D5): [text] becomes a "Note: …" all-day event in the task calendar. */
+    fun addStudyNote(text: String, done: (Boolean) -> Unit = {}) {
+        if (text.isBlank()) return
+        scope.launch {
+            val ok = data.study.addNote(text)
+            if (ok) {
+                Haptics.confirm(view)
+                notice(dev.liquid.launcher.core.common.NoticeKind.Study, "Note saved for tonight's check-in", text.trim().take(70))
+            } else {
+                toast(if (!data.study.canWrite) "The launcher may not write to the calendar" else "No calendar for tasks found to write the note to")
+            }
+            done(ok)
+        }
+    }
+
+    /** "I'm home" (A2, by hand). */
+    fun markHomeNow() {
+        Haptics.confirm(view)
+        scope.launch {
+            val at = data.study.markHome(how = "manual")
+            notice(dev.liquid.launcher.core.common.NoticeKind.Study, "Home $at", "Noted on tonight's first block")
+        }
+    }
+
+    /** Moves tonight's blocks by [plan] (A3). */
+    fun applyShift(plan: dev.liquid.launcher.core.data.ShiftPlan) {
+        Haptics.confirm(view)
+        data.study.answerShift()
+        scope.launch {
+            val moved = data.study.applyShift(plan)
+            if (moved > 0) {
+                val cut = plan.shortened?.let { "${it.title.subject} shortened by ${plan.shortenedMinutes} min" }
+                notice(dev.liquid.launcher.core.common.NoticeKind.Study, "Tonight moved +${plan.deltaMinutes} min", cut ?: (if (moved == 1) "1 block moved" else "$moved blocks moved"))
+            } else {
+                toast("Could not move the blocks: the launcher may not write to the calendar")
+            }
+        }
+    }
+
+    /** Keeps tonight as planned: the shift is not offered again today. */
+    fun keepEvening() {
+        Haptics.tick(view)
+        data.study.answerShift()
+    }
+
+    /** Remembers the Wi-Fi the phone is on as home (A2). Android only tells an app its name with location access. */
+    fun rememberHomeWifi() {
+        callbacks.requestLocation { granted ->
+            val ssid = if (granted) data.study.currentWifi() else null
+            when {
+                !granted -> toast("Without location access Android hides the Wi-Fi name")
+                ssid == null -> toast("Connect to your home Wi-Fi with location on, then try again")
+                else -> {
+                    data.settings.set(LauncherSettings.StudyHomeWifi, ssid)
+                    notice(dev.liquid.launcher.core.common.NoticeKind.Study, "Home Wi-Fi: $ssid", "Getting home after the last class is noticed by it")
+                }
+            }
+        }
+    }
+
     /** The list of built-in widgets, over edit mode. */
     var widgetPicker by mutableStateOf(false)
 
@@ -808,7 +1001,7 @@ class HomeController(
         wallpaperStrip = false
         layoutsSheet = false
         wallpaperStudio = false
-        todaySheet = false
+        if (todaySheet || hub.value > 0f) closeHub(immediately)
         widgetPicker = false
         if (clockStudio != null) closeClockStudio(save = true)
         menu = null
@@ -833,7 +1026,7 @@ class HomeController(
             wallpaperStrip -> wallpaperStrip = false
             layoutsSheet -> layoutsSheet = false
             wallpaperStudio -> wallpaperStudio = false
-            todaySheet -> todaySheet = false
+            todaySheet -> closeHub()
             widgetPicker -> widgetPicker = false
             clockStudio != null -> closeClockStudio(save = true)
             openFolder != null -> openFolder = null
@@ -941,7 +1134,7 @@ class HomeController(
      * that [tidyAfterLeaving] will close: the system's picture of this screen will then be out of date.
      */
     val closesWhileAway: Boolean
-        get() = tidyPending && (drawerOpen || searchOpen || search.value > 0.01f || menu != null)
+        get() = tidyPending && (drawerOpen || searchOpen || search.value > 0.01f || menu != null || todaySheet || hub.value > 0.01f)
 
     /**
      * Called right after an app was started from anywhere in the launcher. The keyboard goes away at
@@ -964,6 +1157,7 @@ class HomeController(
         tidyPending = false
         menu = null
         tagSheet = false
+        if (todaySheet || hub.value > 0f) closeHub(immediately = true)
         if (searchOpen || search.value > 0f) closeSearch(immediately = true)
         if (drawerOpen && data.settings.get(LauncherSettings.DrawerCloseOnLaunch)) closeDrawer(immediately = true)
         hideKeyboard()
@@ -1421,13 +1615,7 @@ class HomeController(
             LauncherAction.SaveLayout -> savingLayout = true
             LauncherAction.NextLayout -> data.layouts.next()?.let { switchLayout(it.id) } ?: toast("No saved layouts yet")
             is LauncherAction.SwitchLayout -> switchLayout(action.id)
-            LauncherAction.Today -> {
-                closeAll()
-                if (editMode) exitEdit()
-                if (!data.study.loaded.value) data.study.refresh()
-                data.study.requestSync()
-                todaySheet = true
-            }
+            LauncherAction.Today -> openToday()
             LauncherAction.TellClaude -> tellClaude()
             LauncherAction.AskClaude -> openAskClaude()
             LauncherAction.StudyPlan -> openStudyPlan()
@@ -1474,6 +1662,8 @@ class HomeController(
         try {
             LaunchClock.mark()
             context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            // Leaving for another app (Claude, a link, the calendar): come back to a clean home screen (P1b).
+            leaveForApp()
         } catch (e: Exception) {
             DebugLog.error("Home", "could not open: $e")
             toast("No app can open this")
@@ -1505,6 +1695,8 @@ class HomeCallbacks(
     val pickFolder: ((android.net.Uri?) -> Unit) -> Unit = { it(null) },
     /** Asks for calendar access (read and write); the callback gets whether reading was granted. */
     val requestCalendar: ((Boolean) -> Unit) -> Unit = { it(false) },
+    /** Asks for location access (Android's condition for reading the Wi-Fi name); the callback gets whether it was given. */
+    val requestLocation: ((Boolean) -> Unit) -> Unit = { it(false) },
     /** Shows the system file picker for a font file; the callback gets it or null. */
     val pickFont: ((android.net.Uri?) -> Unit) -> Unit = { it(null) },
     /** Shows the system's dialog allowing the launcher to add a widget; the callback gets whether it was allowed. */

@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.9.1: Today is now the study hub: it grows out of the pill (or the line under the clock) on a spring and shrinks back into it under the finger; the block now or next with its steps, today's timeline with your classes, the day as a ring, "I'm home" and "shift tonight", a note field for tonight's check-in, prompt templates, Ask Claude with your study header, and one big action right under the thumb. Double tap the clock to write a note. The line under the clock gains one button (focus, or ✓ for a block that ended).
+
 0.9.0: going home during a phone or Messenger call opens Liquid Launcher (the old "do not redirect during calls" default is gone; a floating call window no longer hides the system launcher from the redirect); starting an app from the drawer or search puts the keyboard away at once and coming home shows a clean home screen, with no flash of the drawer and keyboard.
 
 0.8.1: a Calendar widget on liquid glass (month with your events, next events, opens the calendar) for pages and the search screen; search has its own Bounce, Speed and Liquid stretch.
