@@ -237,8 +237,9 @@ internal fun themedSurface(
     } else {
         modifier.background(fill, shape).then(if (sheen != null) Modifier.background(sheen, shape) else Modifier)
     }
-    if (kind.border != null && kind.borderWidthDp > 0.01f) {
-        modifier = modifier.border(kind.borderWidthDp.dp, Color(kind.border), shape)
+    val border = kind.border
+    if (border != null && kind.borderWidthDp > 0.01f) {
+        modifier = modifier.border(kind.borderWidthDp.dp, Color(border), shape)
     }
     return ControlSurface(modifier, content)
 }
