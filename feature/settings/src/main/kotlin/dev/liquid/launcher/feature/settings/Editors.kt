@@ -178,7 +178,7 @@ internal fun MenuEntriesEditor(store: SettingsStore) {
     }
 }
 
-private fun <T> List<T>.move(index: Int, by: Int): List<T> {
+internal fun <T> List<T>.move(index: Int, by: Int): List<T> {
     val target = index + by
     if (target !in indices) return this
     val list = toMutableList()

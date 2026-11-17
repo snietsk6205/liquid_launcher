@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -130,8 +131,39 @@ internal fun StudyPillItem(controller: HomeController, look: StudyItemLook, colo
     val showRing = loaded && look.ring != "none" && look.look != "circle"
     val stroke = 2.5.dp
     val outer = if (showRing) item + 10.dp else item
+    // C3: a block ended without a mark: the item breathes twice, then rests for a while, until it is marked.
+    val missed = (glance as? StudyGlance.Unmarked)?.block?.key
+    val pulse = remember { androidx.compose.animation.core.Animatable(0f) }
+    androidx.compose.runtime.LaunchedEffect(missed) {
+        if (missed == null) {
+            pulse.animateTo(0f, androidx.compose.animation.core.tween(200))
+            return@LaunchedEffect
+        }
+        while (true) {
+            repeat(2) {
+                pulse.animateTo(1f, androidx.compose.animation.core.tween(520, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+                pulse.animateTo(0f, androidx.compose.animation.core.tween(760, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
+            }
+            kotlinx.coroutines.delay(14_000)
+        }
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(outer), contentAlignment = Alignment.Center) {
+            if (missed != null) {
+                // Read in the layer only: the halo moves without recomposing or redrawing the pill.
+                Box(
+                    Modifier
+                        .size(outer)
+                        .graphicsLayer {
+                            val p = pulse.value
+                            alpha = 0.55f * p
+                            scaleX = 1f + 0.38f * p
+                            scaleY = 1f + 0.38f * p
+                        }
+                        .clip(CircleShape)
+                        .background(accent),
+                )
+            }
             if (showRing) StudyItemRing(look.ring, day, now, color, accent, outer, stroke)
             StudyItemFace(look, accent, color, apps, day, Modifier.size(item))
         }

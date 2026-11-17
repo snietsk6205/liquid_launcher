@@ -485,6 +485,18 @@ internal fun BlockCard(
                 }
             }
             block.link?.let { link -> buttons += { ActionChip("Open link", color, icon = LauncherIcons.Web) { controller.openStudyLink(link) } } }
+            // C3: a block that ended without being done: ask Claude where to put it, pre-filled.
+            if (block.status != StudyStatus.Done && block.end <= now) {
+                buttons += {
+                    ActionChip("Reschedule", color, icon = LauncherIcons.Sparkle) {
+                        controller.askTemplate(
+                            "I could not do this block today. Suggest where to fit it in the next days without touching fixed dates, " +
+                                "and say what to drop if the week is full.",
+                            block,
+                        )
+                    }
+                }
+            }
             // Help with this block from Claude: its title, steps and notes as the start of a chat (0.7.2, D109).
             if (block.status == StudyStatus.Open && controller.data.settings.get(dev.liquid.launcher.core.settings.LauncherSettings.SearchClaude) != "off") {
                 buttons += { ActionChip("Ask Claude", color, icon = LauncherIcons.Sparkle) { controller.askClaudeAbout(block) } }
@@ -671,7 +683,17 @@ internal sealed interface StudyGlance {
 
     /** Nothing left today: tomorrow's first block. 0.6.4. */
     data class Tomorrow(val block: StudyEvent) : StudyGlance
+
+    /** Morning (A6, 0.9.4): leave by [leaveAt] for the day's first class; [minutesLeft] may be negative (late). */
+    data class LeaveBy(val firstClass: StudyEvent, val leaveAt: Long, val minutesLeft: Int) : StudyGlance
+
+    /** A class ended a moment ago (B3, 0.9.4): was Med there? */
+    data class Attendance(val cls: StudyEvent) : StudyGlance
 }
+
+/** The class whose attendance to ask about (B3): ended 5 min to 3 h ago and not answered yet, the latest first. */
+internal fun attendanceDue(day: StudyDay, now: Long, answered: Set<String>): StudyEvent? =
+    day.classes.filter { it.end + 5 * 60_000L <= now && now - it.end <= 3 * 60 * 60_000L && it.key !in answered }.maxByOrNull { it.end }
 
 /**
  * The glance for [day] at [now] (0.6.3, D92; 0.6.4, D93). In order: the block running; the next block
@@ -679,7 +701,25 @@ internal sealed interface StudyGlance {
  * the tasks left; tomorrow's first block ([withTomorrow]). Null only when there is nothing at all, so
  * the line under the clock does not vanish just because the day's blocks are over.
  */
-internal fun studyGlance(day: StudyDay, now: Long, withTomorrow: Boolean = true): StudyGlance? {
+internal fun studyGlance(
+    day: StudyDay,
+    now: Long,
+    withTomorrow: Boolean = true,
+    /** Morning commute in minutes for "Leave by" (A6); 0: off. */
+    commuteMinutes: Int = 0,
+    /** Classes already answered for "present?" (B3); null: off. */
+    answered: Set<String>? = null,
+): StudyGlance? {
+    if (commuteMinutes > 0) {
+        val first = day.classes.minByOrNull { it.begin }
+        if (first != null) {
+            val leaveAt = first.begin - commuteMinutes * 60_000L
+            // From an hour before leaving until a quarter of an hour after (by then you are on the way).
+            if (now >= leaveAt - 60 * 60_000L && now <= leaveAt + 15 * 60_000L && now < first.begin) {
+                return StudyGlance.LeaveBy(first, leaveAt, Math.floorDiv(leaveAt - now, 60_000L).toInt())
+            }
+        }
+    }
     val running = day.blocks.lastOrNull { now >= it.begin && now < it.end && it.status == StudyStatus.Open }
     if (running != null) {
         val length = (running.end - running.begin).coerceAtLeast(1)
@@ -689,6 +729,7 @@ internal fun studyGlance(day: StudyDay, now: Long, withTomorrow: Boolean = true)
             progress = ((now - running.begin).toFloat() / length).coerceIn(0f, 1f),
         )
     }
+    if (answered != null) attendanceDue(day, now, answered)?.let { return StudyGlance.Attendance(it) }
     val next = day.blocks.firstOrNull { it.begin > now && it.status == StudyStatus.Open }
     val nextGlance = next?.let { StudyGlance.Next(it, ((it.begin - now + 59_999) / 60_000).toInt()) }
     if (nextGlance != null && nextGlance.minutesUntil <= 60) return nextGlance
@@ -714,6 +755,13 @@ internal fun glanceText(glance: StudyGlance, short: Boolean = false): String = w
     }
     is StudyGlance.Tasks -> if (short) "${glance.open}" else if (glance.open == 1) "1 task left today" else "${glance.open} tasks left today"
     is StudyGlance.Tomorrow -> if (short) "Tomorrow " + time(glance.block.begin) else "Tomorrow " + time(glance.block.begin) + " · " + glance.block.title.subject
+    is StudyGlance.LeaveBy -> when {
+        glance.minutesLeft > 0 && short -> "Leave " + time(glance.leaveAt)
+        glance.minutesLeft > 0 -> "Leave by " + time(glance.leaveAt) + " · " + glance.firstClass.title.subject + " at " + time(glance.firstClass.begin)
+        short -> "Leave now"
+        else -> "Leave now · " + glance.firstClass.title.subject + " at " + time(glance.firstClass.begin)
+    }
+    is StudyGlance.Attendance -> if (short) "Present?" else glance.cls.title.subject + " " + time(glance.cls.begin) + " · present?"
 }
 
 /** The glance now, or null when the study companion is off, cannot read the calendar, or has nothing to say. */
@@ -724,7 +772,12 @@ internal fun rememberStudyGlance(controller: HomeController): StudyGlance? {
     val day by study.day.collectAsState()
     val tick = rememberMinuteTick()
     val withTomorrow by controller.data.settings.derive { get(LauncherSettings.StudyClockLine) != "today" }
-    return remember(loaded, day, tick, withTomorrow) { if (loaded) studyGlance(day, System.currentTimeMillis(), withTomorrow) else null }
+    val commute by controller.data.settings.derive { if (get(LauncherSettings.StudyLeaveBy)) get(LauncherSettings.StudyCommute) else 0 }
+    val askAttendance by controller.data.settings.derive { get(LauncherSettings.StudyAttendance) }
+    val answered by study.attendance.collectAsState()
+    return remember(loaded, day, tick, withTomorrow, commute, askAttendance, answered) {
+        if (loaded) studyGlance(day, System.currentTimeMillis(), withTomorrow, commute, if (askAttendance) answered else null) else null
+    }
 }
 
 /**
@@ -739,6 +792,9 @@ internal fun StudyRing(glance: StudyGlance, color: Color, size: Dp) {
         is StudyGlance.Unmarked -> eventColor(glance.block)
         is StudyGlance.Tomorrow -> eventColor(glance.block)
         is StudyGlance.Tasks -> color
+        // Red from 10 minutes before leaving (A6).
+        is StudyGlance.LeaveBy -> if (glance.minutesLeft <= 10) LeaveRed else color
+        is StudyGlance.Attendance -> color
     }
     // The ring grows smoothly from one minute to the next instead of in steps.
     val shownProgress by animateFloatAsState(if (glance is StudyGlance.Running) glance.progress else 0f, androidx.compose.animation.core.tween(700), label = "ring")
@@ -763,6 +819,19 @@ internal fun StudyRing(glance: StudyGlance, color: Color, size: Dp) {
             is StudyGlance.Tasks -> drawCircle(accent.copy(alpha = 0.8f), radius = radius, style = Stroke(stroke))
             is StudyGlance.Tomorrow -> drawCircle(accent.copy(alpha = 0.5f), radius = radius * 0.5f)
             is StudyGlance.Next -> drawCircle(accent, radius = radius * 0.55f)
+            is StudyGlance.LeaveBy -> {
+                // The hour before leaving, running out.
+                val left = (glance.minutesLeft / 60f).coerceIn(0f, 1f)
+                drawCircle(color.copy(alpha = 0.22f), radius = radius, style = Stroke(stroke))
+                drawArc(
+                    accent, startAngle = -90f, sweepAngle = 360f * left, useCenter = false,
+                    topLeft = androidx.compose.ui.geometry.Offset(stroke / 2f, stroke / 2f),
+                    size = androidx.compose.ui.geometry.Size(radius * 2f, radius * 2f),
+                    style = Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round),
+                )
+                if (glance.minutesLeft <= 10) drawCircle(accent, radius = radius * 0.45f)
+            }
+            is StudyGlance.Attendance -> drawCircle(accent.copy(alpha = 0.85f), radius = radius, style = Stroke(stroke))
         }
     }
 }
@@ -806,7 +875,12 @@ private fun glanceKey(glance: StudyGlance): String = when (glance) {
     is StudyGlance.Unmarked -> "unmarked:" + glance.block.key
     is StudyGlance.Tasks -> "tasks"
     is StudyGlance.Tomorrow -> "tomorrow:" + glance.block.key
+    is StudyGlance.LeaveBy -> "leave:" + glance.firstClass.key
+    is StudyGlance.Attendance -> "attendance:" + glance.cls.key
 }
+
+/** The red of "leave now" (A6) and of an exam three days away (B1). */
+internal val LeaveRed = Color(0xFFFF6B6B)
 
 @Composable
 private fun StudyLineRow(
@@ -857,6 +931,23 @@ private fun StudyLineRow(
             glance is StudyGlance.Running && wanted == "done" -> Triple(LauncherIcons.Check, "Mark the block done") { controller.studyStatus(block, StudyStatus.Done) }
             glance is StudyGlance.Running -> Triple(LauncherIcons.Schedule, if (focusing) "Stop the focus timer" else "Start the focus timer") { controller.studyFocus(block) }
             else -> null
+        }
+        if (glance is StudyGlance.Attendance && interactive) {
+            // B3: ✓ present, ✗ absent (a "Note: absent …" for tonight's check-in).
+            Spacer(Modifier.width(8.dp))
+            for ((present, icon) in listOf(true to LauncherIcons.Check, false to LauncherIcons.Close)) {
+                Box(
+                    Modifier
+                        .padding(start = 4.dp)
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(color.copy(alpha = 0.18f))
+                        .squishClickable { controller.answerAttendance(glance.cls, present) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    LauncherIcon(icon, contentDescription = if (present) "I was there" else "I was absent", tint = color, size = 16.dp)
+                }
+            }
         }
         if (action != null) {
             Spacer(Modifier.width(8.dp))

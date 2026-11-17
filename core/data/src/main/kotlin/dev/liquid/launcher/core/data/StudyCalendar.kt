@@ -100,6 +100,7 @@ class StudyCalendar(
             _day.value = if (enabled && canRead) load() else StudyDay()
             _loaded.value = enabled && canRead
             _homeAt.value = storedHome()
+            _attendance.value = storedAttendance()
             // Not part of this job: a newer refresh must not cancel the write of the minutes.
             if (_focus.value != null) scope.launch(Dispatchers.IO) { finishFocusIfOver() }
         }
@@ -252,7 +253,73 @@ class StudyCalendar(
             waitingToSync = waitingToSync(blockCalendars + taskCalendars),
             classes = classes.sortedBy { it.begin },
             notes = notes,
+            // Only the timetable's calendars: a study block "préparer le DS" is not an exam.
+            exams = exams(classCalendars, zone),
+            absences = absences(taskCalendars + blockCalendars, today, zone),
         )
+    }
+
+    /** The next exams (B1): events named like an exam from now to six months ahead, soonest first, at most five. */
+    private fun exams(calendarIds: Set<Long>, zone: ZoneId): List<StudyEvent> {
+        if (calendarIds.isEmpty()) return emptyList()
+        val now = System.currentTimeMillis()
+        val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also {
+            ContentUris.appendId(it, now)
+            ContentUris.appendId(it, now + 183L * 24 * 60 * 60_000L)
+        }.build()
+        val out = ArrayList<StudyEvent>()
+        try {
+            context.contentResolver.query(
+                uri,
+                arrayOf(
+                    CalendarContract.Instances.EVENT_ID, CalendarContract.Instances.BEGIN, CalendarContract.Instances.END,
+                    CalendarContract.Instances.ALL_DAY, CalendarContract.Instances.TITLE, CalendarContract.Instances.CALENDAR_ID,
+                    CalendarContract.Instances.DISPLAY_COLOR, CalendarContract.Instances.EVENT_LOCATION,
+                ),
+                null, null, CalendarContract.Instances.BEGIN + " ASC",
+            )?.use { c ->
+                while (c.moveToNext() && out.size < 5) {
+                    if (c.getLong(5) !in calendarIds) continue
+                    val title = c.getString(4).orEmpty()
+                    if (!StudyFormat.isExam(title) || StudyFormat.parseTitle(title).status != StudyStatus.Open) continue
+                    // All-day events start at midnight UTC: count them from the morning of their day, here.
+                    val allDay = c.getInt(3) != 0
+                    val begin = if (allDay) Instant.ofEpochMilli(c.getLong(1)).atZone(ZoneOffset.UTC).toLocalDate().atTime(8, 0).atZone(zone).toInstant().toEpochMilli() else c.getLong(1)
+                    if (out.any { it.eventId == c.getLong(0) }) continue
+                    out += StudyEvent(c.getLong(0), c.getLong(5), begin, c.getLong(2), allDay, title, location = c.getString(7).orEmpty(), color = c.getInt(6))
+                }
+            }
+        } catch (e: Exception) {
+            DebugLog.error("Study", "reading exams failed: $e")
+        }
+        return out.sortedBy { it.begin }
+    }
+
+    /** "Note: absent <module> …" events of the last five months, counted by module (B2 from the launcher's own records). */
+    private fun absences(calendarIds: Set<Long>, today: LocalDate, zone: ZoneId): Map<String, Int> {
+        if (calendarIds.isEmpty()) return emptyMap()
+        val from = today.minusDays(150).atStartOfDay(zone).toInstant().toEpochMilli()
+        val to = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val counts = LinkedHashMap<String, Int>()
+        try {
+            context.contentResolver.query(
+                CalendarContract.Events.CONTENT_URI,
+                arrayOf(CalendarContract.Events.TITLE, CalendarContract.Events.CALENDAR_ID),
+                CalendarContract.Events.DTSTART + " >= ? AND " + CalendarContract.Events.DTSTART + " < ? AND " +
+                    CalendarContract.Events.DELETED + " = 0 AND " + CalendarContract.Events.TITLE + " LIKE ?",
+                arrayOf(from.toString(), to.toString(), "%absent%"),
+                null,
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    if (c.getLong(1) !in calendarIds) continue
+                    val module = StudyFormat.absentModule(c.getString(0).orEmpty()) ?: continue
+                    counts[module] = (counts[module] ?: 0) + 1
+                }
+            }
+        } catch (e: Exception) {
+            DebugLog.error("Study", "reading absences failed: $e")
+        }
+        return counts
     }
 
     /** Study events changed on the phone that the sync has not sent yet (the calendar's "dirty" flag). */
@@ -515,6 +582,29 @@ class StudyCalendar(
 
     /** Changes when "shift tonight" is answered, so the hub can hide its chip. */
     val shiftTick: StateFlow<Int> = _shiftTick
+
+    private fun storedAttendance(): Set<String> = prefs.getStringSet("att:" + LocalDate.now(), emptySet()).orEmpty().toSet()
+
+    private val _attendance = MutableStateFlow(storedAttendance())
+
+    /** Classes of today whose attendance was answered (B3), by event key. */
+    val attendance: StateFlow<Set<String>> = _attendance
+
+    /**
+     * B3: Med was at class [cls] or not. Absent writes "Note: absent <module> <HH:mm>" as an all-day event in the
+     * task calendar (what !abs and the evening check-in read). Returns false when that note could not be written.
+     */
+    suspend fun answerAttendance(cls: StudyEvent, present: Boolean): Boolean {
+        val today = "att:" + LocalDate.now()
+        val answered = storedAttendance() + cls.key
+        val edit = prefs.edit()
+        prefs.all.keys.filter { it.startsWith("att:") && it != today }.forEach { edit.remove(it) }
+        edit.putStringSet(today, answered).apply()
+        _attendance.value = answered
+        if (present) return true
+        val time = Instant.ofEpochMilli(cls.begin).atZone(ZoneId.systemDefault()).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm"))
+        return addNote("absent " + cls.title.subject + " " + time)
+    }
 
     /** Forgets today's arrival (the manual chip was a mistake). The mark already written stays. */
     fun forgetHome() {

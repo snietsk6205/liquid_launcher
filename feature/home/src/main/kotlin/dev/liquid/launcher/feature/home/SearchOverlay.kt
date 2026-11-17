@@ -67,7 +67,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
 import kotlin.math.roundToInt
+import android.content.Intent
 import dev.liquid.launcher.core.data.AppEntry
+import dev.liquid.launcher.core.data.LauncherAction
 import dev.liquid.launcher.core.data.Bangs
 import dev.liquid.launcher.core.data.Calculator
 import dev.liquid.launcher.core.data.Fuzzy
@@ -85,6 +87,9 @@ private sealed interface SearchResult {
 
     /** Ask Claude with [prompt] (0.7.2, D109). */
     data class Claude(val prompt: String) : SearchResult
+
+    /** A row of a study command, "!next", "!exam", "!plan", "!abs" (0.9.3, D3). */
+    data class Study(val row: StudyRow) : SearchResult
 }
 
 /**
@@ -131,8 +136,11 @@ fun SearchOverlay(
     }
     val claudeApp = remember(visible) { visible.firstOrNull { it.component.packageName == controller.claudePackage && !it.isWorkProfile } }
     val askMode = controller.askClaudeMode && config.claude != "off"
-    val results = remember(query, visible, usage, config.engine, config.claude, askMode) {
-        buildResults(query, visible, usage, config.engine, config.claude, askMode)
+    val studyDay by controller.data.study.day.collectAsState()
+    val studyLoaded by controller.data.study.loaded.collectAsState()
+    val minute = rememberMinuteTick()
+    val results = remember(query, visible, usage, config.engine, config.claude, askMode, studyDay, studyLoaded, minute) {
+        buildResults(query, visible, usage, config.engine, config.claude, askMode, studyDay, studyLoaded)
     }
 
     fun open(result: SearchResult) {
@@ -148,6 +156,23 @@ fun SearchOverlay(
             is SearchResult.Web -> controller.openUrl(result.url)
             // D1: sent with "[1A ESSAI · P2 · now: <block or free>]" in front while the study companion is on.
             is SearchResult.Claude -> controller.askClaude(controller.withStudyHeader(result.prompt))
+            is SearchResult.Study -> {
+                val key = result.row.key
+                when {
+                    key.startsWith("block:") || key.startsWith("abs:") || key == "today" -> {
+                        controller.openToday()
+                        return
+                    }
+                    key.startsWith("exam:") -> key.removePrefix("exam:").toLongOrNull()?.let { id ->
+                        controller.start(Intent(Intent.ACTION_VIEW, android.content.ContentUris.withAppendedId(android.provider.CalendarContract.Events.CONTENT_URI, id)))
+                    }
+                    key == "plan" -> controller.run(LauncherAction.StudyPlan)
+                    key == "checkin" -> controller.eveningCheckin()
+                    key == "off" -> controller.openSection("study")
+                    // Nothing to open: the row only says what it found.
+                    else -> return
+                }
+            }
         }
         controller.closeSearch()
     }
@@ -249,6 +274,7 @@ private fun resultKey(result: SearchResult): String = when (result) {
     is SearchResult.Bang -> "bang"
     is SearchResult.Web -> "web"
     is SearchResult.Claude -> "claude"
+    is SearchResult.Study -> "study:" + result.row.key
 }
 
 private fun fieldHint(askMode: Boolean): String = if (askMode) "Ask Claude anything…" else "Apps, calculations, web, Claude…"
@@ -260,11 +286,23 @@ private fun buildResults(
     engine: String,
     claude: String,
     askMode: Boolean,
+    studyDay: dev.liquid.launcher.core.data.StudyDay = dev.liquid.launcher.core.data.StudyDay(),
+    studyLoaded: Boolean = false,
 ): List<SearchResult> {
     val text = query.trim()
     if (text.isEmpty()) return emptyList()
     // Switched to Claude (the field's icon or the "Ask Claude" action): everything typed goes there.
     if (askMode) return listOf(SearchResult.Claude(text))
+    // "?text": straight to Claude (D3).
+    if (claude != "off") {
+        StudyCommands.question(text)?.let { question ->
+            return if (question.isEmpty()) emptyList() else listOf(SearchResult.Claude(question))
+        }
+    }
+    // "!next", "!exam", "!plan", "!abs" (D3).
+    StudyCommands.parse(text)?.let { command ->
+        return studyRows(command, studyDay, System.currentTimeMillis(), studyLoaded).map { SearchResult.Study(it) }
+    }
     if (claude != "off") {
         ClaudeQuery.bang(text)?.let { prompt ->
             return if (prompt.isEmpty()) emptyList() else listOf(SearchResult.Claude(prompt))
@@ -341,6 +379,14 @@ private fun ResultRow(result: SearchResult, claudeApp: AppEntry?, modifier: Modi
                 }
                 Spacer(Modifier.width(8.dp))
                 LauncherIcon(LauncherIcons.Sparkle, contentDescription = null, tint = Color.White.copy(alpha = 0.55f), size = 18.dp)
+            }
+            is SearchResult.Study -> {
+                IconBox(result.row.icon, (result.row.color ?: Color.White).copy(alpha = 0.28f))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(result.row.title, style = style.copy(fontWeight = FontWeight.Medium), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(result.row.detail, style = style.copy(fontSize = 13.sp, color = (result.row.color ?: Color.White).copy(alpha = 0.8f)), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
     }
@@ -529,7 +575,7 @@ private fun AskClaudeHint(controller: HomeController, claudeApp: AppEntry?) {
  * following the finger (their timing is a slice of search's progress).
  */
 @Composable
-private fun SuggestionRow(controller: HomeController, suggestions: List<AppEntry>, transition: String, open: (AppEntry) -> Unit) {
+internal fun SuggestionRow(controller: HomeController, suggestions: List<AppEntry>, transition: String, open: (AppEntry) -> Unit) {
     val progress = controller.search
     val staggered = transition != "fade" && transition != "depth"
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -595,9 +641,16 @@ internal fun SearchPillField(controller: HomeController, color: Color, interacti
             if (controller.searchQuery.isEmpty()) {
                 Text(fieldHint(controller.askClaudeMode && claudeOn), style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.6f), fontSize = 16.sp), maxLines = 1)
             }
+            val query = controller.searchQuery
+            var field by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(query, androidx.compose.ui.text.TextRange(query.length))) }
+            // Text put in from outside (a command chip, Clear) arrives with the cursor at its end.
+            val shown = if (field.text == query) field else androidx.compose.ui.text.input.TextFieldValue(query, androidx.compose.ui.text.TextRange(query.length))
             BasicTextField(
-                value = controller.searchQuery,
-                onValueChange = { controller.searchQuery = it },
+                value = shown,
+                onValueChange = {
+                    field = it
+                    controller.searchQuery = it.text
+                },
                 singleLine = true,
                 textStyle = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 16.sp),
                 cursorBrush = SolidColor(color),
@@ -710,19 +763,13 @@ private fun BottomSearch(
             ) {
                 if (query.isBlank()) {
                     if (!askMode) {
-                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.Bottom) {
-                            SearchWidgets(controller, widgets, env)
-                        }
+                        // Study first (0.9.3): the cards chosen in Settings → Search, from the field upwards.
+                        SearchPage(controller, config.cards, widgets, env, suggestions, transition, Modifier.weight(1f)) { open(SearchResult.App(it)) }
                     } else {
                         Spacer(Modifier.weight(1f))
                     }
                     ClipboardChips(controller, config, live)
-                    if (askMode) {
-                        AskClaudeHint(controller, claudeApp)
-                    } else if (suggestions.isNotEmpty()) {
-                        Spacer(Modifier.height(10.dp))
-                        SuggestionRow(controller, suggestions, transition) { open(SearchResult.App(it)) }
-                    }
+                    if (askMode) AskClaudeHint(controller, claudeApp)
                 } else {
                     // The best result nearest the field and the thumb; rows slide as the ranking changes.
                     LazyColumn(Modifier.fillMaxWidth().weight(1f), reverseLayout = true) {
@@ -765,7 +812,12 @@ private fun PreviewKeyboard(controller: HomeController, insets: FieldInsets, mod
  * resize and remove them.
  */
 @Composable
-private fun SearchWidgets(controller: HomeController, widgets: List<dev.liquid.launcher.core.data.HomeItem>, env: PageEnv?) {
+internal fun SearchWidgets(
+    controller: HomeController,
+    widgets: List<dev.liquid.launcher.core.data.HomeItem>,
+    env: PageEnv?,
+    room: androidx.compose.ui.unit.Dp = androidx.compose.ui.unit.Dp.Infinity,
+) {
     val color = Color.White
     val density = androidx.compose.ui.platform.LocalDensity.current
     val rows = env?.grid?.rows ?: 6
@@ -790,7 +842,9 @@ private fun SearchWidgets(controller: HomeController, widgets: List<dev.liquid.l
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(cell * item.h)
+                // Never taller than the space above the keyboard, so a widget is always seen whole (0.9.3):
+                // the calendar adapts to its height (a month above 190 dp, today and what comes next below).
+                .height(if (room == androidx.compose.ui.unit.Dp.Infinity) cell * item.h else minOf(cell * item.h, (room - 56.dp).coerceAtLeast(150.dp)))
                 .padding(vertical = 3.dp),
         ) {
             WidgetContent(item, env, controller)

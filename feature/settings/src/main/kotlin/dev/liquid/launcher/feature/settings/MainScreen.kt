@@ -249,6 +249,7 @@ internal fun SectionScreen(store: SettingsStore, sectionId: String, onBack: () -
                     PillStudyEditor(store)
                 }
                 "menu" -> MenuEntriesEditor(store)
+                "search" -> SearchCardsEditor(store)
                 "tags" -> TabsAndTagsEditor()
                 "icons" -> IconPacksEditor(store)
                 "homeMenu" -> HomeMenuEditor(store)

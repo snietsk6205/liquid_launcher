@@ -290,6 +290,7 @@ private fun HubContent(controller: HomeController, color: Color, scroll: ScrollS
             }
         } else {
             Column(Modifier.weight(1f).verticalScroll(scroll)) {
+                AttendanceCallout(controller, day, now, color)
                 ArrivalCallout(controller, day, now, homeAt, color)
                 if (day.isEmpty && day.classes.isEmpty()) {
                     Text(
@@ -644,6 +645,23 @@ private fun ArrivalCallout(controller: HomeController, day: StudyDay, now: Long,
             } else {
                 ActionChip("Shift +$delta min", color, filled = true) { controller.applyShift(plain) }
             }
+        }
+    }
+}
+
+/** B3 in the hub: the class that just ended, present or absent. */
+@Composable
+private fun AttendanceCallout(controller: HomeController, day: StudyDay, now: Long, color: Color) {
+    val ask by controller.data.settings.derive { get(LauncherSettings.StudyAttendance) }
+    val answered by controller.data.study.attendance.collectAsState()
+    if (!ask) return
+    val due = attendanceDue(day, now, answered) ?: return
+    HubCallout(color) {
+        Text("${due.title.subject} ${studyClock(due.begin)} · were you there?", style = studyText(color, 14, FontWeight.SemiBold))
+        Text("Absent writes a note for tonight's check-in; !abs in search counts them.", style = studyText(color, 12, alpha = 0.75f))
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
+            ActionChip("Absent", color, icon = LauncherIcons.Close) { controller.answerAttendance(due, false) }
+            ActionChip("Present", color, filled = true, icon = LauncherIcons.Check) { controller.answerAttendance(due, true) }
         }
     }
 }

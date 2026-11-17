@@ -79,3 +79,44 @@ class StudyGlanceTest {
         assertNull(studyGlance(StudyDay(), later))
     }
 }
+
+/** Leave by (A6) and present? (B3), 0.9.4. */
+class StudyGlanceMorningTest {
+    private val min = 60_000L
+    private val t0 = 1_800_000_000_000L - 1_800_000_000_000L % (60 * min)
+
+    private fun event(id: Long, startMin: Int, endMin: Int, title: String) =
+        StudyEvent(id, 3, t0 + startMin * min, t0 + endMin * min, false, title)
+
+    private val stat = event(10, 120, 210, "Stat Des")
+    private val micro = event(11, 240, 330, "Micro")
+    private val evening = StudyEvent(1, 1, t0 + 600 * min, t0 + 660 * min, false, "Proba 2: série 1")
+    private val day = StudyDay(blocks = listOf(evening), classes = listOf(stat, micro))
+
+    @Test
+    fun leaveBy_fromAnHourBeforeTheTripUntilAQuarterAfter() {
+        // First class at t0+120, trip 90 min: leave at t0+30.
+        assertNull(studyGlance(day, t0 - 31 * min, commuteMinutes = 90)?.takeIf { it is StudyGlance.LeaveBy })
+        val early = studyGlance(day, t0 - 20 * min, commuteMinutes = 90)
+        assertEquals(StudyGlance.LeaveBy(stat, t0 + 30 * min, 50), early)
+        assertTrue(glanceText(early!!).startsWith("Leave by "))
+        val late = studyGlance(day, t0 + 40 * min, commuteMinutes = 90)
+        assertEquals(StudyGlance.LeaveBy(stat, t0 + 30 * min, -10), late)
+        assertTrue(glanceText(late!!).startsWith("Leave now"))
+        // Off, or long after leaving: the usual line.
+        assertTrue(studyGlance(day, t0 - 20 * min) !is StudyGlance.LeaveBy)
+        assertTrue(studyGlance(day, t0 + 50 * min, commuteMinutes = 90) !is StudyGlance.LeaveBy)
+    }
+
+    @Test
+    fun attendance_askedFiveMinutesAfterAClassUntilAnswered() {
+        assertTrue(studyGlance(day, t0 + 212 * min, answered = emptySet()) !is StudyGlance.Attendance)
+        assertEquals(StudyGlance.Attendance(stat), studyGlance(day, t0 + 216 * min, answered = emptySet()))
+        assertEquals("Stat Des " + glanceText(StudyGlance.Attendance(stat)).substringAfter("Stat Des ").substringBefore(" ·") + " · present?", glanceText(StudyGlance.Attendance(stat)))
+        assertTrue(studyGlance(day, t0 + 216 * min, answered = setOf(stat.key)) !is StudyGlance.Attendance)
+        // Off (null): never asked.
+        assertTrue(studyGlance(day, t0 + 216 * min) !is StudyGlance.Attendance)
+        // Both classes over: the latest is asked first.
+        assertEquals(StudyGlance.Attendance(micro), studyGlance(day, t0 + 340 * min, answered = emptySet()))
+    }
+}

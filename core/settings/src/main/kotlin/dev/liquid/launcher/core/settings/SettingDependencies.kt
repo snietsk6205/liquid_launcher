@@ -9,6 +9,9 @@ object SettingDependencies {
             listOf(surface.blur, surface.refraction, surface.tint).forEach { map[it.key] = custom }
         }
         map[LauncherSettings.HomeLabelSize.key] = LauncherSettings.HomeLabels
+        map[LauncherSettings.StudyCommute.key] = LauncherSettings.StudyLeaveBy
+        map[LauncherSettings.StudyHomeWifi.key] = LauncherSettings.StudyArrival
+        map[LauncherSettings.StudyArrivalCharger.key] = LauncherSettings.StudyArrival
         map[LauncherSettings.FastDelay.key] = LauncherSettings.FastOnHomeAnimation
         map[LauncherSettings.HomeScreenFallback.key] = LauncherSettings.RequireHomeScreen
         map[LauncherSettings.ReopenWindow.key] = LauncherSettings.ReopenRecents

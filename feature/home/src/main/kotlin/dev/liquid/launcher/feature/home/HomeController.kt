@@ -367,6 +367,18 @@ class HomeController(
         }
     }
 
+    /** B3: present or not at [cls]; absent becomes a note for tonight's check-in. */
+    fun answerAttendance(cls: dev.liquid.launcher.core.data.StudyEvent, present: Boolean) {
+        if (present) Haptics.tick(view) else Haptics.confirm(view)
+        scope.launch {
+            val ok = data.study.answerAttendance(cls, present)
+            if (!present) {
+                if (ok) notice(dev.liquid.launcher.core.common.NoticeKind.Study, "Absent: ${cls.title.subject}", "Noted for tonight's check-in")
+                else toast("Could not write the absence to the calendar")
+            }
+        }
+    }
+
     /** "I'm home" (A2, by hand). */
     fun markHomeNow() {
         Haptics.confirm(view)
@@ -861,23 +873,26 @@ class HomeController(
      * Opens the drawer. [velocity] is the finger's speed in drawer heights per second, so a
      * flick hands its momentum to the spring instead of restarting from rest.
      */
-    fun openDrawer(velocity: Float = 0f) {
+    fun openDrawer(velocity: Float = Float.NaN) {
         dragPosition = null
         menu = null
         if (searchOpen || search.value > 0f) closeSearch(immediately = true)
         DebugLog.event("Home", "drawer: open from " + "%.2f".format(drawer.value))
-        scope.launch { drawer.animateTo(1f, drawerSpring(), initialVelocity = velocity) }
+        // Without a finger's speed, the spring keeps the speed it has: an interrupted close turns round without stopping (0.9.3).
+        val v = if (velocity.isNaN()) drawer.velocity else velocity
+        scope.launch { drawer.animateTo(1f, drawerSpring(), initialVelocity = v) }
     }
 
-    fun closeDrawer(immediately: Boolean = false, velocity: Float = 0f) {
+    fun closeDrawer(immediately: Boolean = false, velocity: Float = Float.NaN) {
         dragPosition = null
         DebugLog.event("Home", "drawer: close from " + "%.2f".format(drawer.value))
         drawerFocusReset++
         drawerQuery = ""
         tagSheet = false
         if (!data.settings.get(LauncherSettings.TagFilterKeep)) tagFilter = emptySet()
+        val v = if (velocity.isNaN()) drawer.velocity else velocity
         scope.launch {
-            if (immediately) drawer.snapTo(0f) else drawer.animateTo(0f, drawerSpring(), initialVelocity = velocity)
+            if (immediately) drawer.snapTo(0f) else drawer.animateTo(0f, drawerSpring(), initialVelocity = v)
         }
     }
 
@@ -951,20 +966,22 @@ class HomeController(
     /** Asks for the calendar (the Calendar widget), then runs [then] if it may be read. */
     fun askCalendar(then: () -> Unit) = callbacks.requestCalendar { granted -> if (granted) then() }
 
-    fun openSearch(velocity: Float = 0f) {
+    fun openSearch(velocity: Float = Float.NaN) {
         menu = null
         searchDragPosition = null
         if (!searchOpen && search.value < 0.001f) startExpectingKeyboard()
         searchOpen = true
-        scope.launch { search.animateTo(1f, searchSpring(opening = true), initialVelocity = velocity) }
+        val v = if (velocity.isNaN()) search.velocity else velocity
+        scope.launch { search.animateTo(1f, searchSpring(opening = true), initialVelocity = v) }
     }
 
-    fun closeSearch(immediately: Boolean = false, velocity: Float = 0f) {
+    fun closeSearch(immediately: Boolean = false, velocity: Float = Float.NaN) {
         searchDragPosition = null
         searchOpen = false
         searchEditing = false
+        val v = if (velocity.isNaN()) search.velocity else velocity
         scope.launch {
-            if (immediately) search.snapTo(0f) else search.animateTo(0f, searchSpring(opening = false), initialVelocity = velocity)
+            if (immediately) search.snapTo(0f) else search.animateTo(0f, searchSpring(opening = false), initialVelocity = v)
             if (!searchOpen) {
                 searchQuery = ""
                 askClaudeMode = false

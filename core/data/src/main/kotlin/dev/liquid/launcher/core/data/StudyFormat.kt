@@ -37,6 +37,17 @@ object StudyFormat {
     /** Title prefix of a quick note: an all-day event in the task calendar that is not a task. */
     const val NOTE_PREFIX = "Note:"
 
+    // "DS", "DS1", "Examen(s)", "Exam(s)", "Partiel(s)", "Contrôle": an exam in the timetable (B1).
+    private val examWords = Regex("(?:^|[^\\p{L}])(?:DS\\d*|(?i:examens?|exams?|partiels?|contr[oô]les?))(?:[^\\p{L}]|$)")
+
+    /** True when [title] names an exam. */
+    fun isExam(title: String): Boolean = examWords.containsMatchIn(title)
+
+    private val absentNote = Regex("(?i)^\\s*" + Regex.escape(NOTE_PREFIX) + "\\s*absent\\s+(.+?)(?:\\s+\\d{1,2}[:h]\\d{2})?\\s*$")
+
+    /** The module of "Note: absent Stat Des 10:00" ("Stat Des"), or null for any other title. */
+    fun absentModule(title: String): String? = absentNote.find(title)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() }
+
     private val doneMarks = listOf("✓", "✔", "✅", "☑")
     private val skippedMarks = listOf("✗", "✘", "❌")
 
@@ -261,6 +272,10 @@ data class StudyDay(
     val classes: List<StudyEvent> = emptyList(),
     /** Today's quick notes ("Note: …" all-day events of the task calendar), newest last. 0.9.1. */
     val notes: List<StudyEvent> = emptyList(),
+    /** Exams to come (B1): events of the class calendars named like an exam, soonest first. 0.9.3. */
+    val exams: List<StudyEvent> = emptyList(),
+    /** Absences recorded as "Note: absent <module> <time>" in the task calendars this semester, by module. 0.9.3. */
+    val absences: Map<String, Int> = emptyMap(),
 ) {
     /** When today's last class ends, or null on a day without classes. */
     val lastClassEnd: Long? get() = classes.maxOfOrNull { it.end }

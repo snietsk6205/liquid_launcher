@@ -377,3 +377,34 @@ released as `v0.9.1`.
 | `StudyHub.kt`, `Study.kt` | `DayRing` takes a stroke width; the old `PillStudy` removed |
 
 Not verified on the phone: picture decoding of HEIC photos (the picker hands JPEG for most), the look of the frames at small sizes.
+
+---
+
+## Entry 9: 0.9.3, P3: a study-first search page, the calendar no longer cut (2026-11-17, Opus 5.5)
+
+Why the calendar was cut (screenshot 1): the empty page put the widgets in a scroll area anchored at the top, and a
+widget's height was its cell count × (screen × 0.8 / rows), about half the screen for the calendar. Above the keyboard
+there is less than that, so the scroll area started at the top and its bottom, the calendar's last week, was out of view.
+
+| File | Change |
+|---|---|
+| `feature/home/SearchStudy.kt` (new) | `SearchPage` (cards in the chosen order, scrolling from the bottom), `NextBlockCard` (now / next, steps, Focus / Done / Start, the next step tickable; a tap grows the hub out of the card), `DayStrip` (classes grey, blocks in their colours: done full, running filling, missed outlined, skipped grey; the time now), `ExamCountdown` (B1 colours, hours at 3 days or less, long press for the next three), `CommandChips`, `ClaudeChips`, `StudyCommands`, `studyRows` |
+| `feature/home/SearchOverlay.kt` | `SearchResult.Study`; `?text` to Claude and `!next !exam !plan !abs` before bangs; search widgets capped to the space above the keyboard; the field keeps its cursor at the end of text put in by a chip |
+| `core/data/StudyFormat.kt`, `StudyCalendar.kt` (+ tests) | `StudyDay.exams` (class calendars, six months), `StudyDay.absences` (`Note: absent …`, five months), `isExam`, `absentModule` |
+| `core/data/SearchCards.kt` (new), settings, `feature/settings/SearchCardsEditor.kt` (new) | The cards and their order (Settings → Search) |
+| `HomeController.kt` | Drawer and search springs keep their speed when turned round without a finger (D125) |
+
+Not changed: the search transition itself (finger tracking, "Lift", the pill turning into the field, the blurred
+wallpaper fading in), which already did what P3 asks; the top-field variant of search keeps its old empty page.
+
+Also in 0.9.3 (P10, study workflow):
+
+| Spec | What | Where |
+|---|---|---|
+| A6 leave-by | `StudyGlance.LeaveBy`: from an hour before leaving to 15 min after, first class − "Morning trip to class" (90 min); ring = the hour running out, red from 10 min | `Study.kt`, settings `study.leaveBy`, `study.commute` |
+| B3 attendance | `StudyGlance.Attendance` 5 min to 3 h after each class, ✓ / ✗ on the clock line and in the hub; ✗ writes `Note: absent <module> <HH:mm>` (read by !abs and the check-in); answers kept per day | `Study.kt`, `StudyHub.kt`, `StudyCalendar.answerAttendance`, setting `study.attendance` |
+| C3 missed block | The pill's study item breathes twice every 15 s while a block ended unmarked (layer only, no redraw of the pill); ended blocks get "Reschedule" (Claude, pre-filled, with the block) | `PillStudy.kt`, `Study.kt` |
+
+Tests: `StudyGlanceMorningTest` (leave-by window and lateness, attendance timing, answered, latest first).
+
+Not verified on the phone: the exam regex against your real event titles, the cards' spacing at your font size.

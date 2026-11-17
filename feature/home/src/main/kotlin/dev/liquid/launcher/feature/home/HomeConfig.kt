@@ -451,6 +451,8 @@ data class SearchConfig(
     /** "questions", "always", "first" or "off" (D109). */
     val claude: String = "questions",
     val clipboard: Boolean = true,
+    /** The empty page's cards, top to bottom (0.9.3). */
+    val cards: List<String> = dev.liquid.launcher.core.data.SearchCards.defaultOrder,
 )
 
 fun SettingsStore.searchConfig() = SearchConfig(
@@ -462,6 +464,7 @@ fun SettingsStore.searchConfig() = SearchConfig(
     homeScale = get(S.SearchHomeScale) / 100f,
     claude = get(S.SearchClaude),
     clipboard = get(S.SearchClipboard),
+    cards = dev.liquid.launcher.core.data.SearchCards.shown(get(S.SearchCards)),
 )
 
 /** Wallpaper treatment on the home screen. */

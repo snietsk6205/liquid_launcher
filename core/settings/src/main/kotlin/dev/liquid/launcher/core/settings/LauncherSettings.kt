@@ -806,6 +806,12 @@ object LauncherSettings {
         title = "Swipe down on the pill", section = "pill", keywords = "gesture swipe",
     )
 
+    /** Ids of the search page's cards, top to bottom (see SearchCards in core/data). Edited with its own editor. */
+    val SearchCards = StringListSetting(
+        key = "search.cards", default = listOf("widgets", "timeline", "exam", "next", "commands", "claude", "apps"),
+        title = "Search page cards", section = "search", hidden = true,
+    )
+
     // ---- Pill: the study item and each item's gestures (0.9.1) ----
 
     val PillStudyLook = ChoiceSetting(
@@ -1922,6 +1928,24 @@ object LauncherSettings {
         summary = "Plugged in at least 45 minutes after the last class",
         section = "study", keywords = "study arrival charger plugged home",
     )
+    val StudyAttendance = BoolSetting(
+        key = "study.attendance", default = true,
+        title = "Ask after each class whether I was there",
+        summary = "Five minutes after a class ends, the line under the clock asks \"present?\". ✗ writes \"Note: absent <module> <time>\" " +
+            "to your task calendar for the check-in, and !abs counts them",
+        section = "study", keywords = "study attendance absent present class absence",
+    )
+    val StudyLeaveBy = BoolSetting(
+        key = "study.leaveBy", default = true,
+        title = "Morning: when to leave",
+        summary = "\"Leave by 6:30\" under the clock from an hour before: the first class minus the trip. Red from 10 minutes before",
+        section = "study", keywords = "study leave commute morning trajet bus class",
+    )
+    val StudyCommute = IntSetting(
+        key = "study.commute", default = 90, min = 15, max = 180, step = 5, unit = "min",
+        title = "Morning trip to class",
+        section = "study", keywords = "study commute trip travel morning minutes trajet",
+    )
     val StudyShiftLead = IntSetting(
         key = "study.shiftLead", default = 20, min = 0, max = 60, step = 5, unit = "min",
         title = "Offer to shift the evening when home later than this before the first block",
@@ -2178,6 +2202,7 @@ object LauncherSettings {
         GesturePinchIn, GesturePinchOut, GestureTwoUp, GestureTwoDown, GestureEdgeLeftUp, GestureEdgeLeftDown, GestureEdgeRightUp, GestureEdgeRightDown, GestureEdgeWidth,
         HapticsEnabled, HapticsStrength, HapticDrawer, HapticPickUp, LaunchAnimation, MotionStyle, MotionSpeed, UpdatesDaily,
         PillEnabled, PillSlots, PillPosition, PillOffset, PillWidth, PillHeight, PillCorner, PillIconSize,
+        SearchCards,
         PillStudyLook, PillStudyGlyph, PillStudyApp, PillStudyPicture, PillStudyFrame, PillStudySize, PillStudyTint, PillStudyRing, PillSlotGestures,
         PillHint, PillTap, PillLongPress, PillSwipeUp, PillSwipeDown,
         DrawerColumns, DrawerIconSize, DrawerLabels, DrawerFromBottom, DrawerAutoKeyboard, DrawerSort,
@@ -2194,6 +2219,7 @@ object LauncherSettings {
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
         StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyPlanLink, StudyLinkOpener,
+        StudyAttendance, StudyLeaveBy, StudyCommute,
         StudyArrival, StudyHomeWifi, StudyArrivalCharger, StudyShiftLead, StudyLatestEnd, StudyClassCalendars, StudyHeader, StudyCheckin, StudyTemplates,
         StudyHubSize, StudyHubBounce, StudyClockAction,
         NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,

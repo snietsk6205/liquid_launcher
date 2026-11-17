@@ -91,3 +91,26 @@ class StudyShiftTest {
         assertEquals("", StudyFormat.notes(ticked).lines().firstOrNull { it.startsWith(StudyFormat.STATUS_PREFIX) } ?: "")
     }
 }
+
+class StudyExamsTest {
+    @Test
+    fun examTitles() {
+        assertTrue(StudyFormat.isExam("DS + Examens P2"))
+        assertTrue(StudyFormat.isExam("DS1 Proba"))
+        assertTrue(StudyFormat.isExam("Partiel de micro"))
+        assertTrue(StudyFormat.isExam("Examen: Stat Des"))
+        assertTrue(StudyFormat.isExam("Contrôle continu"))
+        assertFalse(StudyFormat.isExam("Proba 2: théorèmes de convergence"))
+        assertFalse(StudyFormat.isExam("Words and things"))
+        assertFalse(StudyFormat.isExam("Ads review"))
+    }
+
+    @Test
+    fun absentNotes() {
+        assertEquals("Stat Des", StudyFormat.absentModule("Note: absent Stat Des 10:00"))
+        assertEquals("Intégration et Probabilité TD", StudyFormat.absentModule("Note: absent Intégration et Probabilité TD 8h30"))
+        assertEquals("Micro", StudyFormat.absentModule("note: Absent Micro"))
+        assertNull(StudyFormat.absentModule("Note: flashcard wrong Micro"))
+        assertNull(StudyFormat.absentModule("Absent Micro"))
+    }
+}
