@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.9.16: quiet during study blocks (optional): notifications wait until the block ends and come back, except calls, alarms, the people, school email and apps you let through; the home screen sums up what waited.
+
 0.9.15: switching tags glides: the selection slides from chip to chip, and the drawer's apps glide to their new places while others fade.
 
 0.9.14: the theme editor: every colour (with its opacity), border, shape, corners, sheen, glass, shadow and glow of buttons, the main button, chips and round buttons, and the frost under them, live in Settings → Buttons.

@@ -2086,6 +2086,33 @@ object LauncherSettings {
         summary = "Every glass surface takes a touch of the colour of the block now or next (its colour in your calendar), easing from one block to the next",
         section = "study", keywords = "study glass tint colour module block e3",
     )
+    // C5 (0.9.16): notification triage during blocks.
+    val StudyQuiet = BoolSetting(
+        key = "study.quiet", default = false,
+        title = "Quiet during blocks",
+        summary = "While a study block runs, notifications wait until it ends: Android gives them back afterwards, and the home " +
+            "screen says how many waited and from which apps. Calls, alarms, music and the people, school email and apps " +
+            "below always get through. Needs notification access (below)",
+        section = "study", keywords = "notifications quiet focus block triage do not disturb hold snooze c5",
+    )
+    val StudyQuietPeople = TextSetting(
+        key = "study.quietPeople", default = "", placeholder = "Maman, Yassine",
+        title = "Let through: people",
+        summary = "Names as they appear in your messages, separated by commas",
+        section = "study", keywords = "quiet notifications people contacts whitelist",
+    )
+    val StudyQuietEmail = TextSetting(
+        key = "study.quietEmail", default = "", placeholder = "@school.tn",
+        title = "Let through: school email",
+        summary = "Your school address or its end (for example @school.tn): mail for that account gets through",
+        section = "study", keywords = "quiet notifications email school mail whitelist",
+    )
+    val StudyQuietTags = TextSetting(
+        key = "study.quietTags", default = "important",
+        title = "Let through: apps with the tag",
+        summary = "Give an app this tag from its long-press menu (Tags); several, separated by commas",
+        section = "study", keywords = "quiet notifications apps tag important whitelist",
+    )
     /** A4 / C4 (0.9.11): saved-layout ids, chosen in the Study companion screen; empty = none. */
     val StudyCommuteLayout = TextSetting(key = "study.commuteLayout", default = "", title = "Layout while travelling home", section = "study", hidden = true)
     val StudyExamLayout = TextSetting(key = "study.examLayout", default = "", title = "Layout in exam week", section = "study", hidden = true)
@@ -2381,6 +2408,7 @@ object LauncherSettings {
         StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyPlanLink, StudyLinkOpener,
         StudyAttendance, StudyLeaveBy, StudyCommute, StudyRest, StudyWindDown, StudySpeedBump, StudySpeedBumpTags, StudyFeedCalendar, StudyFeedLocal, StudyGlassTint,
         StudyCommuteLayout, StudyExamLayout, ContextActive, ContextApplied, ContextBase,
+        StudyQuiet, StudyQuietPeople, StudyQuietEmail, StudyQuietTags,
         StudyArrival, StudyHomeWifi, StudyArrivalCharger, StudyShiftLead, StudyLatestEnd, StudyClassCalendars, StudyHeader, StudyCheckin, StudyTemplates,
         StudyHubSize, StudyHubBounce, StudyClockAction,
         NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,

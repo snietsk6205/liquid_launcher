@@ -10,6 +10,9 @@ object SettingDependencies {
         }
         map[LauncherSettings.HomeLabelSize.key] = LauncherSettings.HomeLabels
         map[LauncherSettings.GlassSwell.key] = LauncherSettings.GlassDepth
+        for (s in listOf(LauncherSettings.StudyQuietPeople, LauncherSettings.StudyQuietEmail, LauncherSettings.StudyQuietTags)) {
+            map[s.key] = LauncherSettings.StudyQuiet
+        }
         map[LauncherSettings.GlassDispersionAmount.key] = LauncherSettings.GlassDispersion
         map[LauncherSettings.StudyCommute.key] = LauncherSettings.StudyLeaveBy
         map[LauncherSettings.StudySpeedBumpTags.key] = LauncherSettings.StudySpeedBump

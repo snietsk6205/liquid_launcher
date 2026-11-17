@@ -58,5 +58,15 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/update_paths" />
         </provider>
+            <!-- C5 (0.9.16): notifications wait during study blocks; only with the user's notification access. -->
+        <service
+            android:name="dev.liquid.launcher.QuietService"
+            android:exported="true"
+            android:label="Liquid Launcher: quiet during study blocks"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

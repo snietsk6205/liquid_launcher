@@ -659,9 +659,28 @@ export and the editor.
 
 ---
 
+## Entry 22: 0.9.16, C5: notifications wait during study blocks (2026-11-17, Opus 5.5)
+
+Settings → Study companion → "Quiet during blocks" (off by default; it needs the system's notification access, and
+a card there opens that switch and says whether it is on).
+
+| What | How |
+|---|---|
+| Held | While a block runs (and is not marked done or missed), a notification that is not let through is snoozed until the block ends: Android gives it back then, so nothing is lost (`QuietService`, a notification listener) |
+| Let through | Calls, alarms, navigation, music and anything ongoing; the system and the launcher; apps with the tag "important" (setting); messages naming one of your people (whole name, so "Ali" is not "Alice"); mail for your school address (Gmail shows the account; setting, e.g. `@school.tn`) |
+| After the block | A notice on the home screen: "Micro is over · 14 notifications waited", with "WhatsApp 6 · Instagram 5 · Gmail 3 · back in your notifications" |
+| Tests | `QuietRulesTest`: what gets through, names as whole words, school mail by account, tags, the summary |
+
+Not tested on the emulator (the CI would need to grant access and post notifications during a block; next step if
+wanted). Risk: MagicOS may stop the listener in the background; the launcher is the home app, which usually keeps
+it alive. If notifications ever stay away after a block, turn the setting off: snoozed ones come back on their own
+at the end of the block in any case.
+
+---
+
 ## End of this session (2026-11-17): state for the next model
 
-**Version shipped:** 0.9.15 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
+**Version shipped:** 0.9.16 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
 0.9.1 (run 63), 0.9.2 (run 64, second attempt; the first failed on a slow emulator, see entry 11). 0.9.3 and 0.9.4 were
 pushed together (run 65); 0.9.5 to 0.9.9 together (run 66, passed); 0.9.10 and 0.9.11 together (run 67, passed); 0.9.12 (run 68: built, unit tests passed, the real glass shader compiled on the emulator, but not released: my new check of the tuning panel found no screen dump, because the bench kept moving after measuring and the screen never settled; 0.9.13 keeps it still unless you press Move); 0.9.13 (run 69: did not compile, a smart cast across modules in `Controls.kt`; fixed) and 0.9.14 together after it. Check the GitHub releases for the newest `v0.9.x`; if a
 run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Nothing of this session was tried on the phone.
@@ -679,7 +698,7 @@ run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Not
 | P7 widgets | Partly (0.9.10): no glass box behind the built-in widgets by default. Not: per-widget layout / font / accent / fields options, restyling other apps' widgets (re-tint their view tree) with a per-widget off switch |
 | P8 layouts and wallpaper | Partly: context triggers for layouts (trip home, exam week; 0.9.11). Not: layout previews, per-layout wallpaper choice UI, switch timer, time windows, the LayoutsSheet redesign, per-wallpaper blur/dim/saturation/vignette, tone feeding the glass, wallpaper quick tools |
 | P9 icon animations | Done (0.9.4) |
-| P10 rest of Phase 5 | Done: A4 (layout switch + trip line), A5, A6, B1 (+ ≈), B2, B3, C1, C3, C4 (layout switch), D3, D4, E1, E2, E3, E4, E5, launcher-data. Not: C5 notification triage (needs a notification listener: a new permission and service), A4's battery rule, C4's annales folders |
+| P10 rest of Phase 5 | Done: A4 (layout switch + trip line), A5, A6, B1 (+ ≈), B2, B3, C1, C3, C4 (layout switch), C5 (0.9.16), D3, D4, E1, E2, E3, E4, E5, launcher-data. Not: A4's battery rule, C4's annales folders |
 | P11 motion pass | Partly: drawer, search and hub springs keep their speed when turned round (D125); the rest of the pass not done |
 
 **Known bugs and risks**
@@ -703,9 +722,12 @@ run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Not
    surfaces (pill, drawer, menus), your frost for buttons and chips; "Your keyboard" in Tune the glass makes
    everything frosted in one tap.
 
-**Exact next step:** P5's transitions. (1) The tag list as a container transform: the tag button in the drawer
-grows into the tag sheet (shared bounds, corner radius and glass morphing with one spring, interruptible; the chosen
-tag shrinks back into the button's dot). (2) The home pill and the drawer's search field as one element: while the
-drawer opens, the pill's bounds, corners and content cross into the field's (`DrawerMotion` progress drives both),
-instead of the pill fading and the field appearing. (3) Commands typed in the drawer field (`!abs`, `!next`,
-`!exam`, `!plan`, `?`) hand over to the search page's study commands. Then P7 (per-widget options) and P8.
+**Exact next step:** P7, your widgets: give the Calendar, Study blocks, Now card, Today and Clock & date widgets
+the options the brief lists (layout, density, font and weight, accent, corners, which fields show), each as a
+per-widget option in the widget's edit menu (`setItemOption`, as "plate" already is) with the preview of the
+home screen; then restyle other apps' widgets inside their view tree (re-tint opaque backgrounds, palette colours,
+text contrast, rounded clip) with a per-widget "off" switch, and log which kinds cannot be restyled (RemoteViews
+drawn as bitmaps, ListView adapters). After that P8 (layout previews, per-layout wallpaper UI, a switch-back timer,
+per-wallpaper blur/dim/saturation), then the last bits: the drawer's top tabs pill rising out of the home pill, an
+emulator check of C5 (grant access with `cmd notification allow_listener`, post during the 14b block), A4's battery
+rule and C4's folders, and the P11 pass.

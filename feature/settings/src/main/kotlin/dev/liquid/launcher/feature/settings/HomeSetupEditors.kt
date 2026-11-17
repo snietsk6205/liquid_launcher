@@ -202,6 +202,44 @@ internal fun StudyEditor(store: SettingsStore) {
     }
     LauncherDataEditor(store)
     ContextLayoutsEditor(store)
+    QuietAccessCard(store)
+}
+
+/** C5 (0.9.16): whether "Quiet during blocks" may hold notifications, and the way to the system switch. */
+@Composable
+private fun QuietAccessCard(store: SettingsStore) {
+    val quiet by store.observe(LauncherSettings.StudyQuiet)
+    if (!quiet) return
+    val context = LocalContext.current
+    fun check(): Boolean = android.provider.Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        ?.contains(context.packageName) == true
+    var granted by remember { mutableStateOf(check()) }
+    // Read again while shown: the switch is in the system's settings.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(1000)
+            granted = check()
+        }
+    }
+    InfoCard {
+        Text("Quiet during blocks", style = MaterialTheme.typography.titleMedium)
+        if (granted) {
+            BodyText("Notification access is on: during a study block, notifications that are not let through wait until it ends.")
+        } else {
+            BodyText(
+                "Notification access is off, so nothing waits yet. Allow \"Liquid Launcher: quiet during study blocks\" " +
+                    "in the system's notification access.",
+            )
+            Button(onClick = {
+                val component = android.content.ComponentName(context.packageName, "dev.liquid.launcher.QuietService").flattenToString()
+                val detail = Intent("android.settings.NOTIFICATION_LISTENER_DETAIL_SETTINGS")
+                    .putExtra("android.provider.extra.NOTIFICATION_LISTENER_COMPONENT_NAME", component)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                val list = Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching { context.startActivity(detail) }.recoverCatching { context.startActivity(list) }
+            }, modifier = Modifier.padding(top = 8.dp)) { Text("Open notification access") }
+        }
+    }
 }
 
 /** A4 and C4 (0.9.11): which saved layout comes on by itself on the way home and in exam week. */
