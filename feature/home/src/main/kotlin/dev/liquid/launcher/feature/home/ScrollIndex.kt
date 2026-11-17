@@ -355,7 +355,8 @@ internal fun ScrollIndex(
             return if (right) restX(true) - pull * w else restX(false) + pull * w
         }
         fun tick() {
-            if (config.haptics == "off") return
+            // P11: the index's own setting, and the launcher's haptics switch over all of them.
+            if (config.haptics == "off" || !Haptics.config.haptics) return
             val strong = config.haptics == "strong"
             val constant = when {
                 Build.VERSION.SDK_INT >= 34 -> if (strong) HapticFeedbackConstants.SEGMENT_TICK else HapticFeedbackConstants.SEGMENT_FREQUENT_TICK
@@ -518,7 +519,7 @@ internal fun ScrollIndex(
                                 touch.active = -1
                                 touch.touching = true
                                 follow(stripLeft + down.position.x, down.position.y)
-                                scope.launch { pop.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 700f)) }
+                                scope.launch { pop.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = MotionScale.stiffness(700f))) }
                                 while (true) {
                                     val event = awaitPointerEvent()
                                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
@@ -527,7 +528,7 @@ internal fun ScrollIndex(
                                     follow(stripLeft + change.position.x, change.position.y)
                                 }
                                 touch.touching = false
-                                scope.launch { pop.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = 500f)) }
+                                scope.launch { pop.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = MotionScale.stiffness(500f))) }
                             }
                         }
                 )
@@ -641,7 +642,7 @@ private fun RailIndex(
         androidx.compose.runtime.snapshotFlow {
             if (touch.touching) touch.lens else index.entryForRow(currentRow(state, index)).toFloat()
         }.collectLatest { target ->
-            if (touch.touching) marker.snapTo(target) else marker.animateTo(target, spring(dampingRatio = 0.82f, stiffness = 380f))
+            if (touch.touching) marker.snapTo(target) else marker.animateTo(target, spring(dampingRatio = 0.82f, stiffness = MotionScale.stiffness(380f)))
         }
     }
     val busy by remember(state) { derivedStateOf { touch.touching || state.isScrollInProgress } }
@@ -684,7 +685,8 @@ private fun RailIndex(
             highlight.to = entries.getOrNull(i + 1)?.firstItem ?: Int.MAX_VALUE
         }
         fun tick() {
-            if (config.haptics == "off") return
+            // P11: the index's own setting, and the launcher's haptics switch over all of them.
+            if (config.haptics == "off" || !Haptics.config.haptics) return
             val strong = config.haptics == "strong"
             val constant = when {
                 Build.VERSION.SDK_INT >= 34 -> if (strong) HapticFeedbackConstants.SEGMENT_TICK else HapticFeedbackConstants.SEGMENT_FREQUENT_TICK
@@ -839,7 +841,7 @@ private fun RailIndex(
                             touch.active = -1
                             touch.touching = true
                             follow(boxTop + down.position.y)
-                            scope.launch { pop.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 700f)) }
+                            scope.launch { pop.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = MotionScale.stiffness(700f))) }
                             while (true) {
                                 val event = awaitPointerEvent()
                                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
@@ -848,7 +850,7 @@ private fun RailIndex(
                                 follow(boxTop + change.position.y)
                             }
                             touch.touching = false
-                            scope.launch { pop.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = 500f)) }
+                            scope.launch { pop.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = MotionScale.stiffness(500f))) }
                         }
                     },
             )

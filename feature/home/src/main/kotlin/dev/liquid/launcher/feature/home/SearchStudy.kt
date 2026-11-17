@@ -235,7 +235,7 @@ private fun NextBlockCard(controller: HomeController, day: StudyDay, now: Long) 
         val running = now >= hero.begin && now < hero.end
         val tasks = hero.tasks
         val nextStep = tasks.firstOrNull { !it.done }
-        Column(Modifier.animateContentSize(spring(dampingRatio = 0.86f, stiffness = 520f))) {
+        Column(Modifier.animateContentSize(spring(dampingRatio = 0.86f, stiffness = MotionScale.stiffness(520f)))) {
             Row(Modifier.height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.width(4.dp).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(accent))
                 Spacer(Modifier.width(11.dp))
@@ -384,7 +384,7 @@ private fun ExamCountdown(controller: HomeController, exams: List<StudyEvent>, u
             )
             .background(Ink.copy(alpha = 0.09f))
             .padding(horizontal = 14.dp, vertical = 10.dp)
-            .animateContentSize(spring(dampingRatio = 0.84f, stiffness = 480f)),
+            .animateContentSize(spring(dampingRatio = 0.84f, stiffness = MotionScale.stiffness(480f))),
     ) {
         Column {
             ExamRow(first, now, big = true, date(first), first.key in unconfirmed)
@@ -484,7 +484,7 @@ private fun AbsenceCard(day: StudyDay) {
 private fun AbsenceTube(level: dev.liquid.launcher.core.data.AbsenceLevel, limit: Double) {
     val color = bandColor(level.band)
     val fill by androidx.compose.animation.core.animateFloatAsState(
-        (level.fill ?: 0.0).toFloat().coerceIn(0f, 1.2f), spring(dampingRatio = 0.6f, stiffness = 120f), label = "tube",
+        (level.fill ?: 0.0).toFloat().coerceIn(0f, 1.2f), spring(dampingRatio = 0.6f, stiffness = MotionScale.stiffness(120f)), label = "tube",
     )
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -536,7 +536,7 @@ private fun FlashcardCard(controller: HomeController, day: StudyDay) {
     if (answered == card.q) return
     var side by remember(card.q) { mutableStateOf(0) }
     val turn by androidx.compose.animation.core.animateFloatAsState(
-        side * 180f, spring(dampingRatio = 0.72f, stiffness = 260f), label = "flip",
+        side * 180f, spring(dampingRatio = 0.72f, stiffness = MotionScale.stiffness(260f)), label = "flip",
     )
     // The face shown is the one turned towards you: the content swaps at the half turn and is mirrored back.
     val shown = ((turn + 90f) / 180f).toInt().coerceIn(0, 2)

@@ -219,7 +219,7 @@ internal fun WidgetPicker(glass: GlassConfig, lightBackground: Boolean, backdrop
                     item { PickerSection(if (groups == null) "Apps · loading…" else "Apps", color) }
                     items(shownApps, key = { "app:" + it.pkg }) { group ->
                         val open = openApp == group.pkg || (q.isNotEmpty() && shownApps.size <= 3)
-                        Column(Modifier.fillMaxWidth().animateContentSize(spring(dampingRatio = 0.85f, stiffness = 520f))) {
+                        Column(Modifier.fillMaxWidth().animateContentSize(spring(dampingRatio = 0.85f, stiffness = MotionScale.stiffness(520f)))) {
                             Row(
                                 Modifier
                                     .fillMaxWidth()
@@ -452,7 +452,7 @@ internal fun BatteryWidget(color: Color, shadow: Shadow?) {
         read(context.registerReceiver(receiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED)))
         onDispose { runCatching { context.unregisterReceiver(receiver) } }
     }
-    val shown by animateFloatAsState(if (level < 0) 0f else level / 100f, spring(dampingRatio = 0.9f, stiffness = 120f), label = "battery")
+    val shown by animateFloatAsState(if (level < 0) 0f else level / 100f, spring(dampingRatio = 0.9f, stiffness = MotionScale.stiffness(120f)), label = "battery")
     val accent = when {
         charging -> Color(0xFF6FD08C)
         level in 0..15 -> Color(0xFFE5675C)

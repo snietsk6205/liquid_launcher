@@ -235,7 +235,7 @@ private fun StudyItemRing(style: String, day: StudyDay, now: Long, color: Color,
         "continuous" -> if (total == 0) 0f else day.blocksDone.toFloat() / total
         else -> day.current(now)?.let { b -> ((now - b.begin).toFloat() / (b.end - b.begin).coerceAtLeast(1)).coerceIn(0f, 1f) } ?: 0f
     }
-    val shown by animateFloatAsState(target, spring(dampingRatio = 0.8f, stiffness = 200f), label = "studyItemRing")
+    val shown by animateFloatAsState(target, spring(dampingRatio = 0.8f, stiffness = MotionScale.stiffness(200f)), label = "studyItemRing")
     Canvas(Modifier.size(size)) {
         val w = stroke.toPx()
         val topLeft = Offset(w / 2f, w / 2f)
@@ -253,7 +253,7 @@ private fun StudyItemRing(style: String, day: StudyDay, now: Long, color: Color,
 private fun LiquidCircle(day: StudyDay, accent: Color, color: Color, modifier: Modifier) {
     val total = day.blocks.size
     val target = if (total == 0) 0f else day.blocks.count { it.status == StudyStatus.Done }.toFloat() / total
-    val level by animateFloatAsState(target, spring(dampingRatio = 0.35f, stiffness = 90f), label = "liquidLevel")
+    val level by animateFloatAsState(target, spring(dampingRatio = 0.35f, stiffness = MotionScale.stiffness(90f)), label = "liquidLevel")
     Canvas(modifier) {
         val r = this.size.minDimension / 2f
         val c = this.center

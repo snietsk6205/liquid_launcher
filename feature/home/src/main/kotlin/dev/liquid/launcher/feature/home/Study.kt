@@ -192,8 +192,8 @@ private fun StudySetup(surface: StudySurface, controller: HomeController) {
 /** A round tick box; ticking fills it and the check pops in with a small overshoot (0.7.0). */
 @Composable
 internal fun Tick(done: Boolean, color: Color, size: Dp = 18.dp) {
-    val fill by animateFloatAsState(if (done) 1f else 0f, spring(dampingRatio = 0.9f, stiffness = 700f), label = "tickFill")
-    val pop by animateFloatAsState(if (done) 1f else 0f, spring(dampingRatio = 0.45f, stiffness = 600f), label = "tickPop")
+    val fill by animateFloatAsState(if (done) 1f else 0f, spring(dampingRatio = 0.9f, stiffness = MotionScale.stiffness(700f)), label = "tickFill")
+    val pop by animateFloatAsState(if (done) 1f else 0f, spring(dampingRatio = 0.45f, stiffness = MotionScale.stiffness(600f)), label = "tickPop")
     Box(
         Modifier
             .size(size)
@@ -431,7 +431,7 @@ internal fun BlockCard(
             .clip(shape)
             .background(color.copy(alpha = if (running) 0.14f else 0.06f))
             .then(paneRim(color))
-            .animateContentSize(spring(dampingRatio = 0.85f, stiffness = 520f))
+            .animateContentSize(spring(dampingRatio = 0.85f, stiffness = MotionScale.stiffness(520f)))
             .padding(horizontal = 12.dp, vertical = 9.dp),
     ) {
         Row(
@@ -535,7 +535,7 @@ internal fun TomorrowSection(day: StudyDay, prefs: TodayPrefs, color: Color) {
     var open by remember(prefs.tomorrow) { mutableStateOf(prefs.tomorrow == "all") }
     val blocks = day.tomorrowBlocks
     val more = blocks.size - 1 + day.tomorrowTasks.size
-    Column(Modifier.fillMaxWidth().animateContentSize(spring(dampingRatio = 0.85f, stiffness = 520f))) {
+    Column(Modifier.fillMaxWidth().animateContentSize(spring(dampingRatio = 0.85f, stiffness = MotionScale.stiffness(520f)))) {
         Row(
             Modifier
                 .fillMaxWidth()
@@ -582,7 +582,7 @@ private fun TomorrowBlock(block: StudyEvent, color: Color) {
             .clip(RoundedCornerShape(16.dp))
             .background(color.copy(alpha = if (open) 0.07f else 0f))
             .clickable(interactionSource = null, indication = null) { open = !open }
-            .animateContentSize(spring(dampingRatio = 0.85f, stiffness = 520f))
+            .animateContentSize(spring(dampingRatio = 0.85f, stiffness = MotionScale.stiffness(520f)))
             .padding(horizontal = 6.dp, vertical = 5.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -931,7 +931,7 @@ internal fun StudyLine(
         contentKey = { glanceKey(it) },
         transitionSpec = {
             (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(260, delayMillis = 60)) +
-                androidx.compose.animation.slideInVertically(spring(dampingRatio = 0.85f, stiffness = 380f)) { it / 2 }) togetherWith
+                androidx.compose.animation.slideInVertically(spring(dampingRatio = 0.85f, stiffness = MotionScale.stiffness(380f))) { it / 2 }) togetherWith
                 (androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(160)) +
                     androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(200)) { -it / 2 })
         },

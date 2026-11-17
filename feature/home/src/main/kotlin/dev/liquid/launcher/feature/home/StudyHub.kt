@@ -409,7 +409,7 @@ internal fun DayRing(day: StudyDay, now: Long, color: Color, size: Dp, showCount
     val blocks = day.blocks
     // The ring pops a little each time a block is ticked off.
     val done = day.blocksDone
-    val pop by animateFloatAsState(done.toFloat(), spring(dampingRatio = 0.45f, stiffness = 500f), label = "dayRing")
+    val pop by animateFloatAsState(done.toFloat(), spring(dampingRatio = 0.45f, stiffness = MotionScale.stiffness(500f)), label = "dayRing")
     Box(Modifier.size(size), contentAlignment = Alignment.Center) {
         Canvas(
             Modifier
@@ -479,7 +479,7 @@ private fun Timeline(
     SectionLabel("Timeline", color)
     val anyRunning = day.blocks.any { now >= it.begin && now < it.end }
     var nowShown = anyRunning
-    Column(Modifier.fillMaxWidth().animateContentSize(spring(dampingRatio = 0.86f, stiffness = 520f))) {
+    Column(Modifier.fillMaxWidth().animateContentSize(spring(dampingRatio = 0.86f, stiffness = MotionScale.stiffness(520f)))) {
         rows.forEach { (event, isClass) ->
             if (!nowShown && event.begin > now) {
                 NowLine(now, color)

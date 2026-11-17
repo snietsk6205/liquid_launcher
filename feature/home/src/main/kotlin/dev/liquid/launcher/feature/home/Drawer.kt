@@ -964,7 +964,7 @@ internal fun DrawerSearchField(
             .then(
                 if (interactive) {
                     Modifier.tagSwipe({ controller.tagSwipeEnabled && controller.drawerQuery.isEmpty() }) { direction ->
-                        view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                        Haptics.tick(view)
                         controller.filterByTags(TagFilterOps.step(controller.tagSwipeOrder, controller.tagFilter, direction))
                     }
                 } else Modifier

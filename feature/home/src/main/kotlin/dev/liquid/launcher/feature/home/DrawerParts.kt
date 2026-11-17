@@ -102,7 +102,7 @@ class ScrollFx(private val scope: CoroutineScope) {
         val target = (pull.value + dy * 0.45f * strength).coerceIn(-limit, limit)
         scope.launch {
             pull.snapTo(target)
-            pull.animateTo(0f, spring(dampingRatio = 0.72f, stiffness = 230f))
+            pull.animateTo(0f, spring(dampingRatio = 0.72f, stiffness = MotionScale.stiffness(230f)))
         }
     }
 }

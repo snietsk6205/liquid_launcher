@@ -183,8 +183,8 @@ internal fun themedSurface(
         pressed -> Color(kind.pressedText ?: kind.text)
         else -> Color(kind.text)
     }
-    val fill by androidx.compose.animation.animateColorAsState(targetFill, spring(stiffness = 900f), label = "themeFill")
-    val content by androidx.compose.animation.animateColorAsState(targetContent, spring(stiffness = 900f), label = "themeText")
+    val fill by androidx.compose.animation.animateColorAsState(targetFill, spring(stiffness = MotionScale.stiffness(900f)), label = "themeFill")
+    val content by androidx.compose.animation.animateColorAsState(targetContent, spring(stiffness = MotionScale.stiffness(900f)), label = "themeText")
     val sheen = kind.gradient?.takeIf { it.colors.size >= 2 }?.let { g ->
         val colors = g.colors.map { Color(it) }
         when (g.type.uppercase()) {

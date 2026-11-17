@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.9.20: every animation follows the motion speed setting and every vibration the haptics switch.
+
 0.9.19: annales for exam week: choose a folder of past papers (one sub-folder per module) and the search page lists them in the week before an exam, the next exam's module first.
 
 0.9.18: on the trip home under 30 % battery, the glass goes frosted and widgets and moving effects rest until you are home or charging.

@@ -724,9 +724,23 @@ card is in the search page instead, one swipe down. The exam layout (C4, 0.9.11)
 
 ---
 
+## Entry 26: 0.9.20, P11 (part): one motion speed, one haptics switch (2026-11-17, Opus 5.5)
+
+| What | How |
+|---|---|
+| Speed | 26 springs set a fixed stiffness and ignored Settings → motion speed (the day ring, the battery ring, the letter index's bubble and marker, the search cards growing, the flashcard's turn, the calendar's month slide, ticks, the hub's lists, the ask-Claude turn, the drawer's pull); they now all go through `MotionScale`, like the drawer, search, hub and sheets already did. The new tag slide and theme colours too |
+| Haptics | The letter index's ticks had their own switch only; they now also obey the launcher's haptics switch. The tag strip's hold and the field's tag swipe used the system haptic directly; they go through `Haptics` (the switch, the strength) like the rest |
+
+Already coherent before this pass: drawer, search, hub, sheets and overlays use the shared springs of `Motion.kt`
+(calm, liquid or lively) and keep their speed when turned round (D125); fades stay short tweens, which never
+delay what comes next. Not done: measuring frame times on the phone (Diagnostics → glass benchmark covers the glass
+only).
+
+---
+
 ## End of this session (2026-11-17): state for the next model
 
-**Version shipped:** 0.9.19 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
+**Version shipped:** 0.9.20 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
 0.9.1 (run 63), 0.9.2 (run 64, second attempt; the first failed on a slow emulator, see entry 11). 0.9.3 and 0.9.4 were
 pushed together (run 65); 0.9.5 to 0.9.9 together (run 66, passed); 0.9.10 and 0.9.11 together (run 67, passed); 0.9.12 (run 68: built, unit tests passed, the real glass shader compiled on the emulator, but not released: my new check of the tuning panel found no screen dump, because the bench kept moving after measuring and the screen never settled; 0.9.13 keeps it still unless you press Move); 0.9.13 (run 69: did not compile, a smart cast across modules in `Controls.kt`; fixed) and 0.9.14 (run 70: the editor's name clashed with Settings → Theme's; fixed) released together by run 71 (passed, emulator included); 0.9.15 to 0.9.18 together after it. Check the GitHub releases for the newest `v0.9.x`; if a
 run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Nothing of this session was tried on the phone.
@@ -745,7 +759,7 @@ run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Not
 | P8 layouts and wallpaper | Partly: context triggers for layouts (trip home, exam week; 0.9.11). Not: layout previews, per-layout wallpaper choice UI, switch timer, time windows, the LayoutsSheet redesign, per-wallpaper blur/dim/saturation/vignette, tone feeding the glass, wallpaper quick tools |
 | P9 icon animations | Done (0.9.4) |
 | P10 rest of Phase 5 | Done: A4 (layout switch + trip line), A5, A6, B1 (+ ≈), B2, B3, C1, C3, C4 (layout switch), C5 (0.9.16), A4's battery rule (0.9.18), C4's annales (0.9.19, as a search card), D3, D4, E1, E2, E3, E4, E5, launcher-data. Phase 5 is complete |
-| P11 motion pass | Partly: drawer, search and hub springs keep their speed when turned round (D125); the rest of the pass not done |
+| P11 motion pass | Partly: drawer, search and hub springs keep their speed when turned round (D125); every spring follows the motion speed and every haptic the haptics switch (0.9.20). Not: frame-time measurements on the phone |
 
 **Known bugs and risks**
 - The emulator in CI is sometimes too slow (run 64: "isn't responding" dialogs and redirects missed); a re-run passes.

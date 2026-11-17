@@ -171,8 +171,8 @@ internal fun CalendarWidget(item: HomeItem, env: PageEnv, controller: HomeContro
                         targetState = month,
                         transitionSpec = {
                             val dir = if (targetState > initialState) 1 else -1
-                            (slideInHorizontally(spring(dampingRatio = 0.82f, stiffness = 420f)) { it / 3 * dir } + fadeIn()) togetherWith
-                                (slideOutHorizontally(spring(dampingRatio = 1f, stiffness = 520f)) { -it / 3 * dir } + fadeOut())
+                            (slideInHorizontally(spring(dampingRatio = 0.82f, stiffness = MotionScale.stiffness(420f))) { it / 3 * dir } + fadeIn()) togetherWith
+                                (slideOutHorizontally(spring(dampingRatio = 1f, stiffness = MotionScale.stiffness(520f))) { -it / 3 * dir } + fadeOut())
                         },
                         modifier = Modifier.fillMaxWidth().weight(1f),
                         label = "month",
@@ -264,7 +264,7 @@ private fun MonthGrid(month: YearMonth, today: LocalDate, data: CalMonth?, color
 @Composable
 private fun DayCell(date: LocalDate, isToday: Boolean, dots: List<Int>, color: Color, live: Boolean, controller: HomeController) {
     // Today swells in like a drop when the widget appears or the day changes.
-    val lit by animateFloatAsState(if (isToday) 1f else 0f, spring(dampingRatio = 0.5f, stiffness = 300f), label = "today")
+    val lit by animateFloatAsState(if (isToday) 1f else 0f, spring(dampingRatio = 0.5f, stiffness = MotionScale.stiffness(300f)), label = "today")
     val past = date.isBefore(LocalDate.now())
     Box(
         Modifier

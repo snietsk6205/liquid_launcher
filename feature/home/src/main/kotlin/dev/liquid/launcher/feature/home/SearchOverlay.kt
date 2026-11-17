@@ -413,7 +413,7 @@ private fun IconBox(icon: Int, background: Color = Color.White.copy(alpha = 0.12
 @Composable
 private fun FieldModeIcon(controller: HomeController, color: Color, claudeOn: Boolean) {
     val ask = controller.askClaudeMode && claudeOn
-    val turn by animateFloatAsState(if (ask) 1f else 0f, spring(dampingRatio = 0.55f, stiffness = 420f), label = "fieldMode")
+    val turn by animateFloatAsState(if (ask) 1f else 0f, spring(dampingRatio = 0.55f, stiffness = MotionScale.stiffness(420f)), label = "fieldMode")
     Box(
         Modifier
             .size(32.dp)

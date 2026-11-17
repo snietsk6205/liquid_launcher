@@ -227,7 +227,7 @@ internal fun TagStrip(
             drawn.deltaStart = from.first - target.first
             drawn.deltaEnd = from.second - target.second
             slide.snapTo(0f)
-            slide.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 520f))
+            slide.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = MotionScale.stiffness(520f)))
         }
     }
     Row(modifier.fillMaxWidth().height(config.stripHeight()), verticalAlignment = Alignment.CenterVertically) {
@@ -293,7 +293,7 @@ internal fun TagStrip(
                         )
                     },
                     onHold = {
-                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        Haptics.confirm(view)
                         controller.filterByTags(if (on) filter - tag.id else filter + tag.id)
                     },
                 )
