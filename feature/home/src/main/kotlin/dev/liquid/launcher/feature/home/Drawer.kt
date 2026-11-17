@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -801,11 +802,21 @@ private fun AppGrid(
             span = { _, cell -> if (cell is HeaderCell) GridItemSpan(maxLineSpan) else GridItemSpan(1) },
             contentType = { _, cell -> if (cell is HeaderCell) 1 else 0 },
         ) { i, cell ->
+            // P5 (0.9.15): when a tag (or the query) changes the list, apps that stay glide to their new places,
+            // the others fade out and the new ones in, instead of the list jumping.
+            val itemMotion = Modifier.animateItem(
+                fadeInSpec = androidx.compose.animation.core.tween(MotionScale.ms(220)),
+                placementSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = 0.9f, stiffness = MotionScale.stiffness(500f),
+                    visibilityThreshold = androidx.compose.ui.unit.IntOffset.VisibilityThreshold,
+                ),
+                fadeOutSpec = androidx.compose.animation.core.tween(MotionScale.ms(140)),
+            )
             when (cell) {
-                is AppCell -> DrawerItem(cell.app, config, color, controller, interactive, fx, state, highlight, i)
+                is AppCell -> Box(itemMotion) { DrawerItem(cell.app, config, color, controller, interactive, fx, state, highlight, i) }
                 is HeaderCell -> Text(
                     cell.title,
-                    modifier = Modifier
+                    modifier = itemMotion
                         .fillMaxWidth()
                         .then(if (highlight != null) Modifier.graphicsLayer { applyIndexHighlight(highlight, i) } else Modifier)
                         .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 2.dp),
@@ -994,7 +1005,15 @@ internal fun DrawerSearchField(
             }
             BasicTextField(
                 value = controller.drawerQuery,
-                onValueChange = { controller.drawerQuery = it },
+                onValueChange = { text ->
+                    // P5: a command (!next, !exam, !plan, !abs) or a question (?) typed here goes to the search page,
+                    // where they run, with what was typed.
+                    if (controller.drawerQuery.isEmpty() && (text.startsWith("!") || text.startsWith("?"))) {
+                        controller.handOverToSearch(text)
+                    } else {
+                        controller.drawerQuery = text
+                    }
+                },
                 enabled = interactive,
                 singleLine = true,
                 textStyle = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 16.sp),

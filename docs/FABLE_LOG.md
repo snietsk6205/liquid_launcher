@@ -647,9 +647,21 @@ export and the editor.
 
 ---
 
+## Entry 21: 0.9.15, P5: switching tags glides instead of jumping (2026-11-17, Opus 5.5)
+
+| What | How |
+|---|---|
+| Tag strip | One selection slides from chip to chip (a shared element) with a spring. It follows the chip it is going to while the row scrolls, and a new choice mid-way starts from where it is drawn, so it never jumps. In the theme it takes the chips' selected colour and corners; the chips sit as text on the strip's one glass, as a segmented control (the theme's chip fill is opaque and would hide the slide). Several tags on: each selected chip is filled, as before |
+| Drawer list | When a tag (or the query) changes the list, apps that stay glide to their new places, the others fade out and the new ones fade in (`animateItem`, scaled by Settings → motion speed) |
+| Tag list | Already a container transform: it grows out of its button and shrinks back into it, interruptible (since 0.6); unchanged |
+| Home pill and drawer field | Already one morphing element when the pill is at the bottom (0.7.1, "The pill becomes the search field"); unchanged |
+| Commands in the drawer field | Typing `!` or `?` first in the drawer's field hands over to the search page with what was typed, where `!next`, `!exam`, `!plan`, `!abs` and questions to Claude run (the same path as the field's Ask Claude button) |
+
+---
+
 ## End of this session (2026-11-17): state for the next model
 
-**Version shipped:** 0.9.14 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
+**Version shipped:** 0.9.15 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
 0.9.1 (run 63), 0.9.2 (run 64, second attempt; the first failed on a slow emulator, see entry 11). 0.9.3 and 0.9.4 were
 pushed together (run 65); 0.9.5 to 0.9.9 together (run 66, passed); 0.9.10 and 0.9.11 together (run 67, passed); 0.9.12 (run 68: built, unit tests passed, the real glass shader compiled on the emulator, but not released: my new check of the tuning panel found no screen dump, because the bench kept moving after measuring and the screen never settled; 0.9.13 keeps it still unless you press Move); 0.9.13 (run 69: did not compile, a smart cast across modules in `Controls.kt`; fixed) and 0.9.14 together after it. Check the GitHub releases for the newest `v0.9.x`; if a
 run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Nothing of this session was tried on the phone.
@@ -662,7 +674,7 @@ run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Not
 | P2 study hub, pill, clock notice, A2, A3, B4 | Done (0.9.1, 0.9.2): hub grown out of the pill, drag to close, timeline, arrival, shift tonight, notes, templates, check-in; the pill's study item fully customisable; the clock line with one action |
 | P3 search page | Done (0.9.3): study-first cards in your order, calendar never cut, commands. The transition was already finger-driven and interruptible; unchanged |
 | P4 real liquid glass, WM Keyboard theme engine | Done (0.9.12 to 0.9.14): the real glass (AGSL: Snell refraction by the edge's shape, dispersion, swell, specular rim, depth shading, grain) with Tune the glass (live sliders, presets); the theme engine after WM Keyboard's model, your backup as the default theme of every button, chip and round button, import/export, the editor, accent and glass colour. Menus and popups keep the glass (question 8) |
-| P5 drawer | Partly (0.9.8): bigger tag button, field with the study glance and Ask Claude. Not: command hand-off from the drawer field, tag list as a container transform, the top tabs pill in the home-pill morph |
+| P5 drawer | Mostly: bigger tag button, field with the study glance and Ask Claude (0.9.8); the tag selection slides between chips and the list glides when tags change (0.9.15); the tag list was already a container transform and the pill already morphs into the field. commands typed in the drawer field go to the search page (0.9.15). Not: the top tabs pill rising out of the home pill |
 | P6 scroll index | Done (0.9.6): the rail |
 | P7 widgets | Partly (0.9.10): no glass box behind the built-in widgets by default. Not: per-widget layout / font / accent / fields options, restyling other apps' widgets (re-tint their view tree) with a per-widget off switch |
 | P8 layouts and wallpaper | Partly: context triggers for layouts (trip home, exam week; 0.9.11). Not: layout previews, per-layout wallpaper choice UI, switch timer, time windows, the LayoutsSheet redesign, per-wallpaper blur/dim/saturation/vignette, tone feeding the glass, wallpaper quick tools |

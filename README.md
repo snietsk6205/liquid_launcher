@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.9.15: switching tags glides: the selection slides from chip to chip, and the drawer's apps glide to their new places while others fade.
+
 0.9.14: the theme editor: every colour (with its opacity), border, shape, corners, sheen, glass, shadow and glow of buttons, the main button, chips and round buttons, and the frost under them, live in Settings → Buttons.
 
 0.9.13: your WM Keyboard theme (Nice liquid) styles every button, chip and round button by default: its colours, pressed and selected states, pill shapes and its frosted glass with a rim of light; Settings → Buttons imports other themes (the launcher's or WM Keyboard's) and exports yours.

@@ -274,6 +274,12 @@ internal fun ThemeChip(
     height: androidx.compose.ui.unit.Dp = 34.dp,
     icon: Int? = null,
     trailing: String? = null,
+    /** False when a sliding selection behind the chips draws the "on" fill (the tag strip): only the text changes. */
+    ownFill: Boolean = true,
+    /** False for chips set on a glass row of their own (the tag strip): no fill at rest, only the text. */
+    restFill: Boolean = true,
+    /** The text of such a bare chip: the colour that reads on that glass (the theme's chip text was made for its fill). */
+    restColor: Color? = null,
     onLongClick: (() -> Unit)? = null,
     onClick: (() -> Unit)?,
 ) {
@@ -283,7 +289,11 @@ internal fun ThemeChip(
     val shape = themeShape(kind)
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val surface = themedSurface(env, theme, kind, shape, if (on) ControlEmphasis.Selected else ControlEmphasis.Normal, null, pressed)
+    val surface = when {
+        on && !ownFill -> ControlSurface(Modifier, Color(kind.activeText))
+        !on && !restFill -> ControlSurface(Modifier, restColor ?: Color(kind.text))
+        else -> themedSurface(env, theme, kind, shape, if (on) ControlEmphasis.Selected else ControlEmphasis.Normal, null, pressed)
+    }
     Row(
         modifier
             .height(height)

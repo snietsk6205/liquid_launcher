@@ -70,6 +70,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.union
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.boundsInRoot
@@ -201,6 +202,34 @@ internal fun TagStrip(
     val color = if (glass.lightGlass(Surfaces.Drawer, lightBackground)) Color(0xFF16181C) else Color.White
     val filter = controller.tagFilter
     val shown = if (config.count > 0) tags.take(config.count) else tags
+    // P5 (0.9.15): one selection that slides from chip to chip, a shared element instead of a jump. It follows the
+    // chip it is going to as the row scrolls, and a new choice mid-way starts from where it is drawn.
+    val rowState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val single: Any? = when {
+        filter.isEmpty() -> "all"
+        filter.size == 1 -> filter.first()
+        else -> null
+    }
+    val theme = LocalControls.current?.theme
+    val selection = theme?.chip?.active?.let { Color(it) } ?: HomeTheme.accent.copy(alpha = 0.9f)
+    val slide = remember { Animatable(1f) }
+    val drawn = remember { SlideHolder() }
+    fun targetOf(key: Any?): Pair<Float, Float>? {
+        val info = rowState.layoutInfo
+        val item = info.visibleItemsInfo.firstOrNull { it.key == key } ?: return null
+        val x = (item.offset - info.viewportStartOffset).toFloat()
+        return x to x + item.size
+    }
+    LaunchedEffect(single) {
+        val target = targetOf(single)
+        val from = drawn.edges
+        if (target != null && from != null) {
+            drawn.deltaStart = from.first - target.first
+            drawn.deltaEnd = from.second - target.second
+            slide.snapTo(0f)
+            slide.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 520f))
+        }
+    }
     Row(modifier.fillMaxWidth().height(config.stripHeight()), verticalAlignment = Alignment.CenterVertically) {
         // The list button is fixed at one end, so it never scrolls away with the chips.
         if (config.button == "rowStart") {
@@ -211,23 +240,49 @@ internal fun TagStrip(
         // shader pass each, redrawn whenever the list under them scrolled), against D8.
         val rowShape = RoundedCornerShape(50)
         LazyRow(
+            state = rowState,
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = if (config.button.startsWith("row")) 8.dp else 14.dp)
                 .height(40.dp)
                 .liquidGlass(backdrop, rowShape, glass.style(Surfaces.Drawer, lightBackground))
-                .clip(rowShape),
+                .clip(rowShape)
+                .drawBehind {
+                    val target = if (single == null) null else targetOf(single)
+                    if (target == null) {
+                        drawn.edges = null
+                        return@drawBehind
+                    }
+                    val k = 1f - slide.value
+                    val start = target.first + drawn.deltaStart * k
+                    val end = target.second + drawn.deltaEnd * k
+                    drawn.edges = start to end
+                    val h = 34.dp.toPx()
+                    val chip = theme?.chip
+                    val radius = when (chip?.shape) {
+                        null, "PILL", "CIRCLE" -> h / 2f
+                        "SHARP" -> 0f
+                        else -> (chip?.cornerDp ?: 12).dp.toPx().coerceAtMost(h / 2f)
+                    }
+                    drawRoundRect(
+                        selection,
+                        topLeft = Offset(start, (size.height - h) / 2f),
+                        size = androidx.compose.ui.geometry.Size((end - start).coerceAtLeast(1f), h),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius),
+                    )
+                },
             contentPadding = PaddingValues(horizontal = 3.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             item(key = "all") {
-                StripChip("All apps", null, filter.isEmpty(), color, glass, lightBackground, backdrop, interactive, onTap = { controller.filterByTags(emptySet()) }, onHold = null)
+                StripChip("All apps", null, filter.isEmpty(), color, glass, lightBackground, backdrop, interactive, ownFill = single == null, onTap = { controller.filterByTags(emptySet()) }, onHold = null)
             }
             items(shown, key = { it.id }) { tag ->
                 val on = tag.id in filter
                 StripChip(
                     tag.name, counts[tag.id]?.takeIf { config.counts }, on, color, glass, lightBackground, backdrop, interactive,
+                    ownFill = single == null,
                     onTap = {
                         controller.filterByTags(
                             when {
@@ -298,12 +353,13 @@ private fun StripChip(
     backdrop: Backdrop,
     interactive: Boolean,
     icon: Int? = null,
+    ownFill: Boolean = true,
     onTap: () -> Unit,
     onHold: (() -> Unit)?,
 ) {
     if (LocalControls.current?.theme != null) {
         ThemeChip(
-            label, on, height = 34.dp, icon = icon, trailing = count?.toString(),
+            label, on, height = 34.dp, icon = icon, trailing = count?.toString(), ownFill = ownFill, restFill = false, restColor = color,
             onLongClick = onHold, onClick = if (interactive) onTap else null,
         )
         return
@@ -315,7 +371,7 @@ private fun StripChip(
         Modifier
             .height(34.dp)
             .clip(shape)
-            .background(if (on) accent.copy(alpha = 0.9f) else Color.Transparent)
+            .background(if (on && ownFill) accent.copy(alpha = 0.9f) else Color.Transparent)
             .then(if (interactive) Modifier.combinedClickable(onClick = onTap, onLongClick = onHold) else Modifier)
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -330,6 +386,13 @@ private fun StripChip(
             Text("$count", style = TextStyle(fontFamily = HomeTheme.font, color = textColor.copy(alpha = 0.7f), fontSize = 12.sp))
         }
     }
+}
+
+/** Where the strip's sliding selection was last drawn (its start and end), and the gap it is closing. */
+private class SlideHolder {
+    var edges: Pair<Float, Float>? = null
+    var deltaStart = 0f
+    var deltaEnd = 0f
 }
 
 /** Dark or light text, whichever reads on [background]. */

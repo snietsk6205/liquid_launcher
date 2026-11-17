@@ -692,6 +692,15 @@ class HomeController(
         openSearch()
     }
 
+    /** P5 (0.9.15): the drawer field hands a command (!next, !exam, !plan, !abs) or a question (?) to the search page. */
+    fun handOverToSearch(text: String) {
+        DebugLog.event("Home", "drawer field: \"$text\" handed to search")
+        drawerQuery = ""
+        searchQuery = text
+        closeDrawer()
+        openSearch()
+    }
+
     /**
      * True when text was copied in the last [withinMs]. Only the clip's description is looked at,
      * which Android does not report as reading the clipboard; the text is read when it is used.
