@@ -176,7 +176,7 @@ private val Sheens: List<Pair<String, ThemeGradient?>> = listOf(
  * so the buttons in the preview at the top follow. Colours have their opacity: a see-through fill over glass is frosted.
  */
 @Composable
-internal fun ThemeEditor(store: SettingsStore) {
+internal fun ControlThemeEditor(store: SettingsStore) {
     val json by store.observe(LauncherSettings.ThemeJson)
     val theme = remember(json) { ThemeApply.current(store) }
     var open by remember { mutableStateOf(false) }

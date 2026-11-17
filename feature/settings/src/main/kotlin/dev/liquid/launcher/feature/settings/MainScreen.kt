@@ -264,7 +264,7 @@ internal fun SectionScreen(store: SettingsStore, sectionId: String, open: (Scree
                 "effects" -> LooksEditor(store)
                 "buttons" -> {
                     ControlThemeCard(store)
-                    ThemeEditor(store)
+                    ControlThemeEditor(store)
                 }
                 "wallpaper" -> WallpaperEditor()
                 "study" -> StudyEditor(store)
