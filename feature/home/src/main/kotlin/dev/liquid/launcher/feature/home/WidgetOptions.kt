@@ -74,6 +74,7 @@ internal data class WidgetLook(val scale: Float, val weight: FontWeight, val acc
 internal val WidgetParts: Map<String, List<Triple<String, String, Boolean>>> = mapOf(
     "date" to listOf(Triple("weekday", "Weekday", true), Triple("month", "Month", true), Triple("year", "Year", false)),
     "battery" to listOf(Triple("ring", "Ring", true), Triple("percent", "Percentage", true), Triple("charging", "\"charging\"", true)),
+    "calendar" to listOf(Triple("grid", "Month", true), Triple("agenda", "Next events", true)),
 )
 
 /**
@@ -108,15 +109,27 @@ internal fun WidgetOptionsSheet(item: HomeItem, glass: GlassConfig, lightBackgro
                 .padding(vertical = 16.dp),
         ) {
             ProvideControls(controller, glass, null) {
+                val calendar = item.widget == "calendar"
                 Text(
-                    if (item.widget == "battery") "Battery widget" else "Date widget",
+                    when (item.widget) {
+                        "battery" -> "Battery widget"
+                        "calendar" -> "Calendar widget"
+                        else -> "Date widget"
+                    },
                     modifier = Modifier.padding(horizontal = 20.dp),
                     style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 17.sp, fontWeight = FontWeight.SemiBold),
                 )
-                OptionRow("Size", color, listOf("s" to "Small", null to "Medium", "l" to "Large"), o["size"]) { set("size", it) }
-                OptionRow("Weight", color, listOf("light" to "Light", "regular" to "Regular", null to "Medium", "bold" to "Bold"), o["weight"]) { set("weight", it) }
+                if (!calendar) {
+                    OptionRow("Size", color, listOf("s" to "Small", null to "Medium", "l" to "Large"), o["size"]) { set("size", it) }
+                    OptionRow("Weight", color, listOf("light" to "Light", "regular" to "Regular", null to "Medium", "bold" to "Bold"), o["weight"]) { set("weight", it) }
+                }
                 OptionRow("Colour", color, listOf(null to "Text", "accent" to "Accent"), o["tint"]) { set("tint", it) }
-                OptionRow("Font", color, listOf(null to "The clock's", "text" to "The launcher's"), o["font"]) { set("font", it) }
+                if (!calendar) {
+                    OptionRow("Font", color, listOf(null to "The clock's", "text" to "The launcher's"), o["font"]) { set("font", it) }
+                } else {
+                    OptionRow("Card", color, listOf(null to "As for all", "glass" to "Glass card", "none" to "On the wallpaper"), o["card"]) { set("card", it) }
+                    OptionRow("Corners", color, listOf("s" to "Small", null to "Medium", "l" to "Large"), o["corner"]) { set("corner", it) }
+                }
                 val parts = WidgetParts[item.widget].orEmpty()
                 if (parts.isNotEmpty()) {
                     Text(

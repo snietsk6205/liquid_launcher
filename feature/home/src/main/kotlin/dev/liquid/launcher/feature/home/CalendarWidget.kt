@@ -130,15 +130,30 @@ internal fun CalendarWidget(item: HomeItem, env: PageEnv, controller: HomeContro
     val data by produceState<CalMonth?>(null, month, tick / 900_000, allowedTick) {
         value = withContext(Dispatchers.IO) { readMonth(context, month, System.currentTimeMillis()) }
     }
-    val shape = RoundedCornerShape(28.dp)
+    // P7 (0.9.23): this widget's own options (its Customise sheet in edit mode): card, corners, colour, parts.
+    val look = WidgetLook.of(item)
+    val shape = RoundedCornerShape(
+        when (item.options?.get("corner")) {
+            "s" -> 18.dp
+            "l" -> 36.dp
+            else -> 28.dp
+        }
+    )
     val style = env.glass.style(Surfaces.Clock, env.lightBackground)
     // No box by default (P7, 0.9.10): on the wallpaper in the clock's colour; "Liquid glass" puts it back on a card.
-    val boxed by controller.data.settings.derive { get(dev.liquid.launcher.core.settings.LauncherSettings.WidgetBackground) == "glass" }
-    val color = when {
-        !boxed -> env.contentColor
-        env.glass.lightGlass(Surfaces.Clock, env.lightBackground) -> Color(0xFF16181C)
-        else -> Color.White
+    val boxedForAll by controller.data.settings.derive { get(dev.liquid.launcher.core.settings.LauncherSettings.WidgetBackground) == "glass" }
+    val boxed = when (item.options?.get("card")) {
+        "glass" -> true
+        "none" -> false
+        else -> boxedForAll
     }
+    val color = look.color(
+        when {
+            !boxed -> env.contentColor
+            env.glass.lightGlass(Surfaces.Clock, env.lightBackground) -> Color(0xFF16181C)
+            else -> Color.White
+        }
+    )
     val live = env.interactive && !env.editMode
     Box(
         Modifier
@@ -160,8 +175,8 @@ internal fun CalendarWidget(item: HomeItem, env: PageEnv, controller: HomeContro
             return@Box
         }
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            val roomy = maxHeight > 300.dp
-            if (maxHeight < 190.dp) {
+            val roomy = maxHeight > 300.dp && look.shows("agenda", true)
+            if (maxHeight < 190.dp || !look.shows("grid", true)) {
                 CompactCalendar(today, shown, color, live, controller)
             } else {
                 Column(Modifier.fillMaxSize()) {

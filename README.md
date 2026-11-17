@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.9.23: the calendar widget's Customise sheet: its own glass card or not, corners, colour, month grid and next events.
+
 0.9.22: the date and battery widgets have a Customise sheet: size, weight, colour, font and the parts they show.
 
 0.9.21: switch to a layout for 30 minutes, 1 or 2 hours, and the launcher switches back by itself (or keep it).
