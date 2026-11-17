@@ -431,6 +431,49 @@ class HomeController(
         }
     }
 
+    /**
+     * A4 / C4 (0.9.11): the commute layout from the end of the last class until home, the exam layout in the week before
+     * an exam, and back to the layout from before afterwards (not if it was changed by hand meanwhile). Runs on the
+     * home screen's minute tick; does nothing until the calendar has been read.
+     */
+    fun applyContextLayout() {
+        val s = data.settings
+        val commuteId = s.get(LauncherSettings.StudyCommuteLayout).takeIf { it.isNotBlank() && data.layouts.find(it) != null }
+        val examId = s.get(LauncherSettings.StudyExamLayout).takeIf { it.isNotBlank() && data.layouts.find(it) != null }
+        val active = s.get(LauncherSettings.ContextActive).ifBlank { null }
+        if (commuteId == null && examId == null && active == null) return
+        if (!data.study.enabled || !data.study.loaded.value) return
+        val now = System.currentTimeMillis()
+        val ctx = dev.liquid.launcher.core.data.ContextLayouts.context(data.study.day.value, now, data.study.homeAt.value, commuteId != null, examId != null)
+        val wanted = when (ctx) {
+            dev.liquid.launcher.core.data.ContextLayouts.COMMUTE -> commuteId
+            dev.liquid.launcher.core.data.ContextLayouts.EXAM -> examId
+            else -> null
+        }
+        val current = data.layouts.state.value.current
+        val step = dev.liquid.launcher.core.data.ContextLayouts.step(
+            active, ctx, current, wanted,
+            s.get(LauncherSettings.ContextApplied).ifBlank { null }, s.get(LauncherSettings.ContextBase).ifBlank { null },
+        )
+        when (step) {
+            dev.liquid.launcher.core.data.ContextLayouts.Step.Stay -> Unit
+            is dev.liquid.launcher.core.data.ContextLayouts.Step.Enter -> {
+                s.set(LauncherSettings.ContextActive, step.context)
+                s.set(LauncherSettings.ContextApplied, step.layout)
+                s.set(LauncherSettings.ContextBase, step.base.orEmpty())
+                DebugLog.event("Home", "context layout: ${step.context}")
+                if (current != step.layout) switchLayout(step.layout)
+            }
+            is dev.liquid.launcher.core.data.ContextLayouts.Step.Leave -> {
+                s.reset(LauncherSettings.ContextActive)
+                s.reset(LauncherSettings.ContextApplied)
+                s.reset(LauncherSettings.ContextBase)
+                DebugLog.event("Home", "context layout over")
+                step.layout?.let { back -> if (back != current && data.layouts.find(back) != null) switchLayout(back) }
+            }
+        }
+    }
+
     /** "I'm home" (A2, by hand). */
     fun markHomeNow() {
         Haptics.confirm(view)

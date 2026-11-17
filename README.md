@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.9.11: layouts that switch by themselves: one for the trip home (from your last class until you are home) and one for exam week, and back to yours afterwards; the study hub shows what the check-in planned for the trip.
+
 0.9.10: the calendar and study widgets sit straight on the wallpaper like the clock, without a glass box (the box is an option in Settings → Home screen).
 
 0.9.9: on Sundays the search page shows the week in four numbers (blocks done of planned, focus minutes, absences, days to the next exam); a tap reviews the week with Claude.

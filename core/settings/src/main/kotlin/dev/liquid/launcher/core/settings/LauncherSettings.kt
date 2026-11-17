@@ -2024,6 +2024,12 @@ object LauncherSettings {
         summary = "Every glass surface takes a touch of the colour of the block now or next (its colour in your calendar), easing from one block to the next",
         section = "study", keywords = "study glass tint colour module block e3",
     )
+    /** A4 / C4 (0.9.11): saved-layout ids, chosen in the Study companion screen; empty = none. */
+    val StudyCommuteLayout = TextSetting(key = "study.commuteLayout", default = "", title = "Layout while travelling home", section = "study", hidden = true)
+    val StudyExamLayout = TextSetting(key = "study.examLayout", default = "", title = "Layout in exam week", section = "study", hidden = true)
+    val ContextActive = TextSetting(key = "state.ctxActive", default = "", title = "Context layout on", section = "state", hidden = true)
+    val ContextApplied = TextSetting(key = "state.ctxApplied", default = "", title = "Context layout applied", section = "state", hidden = true)
+    val ContextBase = TextSetting(key = "state.ctxBase", default = "", title = "Layout before the context", section = "state", hidden = true)
     val StudyRest = IntSetting(
         key = "study.rest", default = 20, min = 0, max = 45, step = 5, unit = "min",
         title = "Rest after getting home",
@@ -2312,6 +2318,7 @@ object LauncherSettings {
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
         StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyPlanLink, StudyLinkOpener,
         StudyAttendance, StudyLeaveBy, StudyCommute, StudyRest, StudyWindDown, StudySpeedBump, StudySpeedBumpTags, StudyFeedCalendar, StudyFeedLocal, StudyGlassTint,
+        StudyCommuteLayout, StudyExamLayout, ContextActive, ContextApplied, ContextBase,
         StudyArrival, StudyHomeWifi, StudyArrivalCharger, StudyShiftLead, StudyLatestEnd, StudyClassCalendars, StudyHeader, StudyCheckin, StudyTemplates,
         StudyHubSize, StudyHubBounce, StudyClockAction,
         NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,

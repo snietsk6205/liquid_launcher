@@ -607,6 +607,10 @@ private fun ArrivalCallout(controller: HomeController, day: StudyDay, now: Long,
         if (!travelling || firstOpen == null) return
         HubCallout(color) {
             Text("On the way home?", style = studyText(color, 14, FontWeight.SemiBold))
+            // A4: what the check-in planned for the trip ("Pendant le trajet : …" in tonight's first block).
+            firstOpen.notes.lines().firstOrNull { it.trim().startsWith("Pendant le trajet", ignoreCase = true) }?.let { trip ->
+                Text(trip.trim(), style = studyText(color, 13), modifier = Modifier.padding(vertical = 4.dp))
+            }
             Text(
                 "Tonight starts with ${firstOpen.title.subject} at ${studyClock(firstOpen.begin)}." +
                     if (homeWifi.isBlank()) " Set your home Wi-Fi and it is noticed by itself." else "",

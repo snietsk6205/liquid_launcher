@@ -360,6 +360,11 @@ private fun HomeScreenBody(
             val target = if (isWindDown(windDownAt)) 1f else 0f
             if (controller.windDown.targetValue != target) controller.windDown.animateTo(target, androidx.compose.animation.core.tween(2400))
         }
+        // A4 / C4: layouts that switch by themselves, checked each minute and when the day or the arrival changes.
+        val contextTick = rememberMinuteTick()
+        val contextDay by data.study.day.collectAsState()
+        val contextHome by data.study.homeAt.collectAsState()
+        LaunchedEffect(contextTick, contextDay, contextHome) { controller.applyContextLayout() }
         // The edit-mode wobble's clock runs only while editing with the wobble on (0.9.4).
         if (controller.editMode && motionConfig.editWobble > 0f) {
             LaunchedEffect(Unit) {

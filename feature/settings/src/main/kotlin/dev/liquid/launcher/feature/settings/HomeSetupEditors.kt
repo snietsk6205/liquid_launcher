@@ -201,6 +201,46 @@ internal fun StudyEditor(store: SettingsStore) {
         )
     }
     LauncherDataEditor(store)
+    ContextLayoutsEditor(store)
+}
+
+/** A4 and C4 (0.9.11): which saved layout comes on by itself on the way home and in exam week. */
+@Composable
+private fun ContextLayoutsEditor(store: SettingsStore) {
+    val context = LocalContext.current
+    val data = remember { LauncherData.get(context) }
+    val state by data.layouts.state.collectAsState()
+    val commute by store.observe(LauncherSettings.StudyCommuteLayout)
+    val exam by store.observe(LauncherSettings.StudyExamLayout)
+    InfoCard {
+        Text("Layouts that switch by themselves", style = MaterialTheme.typography.titleMedium)
+        BodyText(
+            "On the way home, from the end of your last class until you are home (big targets, the trip card, music), and in the " +
+                "seven days before an exam. The layout you had comes back afterwards, unless you switched by hand meanwhile. " +
+                "Make these layouts first in Saved layouts.",
+        )
+        if (state.layouts.isEmpty()) {
+            BodyText("No saved layout yet.", Modifier.padding(top = 6.dp))
+        } else {
+            LayoutChoice("While travelling home", commute, state.layouts) { store.set(LauncherSettings.StudyCommuteLayout, it) }
+            LayoutChoice("In exam week", exam, state.layouts) { store.set(LauncherSettings.StudyExamLayout, it) }
+        }
+    }
+}
+
+@Composable
+private fun LayoutChoice(title: String, chosen: String, layouts: List<dev.liquid.launcher.core.data.SavedLayout>, onPick: (String) -> Unit) {
+    Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+    val options = listOf("" to "None") + layouts.map { it.id to it.name }
+    options.forEach { (id, name) ->
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        ) {
+            androidx.compose.material3.RadioButton(selected = chosen == id || (id.isEmpty() && layouts.none { it.id == chosen }), onClick = { onPick(id) })
+            Text(name, style = MaterialTheme.typography.bodyLarge)
+        }
+    }
 }
 
 /** The example of docs/05 and the spec, to start a local copy from. */

@@ -527,9 +527,25 @@ or "A liquid glass card" (as before). Applies on pages and on the search screen.
 
 ---
 
+## Entry 17: 0.9.11, A4 commute layout and C4 exam-week layout (2026-11-17, Opus 5.5)
+
+| What | How |
+|---|---|
+| Choosing | Settings → Study companion → "Layouts that switch by themselves": a saved layout (or none) for the trip home and one for exam week |
+| When | Trip: from the end of today's last class until "home" is noticed (Wi-Fi, charger or the chip), at most 4 h. Exam week: the 7 days before the next exam (launcher-data's or the timetable's) and the exam day until it is over. The trip wins when both apply |
+| Back | When the context ends, the layout from before comes back, through the usual layout transition; if you switched layout by hand meanwhile, it stays as you chose. The state (context on, layout applied, layout before) survives restarts; nothing happens until the calendar has been read, so a restart cannot end a trip early |
+| Trip card | The hub's "On the way home?" shows the "Pendant le trajet : …" line of tonight's first block |
+| Tests | `ContextLayoutsTest`: the trip window, home ends it, the 4 h cap, exam week, the trip first, steps remembering the base and respecting a hand switch |
+
+Not done for A4: hiding heavy widgets below 30 % battery, data saver, offline notes of tonight's module. Not done for C4:
+filtering the drawer to `study` and one folder per module of annales (the exam layout can carry its own drawer tab and
+folders: layouts save the home screen and their own settings).
+
+---
+
 ## End of this session (2026-11-17): state for the next model
 
-**Version shipped:** 0.9.10 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
+**Version shipped:** 0.9.11 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
 0.9.1 (run 63), 0.9.2 (run 64, second attempt; the first failed on a slow emulator, see entry 11). 0.9.3 and 0.9.4 were
 pushed together (run 65); 0.9.5 to 0.9.9 together after it. Check the GitHub releases for the newest `v0.9.x`; if a
 run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Nothing of this session was tried on the phone.
@@ -545,9 +561,9 @@ run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Not
 | P5 drawer | Partly (0.9.8): bigger tag button, field with the study glance and Ask Claude. Not: command hand-off from the drawer field, tag list as a container transform, the top tabs pill in the home-pill morph |
 | P6 scroll index | Done (0.9.6): the rail |
 | P7 widgets | Partly (0.9.10): no glass box behind the built-in widgets by default. Not: per-widget layout / font / accent / fields options, restyling other apps' widgets (re-tint their view tree) with a per-widget off switch |
-| P8 layouts and wallpaper | Not started (wind-down's colour filter on the wallpaper is the only wallpaper change) |
+| P8 layouts and wallpaper | Partly: context triggers for layouts (trip home, exam week; 0.9.11). Not: layout previews, per-layout wallpaper choice UI, switch timer, time windows, the LayoutsSheet redesign, per-wallpaper blur/dim/saturation/vignette, tone feeding the glass, wallpaper quick tools |
 | P9 icon animations | Done (0.9.4) |
-| P10 rest of Phase 5 | Done: A5, A6, B1 (+ ≈), B2, B3, C1, C3, D3, D4, E1, E2, E3, E4, E5, launcher-data. Not: A4 Trajet layout and C4 Exam mode (both need P8's layout triggers), C5 notification triage (needs a notification listener: a new permission and service) |
+| P10 rest of Phase 5 | Done: A4 (layout switch + trip line), A5, A6, B1 (+ ≈), B2, B3, C1, C3, C4 (layout switch), D3, D4, E1, E2, E3, E4, E5, launcher-data. Not: C5 notification triage (needs a notification listener: a new permission and service), A4's battery rule, C4's annales folders |
 | P11 motion pass | Partly: drawer, search and hub springs keep their speed when turned round (D125); the rest of the pass not done |
 
 **Known bugs and risks**
