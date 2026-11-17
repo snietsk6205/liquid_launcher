@@ -21,16 +21,17 @@ object Looks {
     val keys: Set<String> by lazy {
         S.all.filter {
             it.section == "buttons" || it.section == "effects" ||
-                (it.section == "glass" && it != S.GlassQuality && it != S.GlassAuto && it != S.GlassCap && it != S.GlassFullPercent && it != S.GlassTintMode)
+                (it.section == "glass" && it != S.GlassQuality && it != S.GlassEngine && it != S.GlassAuto && it != S.GlassCap && it != S.GlassFullPercent && it != S.GlassTintMode)
         }.map { it.key }.toSet()
     }
 
     val presets = listOf(
         LookPreset("Liquid", "The default: thick glass with rainbow edges, a ripple under the finger, squish", emptyMap()),
         LookPreset(
-            "Nice liquid", "From your keyboard theme: frosted glass, bright rims, a slow swoosh and a squish",
+            "Nice liquid", "From your WM Keyboard theme: its frost (blur 9, colour 125 %, edge light 0.86, rainbow 0.25) on the real glass, a slow swoosh and a squish",
             mapOf(
-                S.GlassDefault.blur.key to i(9), S.GlassSaturation.key to i(125), S.GlassRim.key to i(45), S.GlassGlow.key to i(15),
+                S.GlassDefault.blur.key to i(9), S.GlassDefault.tint.key to i(10), S.GlassSaturation.key to i(125),
+                S.GlassSpecular.key to i(85), S.GlassDispersionAmount.key to i(25), S.GlassGrain.key to i(0), S.GlassGlow.key to i(15),
                 S.ButtonRim.key to i(90), S.ButtonTint.key to i(10),
                 S.TouchEffect.key to s("swoosh"), S.TouchSpeed.key to i(40), S.TouchBrightness.key to i(40), S.TouchAmount.key to i(50),
                 S.TouchColour.key to s("rainbow"), S.PressFeel.key to s("squishy"), S.PressDepth.key to i(40), S.PressWobble.key to i(50),

@@ -543,11 +543,50 @@ folders: layouts save the home screen and their own settings).
 
 ---
 
+## Entry 18: 0.9.12, P4 part one: the real liquid glass (2026-11-17, Opus 5.5)
+
+The glass you disliked was the backdrop library's lens: a fixed displacement curve with a 7-tap rainbow and a
+separate highlight stroke; "Nice liquid" only renamed its sliders. It is replaced by a shader written for this
+launcher, `core/designsystem/LiquidShader.kt`:
+
+| Part | How |
+|---|---|
+| Shape | The glass is a slab with a rounded edge: "Edge width" wide (default 16 dp, never more than half a surface), "Thickness" × that high (0.5 to 3.5; default 2) |
+| Refraction | Each ray, looking straight down, is bent by Snell's law where the edge slopes (index of refraction 1 + 0.8 × "Refraction": 1.48 by default, like glass) and lands further inside, by the glass's height there. So the edge squeezes what is behind it into a thin bright band and slightly magnifies further in; nothing is bent at the very rim or on the flat top |
+| Dispersion | Red, green and blue are bent by three indices ("Rainbow strength"): fringes only where the edge bends, three samples instead of seven |
+| Swell | "Thick glass" also magnifies the middle a little ("Swell") |
+| Specular rim | From the surface normal: Fresnel-weighted light on the edge facing "Light comes from", 40 % of it on the opposite edge, in the edge light colour ("Light on the edge") |
+| Depth shading | The edge away from the light darkens ("Depth shading") |
+| Grain | A fine static grain ("Grain") |
+| Blur | Unchanged: the backdrop blur runs first, the shader bends the blurred picture |
+
+One compiled shader serves every surface (each makes its effect with its own values); it is compiled off the main
+thread when the home screen starts and the log says "liquid glass shader ready" (the emulator test checks it). If it
+does not compile on a phone, the glass falls back to the old lens by itself. minSdk is 33, so "below Android 13" does
+not exist for this app; the fallback is for a driver that refuses the shader. Buttons use the same glass with a
+narrower edge. Settings → Liquid glass → "Glass" switches back to the simple lens.
+
+**Tune the glass** (Settings → Liquid glass, first row; Diagnostics' benchmark ends there too): three glass surfaces
+over your wallpaper and moving tiles (Pause/Move), drawn with your settings; below, a live slider for every value
+(each step is applied while the finger moves), the switches, the light's angle, and presets: Real glass (default),
+Clear, Frosted, Thick, Subtle, Your keyboard. "Measure" still times the three quality tiers and sets the automatic
+fallback. "Your keyboard" and the "Nice liquid" look now carry your theme's frost: blur 9, colour 125 %, edge light
+0.86 (as Light on the edge 85 %), bend 0.6, rainbow 0.25, no grain, tint 10 %.
+
+Checked before pushing: the shader was compiled (strict ES2 rules) and rendered with Skia on your own wallpaper from
+the theme backup, at the defaults and with the keyboard preset: `docs/reference/real-glass-preview.jpg` (left the
+default, right your keyboard's frost). Not measured on the phone: the frame rate (run Measure in Tune the glass).
+
+Left of P4: the theme engine (your backup's surfaces, gradients, borders, glows, radii and pressed states applied
+to every button, pill and chip, with an editor and JSON import/export).
+
+---
+
 ## End of this session (2026-11-17): state for the next model
 
-**Version shipped:** 0.9.11 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
+**Version shipped:** 0.9.12 is the last push of this session. Released and verified on the emulator by CI: 0.9.0 (run 62),
 0.9.1 (run 63), 0.9.2 (run 64, second attempt; the first failed on a slow emulator, see entry 11). 0.9.3 and 0.9.4 were
-pushed together (run 65); 0.9.5 to 0.9.9 together (run 66, passed); 0.9.10 and 0.9.11 together after it. Check the GitHub releases for the newest `v0.9.x`; if a
+pushed together (run 65); 0.9.5 to 0.9.9 together (run 66, passed); 0.9.10 and 0.9.11 together (run 67, passed); 0.9.12 after it. Check the GitHub releases for the newest `v0.9.x`; if a
 run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Nothing of this session was tried on the phone.
 
 | Workstream | State |
@@ -557,7 +596,7 @@ run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Not
 | P1 b. drawer / keyboard ghost | Done (0.9.0) |
 | P2 study hub, pill, clock notice, A2, A3, B4 | Done (0.9.1, 0.9.2): hub grown out of the pill, drag to close, timeline, arrival, shift tonight, notes, templates, check-in; the pill's study item fully customisable; the clock line with one action |
 | P3 search page | Done (0.9.3): study-first cards in your order, calendar never cut, commands. The transition was already finger-driven and interruptible; unchanged |
-| P4 real liquid glass, WM Keyboard theme engine | **Not started.** Your theme backup is in `docs/reference/nice_liquid.wmtheme.json` (its `frost` block: frosted style, backdrop blur 9, saturation 1.25, rim 0.86, refraction 0.6, dispersion 0.25; keys: pill shape, background 0x1C3C323E (11 % plum-grey), text 0xFFE9E9EE, pressed 0xFF723F61, accent 0xFFD182AF, popups 0xFF443A47, tool circles 0x433D323F, chips 0xFF322B35; touch bloom: squish motion, light 0.5, radius 100 dp, wobble 0.5) |
+| P4 real liquid glass, WM Keyboard theme engine | Partly (0.9.12): the real glass (AGSL: Snell refraction by the edge's shape, dispersion, swell, specular rim, depth shading, grain), Tune the glass with live sliders and presets incl. your keyboard's frost. **Not:** the theme engine. Your theme backup is in `docs/reference/nice_liquid.wmtheme.json` (keys: pill shape, background 0x1C3C323E (11 % plum-grey), text 0xFFE9E9EE, pressed 0xFF723F61, accent 0xFFD182AF, popups 0xFF443A47, tool circles 0x433D323F, chips 0xFF322B35; touch bloom: squish motion, light 0.5, radius 100 dp, wobble 0.5) |
 | P5 drawer | Partly (0.9.8): bigger tag button, field with the study glance and Ask Claude. Not: command hand-off from the drawer field, tag list as a container transform, the top tabs pill in the home-pill morph |
 | P6 scroll index | Done (0.9.6): the rail |
 | P7 widgets | Partly (0.9.10): no glass box behind the built-in widgets by default. Not: per-widget layout / font / accent / fields options, restyling other apps' widgets (re-tint their view tree) with a per-widget off switch |
@@ -582,11 +621,12 @@ run failed, its log says where (`ci/smoke.sh` prints PASS / FAIL per check). Not
 6. Wobble while editing is off by default (you disliked the old wobbles): on, subtle?
 7. Speed-bump tag name: "distracting" assumed; give your apps that tag from their long-press menu.
 
-**Exact next step:** P4. (1) In `core/designsystem/Glass.kt`, add an AGSL `RuntimeShader` pass (Android 13+) for the
-edge: refraction by the shape's distance field, dispersion per channel, a specular rim from `lightAngle`, depth
-shading and grain, applied with `RenderEffect.createRuntimeShaderEffect` on the backdrop layer; keep Kyant's
-lens as the fallback; every parameter in `GlassBenchScreen` with presets. (2) Theme engine: map the backup's
-fields (surfaces, gradients, borders, glows, shadows, radii, pressed/focused) onto a `LiquidTheme` model with JSON
-import/export, import `docs/reference/nice_liquid.wmtheme.json` as the default, and route `GlassButton`,
-pills and chips through it. wmkeyboard is MIT (README credits it); `github.com` code browsing was blocked from this
-session's network (403), so read it from a session that can reach GitHub or reimplement from the backup's fields.
+**Exact next step:** P4, part two: the theme engine. (1) A `LiquidTheme` model in `core/designsystem` (per-surface
+fill or multi-stop gradient, border colour and width, glow, shadow, corner radius, pressed and focused states, for:
+buttons, main button, chips, pills, cards, popups/menus, tool circles), JSON import/export, and an importer for WM
+Keyboard backups mapping `keyBackground`, `pressedKeyBackground`, `chipBackground`, `popupBackground`,
+`toolCircleBackground`, `accent`, `keyText`, `keyShape` and `frost` onto it. (2) Import
+`docs/reference/nice_liquid.wmtheme.json` as the default theme on first run of that version (settings migrated, not
+reset). (3) Route `controlSurface` (Controls.kt), the pill and the chips through it, keeping "Settings → Buttons" as
+overrides. (4) A theme editor with live preview. wmkeyboard is MIT; `github.com` code browsing was blocked from this
+session's network (403), so the model is reimplemented from the backup's fields.

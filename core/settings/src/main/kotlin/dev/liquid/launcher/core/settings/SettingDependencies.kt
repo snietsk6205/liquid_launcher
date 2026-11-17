@@ -9,6 +9,8 @@ object SettingDependencies {
             listOf(surface.blur, surface.refraction, surface.tint).forEach { map[it.key] = custom }
         }
         map[LauncherSettings.HomeLabelSize.key] = LauncherSettings.HomeLabels
+        map[LauncherSettings.GlassSwell.key] = LauncherSettings.GlassDepth
+        map[LauncherSettings.GlassDispersionAmount.key] = LauncherSettings.GlassDispersion
         map[LauncherSettings.StudyCommute.key] = LauncherSettings.StudyLeaveBy
         map[LauncherSettings.StudySpeedBumpTags.key] = LauncherSettings.StudySpeedBump
         map[LauncherSettings.StudyHomeWifi.key] = LauncherSettings.StudyArrival
@@ -39,12 +41,17 @@ object SettingDependencies {
             LauncherSettings.IndexBubbleGap, LauncherSettings.IndexTrack, LauncherSettings.IndexSpring, LauncherSettings.IndexHideDelay,
         )
         val railOnly = listOf(LauncherSettings.IndexRailHeight, LauncherSettings.IndexRailLift, LauncherSettings.IndexRailInset)
+        val realGlassOnly = listOf(
+            LauncherSettings.GlassBevel, LauncherSettings.GlassThickness, LauncherSettings.GlassSpecular, LauncherSettings.GlassShade,
+            LauncherSettings.GlassGrain, LauncherSettings.GlassSwell, LauncherSettings.GlassDispersionAmount,
+        )
         mapOf(
             LauncherSettings.PillStudyGlyph.key to (look to setOf("glyph")),
             LauncherSettings.PillStudyFrame.key to (look to setOf("glyph", "app", "picture")),
             LauncherSettings.PillStudyRing.key to (look to setOf("glyph", "app", "picture")),
             LauncherSettings.PillStudyTint.key to (look to setOf("glyph", "app", "picture", "circle")),
-        ) + stringOnly.associate { it.key to (index to setOf("string")) } + railOnly.associate { it.key to (index to setOf("rail")) }
+        ) + stringOnly.associate { it.key to (index to setOf("string")) } + railOnly.associate { it.key to (index to setOf("rail")) } +
+            realGlassOnly.associate { it.key to (LauncherSettings.GlassEngine to setOf("real")) }
     }
 
     fun isVisible(setting: Setting<*>, store: SettingsStore): Boolean {

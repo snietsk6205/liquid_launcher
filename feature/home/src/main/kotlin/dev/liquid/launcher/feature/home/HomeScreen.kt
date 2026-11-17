@@ -888,7 +888,13 @@ private fun HomeScreenBody(
         }
         if (live) {
             // The wallpaper transitions' shaders, compiled before the first change (D103).
-            LaunchedEffect(Unit) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { WallpaperTransitions.warmUp() } }
+            LaunchedEffect(Unit) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    WallpaperTransitions.warmUp()
+                    // P4: the real glass's shader, checked (and logged) once before the first glass surface needs it.
+                    dev.liquid.launcher.core.designsystem.LiquidShader.warmUp()
+                }
+            }
             StudyNotices(controller)
             // Follow the calendar while the home screen is composed; read it when the companion is switched on.
             val studyOn by store.derive { get(LauncherSettings.StudyEnabled) }

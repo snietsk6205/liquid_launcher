@@ -43,6 +43,8 @@ import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.highlight.HighlightStyle
 import com.kyant.backdrop.effects.colorControls
 import dev.liquid.launcher.core.designsystem.GlassQuality
+import dev.liquid.launcher.core.designsystem.GlassStyle
+import dev.liquid.launcher.core.designsystem.realGlass
 import dev.liquid.launcher.core.designsystem.LauncherIcon
 import dev.liquid.launcher.core.settings.SettingsStore
 import dev.liquid.launcher.core.settings.derive
@@ -165,10 +167,13 @@ internal fun controlSurface(env: ControlEnv?, shape: CornerBasedShape, color: Co
         else -> {
             val backdrop = env?.backdrop
             if (backdrop == null || env.glass.quality == GlassQuality.Tint) return crystal()
-            val refraction = if (env.glass.quality == GlassQuality.Full) look.refraction else 0f
+            val full = env.glass.quality == GlassQuality.Full
+            val refraction = if (full) look.refraction else 0f
             val rim = look.rim
             val redraw = env.redraw
             val x = env.glass.extras
+            // P4: the button's real glass, with the button's own bend and a narrower edge than a sheet's.
+            val real = x.applyTo(GlassStyle(GlassQuality.Full, 0.dp, look.refraction, Color.Transparent))
             ControlSurface(
                 (if (redraw != null) Modifier.drawBehind { redraw() } else Modifier).drawBackdrop(
                     backdrop = backdrop,
@@ -176,7 +181,7 @@ internal fun controlSurface(env: ControlEnv?, shape: CornerBasedShape, color: Co
                     effects = {
                         if (x.saturation == 1.5f && x.brightness == 0f) vibrancy()
                         else colorControls(brightness = x.brightness, contrast = 1f, saturation = x.saturation)
-                        if (refraction > 0f) {
+                        if (full && !realGlass(shape, real, bevelCap = (8f + 8f * refraction).dp.toPx()) && refraction > 0f) {
                             lens(
                                 refractionHeight = minOf(size.minDimension / 2f, (8f + 8f * refraction).dp.toPx()),
                                 refractionAmount = (6f + 18f * refraction).dp.toPx(),

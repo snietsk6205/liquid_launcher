@@ -44,6 +44,19 @@ enum class GlassQuality {
     }
 }
 
+/** How Full glass bends the light (P4, 0.9.12). */
+enum class GlassEngine {
+    /** The AGSL glass of [LiquidShader]: Snell refraction by the edge's shape, dispersion, specular, shading, grain. */
+    Real,
+
+    /** The backdrop library's lens, as up to 0.9.11. */
+    Lens;
+
+    companion object {
+        fun fromSetting(value: String): GlassEngine = if (value == "lens") Lens else Real
+    }
+}
+
 /** How one glass surface looks. */
 @Immutable
 data class GlassStyle(
@@ -72,9 +85,28 @@ data class GlassStyle(
     val shadow: Float = 1f,
     /** 0..1: light glowing inside the edge, as in a drop of water. */
     val glow: Float = 0f,
+    /** P4 (0.9.12): what draws Full glass. The values below are the real glass's ([GlassEngine.Real]). */
+    val engine: GlassEngine = GlassEngine.Real,
+    /** Width of the rounded edge that bends the light (at most half the surface). */
+    val bevel: Dp = 16.dp,
+    /** Height of the glass, as a multiple of [bevel]: thicker glass bends what is behind the edge further. */
+    val thickness: Float = 2f,
+    /** 0..1: how far red and blue split at the edge, when [dispersion] is on. */
+    val dispersionAmount: Float = 0.35f,
+    /** 0..1: how much the middle magnifies, when [depth] is on. */
+    val swell: Float = 0.4f,
+    /** 0..1: light caught by the edge facing [lightAngle] (a little by the opposite edge), in [rimColor]. */
+    val specular: Float = 0.6f,
+    /** 0..1: the edge away from the light darkens, as thick glass does. */
+    val shade: Float = 0.4f,
+    /** 0..1: a fine grain over the glass. */
+    val grain: Float = 0.1f,
 ) {
     companion object {
         val Default = GlassStyle(GlassQuality.Full, 4.dp, 0.6f, Color.White.copy(alpha = 0.18f))
+
+        /** The "Thickness" setting (0..100 %) as the glass's height in edge widths: 0.5 (thin) to 3.5 (a slab); 50 % is 2. */
+        fun thicknessOf(percent: Int): Float = 0.5f + 3f * percent.coerceIn(0, 100) / 100f
     }
 }
 
@@ -126,7 +158,8 @@ fun Modifier.liquidGlass(backdrop: Backdrop, shape: CornerBasedShape, style: Gla
             effects = {
                 look(style)
                 if (style.blur > 0.dp) blur(style.blur.toPx())
-                if (style.refraction > 0f) {
+                // P4: the real glass; the library's lens only where it cannot run.
+                if (!realGlass(shape, style) && style.refraction > 0f) {
                     lens(
                         refractionHeight = (10f + 10f * style.refraction).dp.toPx(),
                         refractionAmount = (32f * style.refraction).dp.toPx(),

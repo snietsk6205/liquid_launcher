@@ -211,7 +211,7 @@ internal fun WallpaperRow(wallpaper: WallpaperStore) {
 }
 
 @Composable
-internal fun SectionScreen(store: SettingsStore, sectionId: String, onBack: () -> Unit) {
+internal fun SectionScreen(store: SettingsStore, sectionId: String, open: (Screen) -> Unit, onBack: () -> Unit) {
     val section = LauncherSettings.Sections.all.first { it.id == sectionId }
     val settings = remember(sectionId) { LauncherSettings.inSection(sectionId) }
     val values by store.values.collectAsStateCompat()
@@ -254,7 +254,14 @@ internal fun SectionScreen(store: SettingsStore, sectionId: String, onBack: () -
                 "icons" -> IconPacksEditor(store)
                 "homeMenu" -> HomeMenuEditor(store)
                 "theme" -> ThemeEditor(store)
-                "glass", "effects" -> LooksEditor(store)
+                "glass" -> {
+                    NavRow(
+                        "Tune the glass",
+                        "Every value of the real glass on a live picture over your wallpaper, with presets; measures the frame rate too",
+                    ) { open(Screen.GlassTune) }
+                    LooksEditor(store)
+                }
+                "effects" -> LooksEditor(store)
                 "wallpaper" -> WallpaperEditor()
                 "study" -> StudyEditor(store)
                 "layouts" -> LayoutsAndBackupEditor()

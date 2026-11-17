@@ -1419,6 +1419,57 @@ object LauncherSettings {
         summary = "The angle of the edge light: 45° is the top left",
         section = "glass", keywords = "glass light angle direction edge rim",
     )
+    // P4 (0.9.12): the real glass. Every value shows at once in the preview above and in Liquid glass → Tune the glass.
+    val GlassEngine = ChoiceSetting(
+        key = "glass.engine", default = "real",
+        options = listOf("real" to "Real glass", "lens" to "Simple lens (up to 0.9.11)"),
+        title = "Glass",
+        summary = "Real glass: the light bends by the shape of the rounded edge, splits into colours, catches the light on one " +
+            "side and darkens on the other, with a fine grain (Full quality). The simple lens is the glass of earlier versions",
+        section = "glass", keywords = "glass engine shader real liquid lens agsl refraction",
+    )
+    val GlassBevel = IntSetting(
+        key = "glass.bevel", default = 16, min = 4, max = 40, unit = "dp",
+        title = "Edge width",
+        summary = "How wide the rounded edge that bends the light is; never more than half of a surface",
+        section = "glass", keywords = "glass edge bevel width refraction lens",
+    )
+    val GlassThickness = IntSetting(
+        key = "glass.thickness", default = 50, min = 0, max = 100, step = 5, unit = "%",
+        title = "Thickness",
+        summary = "Thicker glass bends what is behind its edge further",
+        section = "glass", keywords = "glass thickness thick depth bend refraction",
+    )
+    val GlassSpecular = IntSetting(
+        key = "glass.specular", default = 60, min = 0, max = 100, step = 5, unit = "%",
+        title = "Light on the edge",
+        summary = "The edge facing the light catches it, the opposite edge a little, in the edge light colour (\"Light comes from\" below)",
+        section = "glass", keywords = "glass specular highlight light edge glint shine rim",
+    )
+    val GlassShade = IntSetting(
+        key = "glass.shade", default = 40, min = 0, max = 100, step = 5, unit = "%",
+        title = "Depth shading",
+        summary = "The edge away from the light darkens, as thick glass does",
+        section = "glass", keywords = "glass shade shading depth dark shadow edge",
+    )
+    val GlassGrain = IntSetting(
+        key = "glass.grain", default = 10, min = 0, max = 100, step = 5, unit = "%",
+        title = "Grain",
+        summary = "A fine grain over the glass, like frosted glass seen up close",
+        section = "glass", keywords = "glass grain noise texture frost",
+    )
+    val GlassSwell = IntSetting(
+        key = "glass.swell", default = 40, min = 5, max = 100, step = 5, unit = "%",
+        title = "Swell",
+        summary = "How much the middle of thick glass magnifies what is behind it",
+        section = "glass", keywords = "glass swell magnify thick dome drop",
+    )
+    val GlassDispersionAmount = IntSetting(
+        key = "glass.dispersionAmount", default = 35, min = 5, max = 100, step = 5, unit = "%",
+        title = "Rainbow strength",
+        summary = "How far the colours split at the edge",
+        section = "glass", keywords = "glass dispersion rainbow prism chromatic amount",
+    )
     val GlassTintMode = ChoiceSetting(
         key = "glass.tintMode", default = "auto",
         options = listOf("auto" to "Follow the wallpaper", "light" to "Light", "dark" to "Dark"),
@@ -2323,8 +2374,9 @@ object LauncherSettings {
         StudyHubSize, StudyHubBounce, StudyClockAction,
         NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,
         NoticeLayout, NoticeWallpaper, NoticeTags, NoticeRedirect, NoticeUpdate, NoticeStudy, NoticeTask, NoticeInfo,
-        GlassQuality, GlassAuto, GlassCap, GlassFullPercent, GlassTintMode, GlassRim,
-        GlassSaturation, GlassBrightness, GlassDepth, GlassDispersion, GlassGlow, GlassShadow, GlassRimColour, GlassLightAngle,
+        GlassQuality, GlassEngine, GlassAuto, GlassCap, GlassFullPercent, GlassTintMode,
+        GlassBevel, GlassThickness, GlassSpecular, GlassShade, GlassGrain, GlassRim,
+        GlassSaturation, GlassBrightness, GlassDepth, GlassSwell, GlassDispersion, GlassDispersionAmount, GlassGlow, GlassShadow, GlassRimColour, GlassLightAngle,
         ButtonStyle, ButtonShape, ButtonSize, ButtonTint, ButtonRim, ButtonRefraction, ButtonMain, ButtonSquish,
         TouchEffect, TouchWhere, TouchAmount, TouchSpeed, TouchBrightness, TouchSize, TouchColour, TouchCustomColour,
         PressFeel, PressDepth, PressSpeed, EditWobble, PressWobble, TouchLight,

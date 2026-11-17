@@ -284,6 +284,12 @@ peek 05-glass-running
 sleep 12
 texts 05-glass-finished 12
 if top_activity | grep -q "SettingsActivity"; then pass "glass benchmark finished without leaving the screen"; else fail "glass benchmark finished without leaving the screen"; fi
+# 0.9.12 (P4): once measured, the same screen tunes the real glass live, with its presets.
+if python3 ci/find_text.py "$OUT/05-glass-finished.xml" "Tune the glass" >/dev/null && python3 ci/find_text.py "$OUT/05-glass-finished.xml" "Real glass" >/dev/null; then
+  pass "after measuring, the glass can be tuned live with presets"
+else
+  fail "after measuring, the glass can be tuned live with presets"
+fi
 
 clear_anr
 echo "== 9. Launcher UI: drawer, search, long-press menu, edit mode"
@@ -688,6 +694,16 @@ if grep -q "transition shaders ready: ripple, ink, shine, melt" "$LOG" && ! grep
 else
   fail "the four transition shaders compile"
   grep -E "transition shader" "$LOG" | tail -6
+fi
+
+echo "== 16. Real glass shader"
+# 0.9.12 (P4): the glass's AGSL shader compiles when the home screen starts; if it did not, the glass would quietly
+# fall back to the simple lens, so the launcher logs which it got.
+if grep -q "liquid glass shader ready" "$LOG"; then
+  pass "the real glass shader compiles"
+else
+  fail "the real glass shader compiles"
+  grep -E "liquid glass shader" "$LOG" | tail -4
 fi
 
 echo "== 8. No crashes"

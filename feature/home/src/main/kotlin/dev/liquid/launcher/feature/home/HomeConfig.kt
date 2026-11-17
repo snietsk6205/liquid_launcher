@@ -290,10 +290,21 @@ data class GlassExtras(
     val shadow: Float = 1f,
     val rimColor: Color = Color.White,
     val lightAngle: Float = 45f,
+    /** The real glass (P4, 0.9.12); see [GlassStyle]. */
+    val engine: dev.liquid.launcher.core.designsystem.GlassEngine = dev.liquid.launcher.core.designsystem.GlassEngine.Real,
+    val bevelDp: Int = 16,
+    val thickness: Float = 2f,
+    val dispersionAmount: Float = 0.35f,
+    val swell: Float = 0.4f,
+    val specular: Float = 0.6f,
+    val shade: Float = 0.4f,
+    val grain: Float = 0.1f,
 ) {
     fun applyTo(style: GlassStyle): GlassStyle = style.copy(
         saturation = saturation, brightness = brightness, depth = depth, dispersion = dispersion,
         glow = glow, shadow = shadow, rimColor = rimColor, lightAngle = lightAngle,
+        engine = engine, bevel = bevelDp.dp, thickness = thickness, dispersionAmount = dispersionAmount,
+        swell = swell, specular = specular, shade = shade, grain = grain,
     )
 }
 
@@ -306,6 +317,14 @@ fun SettingsStore.glassExtras() = GlassExtras(
     shadow = get(S.GlassShadow) / 100f,
     rimColor = dev.liquid.launcher.core.settings.ColorSetting.parse(get(S.GlassRimColour))?.let { Color(it) } ?: Color.White,
     lightAngle = get(S.GlassLightAngle).toFloat(),
+    engine = dev.liquid.launcher.core.designsystem.GlassEngine.fromSetting(get(S.GlassEngine)),
+    bevelDp = get(S.GlassBevel),
+    thickness = GlassStyle.thicknessOf(get(S.GlassThickness)),
+    dispersionAmount = get(S.GlassDispersionAmount) / 100f,
+    swell = get(S.GlassSwell) / 100f,
+    specular = get(S.GlassSpecular) / 100f,
+    shade = get(S.GlassShade) / 100f,
+    grain = get(S.GlassGrain) / 100f,
 )
 
 fun SettingsStore.gridConfig() = GridConfig(
