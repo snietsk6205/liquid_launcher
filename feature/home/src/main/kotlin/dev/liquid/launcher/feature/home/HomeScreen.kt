@@ -259,6 +259,8 @@ private fun HomeScreenBody(
         PressStyle.depth = motionConfig.pressDepth
         PressStyle.wobble = motionConfig.pressWobble
         PressStyle.light = motionConfig.pressLight
+        PressStyle.speed = motionConfig.pressSpeed
+        EditWobble.degrees = motionConfig.editWobble
         if (live) controller.view = rootView
         controller.motionConfig = motionConfig
     }
@@ -340,7 +342,26 @@ private fun HomeScreenBody(
         val overlay by remember { derivedStateOf { controller.anyOverlay } }
         BackHandler(enabled = overlay) { controller.back() }
 
+        // Wind-down (D4): from the chosen time the wallpaper's colour drains over a few seconds; back in the morning.
+        val windDownAt by store.derive { get(LauncherSettings.StudyWindDown).toIntOrNull() }
+        val windTick = rememberMinuteTick()
+        LaunchedEffect(windDownAt, windTick) {
+            val target = if (isWindDown(windDownAt)) 1f else 0f
+            if (controller.windDown.targetValue != target) controller.windDown.animateTo(target, androidx.compose.animation.core.tween(2400))
+        }
+        // The edit-mode wobble's clock runs only while editing with the wobble on (0.9.4).
+        if (controller.editMode && motionConfig.editWobble > 0f) {
+            LaunchedEffect(Unit) {
+                val start = androidx.compose.runtime.withFrameNanos { it }
+                while (true) androidx.compose.runtime.withFrameNanos { EditWobble.time.floatValue = (it - start) / 1e9f }
+            }
+        }
         LaunchedEffect(returnState.tick) {
+            // Back from the app an icon opened: that icon lands as the home screen settles (0.9.4).
+            controller.lastLaunchKey?.let { key ->
+                controller.lastLaunchKey = null
+                IconLanding.land(key)
+            }
             val progress = returnState.progress
             if (progress.floatValue < 1f) {
                 val (style, duration) = handover
@@ -550,6 +571,7 @@ private fun HomeScreenBody(
                         }
                     },
                     modifier = Modifier.layerBackdrop(wallpaperBackdrop),
+                    filter = { controller.windDownFilter() },
                 )
                 val deep = deepWallpaper
                 if (deep != null && placing == null) {
@@ -567,6 +589,7 @@ private fun HomeScreenBody(
                             val depth = deepBlurDp.coerceAtLeast(1).toFloat()
                             maxOf(p * motionShown.homeBlurDp / depth, searchP * searchBlurDp / depth)
                         },
+                        filter = { controller.windDownFilter() },
                     )
                 }
             }
@@ -839,6 +862,10 @@ private fun HomeScreenBody(
         val hubShown by remember { derivedStateOf { controller.todaySheet || controller.hub.value > 0.001f } }
         if ((live || mode == HomeMode.PreviewToday) && hubShown) {
             StudyHub(glass, lightBackground, overlayBackdrop, controller)
+        }
+        // C1: a distracting app asked for during a block waits here.
+        Presence(controller.speedBump.takeIf { live }) { bump ->
+            SpeedBumpOverlay(bump, glass, lightBackground, overlayBackdrop, controller)
         }
         Presence(if (live && controller.widgetPicker) Unit else null) {
             WidgetPicker(glass, lightBackground, overlayBackdrop, controller)

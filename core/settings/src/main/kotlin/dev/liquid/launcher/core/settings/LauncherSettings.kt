@@ -692,28 +692,32 @@ object LauncherSettings {
     val PressFeel = ChoiceSetting(
         key = "motion.press", default = "squishy",
         options = listOf(
-            "squishy" to "Squish: squashes like a drop under your finger and wobbles back",
-            "jelly" to "Jelly: flattens wide like jelly, then wobbles",
-            "sink" to "Sink: sinks into the screen",
-            "grow" to "Grow: swells under the finger",
-            "shrink" to "Shrink: shrinks away from the finger",
-            "rise" to "Rise: lifts up towards you",
-            "tilt" to "Tilt: tips towards where your finger landed",
-            "pop" to "Pop: grows and hops up",
-            "fade" to "Fade: fades back a little",
-            "bouncy" to "Bouncy: a deeper squash and a livelier spring",
-            "gentle" to "Gentle: shrinks a little, no bounce",
+            "squishy" to "Squish: a crisp squash under your finger and a rebound",
+            "tilt" to "Tilt: tips towards where your finger landed, with a highlight",
             "off" to "Off",
         ),
         title = "Press motion",
         summary = "How icons, pill items, search results, menus and glass buttons move under your finger. Big things such as widgets move only a little",
-        section = "effects", keywords = "press squish bounce jelly tap feedback button icon spring key motion sink grow shrink rise tilt pop fade",
+        section = "effects", keywords = "press squish bounce tap feedback button icon spring tilt highlight motion",
     )
     val PressDepth = IntSetting(
         key = "motion.pressDepth", default = 50, min = 0, max = 100, step = 10, unit = "%",
-        title = "Press depth",
-        summary = "How far a press goes: deeper squash, higher hop, more tilt",
-        section = "effects", keywords = "press squish depth amount dip",
+        title = "Press intensity",
+        summary = "How far a press goes: a deeper squash, more tilt",
+        section = "effects", keywords = "press squish depth amount dip intensity",
+    )
+    val PressSpeed = IntSetting(
+        key = "motion.pressSpeed", default = 100, min = 50, max = 200, step = 10, unit = "%",
+        title = "Press speed",
+        summary = "How quickly a press goes down and springs back",
+        section = "effects", keywords = "press speed fast slow spring",
+    )
+    val EditWobble = ChoiceSetting(
+        key = "motion.editWobble", default = "off",
+        options = listOf("off" to "Off", "subtle" to "Subtle", "lively" to "Lively"),
+        title = "Wobble while editing",
+        summary = "Icons and widgets shiver while the home screen is in edit mode, each at its own pace",
+        section = "effects", keywords = "edit wobble jiggle shake icons edit mode",
     )
     val PressWobble = IntSetting(
         key = "motion.pressWobble", default = 50, min = 0, max = 100, step = 10, unit = "%",
@@ -1946,6 +1950,33 @@ object LauncherSettings {
         title = "Morning trip to class",
         section = "study", keywords = "study commute trip travel morning minutes trajet",
     )
+    val StudySpeedBump = BoolSetting(
+        key = "study.speedBump", default = true,
+        title = "Speed bump during blocks",
+        summary = "While a study block runs, an app with the tag below opens only after \"Open anyway\", which waits 5 seconds. " +
+            "Only for apps opened from Liquid Launcher (not from notifications or recents, which Android does not let a launcher hold back)",
+        section = "study", keywords = "study focus distracting speed bump block apps social",
+    )
+    val StudySpeedBumpTags = TextSetting(
+        key = "study.speedBumpTags", default = "distracting",
+        placeholder = "distracting",
+        title = "Tag of the apps that wait",
+        summary = "A tag name, or several separated by commas. Give apps the tag from their long-press menu (Tags)",
+        section = "study", keywords = "study distracting tag speed bump",
+    )
+    val StudyRest = IntSetting(
+        key = "study.rest", default = 20, min = 0, max = 45, step = 5, unit = "min",
+        title = "Rest after getting home",
+        summary = "The line under the clock shows the rest running out, then \"Start\" for tonight's first block. 0: no rest",
+        section = "study", keywords = "study rest decompression home arrival break",
+    )
+    val StudyWindDown = ChoiceSetting(
+        key = "study.windDown", default = "1350",
+        options = listOf("off" to "Off", "1290" to "21:30", "1320" to "22:00", "1350" to "22:30", "1380" to "23:00"),
+        title = "Wind down from",
+        summary = "From this time until morning the wallpaper and the glass lose most of their colour, and the line under the clock offers the evening check-in until you send it",
+        section = "study", keywords = "study wind down evening night check-in saturation colour",
+    )
     val StudyShiftLead = IntSetting(
         key = "study.shiftLead", default = 20, min = 0, max = 60, step = 5, unit = "min",
         title = "Offer to shift the evening when home later than this before the first block",
@@ -2219,7 +2250,7 @@ object LauncherSettings {
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
         StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyPlanLink, StudyLinkOpener,
-        StudyAttendance, StudyLeaveBy, StudyCommute,
+        StudyAttendance, StudyLeaveBy, StudyCommute, StudyRest, StudyWindDown, StudySpeedBump, StudySpeedBumpTags,
         StudyArrival, StudyHomeWifi, StudyArrivalCharger, StudyShiftLead, StudyLatestEnd, StudyClassCalendars, StudyHeader, StudyCheckin, StudyTemplates,
         StudyHubSize, StudyHubBounce, StudyClockAction,
         NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,
@@ -2228,7 +2259,7 @@ object LauncherSettings {
         GlassSaturation, GlassBrightness, GlassDepth, GlassDispersion, GlassGlow, GlassShadow, GlassRimColour, GlassLightAngle,
         ButtonStyle, ButtonShape, ButtonSize, ButtonTint, ButtonRim, ButtonRefraction, ButtonMain, ButtonSquish,
         TouchEffect, TouchWhere, TouchAmount, TouchSpeed, TouchBrightness, TouchSize, TouchColour, TouchCustomColour,
-        PressFeel, PressDepth, PressWobble, TouchLight,
+        PressFeel, PressDepth, PressSpeed, EditWobble, PressWobble, TouchLight,
         WallpaperEffect, WallpaperEffectAmount, WallpaperEffectSpeed, WallpaperEffectBrightness, WallpaperEffectSize,
         WallpaperEffectColour, WallpaperEffectReact,
     ) + GlassDefault.settings + glassSurfaces.flatMap { it.settings } + listOf(

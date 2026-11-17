@@ -43,7 +43,7 @@ object Looks {
                 S.GlassDefault.blur.key to i(2), S.GlassDefault.refraction.key to i(85), S.GlassDefault.tint.key to i(8),
                 S.GlassGlow.key to i(45), S.GlassSaturation.key to i(140),
                 S.TouchEffect.key to s("drop"), S.TouchColour.key to s("white"), S.TouchBrightness.key to i(55),
-                S.PressFeel.key to s("jelly"), S.PressWobble.key to i(70),
+                S.PressFeel.key to s("squishy"), S.PressWobble.key to i(70),
                 S.WallpaperEffect.key to s("bubbles"), S.WallpaperEffectAmount.key to i(30), S.WallpaperEffectBrightness.key to i(30),
             ),
         ),
@@ -53,7 +53,7 @@ object Looks {
                 S.GlassDefault.blur.key to i(16), S.GlassDefault.tint.key to i(30), S.GlassDefault.refraction.key to i(40),
                 S.GlassSaturation.key to i(110), S.GlassDepth.key to b(false), S.GlassDispersion.key to b(false),
                 S.GlassRim.key to i(60), S.GlassGlow.key to i(10), S.GlassRimColour.key to s("#CFE8FF"),
-                S.TouchEffect.key to s("glint"), S.TouchColour.key to s("white"), S.PressFeel.key to s("shrink"), S.PressWobble.key to i(20),
+                S.TouchEffect.key to s("glint"), S.TouchColour.key to s("white"), S.PressFeel.key to s("squishy"), S.PressWobble.key to i(20),
                 S.WallpaperEffect.key to s("snow"), S.WallpaperEffectAmount.key to i(35),
             ),
         ),
@@ -63,7 +63,7 @@ object Looks {
                 S.GlassSaturation.key to i(220), S.GlassBrightness.key to i(4), S.GlassRim.key to i(70), S.GlassGlow.key to i(40),
                 S.GlassRimColour.key to s("#B388FF"),
                 S.TouchEffect.key to s("swoosh"), S.TouchColour.key to s("rainbow"), S.TouchBrightness.key to i(70), S.TouchSpeed.key to i(90),
-                S.PressFeel.key to s("pop"), S.TouchLight.key to i(60),
+                S.PressFeel.key to s("tilt"), S.TouchLight.key to i(60),
                 S.WallpaperEffect.key to s("orbs"), S.WallpaperEffectBrightness.key to i(35),
             ),
         ),
@@ -72,7 +72,7 @@ object Looks {
             mapOf(
                 S.GlassDefault.refraction.key to i(100), S.GlassGlow.key to i(50), S.GlassRim.key to i(30),
                 S.ButtonRefraction.key to i(90),
-                S.TouchEffect.key to s("bubbles"), S.TouchAmount.key to i(60), S.PressFeel.key to s("bouncy"), S.PressWobble.key to i(80),
+                S.TouchEffect.key to s("bubbles"), S.TouchAmount.key to i(60), S.PressFeel.key to s("squishy"), S.PressWobble.key to i(80),
             ),
         ),
         LookPreset(
@@ -80,7 +80,7 @@ object Looks {
             mapOf(
                 S.GlassDispersion.key to b(false), S.GlassGlow.key to i(0),
                 S.TouchEffect.key to s("light"), S.TouchBrightness.key to i(30), S.TouchColour.key to s("white"),
-                S.PressFeel.key to s("gentle"), S.PressWobble.key to i(0), S.TouchLight.key to i(20),
+                S.PressFeel.key to s("squishy"), S.PressWobble.key to i(0), S.TouchLight.key to i(20),
             ),
         ),
         LookPreset(

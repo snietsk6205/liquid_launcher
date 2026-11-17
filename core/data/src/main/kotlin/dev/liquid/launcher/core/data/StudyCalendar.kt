@@ -101,6 +101,7 @@ class StudyCalendar(
             _loaded.value = enabled && canRead
             _homeAt.value = storedHome()
             _attendance.value = storedAttendance()
+            _checkedIn.value = storedCheckin()
             // Not part of this job: a newer refresh must not cancel the write of the minutes.
             if (_focus.value != null) scope.launch(Dispatchers.IO) { finishFocusIfOver() }
         }
@@ -604,6 +605,21 @@ class StudyCalendar(
         if (present) return true
         val time = Instant.ofEpochMilli(cls.begin).atZone(ZoneId.systemDefault()).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm"))
         return addNote("absent " + cls.title.subject + " " + time)
+    }
+
+    private fun storedCheckin(): Boolean = prefs.getBoolean("checkin:" + LocalDate.now(), false)
+
+    private val _checkedIn = MutableStateFlow(storedCheckin())
+
+    /** The evening check-in was sent from the launcher today (D4): wind-down no longer offers it. */
+    val checkedIn: StateFlow<Boolean> = _checkedIn
+
+    fun markCheckin() {
+        val today = "checkin:" + LocalDate.now()
+        val edit = prefs.edit()
+        prefs.all.keys.filter { it.startsWith("checkin:") && it != today }.forEach { edit.remove(it) }
+        edit.putBoolean(today, true).apply()
+        _checkedIn.value = true
     }
 
     /** Forgets today's arrival (the manual chip was a mistake). The mark already written stays. */

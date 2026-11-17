@@ -75,6 +75,8 @@ internal fun WallpaperImage(
     modifier: Modifier,
     /** Opacity, read while drawing (the blurred copy that fades in over the wallpaper). */
     alpha: () -> Float = { 1f },
+    /** A colour filter, read while drawing (wind-down, D4). */
+    filter: () -> androidx.compose.ui.graphics.ColorFilter? = { null },
 ) {
     Spacer(
         modifier
@@ -109,6 +111,7 @@ internal fun WallpaperImage(
                         dstOffset = IntOffset(dx.roundToInt(), dy.roundToInt()),
                         dstSize = IntSize((srcW * scale).roundToInt(), (srcH * scale).roundToInt()),
                         alpha = a.coerceAtMost(1f),
+                        colorFilter = filter(),
                         filterQuality = FilterQuality.Medium,
                     )
                 }

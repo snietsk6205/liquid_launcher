@@ -173,7 +173,7 @@ class HomeController(
     val drawerOpen: Boolean get() = drawer.targetValue > 0.5f || drawer.value > 0.01f
     val anyOverlay: Boolean get() = drawerOpen || searchOpen || menu != null || editMode || renaming != null || tagging != null ||
         iconPicking != null || swipeEditing != null || openFolder != null || homeMenu || wallpaperStudio || layoutsSheet || savingLayout ||
-        wallpaperStrip || clockStudio != null || todaySheet || widgetPicker
+        wallpaperStrip || clockStudio != null || todaySheet || widgetPicker || speedBump != null
 
     // ---- home menu, wallpaper, layouts ----
 
@@ -346,6 +346,7 @@ class HomeController(
     /** The evening check-in: the message from the settings and today's log, to Claude. */
     fun eveningCheckin() {
         Haptics.confirm(view)
+        data.study.markCheckin()
         val message = data.settings.get(LauncherSettings.StudyCheckin).trim()
         askClaude(withStudyHeader(message + "\n\n" + studyReport(data.study.day.value)))
     }
@@ -1014,6 +1015,7 @@ class HomeController(
     }
 
     fun closeAll(immediately: Boolean = false) {
+        speedBump = null
         homeMenu = false
         wallpaperStrip = false
         layoutsSheet = false
@@ -1032,6 +1034,7 @@ class HomeController(
     /** Back gesture: close the top-most thing. Returns false when nothing was open. */
     fun back(): Boolean {
         when {
+            speedBump != null -> speedBump = null
             renaming != null -> renaming = null
             tagging != null -> tagging = null
             iconPicking != null -> iconPicking = null
@@ -1134,8 +1137,67 @@ class HomeController(
 
     // ---- apps ----
 
-    fun launch(app: AppEntry, bounds: android.graphics.Rect? = null, options: android.os.Bundle? = null, fromDrawer: Boolean = false) {
+    /** 0 by day, 1 at wind-down (D4): how much colour the wallpaper (and so the glass) loses. Eased in and out. */
+    val windDown = Animatable(0f)
+    private var windDownMatrix: Pair<Float, androidx.compose.ui.graphics.ColorFilter?> = 0f to null
+
+    /** The wallpaper's colour filter now, or null at full colour. Read while drawing. */
+    fun windDownFilter(): androidx.compose.ui.graphics.ColorFilter? {
+        val w = windDown.value
+        if (w <= 0.001f) return null
+        val cached = windDownMatrix
+        if (cached.first == w) return cached.second
+        val matrix = androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(1f - 0.68f * w) }
+        // A touch darker too: evening light.
+        val dim = 1f - 0.12f * w
+        val scale = androidx.compose.ui.graphics.ColorMatrix(floatArrayOf(dim, 0f, 0f, 0f, 0f, 0f, dim, 0f, 0f, 0f, 0f, 0f, dim, 0f, 0f, 0f, 0f, 0f, 1f, 0f))
+        matrix.timesAssign(scale)
+        val filter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(matrix)
+        windDownMatrix = w to filter
+        return filter
+    }
+
+    /** The app last opened from the launcher, until the launcher comes back (its icon lands then; 0.9.4). */
+    var lastLaunchKey: String? = null
+
+    /** C1: an app tagged as distracting was asked for during a study block; it waits here. */
+    var speedBump by mutableStateOf<SpeedBump?>(null)
+
+    /** The block running now when [app] carries a "distracting" tag (C1, Settings → Study companion); else null. */
+    private fun speedBumpFor(app: AppEntry): dev.liquid.launcher.core.data.StudyEvent? {
+        if (!data.study.enabled || !data.settings.get(LauncherSettings.StudySpeedBump)) return null
+        val words = data.settings.get(LauncherSettings.StudySpeedBumpTags).split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+        if (words.isEmpty() || app.tags.isEmpty()) return null
+        val ids = data.organisation.value.value.tags.filter { it.name.trim().lowercase() in words }.map { it.id }.toSet()
+        if (app.tags.none { it in ids }) return null
+        return data.study.day.value.current(System.currentTimeMillis())?.takeIf { it.status == dev.liquid.launcher.core.data.StudyStatus.Open }
+    }
+
+    /** The speed bump's "Open anyway": the app it held back opens as it would have. */
+    fun openAnyway() {
+        val bump = speedBump ?: return
+        speedBump = null
+        launch(bump.app, bump.bounds, bump.options, bump.fromDrawer, bypass = true)
+    }
+
+    /** The speed bump's "Back to <block>": the study hub, on the block. */
+    fun backToBlock() {
+        speedBump = null
+        openToday()
+    }
+
+    fun launch(app: AppEntry, bounds: android.graphics.Rect? = null, options: android.os.Bundle? = null, fromDrawer: Boolean = false, bypass: Boolean = false) {
+        if (!bypass) {
+            speedBumpFor(app)?.let { block ->
+                Haptics.confirm(view)
+                menu = null
+                speedBump = SpeedBump(app, bounds, options, fromDrawer, block)
+                DebugLog.event("Home", "speed bump: ${app.label} during ${block.title.subject}")
+                return
+            }
+        }
         val started = data.apps.launch(app, bounds, options)
+        if (started) lastLaunchKey = app.key
         if (!started) {
             toast(if (app.isWorkProfile) "Could not open: is the work profile paused?" else "Could not open ${app.label}")
             return
@@ -1702,6 +1764,15 @@ private const val OPEN_POINT = 0.4f
 /** What the home screen asks the activity to do. */
 /** How long after starting an app the drawer, search and menus are closed (its opening animation covers them by then). */
 private const val LEAVE_TIDY_MS = 250L
+
+/** An app held back by the speed bump (C1), with how it was going to open. */
+class SpeedBump(
+    val app: AppEntry,
+    val bounds: android.graphics.Rect?,
+    val options: android.os.Bundle?,
+    val fromDrawer: Boolean,
+    val block: dev.liquid.launcher.core.data.StudyEvent,
+)
 
 class HomeCallbacks(
     val openSettings: () -> Unit,

@@ -408,3 +408,34 @@ Also in 0.9.3 (P10, study workflow):
 Tests: `StudyGlanceMorningTest` (leave-by window and lateness, attendance timing, answered, latest first).
 
 Not verified on the phone: the exam regex against your real event titles, the cards' spacing at your font size.
+
+---
+
+## Entry 10: 0.9.4, P9: icon motion rebuilt (2026-11-17, Opus 5.5)
+
+You called Opus's per-icon animations "bad and mostly useless". What was there: eleven press motions (squishy, jelly,
+sink, grow, shrink, rise, tilt, pop, fade, bouncy, gentle), most of them variations of one scale; no edit-mode wobble;
+nothing on launch or return.
+
+| What | How |
+|---|---|
+| Press styles | Two kept: **Squish** (crisper: down with damping 0.86 at stiffness 1800, back with width and height a little out of step, 540 / 620) and **Tilt** (at most 9° towards the finger, smaller scale, always a highlight from the finger), plus **Off**. A stored removed style falls back to Squish; the Looks that used them now use Squish or Tilt |
+| Settings | Effects and touch: Press motion, Press intensity (was Press depth), **Press speed** (new, 50–200 %), Wobble (how much the rebound rings), **Wobble while editing** (new: off / subtle 1.4° / lively 2.6°) |
+| Edit-mode wobble | One frame clock for the whole page (runs only while editing with it on), read in each item's layer: no recomposition. Each item has its own phase and pace from its id; big items (widgets) turn less; the item being resized or dragged stays still |
+| Close: landing | Coming back from an app opened from a home icon, that icon lands (starts about 13 % larger and settles with the rebound) at the moment the home screen settles in. Watched with a snapshot flow, so only that icon moves |
+| Launch | Unchanged: the press squashes as the system grows the app's window out of the icon (Motion → how apps open); the press's way back is hidden under the opening app |
+| Preview | Settings → Effects and touch: every few presses one icon lands; with "Wobble while editing" on, the demo icons shiver |
+
+Not verified on the phone: the feel of the new springs at 90 Hz, the wobble's cost on a full page (one layer update
+per item per frame while editing).
+
+Also in 0.9.4 (P10, study workflow):
+
+| Spec | What |
+|---|---|
+| A5 decompression | After "home" (Wi-Fi, charger or the chip), the line under the clock shows "Rest until 19:40 · then Proba 2" with the rest filling a ring (Settings: Rest after getting home, 20 min; 0 = off); then the block, with a Start button (focus timer) on the line once it is within 45 min. The hub's main action is "Start <block>" in that window |
+| D4 wind-down | From 22:30 (Settings: Wind down from; off / 21:30 / 22:00 / 22:30 / 23:00) until 5:00 the wallpaper eases to 32 % saturation and a touch darker over 2.4 s (glass follows, it samples the wallpaper), and the line under the clock says "Evening check-in · 2/3 blocks done" with a button that sends it; once sent from the launcher it is not offered again that night |
+
+| C1 speed bump | During a running, open block, an app tagged `distracting` (Settings: Tag of the apps that wait; any names, comma separated) opened from the launcher (home, dock, drawer, search, pill, folders: everything goes through `launch`) waits behind a glass card grown from its icon: "Micro · 23 min left", "Back to Micro" (the hub) and "Open anyway" unlocking after 5 s. Back closes it. **Limit:** apps opened from notifications, recents or another app are not held back; a launcher cannot intercept those without an accessibility service that watches every app, which this launcher deliberately does not do (it only watches the system launcher, D2) |
+
+Tests: rest window and progress, no rest without a block to come, wind-down before everything but a running block, the wind-down hours.

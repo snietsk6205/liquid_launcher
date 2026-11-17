@@ -45,12 +45,24 @@ fun Modifier.iconGestures(
     coordinates: () -> LayoutCoordinates?,
     handler: IconGestureHandler,
     enabled: Boolean = true,
+    /** The app this item opens: it lands when the launcher comes back from that app (0.9.4). */
+    landKey: String? = null,
 ): Modifier {
     val current by rememberUpdatedState(handler)
     val coords by rememberUpdatedState(coordinates)
     if (!enabled) return this
     // The item squishes under the finger and springs back when tapped (0.7.2, D108).
     val feel = rememberPressFeel()
+    if (landKey != null) {
+        // Watched without recomposing: only the icon that opened the app moves.
+        androidx.compose.runtime.LaunchedEffect(feel, landKey) {
+            var seen = IconLanding.tick.intValue
+            androidx.compose.runtime.snapshotFlow { IconLanding.tick.intValue }.collect { tick ->
+                if (tick != seen && IconLanding.key == landKey) feel.land()
+                seen = tick
+            }
+        }
+    }
     // Remembered so recompositions (which happen during a drag) never restart the detector:
     // a new pointerInput lambda would cancel the gesture in progress.
     val gesture = remember(feel) { Modifier.iconPointerInput({ current }, { coords() }, feel).pressSquash(feel) }

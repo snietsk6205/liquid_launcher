@@ -23,6 +23,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -697,6 +698,23 @@ internal fun EffectsDemo(fx: TouchFx, glass: GlassConfig, lightBackground: Boole
             i = (i + 1) % icons.size
         }
     }
+    // Every few presses one icon lands, as when coming back from its app (0.9.4).
+    LaunchedEffect(Unit) {
+        var i = 0
+        while (true) {
+            kotlinx.coroutines.delay(4300)
+            feels[i].land()
+            i = (i + 2) % icons.size
+        }
+    }
+    // "Wobble while editing" shows here too while it is on (0.9.4).
+    val wobble = EditWobble.degrees
+    if (wobble > 0f) {
+        LaunchedEffect(Unit) {
+            val start = androidx.compose.runtime.withFrameNanos { it }
+            while (true) androidx.compose.runtime.withFrameNanos { EditWobble.time.floatValue = (it - start) / 1e9f }
+        }
+    }
     val style = glass.style(Surfaces.Menu, lightBackground)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -705,6 +723,9 @@ internal fun EffectsDemo(fx: TouchFx, glass: GlassConfig, lightBackground: Boole
                     Modifier
                         .size(64.dp)
                         .onGloballyPositioned { places[i] = it }
+                        .graphicsLayer {
+                            if (wobble > 0f) rotationZ = kotlin.math.sin(EditWobble.time.floatValue * (2.4f + 0.17f * i) * 6.2832f + i * 1.9f) * wobble
+                        }
                         .pressSquash(feels[i])
                         .liquidGlass(backdrop, CircleShape, style)
                         .clip(CircleShape),

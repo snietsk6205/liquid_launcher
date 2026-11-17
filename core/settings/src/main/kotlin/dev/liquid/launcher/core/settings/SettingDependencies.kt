@@ -10,6 +10,7 @@ object SettingDependencies {
         }
         map[LauncherSettings.HomeLabelSize.key] = LauncherSettings.HomeLabels
         map[LauncherSettings.StudyCommute.key] = LauncherSettings.StudyLeaveBy
+        map[LauncherSettings.StudySpeedBumpTags.key] = LauncherSettings.StudySpeedBump
         map[LauncherSettings.StudyHomeWifi.key] = LauncherSettings.StudyArrival
         map[LauncherSettings.StudyArrivalCharger.key] = LauncherSettings.StudyArrival
         map[LauncherSettings.FastDelay.key] = LauncherSettings.FastOnHomeAnimation

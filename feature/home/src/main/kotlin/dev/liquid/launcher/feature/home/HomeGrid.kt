@@ -175,10 +175,22 @@ fun HomePageView(index: Int, page: HomePage, env: PageEnv, controller: HomeContr
 private fun ItemView(item: HomeItem, pageIndex: Int, env: PageEnv, controller: HomeController) {
     val holder = remember { CoordinatesHolder() }
     val beingDragged = (controller.drag?.source as? DragSource.Home)?.itemId == item.id
+    val wobbling = env.editMode && env.interactive && EditWobble.degrees > 0f && controller.selectedItem != item.id
+    // Each item its own phase and a slightly different pace, so the page shivers rather than swings (0.9.4, P9).
+    val phase = remember(item.id) { (item.id.hashCode() and 0xFFFF) / 65535f * 6.2832f }
+    val pace = remember(item.id) { 2.4f + ((item.id.hashCode() ushr 16) and 0xFF) / 255f * 0.5f }
     val base = Modifier
         .fillMaxSize()
         .onPlaced { holder.value = it }
-        .graphicsLayer { alpha = if (beingDragged) 0f else 1f }
+        .graphicsLayer {
+            alpha = if (beingDragged) 0f else 1f
+            if (wobbling) {
+                val t = EditWobble.time.floatValue
+                val big = (64.dp.toPx() / size.minDimension.coerceAtLeast(1f)).coerceIn(0.15f, 1f)
+                rotationZ = kotlin.math.sin(t * pace * 6.2832f + phase) * EditWobble.degrees * big
+                translationY = kotlin.math.sin(t * pace * 6.2832f * 0.5f + phase * 1.7f) * 0.6.dp.toPx() * big
+            }
+        }
     when (item.kind) {
         ItemKind.APP -> {
             val app = item.app?.let { env.apps[it] }
@@ -204,7 +216,7 @@ private fun ItemView(item: HomeItem, pageIndex: Int, env: PageEnv, controller: H
                 labelSizeSp = env.grid.labelSizeSp,
                 color = env.contentColor,
                 shadow = env.shadow,
-                modifier = base.iconGestures({ holder.value }, appHandler(item, app, holder, controller), env.interactive),
+                modifier = base.iconGestures({ holder.value }, appHandler(item, app, holder, controller), env.interactive, landKey = app.key),
             )
         }
 

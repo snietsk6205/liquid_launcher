@@ -689,6 +689,12 @@ internal sealed interface StudyGlance {
 
     /** A class ended a moment ago (B3, 0.9.4): was Med there? */
     data class Attendance(val cls: StudyEvent) : StudyGlance
+
+    /** Just home (A5, 0.9.4): rest until [restEnd], then [first]. [progress] is the rest gone, 0..1. */
+    data class Rest(val first: StudyEvent, val restEnd: Long, val progress: Float) : StudyGlance
+
+    /** Wind-down (D4, 0.9.4): the evening check-in comes first. */
+    data class WindDown(val done: Int, val total: Int) : StudyGlance
 }
 
 /** The class whose attendance to ask about (B3): ended 5 min to 3 h ago and not answered yet, the latest first. */
@@ -709,6 +715,11 @@ internal fun studyGlance(
     commuteMinutes: Int = 0,
     /** Classes already answered for "present?" (B3); null: off. */
     answered: Set<String>? = null,
+    /** When Med got home today (A5), and how long to rest then; 0: no rest. */
+    homeAt: Long? = null,
+    restMinutes: Int = 0,
+    /** It is wind-down time and the check-in was not sent yet (D4). */
+    windDown: Boolean = false,
 ): StudyGlance? {
     if (commuteMinutes > 0) {
         val first = day.classes.minByOrNull { it.begin }
@@ -730,6 +741,14 @@ internal fun studyGlance(
         )
     }
     if (answered != null) attendanceDue(day, now, answered)?.let { return StudyGlance.Attendance(it) }
+    if (homeAt != null && restMinutes > 0 && now >= homeAt) {
+        val restEnd = homeAt + restMinutes * 60_000L
+        val first = day.blocks.firstOrNull { it.end > now && it.status == StudyStatus.Open && it.begin > now }
+        if (now < restEnd && first != null) {
+            return StudyGlance.Rest(first, restEnd, ((now - homeAt).toFloat() / (restEnd - homeAt)).coerceIn(0f, 1f))
+        }
+    }
+    if (windDown) return StudyGlance.WindDown(day.blocksDone, day.blocks.size)
     val next = day.blocks.firstOrNull { it.begin > now && it.status == StudyStatus.Open }
     val nextGlance = next?.let { StudyGlance.Next(it, ((it.begin - now + 59_999) / 60_000).toInt()) }
     if (nextGlance != null && nextGlance.minutesUntil <= 60) return nextGlance
@@ -762,6 +781,9 @@ internal fun glanceText(glance: StudyGlance, short: Boolean = false): String = w
         else -> "Leave now · " + glance.firstClass.title.subject + " at " + time(glance.firstClass.begin)
     }
     is StudyGlance.Attendance -> if (short) "Present?" else glance.cls.title.subject + " " + time(glance.cls.begin) + " · present?"
+    is StudyGlance.Rest -> if (short) "Rest " + minutes(glance.restEnd - System.currentTimeMillis().coerceAtMost(glance.restEnd)) else
+        "Rest until " + time(glance.restEnd) + " · then " + glance.first.title.subject
+    is StudyGlance.WindDown -> if (short) "Check-in" else "Evening check-in" + if (glance.total > 0) " · ${glance.done}/${glance.total} blocks done" else ""
 }
 
 /** The glance now, or null when the study companion is off, cannot read the calendar, or has nothing to say. */
@@ -775,8 +797,20 @@ internal fun rememberStudyGlance(controller: HomeController): StudyGlance? {
     val commute by controller.data.settings.derive { if (get(LauncherSettings.StudyLeaveBy)) get(LauncherSettings.StudyCommute) else 0 }
     val askAttendance by controller.data.settings.derive { get(LauncherSettings.StudyAttendance) }
     val answered by study.attendance.collectAsState()
-    return remember(loaded, day, tick, withTomorrow, commute, askAttendance, answered) {
-        if (loaded) studyGlance(day, System.currentTimeMillis(), withTomorrow, commute, if (askAttendance) answered else null) else null
+    val homeAt by study.homeAt.collectAsState()
+    val rest by controller.data.settings.derive { get(LauncherSettings.StudyRest) }
+    val windDownAt by controller.data.settings.derive { get(LauncherSettings.StudyWindDown).toIntOrNull() }
+    val checkedIn by study.checkedIn.collectAsState()
+    return remember(loaded, day, tick, withTomorrow, commute, askAttendance, answered, homeAt, rest, windDownAt, checkedIn) {
+        val now = System.currentTimeMillis()
+        if (loaded) {
+            studyGlance(
+                day, now, withTomorrow, commute, if (askAttendance) answered else null,
+                homeAt = homeAt, restMinutes = rest, windDown = !checkedIn && isWindDown(windDownAt),
+            )
+        } else {
+            null
+        }
     }
 }
 
@@ -795,6 +829,8 @@ internal fun StudyRing(glance: StudyGlance, color: Color, size: Dp) {
         // Red from 10 minutes before leaving (A6).
         is StudyGlance.LeaveBy -> if (glance.minutesLeft <= 10) LeaveRed else color
         is StudyGlance.Attendance -> color
+        is StudyGlance.Rest -> eventColor(glance.first)
+        is StudyGlance.WindDown -> color
     }
     // The ring grows smoothly from one minute to the next instead of in steps.
     val shownProgress by animateFloatAsState(if (glance is StudyGlance.Running) glance.progress else 0f, androidx.compose.animation.core.tween(700), label = "ring")
@@ -832,6 +868,26 @@ internal fun StudyRing(glance: StudyGlance, color: Color, size: Dp) {
                 if (glance.minutesLeft <= 10) drawCircle(accent, radius = radius * 0.45f)
             }
             is StudyGlance.Attendance -> drawCircle(accent.copy(alpha = 0.85f), radius = radius, style = Stroke(stroke))
+            is StudyGlance.Rest -> {
+                // The rest filling up, softly.
+                drawCircle(color.copy(alpha = 0.18f), radius = radius, style = Stroke(stroke))
+                drawArc(
+                    accent.copy(alpha = 0.75f), startAngle = -90f, sweepAngle = 360f * glance.progress, useCenter = false,
+                    topLeft = androidx.compose.ui.geometry.Offset(stroke / 2f, stroke / 2f),
+                    size = androidx.compose.ui.geometry.Size(radius * 2f, radius * 2f),
+                    style = Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round),
+                )
+            }
+            is StudyGlance.WindDown -> {
+                val f = if (glance.total > 0) glance.done.toFloat() / glance.total else 0f
+                drawCircle(color.copy(alpha = 0.22f), radius = radius, style = Stroke(stroke))
+                if (f > 0f) drawArc(
+                    accent, startAngle = -90f, sweepAngle = 360f * f, useCenter = false,
+                    topLeft = androidx.compose.ui.geometry.Offset(stroke / 2f, stroke / 2f),
+                    size = androidx.compose.ui.geometry.Size(radius * 2f, radius * 2f),
+                    style = Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round),
+                )
+            }
         }
     }
 }
@@ -877,6 +933,15 @@ private fun glanceKey(glance: StudyGlance): String = when (glance) {
     is StudyGlance.Tomorrow -> "tomorrow:" + glance.block.key
     is StudyGlance.LeaveBy -> "leave:" + glance.firstClass.key
     is StudyGlance.Attendance -> "attendance:" + glance.cls.key
+    is StudyGlance.Rest -> "rest:" + glance.first.key
+    is StudyGlance.WindDown -> "winddown"
+}
+
+/** True from [startMinute] (minutes after midnight; null: never) until five in the morning (D4). */
+internal fun isWindDown(startMinute: Int?, time: java.time.LocalTime = java.time.LocalTime.now()): Boolean {
+    if (startMinute == null) return false
+    val m = time.hour * 60 + time.minute
+    return m >= startMinute || m < 5 * 60
 }
 
 /** The red of "leave now" (A6) and of an exam three days away (B1). */
@@ -930,7 +995,22 @@ private fun StudyLineRow(
             glance is StudyGlance.Unmarked && wanted != "focus" -> Triple(LauncherIcons.Check, "Mark the block done") { controller.studyStatus(block, StudyStatus.Done) }
             glance is StudyGlance.Running && wanted == "done" -> Triple(LauncherIcons.Check, "Mark the block done") { controller.studyStatus(block, StudyStatus.Done) }
             glance is StudyGlance.Running -> Triple(LauncherIcons.Schedule, if (focusing) "Stop the focus timer" else "Start the focus timer") { controller.studyFocus(block) }
+            // A5: after the rest, the block is one tap away (it starts the focus timer).
+            glance is StudyGlance.Next && glance.minutesUntil <= 45 -> Triple(LauncherIcons.Schedule, "Start ${block.title.subject} now") { controller.studyFocus(block) }
             else -> null
+        }
+        if (glance is StudyGlance.WindDown && interactive) {
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier
+                    .size(26.dp)
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = 0.18f))
+                    .squishClickable { controller.eveningCheckin() },
+                contentAlignment = Alignment.Center,
+            ) {
+                LauncherIcon(LauncherIcons.Chat, contentDescription = "Send the evening check-in", tint = color, size = 16.dp)
+            }
         }
         if (glance is StudyGlance.Attendance && interactive) {
             // B3: ✓ present, ✗ absent (a "Note: absent …" for tonight's check-in).

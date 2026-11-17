@@ -3,6 +3,7 @@ package dev.liquid.launcher.feature.home
 import dev.liquid.launcher.core.data.StudyDay
 import dev.liquid.launcher.core.data.StudyEvent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -118,5 +119,27 @@ class StudyGlanceMorningTest {
         assertTrue(studyGlance(day, t0 + 216 * min) !is StudyGlance.Attendance)
         // Both classes over: the latest is asked first.
         assertEquals(StudyGlance.Attendance(micro), studyGlance(day, t0 + 340 * min, answered = emptySet()))
+    }
+
+    @Test
+    fun rest_thenTheBlock_andWindDownComesFirstAtNight() {
+        // Home at t0+500, tonight's block at t0+600.
+        val home = t0 + 500 * min
+        val r = studyGlance(day, t0 + 505 * min, homeAt = home, restMinutes = 20)
+        assertTrue(r is StudyGlance.Rest)
+        r as StudyGlance.Rest
+        assertEquals(evening, r.first)
+        assertEquals(0.25f, r.progress, 0.001f)
+        // After the rest: the block, as usual.
+        assertTrue(studyGlance(day, t0 + 521 * min, homeAt = home, restMinutes = 20) is StudyGlance.Next)
+        // No rest without a block to come.
+        assertTrue(studyGlance(StudyDay(classes = day.classes), t0 + 505 * min, homeAt = home, restMinutes = 20) !is StudyGlance.Rest)
+        // Wind-down: the check-in first, unless a block is running.
+        assertEquals(StudyGlance.WindDown(0, 1), studyGlance(day, t0 + 700 * min, windDown = true))
+        assertTrue(studyGlance(day, t0 + 610 * min, windDown = true) is StudyGlance.Running)
+        assertTrue(isWindDown(1350, java.time.LocalTime.of(22, 40)))
+        assertTrue(isWindDown(1350, java.time.LocalTime.of(1, 0)))
+        assertFalse(isWindDown(1350, java.time.LocalTime.of(21, 0)))
+        assertFalse(isWindDown(null, java.time.LocalTime.of(23, 0)))
     }
 }

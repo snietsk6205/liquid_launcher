@@ -55,12 +55,16 @@ data class MotionConfig(
     val launch: String = "reveal",
     /** How search opens: "lift" (D107), "space" (like the drawer, D99), "zoom", "depth" or "fade". */
     val searchTransition: String = "lift",
-    /** How presses feel: "squishy", "jelly", "sink", "grow", "shrink", "rise", "tilt", "pop", "fade", "bouncy", "gentle" or "off" (D108, D112). */
+    /** How presses feel: "squishy", "tilt" or "off" (D108, D112; nine others removed in 0.9.4). */
     val press: String = "squishy",
     val pressDepth: Float = 0.5f,
     val pressWobble: Float = 0.5f,
     /** Light from the finger on a pressed thing, 0..1 (D112). */
     val pressLight: Float = 0.35f,
+    /** 0.5..2 (0.9.4). */
+    val pressSpeed: Float = 1f,
+    /** Degrees of the edit-mode wobble; 0: off (0.9.4). */
+    val editWobble: Float = 0f,
     /** 1 = normal; 2 = twice as fast. */
     val speed: Float = 1f,
     /** "calm", "liquid" or "lively" (see Motion). */
@@ -77,6 +81,12 @@ fun SettingsStore.motionConfig() = MotionConfig(
     press = get(S.PressFeel),
     pressDepth = get(S.PressDepth) / 100f,
     pressWobble = get(S.PressWobble) / 100f,
+    pressSpeed = get(S.PressSpeed) / 100f,
+    editWobble = when (get(S.EditWobble)) {
+        "subtle" -> 1.4f
+        "lively" -> 2.6f
+        else -> 0f
+    },
     pressLight = get(S.TouchLight) / 100f,
     speed = get(S.MotionSpeed) / 100f,
     style = get(S.MotionStyle),

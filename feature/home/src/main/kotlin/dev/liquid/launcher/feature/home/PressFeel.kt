@@ -42,13 +42,13 @@ import kotlinx.coroutines.launch
  */
 object PressStyle {
     /**
-     * "squishy" (default), "jelly", "sink", "grow", "shrink", "rise", "tilt", "pop", "fade",
-     * "bouncy", "gentle" or "off".
+     * "squishy" (default: a crisp squash and rebound), "tilt" (tips towards the finger, with a highlight) or "off".
+     * 0.9.4 (P9): the other nine motions of 0.8.0 are gone; a stored one of them falls back to "squishy".
      */
     @Volatile
     var style = "squishy"
 
-    /** 0..1: how deep a press goes (Effects and touch, "Press depth"). */
+    /** 0..1: intensity, how deep a press goes ("Press intensity"). */
     @Volatile
     var depth = 0.5f
 
@@ -60,41 +60,52 @@ object PressStyle {
     @Volatile
     var light = 0.35f
 
+    /** 0.5..2: how quickly a press goes down and comes back ("Press speed"). */
+    @Volatile
+    var speed = 1f
+
     internal val on: Boolean get() = style != "off"
 
     /** Fraction an icon-sized thing changes size by when fully pressed. */
-    internal fun shrink(): Float = when (style) {
-        "gentle" -> 0.05f
-        "bouncy" -> 0.13f
-        "shrink" -> 0.16f
-        "jelly", "pop" -> 0.12f
-        else -> 0.1f
-    } * (0.4f + 1.2f * depth)
+    internal fun shrink(): Float = (if (style == "tilt") 0.06f else 0.1f) * (0.4f + 1.2f * depth)
 
     /** Width squashes less than height: the drop flattens a little under the finger. */
-    internal fun widthShare(): Float = when (style) {
-        "gentle" -> 1f
-        "bouncy" -> 0.6f
-        else -> 0.72f
-    }
+    internal fun widthShare(): Float = 0.72f
 
-    internal fun heightShare(): Float = when (style) {
-        "gentle" -> 1f
-        "bouncy" -> 1.2f
-        else -> 1.12f
-    }
+    internal fun heightShare(): Float = 1.12f
 
     /** Damping of the way back: 1 settles without overshoot. [wobble] 0.5 gives each style's own. */
     internal fun releaseDamping(): Float {
-        val own = when (style) {
-            "gentle", "fade" -> 0.9f
-            "bouncy", "pop" -> 0.3f
-            "jelly" -> 0.28f
-            "tilt", "sink" -> 0.55f
-            else -> 0.42f
-        }
+        val own = if (style == "tilt") 0.55f else 0.42f
         return (1f - (1f - own) * (wobble / 0.5f)).coerceIn(0.15f, 1f)
     }
+
+    /** A stiffness scaled by the launcher's animation speed and the press speed. */
+    internal fun stiffness(base: Float): Float = MotionScale.stiffness(base) * speed * speed
+}
+
+/**
+ * Coming back from an app (0.9.4, P9): the icon it was opened from lands, a little larger, and settles,
+ * at the moment the home screen settles in. [key] is the app's key; [tick] changes on each return.
+ */
+object IconLanding {
+    @Volatile
+    var key: String? = null
+    val tick = androidx.compose.runtime.mutableIntStateOf(0)
+
+    fun land(appKey: String) {
+        key = appKey
+        tick.intValue++
+    }
+}
+
+/** The edit-mode wobble's clock in seconds (0.9.4): one for every icon, read in layers only. */
+object EditWobble {
+    val time = androidx.compose.runtime.mutableFloatStateOf(0f)
+
+    /** Degrees of the wobble; 0 is off. Set from the settings. */
+    @Volatile
+    var degrees = 0f
 }
 
 /**
@@ -125,7 +136,8 @@ class PressFeel internal constructor(private val scope: CoroutineScope, private 
             thrown = true
             fx?.fromPress()
             if (!PressStyle.on) return@launch
-            val spec = spring(dampingRatio = 0.8f, stiffness = MotionScale.stiffness(1500f), visibilityThreshold = 0.002f)
+            // Crisp: down fast and without a bounce.
+            val spec = spring(dampingRatio = 0.86f, stiffness = PressStyle.stiffness(1800f), visibilityThreshold = 0.002f)
             launch { x.animateTo(1f, spec) }
             launch { y.animateTo(1f, spec) }
         }
@@ -150,8 +162,24 @@ class PressFeel internal constructor(private val scope: CoroutineScope, private 
             val damping = PressStyle.releaseDamping()
             // A push that moves the element when it had not gone down yet.
             val push = if (y.value < 0.5f) 9f else 0f
-            launch { y.animateTo(0f, spring(dampingRatio = damping, stiffness = MotionScale.stiffness(520f), visibilityThreshold = 0.002f), initialVelocity = push) }
-            launch { x.animateTo(0f, spring(dampingRatio = damping, stiffness = MotionScale.stiffness(390f), visibilityThreshold = 0.002f), initialVelocity = push * 0.75f) }
+            // Width and height a little out of step: a rebound, not a jelly.
+            launch { y.animateTo(0f, spring(dampingRatio = damping, stiffness = PressStyle.stiffness(620f), visibilityThreshold = 0.002f), initialVelocity = push) }
+            launch { x.animateTo(0f, spring(dampingRatio = damping, stiffness = PressStyle.stiffness(540f), visibilityThreshold = 0.002f), initialVelocity = push * 0.85f) }
+        }
+    }
+
+    /** Back from the app this element opened (0.9.4): it lands a little larger and settles with the rebound. */
+    fun land() {
+        if (!PressStyle.on) return
+        pending?.cancel()
+        pending = null
+        at = Offset.Unspecified
+        scope.launch {
+            x.snapTo(-1.3f)
+            y.snapTo(-1.5f)
+            val damping = PressStyle.releaseDamping()
+            launch { y.animateTo(0f, spring(dampingRatio = damping, stiffness = PressStyle.stiffness(360f), visibilityThreshold = 0.002f)) }
+            launch { x.animateTo(0f, spring(dampingRatio = damping, stiffness = PressStyle.stiffness(300f), visibilityThreshold = 0.002f)) }
         }
     }
 
@@ -161,7 +189,7 @@ class PressFeel internal constructor(private val scope: CoroutineScope, private 
         pending = null
         if (x.value == 0f && y.value == 0f) return
         scope.launch {
-            val spec = spring<Float>(dampingRatio = 1f, stiffness = MotionScale.stiffness(900f), visibilityThreshold = 0.002f)
+            val spec = spring<Float>(dampingRatio = 1f, stiffness = PressStyle.stiffness(900f), visibilityThreshold = 0.002f)
             launch { x.animateTo(0f, spec) }
             launch { y.animateTo(0f, spec) }
         }
@@ -180,69 +208,28 @@ class PressFeel internal constructor(private val scope: CoroutineScope, private 
         // Moves in pixels shrink for big things the same way.
         val big = (64.dp.toPx() / minSide).coerceAtMost(1f)
         val depth = 0.4f + 1.2f * PressStyle.depth
-        when (PressStyle.style) {
-            "jelly" -> {
-                scaleX *= 1f + px * d * 0.9f
-                scaleY *= 1f - py * d * 1.5f
-            }
-            "sink" -> {
-                val s = 1f - py * d * 0.55f
-                scaleX *= s
-                scaleY *= s
-                translationY += py * 3.dp.toPx() * depth * big
-                alpha *= 1f - 0.12f * py.coerceAtLeast(0f)
-            }
-            "grow" -> {
-                val s = 1f + py * d * 0.9f
-                scaleX *= s
-                scaleY *= s
-            }
-            "shrink" -> {
-                val s = 1f - py * d
-                scaleX *= s
-                scaleY *= s
-            }
-            "rise" -> {
-                val s = 1f + py * d * 0.35f
-                scaleX *= s
-                scaleY *= s
-                translationY -= py * 5.dp.toPx() * depth * big
-            }
-            "pop" -> {
-                val s = 1f + px * d * 0.9f
-                scaleX *= s
-                scaleY *= 1f + py * d * 0.9f
-                translationY -= py * 7.dp.toPx() * depth * big
-            }
-            "fade" -> {
-                alpha *= (1f - py * 0.35f * depth).coerceIn(0.2f, 1f)
-                val s = 1f - py * d * 0.45f
-                scaleX *= s
-                scaleY *= s
-            }
-            "tilt" -> {
-                val p = at
-                val tx = if (p.isSpecified) ((p.x / size.width.coerceAtLeast(1f)) * 2f - 1f).coerceIn(-1f, 1f) else 0f
-                val ty = if (p.isSpecified) ((p.y / size.height.coerceAtLeast(1f)) * 2f - 1f).coerceIn(-1f, 1f) else 0f
-                val deg = 14f * depth * big
-                // The side pressed goes down, as a plate on a pivot would.
-                rotationY = rotationY - tx * py * deg
-                rotationX = rotationX + ty * px * deg
-                cameraDistance = maxOf(12f * density, size.maxDimension * 4f)
-                val s = 1f - py * d * 0.35f
-                scaleX *= s
-                scaleY *= s
-            }
-            else -> {
-                scaleX *= 1f - px * d * PressStyle.widthShare()
-                scaleY *= 1f - py * d * PressStyle.heightShare()
-            }
+        if (PressStyle.style == "tilt") {
+            val p = at
+            val tx = if (p.isSpecified) ((p.x / size.width.coerceAtLeast(1f)) * 2f - 1f).coerceIn(-1f, 1f) else 0f
+            val ty = if (p.isSpecified) ((p.y / size.height.coerceAtLeast(1f)) * 2f - 1f).coerceIn(-1f, 1f) else 0f
+            // Subtle: at most about 9 degrees on an icon, less on big things.
+            val deg = 9f * depth * big
+            // The side pressed goes down, as a plate on a pivot would.
+            rotationY = rotationY - tx * py * deg
+            rotationX = rotationX + ty * px * deg
+            cameraDistance = maxOf(12f * density, size.maxDimension * 4f)
+            val s = 1f - py * d * 0.6f
+            scaleX *= s
+            scaleY *= s
+        } else {
+            scaleX *= 1f - px * d * PressStyle.widthShare()
+            scaleY *= 1f - py * d * PressStyle.heightShare()
         }
     }
 
     /** The light from the finger, drawn over the element while it is pressed (D112). */
     internal fun DrawScope.drawLight() {
-        val light = PressStyle.light
+        val light = if (PressStyle.style == "tilt") maxOf(PressStyle.light, 0.3f) else PressStyle.light
         if (light <= 0.01f || !PressStyle.on) return
         val p = y.value
         if (p <= 0.01f) return
