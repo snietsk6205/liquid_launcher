@@ -951,8 +951,11 @@ given; fast-forwarded from `claude/exciting-knuth-s83frp` at `51ecd76`; the `cla
 now also builds `ccr-*` branches (D148), so releases still come from the session's branch through the marker.
 
 **Released:** 0.10.2 (run 88, published 2026-11-18 14:42 UTC, every check passed on the first attempt) and 0.10.3
-(pushed with the marker as run 89; its result is in the log commit that follows it). Two releases, as agreed. Run 87
-(items 3 to 7, no release) failed one new check only, fixed before 0.10.2.
+(run 89, published 14:59 UTC after one re-run of its emulator job: the first attempt stopped before the emulator
+started, the SDK's system image download broke with "Premature EOF"; the re-run passed every check). Two releases,
+as agreed. Run 87 (items 3 to 7, no release) failed one new check only, fixed before 0.10.2. The new check that opens
+the clock gallery only wrote a note in run 89 (in edit mode a widget shows "Customise" once it is tapped); the test
+now taps the clock first (found by its digits in the screen dump). Run 90 (no release) is its first real try.
 
 **Items**
 

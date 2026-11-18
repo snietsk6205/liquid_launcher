@@ -667,7 +667,33 @@ if tap_text 11-edit "Widgets" exact; then
 else
   fail "edit mode has a Widgets button"
 fi
-# 0.10.2: the clock's gallery offers the two new designs; a look at each (the default layout's first widget is the clock).
+# 0.10.2: the clock's gallery offers the two new designs; a look at each. In edit mode a widget shows its Customise
+# button once it is tapped (selected): find the clock by its digits and tap it first.
+clock_pos() {
+  python3 - "$OUT/$1.xml" <<'PY'
+import re, sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    sys.exit(1)
+for n in root.iter("node"):
+    text = (n.get("text") or "").strip()
+    if re.fullmatch(r"\d{1,2}(:\d{2})?", text):
+        m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", n.get("bounds", ""))
+        if m:
+            l, t, r, b = map(int, m.groups())
+            if r > l and b > t:
+                print((l + r) // 2, (t + b) // 2)
+                sys.exit(0)
+sys.exit(1)
+PY
+}
+if CLOCK=$(clock_pos 11-edit); then
+  adb shell input tap $CLOCK
+  sleep 1.2
+  dump 11-edit
+fi
 if tap_text 11-edit "Customise" exact; then
   sleep 1.5
   dump 12-clock
