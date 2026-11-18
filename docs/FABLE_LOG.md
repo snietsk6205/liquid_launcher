@@ -955,7 +955,9 @@ now also builds `ccr-*` branches (D148), so releases still come from the session
 started, the SDK's system image download broke with "Premature EOF"; the re-run passed every check). Two releases,
 as agreed. Run 87 (items 3 to 7, no release) failed one new check only, fixed before 0.10.2. The new check that opens
 the clock gallery only wrote a note in run 89 (in edit mode a widget shows "Customise" once it is tapped); the test
-now taps the clock first (found by its digits in the screen dump). Run 90 (no release) is its first real try.
+now taps the clock first (found by its digits in the screen dump). Run 90 (no release) passed every check, that one
+included; its ASCII looks (`12-clock-Tall`, `12-clock-Stacked`) show Tall's narrow, tall digits with the two dots and
+Stacked's two heavy lines, hours over minutes.
 
 **Items**
 
