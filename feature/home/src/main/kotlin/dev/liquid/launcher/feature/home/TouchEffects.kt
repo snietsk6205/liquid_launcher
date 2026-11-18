@@ -1,5 +1,6 @@
 package dev.liquid.launcher.feature.home
 
+import androidx.compose.ui.graphics.drawscope.rotate
 import android.os.SystemClock
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -108,7 +109,46 @@ data class WallpaperFxConfig(
     val custom: Color? = null,
     /** How much touches stir it, 0..1. */
     val react: Float = 0.4f,
+    /** W3: colour orbs placed by hand (WM Keyboard's orbSpots), as fractions of the screen; empty: drifting. */
+    val orbs: List<dev.liquid.launcher.core.data.ThemeOrb> = emptyList(),
 )
+
+/**
+ * W3 (0.10.0): the theme's board effect as the launcher's effects. A splash kind is what a press throws (it replaces
+ * Settings → Effects and touch's while the theme has one); a moving kind plays over the home wallpaper.
+ */
+internal object ThemeEffects {
+    /** WM Keyboard's splash kinds the launcher draws (Meld, which bridges neighbouring keys, has no launcher form). */
+    val splash = mapOf(
+        "PAINT" to "paint", "INK" to "ink", "LIGHT_POOL" to "light", "FLOOD" to "flood", "PUFF" to "puff",
+        "GLINT" to "glint", "POP" to "pop", "SWOOSH" to "swoosh", "SPECKS" to "specks",
+    )
+    val moving = mapOf(
+        "SNOW" to "snow", "RAIN" to "rain", "CODE_RAIN" to "coderain", "BOKEH" to "bokeh", "STARFIELD" to "starfield",
+        "WARP" to "warp", "FIREFLIES" to "fireflies", "MOTES" to "motes", "EMBERS" to "embers", "BUBBLES" to "bubbles",
+        "CONFETTI" to "confetti", "FIREWORKS" to "fireworks", "AURORA" to "aurora", "NEBULA" to "nebula", "LAVA" to "lava",
+        "WAVES" to "waves", "SMOKE" to "smoke", "DOT_GRID" to "dotgrid", "CONTOUR" to "contour", "EQUALIZER" to "equalizer",
+        "SCAN" to "scan", "SHEEN" to "sheen", "RIPPLES" to "ripples", "ORBS" to "orbs",
+    )
+
+    fun touch(effect: dev.liquid.launcher.core.data.ThemeEffect?, base: TouchFxConfig): TouchFxConfig {
+        val kind = effect?.let { splash[it.kind] } ?: return base
+        return base.copy(
+            kind = kind, amount = effect.density, speed = (effect.speed / 1.5f).coerceIn(0.2f, 2f) * 1000f / effect.halfLifeMs.coerceAtLeast(300) * 1.2f,
+            brightness = effect.intensity, size = effect.scale,
+            colour = if (effect.colors.isEmpty()) "accent" else "custom", custom = effect.colors.firstOrNull()?.let { Color(it) },
+        )
+    }
+
+    fun wallpaper(effect: dev.liquid.launcher.core.data.ThemeEffect?, base: WallpaperFxConfig): WallpaperFxConfig {
+        val kind = effect?.let { moving[it.kind] } ?: return base
+        return base.copy(
+            kind = kind, amount = effect.density, speed = effect.speed, brightness = effect.intensity, size = effect.scale,
+            colour = if (effect.colors.isEmpty()) "wallpaper" else "custom", custom = effect.colors.firstOrNull()?.let { Color(it) },
+            react = effect.reactive, orbs = effect.orbs,
+        )
+    }
+}
 
 fun SettingsStore.wallpaperFxConfig() = WallpaperFxConfig(
     kind = get(S.WallpaperEffect),
@@ -600,8 +640,17 @@ private fun DrawScope.ambient(config: WallpaperFxConfig, colours: List<Color>, g
     val seed = 0x5EED
     when (config.kind) {
         "orbs" -> {
-            val n = 3 + (config.amount * 4).toInt()
             val big = maxOf(w, h)
+            if (config.orbs.isNotEmpty()) {
+                // Placed by hand: each pool stays where it was put, swaying a little when the effect moves.
+                config.orbs.forEachIndexed { i, o ->
+                    val x = w * o.x + sin(t * 0.2f + i) * 10f * dp
+                    val y = h * o.y + cos(t * 0.17f + i) * 10f * dp
+                    softDot(glows[i % glows.size], x, y, big * o.radius * s, bright * 0.6f)
+                }
+                return
+            }
+            val n = 3 + (config.amount * 4).toInt()
             for (i in 0 until n) {
                 val x = w * (0.5f + 0.42f * sin(t * 0.11f * (1f + 0.4f * rnd(seed, i)) + rnd(seed, i + 10) * TAU))
                 val y = h * (0.5f + 0.44f * sin(t * 0.08f * (1f + 0.4f * rnd(seed, i + 20)) + rnd(seed, i + 30) * TAU))
@@ -649,6 +698,235 @@ private fun DrawScope.ambient(config: WallpaperFxConfig, colours: List<Color>, g
                 val x = rnd(seed, i + 20) * w + sin(t * (0.5f + rnd(seed, i + 30)) + i * 1.7f) * 16f * dp
                 val r = (1.2f + 2.3f * rnd(seed, i + 40)) * dp * s
                 drawCircle(Color.White.copy(alpha = (bright * (0.5f + 0.5f * rnd(seed, i + 50))).coerceAtMost(1f)), r, Offset(x, y))
+            }
+        }
+        "starfield" -> {
+            val n = 30 + (config.amount * 140).toInt()
+            for (i in 0 until n) {
+                val tw = 0.3f + 0.7f * (0.5f + 0.5f * sin(t * (0.8f + 2.5f * rnd(seed, i + 40)) + i * 2.1f))
+                val r = (0.6f + 1.4f * rnd(seed, i + 50)) * dp * s
+                drawCircle(lerp(colours[i % colours.size], Color.White, 0.7f).copy(alpha = (bright * tw).coerceAtMost(1f)), r, Offset(rnd(seed, i) * w, rnd(seed, i + 10) * h))
+            }
+        }
+        "fireflies" -> {
+            val n = 6 + (config.amount * 24).toInt()
+            for (i in 0 until n) {
+                val x = w * (rnd(seed, i) + 0.12f * sin(t * (0.3f + 0.4f * rnd(seed, i + 5)) + i))
+                val y = h * (0.35f + 0.6f * rnd(seed, i + 10) + 0.08f * cos(t * (0.25f + 0.3f * rnd(seed, i + 15)) + i * 1.3f))
+                val pulse = (0.5f + 0.5f * sin(t * (1.5f + rnd(seed, i + 20) * 2f) + i * 3f)).coerceAtLeast(0f)
+                val r = (2f + 2f * rnd(seed, i + 30)) * dp * s
+                softDot(glows[i % glows.size], x, y, r * 6f, bright * 0.6f * pulse)
+                drawCircle(lerp(colours[i % colours.size], Color.White, 0.6f).copy(alpha = (bright * pulse).coerceAtMost(1f)), r, Offset(x, y))
+            }
+        }
+        "embers" -> {
+            val n = 12 + (config.amount * 50).toInt()
+            for (i in 0 until n) {
+                val vy = (30f + 60f * rnd(seed, i)) * dp
+                val span = h * 0.7f
+                val rise = posMod(rnd(seed, i + 10) * span + t * vy, span)
+                val y = h - rise
+                val x = rnd(seed, i + 20) * w + sin(t * (1f + rnd(seed, i + 30)) + i) * 18f * dp
+                val fade = 1f - rise / span
+                val c = lerp(Color(0xFFFF7A1A), colours[i % colours.size], 0.3f)
+                drawCircle(c.copy(alpha = (bright * fade).coerceIn(0f, 1f)), (1f + 1.8f * rnd(seed, i + 40)) * dp * s, Offset(x, y))
+            }
+        }
+        "confetti" -> {
+            val n = 15 + (config.amount * 60).toInt()
+            for (i in 0 until n) {
+                val vy = (40f + 50f * rnd(seed, i)) * dp
+                val span = h + 20f * dp
+                val y = posMod(rnd(seed, i + 10) * span + t * vy, span) - 10f * dp
+                val x = rnd(seed, i + 20) * w + sin(t * (1f + rnd(seed, i + 30)) + i) * 20f * dp
+                val turn = t * (2f + 3f * rnd(seed, i + 40)) + i
+                val pw = 6f * dp * s
+                val ph = 3f * dp * s * (0.3f + 0.7f * kotlin.math.abs(sin(turn)))
+                rotate(turn * 57f, Offset(x, y)) {
+                    drawRect(colours[i % colours.size].copy(alpha = bright.coerceAtMost(1f)), Offset(x - pw / 2f, y - ph / 2f), androidx.compose.ui.geometry.Size(pw, ph))
+                }
+            }
+        }
+        "bokeh" -> {
+            val n = 6 + (config.amount * 14).toInt()
+            for (i in 0 until n) {
+                val x = posMod(rnd(seed, i) * w + t * (rnd(seed, i + 5) - 0.5f) * 14f * dp, w)
+                val y = posMod(rnd(seed, i + 10) * h + t * (rnd(seed, i + 15) - 0.5f) * 10f * dp, h)
+                val r = (14f + 26f * rnd(seed, i + 20)) * dp * s
+                val c = colours[i % colours.size]
+                drawCircle(c.copy(alpha = bright * 0.16f), r, Offset(x, y))
+                drawCircle(c.copy(alpha = bright * 0.3f), r, Offset(x, y), style = Stroke(1.2f * dp))
+            }
+        }
+        "nebula" -> {
+            val n = 5 + (config.amount * 6).toInt()
+            val big = maxOf(w, h)
+            for (i in 0 until n) {
+                val x = w * (rnd(seed, i) + 0.08f * sin(t * 0.05f + i))
+                val y = h * (rnd(seed, i + 10) + 0.08f * cos(t * 0.04f + i))
+                softDot(glows[i % glows.size], x, y, big * (0.12f + 0.12f * rnd(seed, i + 20)) * s, bright * 0.35f)
+            }
+        }
+        "lava" -> {
+            val n = 4 + (config.amount * 6).toInt()
+            for (i in 0 until n) {
+                val y = h * (0.5f + 0.42f * sin(t * (0.12f + 0.1f * rnd(seed, i)) + i * 2f))
+                val x = w * (0.15f + 0.7f * rnd(seed, i + 10))
+                val r = (36f + 40f * rnd(seed, i + 20)) * dp * s
+                softDot(glows[i % glows.size], x, y, r * 1.6f, bright * 0.5f)
+                drawCircle(colours[i % colours.size].copy(alpha = bright * 0.22f), r, Offset(x, y))
+            }
+        }
+        "smoke" -> {
+            val n = 6 + (config.amount * 14).toInt()
+            for (i in 0 until n) {
+                val life = posMod(t * (0.08f + 0.06f * rnd(seed, i)) + rnd(seed, i + 10), 1f)
+                val x = w * rnd(seed, i + 20) + sin(life * 6f + i) * 30f * dp
+                val y = h * (1f - life * 0.8f)
+                val r = (30f + 70f * life) * dp * s
+                softDot(glows[i % glows.size], x, y, r, bright * 0.35f * (1f - life))
+            }
+        }
+        "aurora" -> {
+            val bands = 3
+            for (b in 0 until bands) {
+                val path = androidx.compose.ui.graphics.Path()
+                val base = h * (0.12f + 0.1f * b)
+                path.moveTo(0f, base)
+                var x = 0f
+                while (x <= w) {
+                    path.lineTo(x, base + sin(x / w * 5f + t * 0.4f + b * 1.7f) * 26f * dp * s)
+                    x += 12f * dp
+                }
+                path.lineTo(w, base + 160f * dp * s)
+                path.lineTo(0f, base + 160f * dp * s)
+                path.close()
+                val c = colours[b % colours.size]
+                drawPath(path, Brush.verticalGradient(listOf(c.copy(alpha = bright * 0.4f), Color.Transparent), startY = base - 30f * dp, endY = base + 160f * dp * s))
+            }
+        }
+        "waves" -> {
+            val lines = 3 + (config.amount * 4).toInt()
+            for (k in 0 until lines) {
+                val path = androidx.compose.ui.graphics.Path()
+                val base = h * (0.62f + 0.06f * k)
+                path.moveTo(0f, base)
+                var x = 0f
+                while (x <= w) {
+                    path.lineTo(x, base + sin(x / w * 7f * s + t * (0.8f + 0.2f * k) + k) * 12f * dp)
+                    x += 8f * dp
+                }
+                drawPath(path, colours[k % colours.size].copy(alpha = bright * (0.5f - k * 0.05f).coerceAtLeast(0.1f)), style = Stroke(1.6f * dp))
+            }
+        }
+        "contour" -> {
+            val lines = 6 + (config.amount * 10).toInt()
+            for (k in 0 until lines) {
+                val path = androidx.compose.ui.graphics.Path()
+                val base = h * (k + 0.5f) / lines
+                path.moveTo(0f, base)
+                var x = 0f
+                while (x <= w) {
+                    val field = sin(x / w * 4f + k * 0.6f + t * 0.15f) + cos(x / w * 2.3f - k * 0.4f + t * 0.1f)
+                    path.lineTo(x, base + field * 14f * dp * s)
+                    x += 10f * dp
+                }
+                drawPath(path, colours[k % colours.size].copy(alpha = bright * 0.35f), style = Stroke(1f * dp))
+            }
+        }
+        "dotgrid" -> {
+            val step = 22f * dp * s
+            var y = step / 2f
+            var row = 0
+            while (y < h) {
+                var x = step / 2f
+                var col = 0
+                while (x < w) {
+                    val wave = 0.5f + 0.5f * sin((x + y) / (w + h) * 10f - t * 1.5f)
+                    drawCircle(colours[(row + col) % colours.size].copy(alpha = bright * (0.15f + 0.6f * wave)), 1.4f * dp * (0.6f + 0.6f * wave), Offset(x, y))
+                    x += step; col++
+                }
+                y += step; row++
+            }
+        }
+        "scan" -> {
+            val y = posMod(t * 90f * dp, h + 80f * dp) - 40f * dp
+            val c = colours[0]
+            drawRect(Brush.verticalGradient(listOf(Color.Transparent, c.copy(alpha = bright * 0.35f), Color.Transparent), startY = y - 40f * dp, endY = y + 40f * dp), Offset(0f, y - 40f * dp), androidx.compose.ui.geometry.Size(w, 80f * dp))
+            drawLine(c.copy(alpha = bright), Offset(0f, y), Offset(w, y), strokeWidth = 1.2f * dp)
+        }
+        "sheen" -> {
+            val span = w + h
+            val p = posMod(t * 0.25f, 1.6f) - 0.3f
+            val cx = span * p
+            drawRect(
+                Brush.linearGradient(
+                    listOf(Color.Transparent, Color.White.copy(alpha = bright * 0.28f), Color.Transparent),
+                    start = Offset(cx - 120f * dp * s, 0f), end = Offset(cx + 120f * dp * s, h * 0.6f),
+                ),
+            )
+        }
+        "ripples" -> {
+            val n = 2 + (config.amount * 5).toInt()
+            for (i in 0 until n) {
+                val life = posMod(t * 0.35f + rnd(seed, i), 1f)
+                val c = Offset(rnd(seed, i + 10) * w, rnd(seed, i + 20) * h)
+                drawCircle(colours[i % colours.size].copy(alpha = bright * (1f - life) * 0.6f), (8f + 120f * life) * dp * s, c, style = Stroke(1.5f * dp))
+            }
+        }
+        "equalizer" -> {
+            val bars = 12 + (config.amount * 20).toInt()
+            val bw = w / bars
+            for (i in 0 until bars) {
+                val level = 0.15f + 0.85f * (0.5f + 0.5f * sin(t * (2f + 3f * rnd(seed, i)) + i * 0.9f)) * (0.5f + 0.5f * rnd(seed, i + 10))
+                val bh = h * 0.22f * level * s
+                drawRect(colours[i % colours.size].copy(alpha = bright * 0.55f), Offset(i * bw + bw * 0.2f, h - bh), androidx.compose.ui.geometry.Size(bw * 0.6f, bh))
+            }
+        }
+        "coderain" -> {
+            val cols = 10 + (config.amount * 24).toInt()
+            val cw = w / cols
+            val seg = 9f * dp * s
+            for (i in 0 until cols) {
+                val vy = (60f + 90f * rnd(seed, i)) * dp
+                val head = posMod(rnd(seed, i + 10) * (h + 300f * dp) + t * vy, h + 300f * dp)
+                val trail = 10
+                for (k in 0 until trail) {
+                    val y = head - k * seg * 1.3f
+                    if (y < 0f || y > h) continue
+                    val c = if (k == 0) Color.White else colours[i % colours.size]
+                    drawRect(c.copy(alpha = bright * (1f - k / trail.toFloat())), Offset(i * cw + cw * 0.3f, y), androidx.compose.ui.geometry.Size(cw * 0.35f, seg))
+                }
+            }
+        }
+        "warp" -> {
+            val n = 30 + (config.amount * 90).toInt()
+            val c = Offset(w / 2f, h / 2f)
+            val far = maxOf(w, h) * 0.75f
+            for (i in 0 until n) {
+                val angle = rnd(seed, i) * TAU
+                val life = posMod(t * (0.25f + 0.3f * rnd(seed, i + 10)) + rnd(seed, i + 20), 1f)
+                val d0 = far * life * life
+                val d1 = far * (life + 0.06f) * (life + 0.06f)
+                val dir = Offset(cos(angle), sin(angle))
+                drawLine(colours[i % colours.size].copy(alpha = (bright * life * 1.4f).coerceAtMost(1f)), c + dir * d0, c + dir * d1, strokeWidth = (0.6f + 1.4f * life) * dp * s, cap = StrokeCap.Round)
+            }
+        }
+        "fireworks" -> {
+            val bursts = 2 + (config.amount * 3).toInt()
+            for (b in 0 until bursts) {
+                val cycle = 2.6f + rnd(seed, b) * 1.2f
+                val life = posMod(t + rnd(seed, b + 10) * cycle, cycle) / cycle
+                val round = ((t + rnd(seed, b + 10) * cycle) / cycle).toInt()
+                val cx = w * (0.2f + 0.6f * rnd(seed + round, b + 20))
+                val cy = h * (0.15f + 0.35f * rnd(seed + round, b + 30))
+                val sparks = 14 + (config.amount * 14).toInt()
+                for (k in 0 until sparks) {
+                    val a = k * TAU / sparks
+                    val d = life * 90f * dp * s
+                    val p = Offset(cx + cos(a) * d, cy + sin(a) * d + life * life * 40f * dp)
+                    drawCircle(colours[(b + k) % colours.size].copy(alpha = (bright * (1f - life)).coerceIn(0f, 1f)), 1.8f * dp * s, p)
+                }
             }
         }
         "rain" -> {

@@ -93,7 +93,7 @@ internal fun ClockStudio(
     controller: HomeController,
 ) {
     val context = LocalContext.current
-    val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
+    val color = sheetContentColor(glass, lightBackground)
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
     val style = state.style
@@ -113,7 +113,8 @@ internal fun ClockStudio(
                     alpha = p.coerceIn(0f, 1f)
                     translationY = (1f - p) * 60.dp.toPx()
                 }
-                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground, large = true))
+                .sheetSurface(backdrop, shape, glass, lightBackground)
+                .bloomLight()
                 .clip(shape)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .padding(horizontal = 14.dp, vertical = 12.dp),

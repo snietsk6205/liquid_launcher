@@ -150,7 +150,7 @@ internal fun FolderOverlay(
     backdrop: Backdrop,
     grid: GridConfig,
 ) {
-    val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
+    val color = sheetContentColor(glass, lightBackground)
     val shape = RoundedCornerShape(32.dp)
     val appear = remember(folder.id) { Animatable(0f) }
     LaunchedEffect(folder.id) { appear.animateTo(1f, Motion.enter()) }
@@ -202,7 +202,8 @@ internal fun FolderOverlay(
                 }
                 // W2: a big folder scrolls inside its card instead of running off the screen.
                 .menuHeightLimit()
-                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground, large = true))
+                .sheetSurface(backdrop, shape, glass, lightBackground)
+                .bloomLight()
                 .clip(shape)
                 // Taps inside the card do not close it.
                 .pointerInput(Unit) { detectTapGestures { } }

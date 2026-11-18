@@ -188,7 +188,8 @@ fun SearchOverlay(
     }
 
     val fieldShape = RoundedCornerShape(50)
-    val fieldColor = if (glass.lightGlass(Surfaces.Pill, lightBackground)) Color(0xFF16181C) else Color.White
+    // W3: the search bar in the theme's pill look: dark by default (it read washed out over a bright page).
+    val fieldColor = pillContentColor(dev.liquid.launcher.core.data.ThemePill.SEARCH, if (glass.lightGlass(Surfaces.Pill, lightBackground)) Color(0xFF16181C) else Color.White)
 
     Box(
         Modifier
@@ -224,7 +225,7 @@ fun SearchOverlay(
                     Modifier
                         .fillMaxWidth()
                         .height(56.dp)
-                        .liquidGlass(backdrop, fieldShape, glass.style(Surfaces.Pill, lightBackground))
+                        .pillSurface(dev.liquid.launcher.core.data.ThemePill.SEARCH, backdrop, fieldShape, glass.style(Surfaces.Pill, lightBackground))
                         .clip(fieldShape)
                         .padding(horizontal = 18.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -835,7 +836,7 @@ internal fun SearchWidgets(
             )
         }
         if (widgets.isNotEmpty()) {
-            GlassButton(if (controller.searchEditing) "Done" else "Edit", color, icon = if (controller.searchEditing) LauncherIcons.Check else LauncherIcons.Edit) {
+            GlassButton(if (controller.searchEditing) "Done" else "Edit", color, emphasis = ControlEmphasis.Secondary, icon = if (controller.searchEditing) LauncherIcons.Check else LauncherIcons.Edit) {
                 controller.searchEditing = !controller.searchEditing
             }
         }

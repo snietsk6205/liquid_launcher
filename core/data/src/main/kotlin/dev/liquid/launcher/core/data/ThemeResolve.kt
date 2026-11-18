@@ -33,7 +33,7 @@ object ThemeResolve {
         val modifier = r.color("modifierKeyBackground") ?: 0xFF222428
         val enter = r.color("enterKeyBackground") ?: 0xFF4C8DF6
         val enterText = r.color("enterKeyText") ?: 0xFF0B1220
-        val keyShape = LiquidThemes.shapeName(r.string("keyShape"), "ROUNDED", allowCircle = false)
+        val keyShape = LiquidThemes.shapeName(r.string("keyShape"), "ROUNDED", allowCircle = false, allowNone = true)
         val keyCorner = r.int("keyCornerRadiusDp") ?: 12
         val frostOn = doc.element("frost") is JsonObject && (r.bool("frost.enabled") ?: true)
         val surfaces = if (!frostOn) emptySet() else doc.strings("frost.surfaces").map { it.uppercase() }.toSet()

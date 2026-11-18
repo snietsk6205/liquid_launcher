@@ -144,7 +144,15 @@ internal fun LayoutsSheet(
                             overflow = TextOverflow.Ellipsis,
                         )
                         if (layout.wallpaper != null) {
-                            LauncherIcon(LauncherIcons.Image, contentDescription = "Has its own wallpaper", tint = color.copy(alpha = 0.6f), size = 14.dp)
+                            // W3: a small badge in the theme's chip colours.
+                            val chip = currentTheme?.chip
+                            Box(
+                                Modifier.padding(top = 3.dp).clip(RoundedCornerShape(50))
+                                    .background(chip?.let { Color(it.fill) } ?: color.copy(alpha = 0.12f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                            ) {
+                                LauncherIcon(LauncherIcons.Image, contentDescription = "Has its own wallpaper", tint = chip?.let { Color(it.text) } ?: color.copy(alpha = 0.7f), size = 13.dp)
+                            }
                         }
                     }
                 }
@@ -224,7 +232,8 @@ private fun DialogRow(label: String, onClick: () -> Unit) {
 /** A button of the sheet: a [GlassButton] in the look of Settings → Buttons (0.6.4). */
 @Composable
 private fun SheetChip(label: String, icon: Int, color: Color, onClick: () -> Unit) {
-    GlassButton(label, color, icon = icon, onClick = onClick)
+    // W3: Save as new, Save changes, Undo switch and Keep it are the theme's secondary buttons.
+    GlassButton(label, color, icon = icon, emphasis = ControlEmphasis.Secondary, onClick = onClick)
 }
 
 /** The layout's home page drawn small: dots for apps, blocks for widgets and folders. */

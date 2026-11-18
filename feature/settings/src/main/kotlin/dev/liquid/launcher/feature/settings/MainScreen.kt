@@ -64,6 +64,9 @@ internal fun MainScreen(
         )
 
         UpdateBanner(store) { open(Screen.Updates) }
+        if (query.isBlank()) {
+            NavRow("Theme lab", "Every option of your WM Keyboard theme, applied to the whole launcher, with a live preview") { open(Screen.ThemeLab) }
+        }
 
         if (query.isNotBlank()) {
             val results = remember(query) { LauncherSettings.search(query) }
@@ -263,8 +266,11 @@ internal fun SectionScreen(store: SettingsStore, sectionId: String, open: (Scree
                 }
                 "effects" -> LooksEditor(store)
                 "buttons" -> {
-                    ControlThemeCard(store)
-                    ControlThemeEditor(store)
+                    // W3 (0.10.0): the Theme lab replaces the theme card and editor of 0.9.13 and 0.9.14.
+                    NavRow(
+                        "Theme lab",
+                        "Every option of your WM Keyboard theme on every button, chip, pill, sheet and menu, with a live preview, presets, import and export",
+                    ) { open(Screen.ThemeLab) }
                 }
                 "wallpaper" -> WallpaperEditor()
                 "study" -> StudyEditor(store)

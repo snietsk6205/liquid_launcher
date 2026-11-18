@@ -42,6 +42,8 @@ class LauncherApp : Application() {
         settings = SettingsStore.get(this)
         // P4 (0.9.13): your keyboard theme's accent and glass colour, once, where you never chose your own.
         dev.liquid.launcher.core.data.ThemeApply.firstRun(settings)
+        // W3 (0.10.0): the theme becomes a WM Keyboard document, once (the fixed blue accent unless you chose one).
+        dev.liquid.launcher.core.data.ThemeStore.migrate010(settings)
         DebugLog.enabled = settings.get(LauncherSettings.LogEnabled)
         DebugLog.maxEntries = settings.get(LauncherSettings.LogSize)
         DebugLog.verbosity = when (settings.get(LauncherSettings.LogVerbosity)) {
@@ -54,6 +56,7 @@ class LauncherApp : Application() {
         RedirectTarget.homeClassName = MainActivity::class.java.name
         SettingsPreviews.sections = HomePreviews.sections
         SettingsPreviews.provider = { sectionId -> HomeSectionPreview(sectionId) }
+        SettingsPreviews.themeLab = { onBack -> dev.liquid.launcher.feature.home.ThemeLab(onBack) }
 
         wallpaper = WallpaperStore.get(this)
         data = LauncherData.get(this)

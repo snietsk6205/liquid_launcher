@@ -322,14 +322,15 @@ object LiquidThemes {
         ThemeResolve.resolve(ThemeDoc(spec), null, fallbackName)
 
     /**
-     * A WM Keyboard shape as one the launcher draws: the four plain outlines and the pill pass through, a circle
-     * where allowed (round tool buttons), every decorative one (arch, leaf, slant, hexagon, scallop, ticket) as
-     * rounded, as WM Keyboard itself does for containers. NONE (a key without a face) draws as [default].
+     * A WM Keyboard shape as one the launcher draws. Since 0.10.0 (W3) every outline is drawn as itself (arch, leaf,
+     * slant, hexagon, scallop, ticket included); a circle only where allowed (round tool buttons); NONE (a key
+     * without a face) where allowed, else [default].
      */
-    fun shapeName(name: String?, default: String, allowCircle: Boolean): String = when (name?.uppercase()) {
-        "PILL", "ROUNDED", "SQUIRCLE", "CUT", "SHARP" -> name.uppercase()
+    fun shapeName(name: String?, default: String, allowCircle: Boolean, allowNone: Boolean = false): String = when (val n = name?.uppercase()) {
+        "PILL", "ROUNDED", "SQUIRCLE", "CUT", "SHARP", "ARCH", "LEAF", "SLANT", "HEXAGON", "SCALLOP", "TICKET" -> n
         "CIRCLE" -> if (allowCircle) "CIRCLE" else "PILL"
-        null, "NONE" -> default
+        "NONE" -> if (allowNone) "NONE" else default
+        null -> default
         else -> "ROUNDED"
     }
 }

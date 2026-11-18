@@ -73,7 +73,9 @@ import java.util.Locale
  * keyboard, so it always fits once scrolled to (the calendar used to be cut off below its fifth week).
  */
 
-private val Ink = Color.White
+/** Text and lines of the search page's cards: the theme's card text (W3), else white. */
+private val Ink: Color
+    get() = ThemeInk.card
 
 private fun searchText(size: Int, weight: FontWeight = FontWeight.Normal, alpha: Float = 1f, color: Color = Ink) =
     TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = alpha), fontSize = size.sp, fontWeight = weight)
@@ -203,8 +205,8 @@ private fun SearchPane(onClick: ((Rect?) -> Unit)?, content: @Composable () -> U
             .fillMaxWidth()
             .onGloballyPositioned { bounds[0] = it.boundsInRoot() }
             .then(if (onClick != null) Modifier.squishClickable(delayMs = 40L) { onClick(bounds[0]) } else Modifier)
-            .clip(RoundedCornerShape(22.dp))
-            .background(Ink.copy(alpha = 0.09f))
+            .clip(cardOutline())
+            .cardFill(0.09f)
             .padding(horizontal = 14.dp, vertical = 11.dp),
     ) { content() }
 }
@@ -371,7 +373,7 @@ private fun ExamCountdown(controller: HomeController, exams: List<StudyEvent>, u
     Box(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
+            .clip(cardOutline())
             .combinedClickable(
                 interactionSource = null,
                 indication = null,
@@ -382,7 +384,7 @@ private fun ExamCountdown(controller: HomeController, exams: List<StudyEvent>, u
                     open = !open
                 },
             )
-            .background(Ink.copy(alpha = 0.09f))
+            .cardFill(0.09f)
             .padding(horizontal = 14.dp, vertical = 10.dp)
             .animateContentSize(spring(dampingRatio = 0.84f, stiffness = MotionScale.stiffness(480f))),
     ) {
@@ -461,7 +463,7 @@ private fun AbsenceCard(day: StudyDay) {
                     Text(
                         "UNVERIFIED",
                         style = searchText(10, FontWeight.SemiBold, alpha = 0.75f),
-                        modifier = Modifier.clip(RoundedCornerShape(50)).background(Ink.copy(alpha = 0.16f)).padding(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.clip(RoundedCornerShape(50)).cardFill(0.16f).padding(horizontal = 8.dp, vertical = 2.dp),
                     )
                 }
             }
@@ -544,7 +546,7 @@ private fun FlashcardCard(controller: HomeController, day: StudyDay) {
         Modifier
             .fillMaxWidth()
             .flipAround(turn)
-            .clip(RoundedCornerShape(22.dp))
+            .clip(cardOutline())
             .background(Ink.copy(alpha = if (shown == 0) 0.14f else 0.09f))
             .squishClickable(delayMs = 40L) { if (side < 2) side++ }
             .padding(horizontal = 16.dp, vertical = 14.dp),

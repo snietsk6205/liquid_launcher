@@ -105,7 +105,7 @@ private class WidgetApp(val pkg: String, val name: String, val app: AppEntry?, v
 @Composable
 internal fun WidgetPicker(glass: GlassConfig, lightBackground: Boolean, backdrop: Backdrop, controller: HomeController) {
     val context = LocalContext.current
-    val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
+    val color = sheetContentColor(glass, lightBackground)
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
     val shape = RoundedCornerShape(32.dp)
@@ -154,7 +154,8 @@ internal fun WidgetPicker(glass: GlassConfig, lightBackground: Boolean, backdrop
                     alpha = p.coerceIn(0f, 1f)
                     translationY = (1f - p) * 60.dp.toPx()
                 }
-                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground, large = true), exported = layer)
+                .sheetSurface(backdrop, shape, glass, lightBackground, exported = layer)
+                .bloomLight()
                 .clip(shape)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .padding(horizontal = 14.dp, vertical = 14.dp),

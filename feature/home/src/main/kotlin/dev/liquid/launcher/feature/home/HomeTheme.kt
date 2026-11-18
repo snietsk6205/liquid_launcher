@@ -55,8 +55,12 @@ object HomeTheme {
         if (automaticAccent) accent = autoAccent(context)
     }
 
-    fun apply(context: Context, theme: ThemeConfig) {
-        automaticAccent = theme.accent == null
+    /**
+     * [themeAccent]: the theme's accent (W3), which wins when the theme styles the controls: fixed (the blue by
+     * default) or taken from the wallpaper by its role.
+     */
+    fun apply(context: Context, theme: ThemeConfig, themeAccent: Long? = null) {
+        automaticAccent = themeAccent == null && theme.accent == null
         val fontDir = File(context.filesDir, "fonts")
         font = family(theme.font, fontDir, theme.fontFile)
         clockFont = if (theme.clockFont == "same") font else family(theme.clockFont, fontDir, theme.fontFile)
@@ -67,7 +71,7 @@ object HomeTheme {
             "bold" -> FontWeight.Bold
             else -> FontWeight.Light
         }
-        accent = theme.accent ?: autoAccent(context)
+        accent = themeAccent?.let { Color(it) } ?: theme.accent ?: autoAccent(context)
     }
 
     /** A clear, mid-tone version of the wallpaper's main colour. */
@@ -76,6 +80,9 @@ object HomeTheme {
         androidx.core.graphics.ColorUtils.colorToHSL(ThemedColors.seed(context), hsl)
         return Color(androidx.core.graphics.ColorUtils.HSLToColor(floatArrayOf(hsl[0], hsl[1].coerceIn(0.45f, 0.85f), 0.66f)))
     }
+
+    /** W3: a font of the theme by its id ("" for the launcher's own). */
+    fun fontFor(id: String): FontFamily? = if (id.isBlank()) font else family(id, File(""), "")
 
     private fun family(id: String, dir: File, file: String): FontFamily? = when (id) {
         "light" -> FontFamily(Typeface.create("sans-serif-light", Typeface.NORMAL))

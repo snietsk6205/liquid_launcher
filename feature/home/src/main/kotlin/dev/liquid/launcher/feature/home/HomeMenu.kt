@@ -111,7 +111,7 @@ internal fun HomeMenu(
     controller: HomeController,
 ) {
     val layouts by controller.data.layouts.state.collectAsState()
-    val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
+    val color = menuContentColor(glass, lightBackground)
     val appear = remember { Animatable(0f) }
     // The pills rise as narrow drops and spread out with a wobble (0.8.0, D116); on closing they narrow and sink.
     val spread = remember { Animatable(0f) }
@@ -175,7 +175,7 @@ internal fun HomeMenu(
                             scaleX = (0.4f + 0.6f * w) * (0.55f + 0.45f * leave)
                             scaleY = (1.18f - 0.18f * w) * (0.8f + 0.2f * leave)
                         }
-                        .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground))
+                        .menuSurface(backdrop, shape, glass, lightBackground)
                         .clip(shape)
                         .horizontalScroll(rememberScrollState())
                         .padding(horizontal = 8.dp, vertical = 6.dp),

@@ -102,7 +102,7 @@ fun AppMenu(
             }
         }
     }
-    val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
+    val color = menuContentColor(glass, lightBackground)
     val shape = RoundedCornerShape(26.dp)
     // Grows out of the pressed icon like a drop (0.8.0, D116): width and height on springs a little
     // out of step, the rows arriving one after another; on closing it shrinks back into the icon.
@@ -141,7 +141,7 @@ fun AppMenu(
                             scaleY = (0.1f + 0.9f * tall.value) * (0.3f + 0.7f * leave)
                             transformOrigin = origin
                         }
-                        .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground))
+                        .menuSurface(backdrop, shape, glass, lightBackground)
                         .clip(shape)
                         // W2: a long menu (many shortcuts and rows) scrolls inside its card.
                         .verticalScroll(rememberScrollState())

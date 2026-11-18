@@ -70,14 +70,6 @@ internal val LocalSheetContent = staticCompositionLocalOf { Color.White }
 /** At most this share of the space between the status bar and the keyboard (or navigation bar). */
 internal const val SheetMaxFraction = 0.85f
 
-/** The text colour that reads on a sheet's glass. */
-internal fun sheetContentColor(glass: GlassConfig, lightBackground: Boolean): Color =
-    if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
-
-/** The surface of a sheet: its glass now, the theme's board in the Theme lab's model (W3). */
-internal fun Modifier.sheetSurface(backdrop: Backdrop, shape: androidx.compose.foundation.shape.CornerBasedShape, glass: GlassConfig, lightBackground: Boolean): Modifier =
-    liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground, large = true))
-
 /**
  * A sheet rising from the bottom of the screen: a fixed [header] (its [title] first), a body that scrolls between
  * it and a fixed [footer] and row of [actions], never taller than 85 % of the space above the keyboard or navigation bar. The
@@ -103,7 +95,8 @@ internal fun LiquidSheet(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val color = sheetContentColor(glass, lightBackground)
-    val shape = RoundedCornerShape(cornerRadius)
+    // W3: the theme's sheet shape and corners (the board), else rounded.
+    val (shape, outline) = sheetOutline(RoundedCornerShape(cornerRadius))
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
     BoxWithConstraints(
@@ -115,7 +108,7 @@ internal fun LiquidSheet(
     ) {
         val limit = maxHeight * maxFraction.coerceIn(0.3f, 1f)
         CompositionLocalProvider(LocalSheetContent provides color) {
-            Column(
+            androidx.compose.foundation.layout.Box(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .padding(12.dp)
@@ -125,12 +118,15 @@ internal fun LiquidSheet(
                         alpha = appear.value.coerceIn(0f, 1f)
                         translationY = (1f - appear.value) * 40.dp.toPx()
                     }
-                    .sheetSurface(backdrop, shape, glass, lightBackground)
-                    .clip(shape)
+                    .sheetSurface(backdrop, shape, glass, lightBackground, outline)
+                    .bloomLight()
+                    .clip(outline)
                     // Taps on the sheet stay on the sheet.
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
-                    .padding(top = 16.dp, bottom = if (actions != null) 14.dp else 16.dp),
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
             ) {
+            // W3: the theme's picture and stickers behind the content.
+            BoardPicture(Modifier.matchParentSize())
+            Column(Modifier.padding(top = 16.dp, bottom = if (actions != null) 14.dp else 16.dp)) {
                 if (title != null) SheetTitle(title)
                 header?.invoke(this)
                 Column(
@@ -148,6 +144,7 @@ internal fun LiquidSheet(
                         content = actions,
                     )
                 }
+            }
             }
         }
     }
@@ -213,12 +210,12 @@ internal fun SheetField(
     icon: Int? = null,
     onDone: (() -> Unit)? = null,
 ) {
-    val color = LocalSheetContent.current
+    val (fieldBackground, color) = fieldStyle(LocalSheetContent.current)
     Row(
         modifier
             .heightIn(min = 46.dp)
             .clip(RoundedCornerShape(50))
-            .then(Modifier.background(color.copy(alpha = 0.09f)))
+            .then(fieldBackground)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -255,17 +252,7 @@ internal fun SheetCheckRow(label: String, checked: Boolean, modifier: Modifier =
         modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        androidx.compose.foundation.layout.Box(
-            Modifier
-                .padding(end = 14.dp)
-                .size(22.dp)
-                .clip(androidx.compose.foundation.shape.CircleShape)
-                .background(if (checked) accent else Color.Transparent)
-                .border(1.5.dp, if (checked) accent else color.copy(alpha = 0.45f), androidx.compose.foundation.shape.CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (checked) dev.liquid.launcher.core.designsystem.LauncherIcon(dev.liquid.launcher.core.designsystem.LauncherIcons.Check, contentDescription = null, tint = readableOn(accent), size = 15.dp)
-        }
+        androidx.compose.foundation.layout.Box(Modifier.padding(end = 14.dp)) { ThemeCheck(checked, color, 22.dp) }
         Text(label, modifier = Modifier.weight(1f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp))
         if (detail != null) Text(detail, style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.6f), fontSize = 13.sp))
     }

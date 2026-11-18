@@ -8,7 +8,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import dev.liquid.launcher.core.designsystem.LauncherTheme
@@ -27,6 +29,7 @@ internal sealed interface Screen {
     data object About : Screen
     data object Updates : Screen
     data object Changelog : Screen
+    data object ThemeLab : Screen
 }
 
 class SettingsActivity : ComponentActivity() {
@@ -51,6 +54,7 @@ class SettingsActivity : ComponentActivity() {
         const val SCREEN_LOG = "log"
         const val SCREEN_GLASS = "glass"
         const val SCREEN_UPDATES = "updates"
+        const val SCREEN_THEME_LAB = "themeLab"
         const val SECTION_PREFIX = "section:"
 
         fun intent(context: Context, screen: String? = null): Intent =
@@ -75,6 +79,7 @@ private fun SettingsApp(
                 SettingsActivity.SCREEN_DIAGNOSTICS -> add(Screen.Diagnostics)
                 SettingsActivity.SCREEN_LOG -> add(Screen.Log)
                 SettingsActivity.SCREEN_UPDATES -> add(Screen.Updates)
+                SettingsActivity.SCREEN_THEME_LAB -> add(Screen.ThemeLab)
                 SettingsActivity.SCREEN_GLASS -> {
                     add(Screen.Diagnostics)
                     add(Screen.GlassBench)
@@ -101,5 +106,8 @@ private fun SettingsApp(
         Screen.About -> AboutScreen(back)
         Screen.Updates -> UpdatesScreen(store, open, back)
         Screen.Changelog -> ChangelogScreen(back)
+        Screen.ThemeLab -> SettingsPreviews.themeLab?.invoke(back) ?: ScreenScaffold(title = "Theme lab", onBack = back) {
+            BodyText("The Theme lab is drawn by the home screen module, which this build did not register.", androidx.compose.ui.Modifier.padding(20.dp))
+        }
     }
 }

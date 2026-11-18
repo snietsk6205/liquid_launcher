@@ -44,7 +44,7 @@ import kotlinx.coroutines.delay
  */
 @Composable
 internal fun SpeedBumpOverlay(bump: SpeedBump, glass: GlassConfig, lightBackground: Boolean, backdrop: Backdrop, controller: HomeController) {
-    val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
+    val color = sheetContentColor(glass, lightBackground)
     val appear = remember { Animatable(0f) }
     var wait by remember(bump) { mutableIntStateOf(5) }
     LaunchedEffect(bump) { appear.animateTo(1f, Motion.enter()) }
@@ -85,7 +85,8 @@ internal fun SpeedBumpOverlay(bump: SpeedBump, glass: GlassConfig, lightBackgrou
                         translationY = dy * (1f - p)
                     }
                 }
-                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground, large = true), exported = layer)
+                .sheetSurface(backdrop, shape, glass, lightBackground, exported = layer)
+                .bloomLight()
                 .clip(shape)
                 .clickable(interactionSource = null, indication = null) { }
                 .padding(horizontal = 22.dp, vertical = 20.dp),

@@ -483,7 +483,7 @@ internal fun TagSheet(
     progress: Float,
 ) {
     val settings = controller.data.settings
-    val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
+    val color = sheetContentColor(glass, lightBackground)
     var query by remember { mutableStateOf("") }
     val pinned = config.pinned
     val filter = controller.tagFilter
@@ -529,33 +529,35 @@ internal fun TagSheet(
       Layout(
         modifier = Modifier.fillMaxSize(),
         content = {
-          Box(Modifier.liquidGlass(backdrop, RoundedCornerShape(radiusDp), glass.style(Surfaces.Menu, lightBackground, large = true)))
+          Box(Modifier.sheetSurface(backdrop, RoundedCornerShape(radiusDp), glass, lightBackground))
           Column(
             Modifier
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .padding(top = 14.dp, bottom = 10.dp),
           ) {
             // Search field of its own: with many tags, typing two letters is faster than scrolling.
+            // W3: the search field in the theme's button colours.
+            val (fieldBackground, fieldInk) = fieldStyle(color)
             Row(
                 Modifier
                     .padding(horizontal = 14.dp)
                     .fillMaxWidth()
                     .height(44.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(color.copy(alpha = 0.08f))
+                    .then(fieldBackground)
                     .padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                LauncherIcon(LauncherIcons.Search, contentDescription = null, tint = color, size = 18.dp)
+                LauncherIcon(LauncherIcons.Search, contentDescription = null, tint = fieldInk, size = 18.dp)
                 Spacer(Modifier.width(10.dp))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (query.isEmpty()) Text("Find a tag", style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.6f), fontSize = 15.sp))
+                    if (query.isEmpty()) Text("Find a tag", style = TextStyle(fontFamily = HomeTheme.font, color = fieldInk.copy(alpha = 0.6f), fontSize = 15.sp))
                     BasicTextField(
                         value = query,
                         onValueChange = { query = it },
                         singleLine = true,
-                        textStyle = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp),
-                        cursorBrush = SolidColor(color),
+                        textStyle = TextStyle(fontFamily = HomeTheme.font, color = fieldInk, fontSize = 15.sp),
+                        cursorBrush = SolidColor(fieldInk),
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -676,26 +678,23 @@ private fun TagRow(
         Modifier.fillMaxWidth().clickable(onClick = onOnly).padding(start = 10.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // W3: the check and the pin in the theme's chip and round-button colours.
         Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onToggle), contentAlignment = Alignment.Center) {
-            Box(
-                Modifier
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .background(if (selected) accent else Color.Transparent)
-                    .border(1.5.dp, if (selected) accent else color.copy(alpha = 0.5f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) { if (selected) LauncherIcon(LauncherIcons.Check, contentDescription = null, tint = readableOn(accent), size = 14.dp) }
+            ThemeCheck(selected, color, 22.dp)
         }
         Text(tag.name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp))
         Text("$count", modifier = Modifier.padding(horizontal = 8.dp), style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.6f), fontSize = 13.sp))
-        Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onPin), contentAlignment = Alignment.Center) {
-            LauncherIcon(LauncherIcons.Star, contentDescription = if (pinned) "Unpin" else "Pin", tint = if (pinned) accent else color.copy(alpha = 0.35f), size = 20.dp)
-        }
+        ThemeToggleIcon(LauncherIcons.Star, pinned, color, if (pinned) "Unpin" else "Pin", onPin)
     }
 }
 
 @Composable
 private fun SheetPill(label: String, color: Color, modifier: Modifier, filled: Boolean = false, onClick: () -> Unit) {
+    // W3: Done is the theme's main button, the others its secondary buttons.
+    if (currentTheme != null) {
+        GlassButton(label, color, modifier, emphasis = if (filled) ControlEmphasis.Main else ControlEmphasis.Secondary, onClick = onClick)
+        return
+    }
     val inverse = if (color == Color.White) Color(0xFF16181C) else Color.White
     Box(
         modifier

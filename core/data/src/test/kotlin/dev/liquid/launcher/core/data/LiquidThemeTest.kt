@@ -82,8 +82,9 @@ class LiquidThemeTest {
         // Pressed: a quarter of the way from the key to its text.
         val p = t.button.pressed
         assertTrue(ThemeColors.luminance(p) < 1f && ThemeColors.luminance(p) > 0.3f)
-        // A decorative key shape is drawn rounded; a round tool stays round.
-        assertEquals("ROUNDED", t.button.shape)
+        // 0.10.0: a decorative key shape is drawn as itself; a round tool stays round.
+        assertEquals("HEXAGON", t.button.shape)
+        assertEquals("NONE", LiquidThemes.decode("""{"keyBackground":1,"keyShape":"NONE"}""")!!.button.shape)
         assertEquals("CIRCLE", t.tool.shape)
         // Without frost nothing is glass.
         assertTrue(!t.button.glass && !t.chip.glass)

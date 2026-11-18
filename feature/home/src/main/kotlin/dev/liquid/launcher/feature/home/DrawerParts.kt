@@ -510,7 +510,7 @@ internal fun TabMenu(
     onDialog: (TabDialog) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
+    val color = menuContentColor(glass, lightBackground)
     val shape = RoundedCornerShape(24.dp)
     var sortOpen by remember { mutableStateOf(false) }
     val org = controller.data.organisation
@@ -528,7 +528,7 @@ internal fun TabMenu(
                 .width(270.dp)
                 // W2: a long tab menu (sort choices open) scrolls inside its card.
                 .menuHeightLimit(0.7f)
-                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground))
+                .menuSurface(backdrop, shape, glass, lightBackground)
                 .clip(shape)
                 .verticalScroll(rememberScrollState())
                 .padding(vertical = 8.dp),

@@ -154,7 +154,7 @@ internal fun WallpaperStrip(
         val recent = WallpaperLibraryOps.recent(library).filter { !it.favourite }.take(recentCount)
         favourites + recent
     }
-    val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
+    val color = sheetContentColor(glass, lightBackground)
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
     val shape = RoundedCornerShape(30.dp)
@@ -174,7 +174,8 @@ internal fun WallpaperStrip(
                     alpha = p.coerceIn(0f, 1f)
                     translationY = (1f - p) * 40.dp.toPx()
                 }
-                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground, large = true))
+                .sheetSurface(backdrop, shape, glass, lightBackground)
+                .bloomLight()
                 .clip(shape)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .padding(vertical = 12.dp),
@@ -202,7 +203,7 @@ internal fun WallpaperStrip(
                 Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                StripButton(LauncherIcons.Shuffle, "Shuffle", color, Modifier.weight(1f), controller) {
+                StripButton(LauncherIcons.Shuffle, "Shuffle", color, Modifier.weight(1f), controller, ControlEmphasis.Secondary) {
                     controller.wallpaperStrip = false
                     controller.shuffleWallpaper()
                 }
@@ -245,9 +246,17 @@ private fun StripThumb(item: WallpaperItem, current: Boolean, color: Color, cont
 
 /** A button of the strip: a [GlassButton] (Settings → Buttons); a transition it starts ripples out from it. */
 @Composable
-private fun StripButton(icon: Int, label: String, color: Color, modifier: Modifier, controller: HomeController? = null, onClick: () -> Unit) {
+private fun StripButton(
+    icon: Int,
+    label: String,
+    color: Color,
+    modifier: Modifier,
+    controller: HomeController? = null,
+    emphasis: ControlEmphasis = ControlEmphasis.Normal,
+    onClick: () -> Unit,
+) {
     var centre by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
-    GlassButton(label, color, modifier.onGloballyPositioned { centre = it.boundsInRoot().center }, icon = icon) {
+    GlassButton(label, color, modifier.onGloballyPositioned { centre = it.boundsInRoot().center }, icon = icon, emphasis = emphasis) {
         controller?.transitionOrigin = centre
         onClick()
     }

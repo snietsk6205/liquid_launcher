@@ -350,7 +350,7 @@ object LauncherSettings {
     val ThemeAccent = ColorSetting(
         key = "theme.accent", autoLabel = "Automatic (from the wallpaper)",
         title = "Accent colour",
-        summary = "Highlights: the selected tab, the scroll index bubble, the current layout, folder tiles set to accent",
+        summary = "With the launcher's own buttons. With your theme (the default) the accent is the Theme lab's: Colours → Accent",
         section = "theme", keywords = "theme accent colour highlight",
     )
     val ThemeGlassColor = ColorSetting(
@@ -1538,6 +1538,9 @@ object LauncherSettings {
     )
     val ThemeJson = TextSetting(key = "theme.json", default = "", title = "Theme", section = "buttons", hidden = true)
     val ThemeColoursApplied = BoolSetting(key = "state.themeColours", default = false, title = "Theme colours applied once", section = "state", hidden = true)
+    // W3 (0.10.0): the theme became a WM Keyboard document (ThemeDoc) once; the look before stays as a preset.
+    val ThemeMigrated010 = BoolSetting(key = "state.theme010", default = false, title = "Theme moved to the 0.10 format", section = "state", hidden = true)
+    val ThemePrevious = TextSetting(key = "theme.previous", default = "", title = "The look before the Theme lab", section = "buttons", hidden = true)
     val ButtonStyle = ChoiceSetting(
         key = "buttons.style", default = "glass",
         options = listOf(
@@ -2429,7 +2432,7 @@ object LauncherSettings {
         GlassQuality, GlassEngine, GlassAuto, GlassCap, GlassFullPercent, GlassTintMode,
         GlassBevel, GlassThickness, GlassSpecular, GlassShade, GlassGrain, GlassRim,
         GlassSaturation, GlassBrightness, GlassDepth, GlassSwell, GlassDispersion, GlassDispersionAmount, GlassGlow, GlassShadow, GlassRimColour, GlassLightAngle,
-        ThemeControls, ThemeJson, ThemeColoursApplied,
+        ThemeControls, ThemeJson, ThemeColoursApplied, ThemeMigrated010, ThemePrevious,
         ButtonStyle, ButtonShape, ButtonSize, ButtonTint, ButtonRim, ButtonRefraction, ButtonMain, ButtonSquish,
         TouchEffect, TouchWhere, TouchAmount, TouchSpeed, TouchBrightness, TouchSize, TouchColour, TouchCustomColour,
         PressFeel, PressDepth, PressSpeed, EditWobble, PressWobble, TouchLight,

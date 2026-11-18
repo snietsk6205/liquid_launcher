@@ -10,4 +10,7 @@ object SettingsPreviews {
     /** Section ids that have a preview. */
     var sections: Set<String> = emptySet()
     var provider: (@Composable (sectionId: String) -> Unit)? = null
+
+    /** W3 (0.10.0): the Theme lab, drawn by the home module (its controls are the home screen's). */
+    var themeLab: (@Composable (onBack: () -> Unit) -> Unit)? = null
 }

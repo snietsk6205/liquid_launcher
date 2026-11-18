@@ -99,7 +99,8 @@ fun Pill(
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(percent = config.cornerPercent)
-    val color = if (glass.lightGlass(Surfaces.Pill, lightBackground)) Color(0xFF16181C) else Color.White
+    // W3: the home pill in the theme's pill look (the space bar), else the launcher's glass.
+    val color = pillContentColor(dev.liquid.launcher.core.data.ThemePill.HOME, if (glass.lightGlass(Surfaces.Pill, lightBackground)) Color(0xFF16181C) else Color.White)
     val flexible = config.slots.any { it == PillSlot.Search || it == PillSlot.Spacer }
     // Remembered: the pill recomposes while the drawer moves, and a new gesture lambda would cancel the swipe.
     val gestures = remember(config, controller) { Modifier.pillGestures(config, controller) }
@@ -108,7 +109,7 @@ fun Pill(
             .fillMaxWidth(config.widthFraction)
             .height(config.heightDp.dp)
             .then(if (interactive) Modifier.onGloballyPositioned { controller.pillBounds = it.boundsInRoot() } else Modifier)
-            .liquidGlass(backdrop, shape, glass.style(Surfaces.Pill, lightBackground))
+            .pillSurface(dev.liquid.launcher.core.data.ThemePill.HOME, backdrop, shape, glass.style(Surfaces.Pill, lightBackground))
             .clip(shape)
             .then(if (interactive) gestures else Modifier)
             .padding(horizontal = 12.dp),

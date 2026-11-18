@@ -76,7 +76,7 @@ object ThemeFields {
     )
     val splashEffects = listOf(
         "PAINT" to "Paint splash", "INK" to "Ink blot", "LIGHT_POOL" to "Light pool", "FLOOD" to "Colour flood", "PUFF" to "Smoke puff",
-        "GLINT" to "Glint", "POP" to "Pop", "SWOOSH" to "Swoosh", "SPECKS" to "Specks", "MELD" to "Meld",
+        "GLINT" to "Glint", "POP" to "Pop", "SWOOSH" to "Swoosh", "SPECKS" to "Specks",
     )
 
     val motions = listOf(

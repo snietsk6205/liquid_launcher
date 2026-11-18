@@ -1017,46 +1017,39 @@ private fun StudyLineRow(
         }
         if (glance is StudyGlance.WindDown && interactive) {
             Spacer(Modifier.width(8.dp))
-            Box(
-                Modifier
-                    .size(26.dp)
-                    .clip(CircleShape)
-                    .background(color.copy(alpha = 0.18f))
-                    .squishClickable { controller.eveningCheckin() },
-                contentAlignment = Alignment.Center,
-            ) {
-                LauncherIcon(LauncherIcons.Chat, contentDescription = "Send the evening check-in", tint = color, size = 16.dp)
-            }
+            LineButton(LauncherIcons.Chat, "Send the evening check-in", color, strong = false) { controller.eveningCheckin() }
         }
         if (glance is StudyGlance.Attendance && interactive) {
             // B3: ✓ present, ✗ absent (a "Note: absent …" for tonight's check-in).
             Spacer(Modifier.width(8.dp))
             for ((present, icon) in listOf(true to LauncherIcons.Check, false to LauncherIcons.Close)) {
-                Box(
-                    Modifier
-                        .padding(start = 4.dp)
-                        .size(26.dp)
-                        .clip(CircleShape)
-                        .background(color.copy(alpha = 0.18f))
-                        .squishClickable { controller.answerAttendance(glance.cls, present) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    LauncherIcon(icon, contentDescription = if (present) "I was there" else "I was absent", tint = color, size = 16.dp)
+                Box(Modifier.padding(start = 4.dp)) {
+                    LineButton(icon, if (present) "I was there" else "I was absent", color, strong = false) { controller.answerAttendance(glance.cls, present) }
                 }
             }
         }
         if (action != null) {
             Spacer(Modifier.width(8.dp))
-            Box(
-                Modifier
-                    .size(26.dp)
-                    .clip(CircleShape)
-                    .background(color.copy(alpha = if (focusing) 0.34f else 0.18f))
-                    .squishClickable(onClick = action.third),
-                contentAlignment = Alignment.Center,
-            ) {
-                LauncherIcon(action.first, contentDescription = action.second, tint = color, size = 16.dp)
-            }
+            LineButton(action.first, action.second, color, strong = focusing, onClick = action.third)
         }
+    }
+}
+
+/** A round button on the line under the clock: the theme's round button (W3), else a faint circle. */
+@Composable
+private fun LineButton(icon: Int, description: String, color: Color, strong: Boolean, onClick: () -> Unit) {
+    if (currentTheme != null) {
+        GlassButton(null, color, Modifier.size(30.dp), icon = icon, contentDescription = description, onClick = onClick)
+        return
+    }
+    Box(
+        Modifier
+            .size(26.dp)
+            .clip(CircleShape)
+            .background(color.copy(alpha = if (strong) 0.34f else 0.18f))
+            .squishClickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        LauncherIcon(icon, contentDescription = description, tint = color, size = 16.dp)
     }
 }

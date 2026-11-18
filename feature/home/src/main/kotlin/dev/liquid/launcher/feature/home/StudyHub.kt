@@ -218,7 +218,7 @@ internal fun StudyHub(glass: GlassConfig, lightBackground: Boolean, backdrop: Ba
     val status = WindowInsets.statusBars
     val fraction by controller.data.settings.derive { get(LauncherSettings.StudyHubSize) / 100f }
     val geometry = remember(controller, density, nav, ime, status, fraction) { HubGeometry(controller, density, nav, ime, status, fraction) }
-    val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
+    val color = sheetContentColor(glass, lightBackground)
     val shape = remember(geometry) { RoundedCornerShape(HubCorner(geometry) { controller.hub.value }) }
     val layer = rememberLayerBackdrop()
     val scroll = rememberScrollState()
@@ -237,7 +237,8 @@ internal fun StudyHub(glass: GlassConfig, lightBackground: Boolean, backdrop: Ba
         Box(
             Modifier
                 .hubBounds(geometry, controller)
-                .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground, large = true), exported = layer)
+                .sheetSurface(backdrop, shape, glass, lightBackground, exported = layer)
+                .bloomLight()
                 .clip(shape)
                 .clickable(interactionSource = null, indication = null) { }
                 .draggable(drag, Orientation.Vertical, onDragStopped = { velocity -> controller.settleHub(velocity) })
@@ -388,6 +389,11 @@ private fun HubHeader(controller: HomeController, day: StudyDay, now: Long, colo
 
 @Composable
 private fun HubIcon(icon: Int, description: String, color: Color, size: Dp = 40.dp, onClick: () -> Unit) {
+    // W3: a round button of the theme (WM Keyboard's tool circles).
+    if (currentTheme != null) {
+        GlassButton(null, color, Modifier.size(size), icon = icon, contentDescription = description, onClick = onClick)
+        return
+    }
     Box(
         Modifier
             .size(size)
@@ -759,23 +765,25 @@ private fun HubBar(
             Spacer(Modifier.height(8.dp))
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
+            // W3: the field in the theme's button colours.
+            val (fieldBackground, fieldInk) = fieldStyle(color)
             Row(
                 Modifier
                     .weight(1f)
                     .height(46.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(color.copy(alpha = 0.1f))
+                    .then(fieldBackground)
                     .padding(start = 16.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (text.isEmpty()) Text("Note for tonight, or ask Claude…", style = studyText(color, 14, alpha = 0.5f), maxLines = 1)
+                    if (text.isEmpty()) Text("Note for tonight, or ask Claude…", style = studyText(fieldInk, 14, alpha = 0.6f), maxLines = 1)
                     BasicTextField(
                         value = text,
                         onValueChange = { text = it },
                         singleLine = true,
-                        textStyle = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 14.sp),
-                        cursorBrush = SolidColor(color),
+                        textStyle = TextStyle(fontFamily = HomeTheme.font, color = fieldInk, fontSize = 14.sp),
+                        cursorBrush = SolidColor(fieldInk),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { saveNote() }),
                         modifier = Modifier
@@ -811,6 +819,11 @@ private fun HubBar(
 
 @Composable
 private fun MainHubButton(action: HubAction) {
+    // W3: the theme's main button, in the block's colour as before (Main button colour: the block's).
+    if (currentTheme != null) {
+        GlassButton(action.label, Color.White, Modifier.fillMaxWidth().height(52.dp), icon = action.icon, emphasis = ControlEmphasis.Main, accent = action.accent, onClick = action.run)
+        return
+    }
     val fill = action.accent ?: HomeTheme.accent
     val ink = readableOn(fill)
     Row(

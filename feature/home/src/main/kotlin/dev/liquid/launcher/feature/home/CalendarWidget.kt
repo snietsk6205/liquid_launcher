@@ -229,6 +229,14 @@ private fun MonthHeader(month: YearMonth, away: Boolean, color: Color, live: Boo
 
 @Composable
 private fun Arrow(color: Color, live: Boolean, back: Boolean, onClick: () -> Unit) {
+    // W3: the theme's round button (turned round for "previous").
+    if (currentTheme != null) {
+        GlassButton(
+            null, color, Modifier.size(30.dp).graphicsLayer { rotationZ = if (back) 180f else 0f },
+            icon = LauncherIcons.ChevronRight, contentDescription = if (back) "Previous month" else "Next month", enabled = live,
+        ) { if (live) onClick() }
+        return
+    }
     Box(
         Modifier
             .size(30.dp)

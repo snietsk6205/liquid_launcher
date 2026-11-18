@@ -172,7 +172,7 @@ internal fun WallpaperStudio(
     val library by data.wallpapers.state.collectAsState()
     val layouts by data.layouts.state.collectAsState()
     val scope = rememberCoroutineScope()
-    val color = if (glass.lightGlass(Surfaces.Menu, lightBackground)) Color(0xFF16181C) else Color.White
+    val color = sheetContentColor(glass, lightBackground)
     val toggled by animateFloatAsState(if (state.peek || state.adjusting) 0f else 1f, label = "sheet")
     // Rises in like the other glass sheets when the screen opens.
     val appear = remember { Animatable(0f) }
@@ -323,7 +323,8 @@ internal fun WallpaperStudio(
                         translationY = (1f - shown) * (size.height + 40.dp.toPx())
                         alpha = shown
                     }
-                    .liquidGlass(backdrop, sheetShape, glass.style(Surfaces.Menu, lightBackground, large = true))
+                    .sheetSurface(backdrop, sheetShape, glass, lightBackground)
+                .bloomLight()
                     .clip(sheetShape)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                     .padding(horizontal = 16.dp, vertical = 14.dp),
@@ -677,6 +678,13 @@ private fun PageLabel(text: String, color: Color) {
 
 @Composable
 internal fun Segmented(options: List<Pair<String, String>>, selected: String, color: Color, onSelect: (String) -> Unit) {
+    // W3: in the theme, the choices are its chips (selected: its selected chip).
+    if (LocalControls.current?.theme != null) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for ((id, label) in options) ThemeChip(label, selected == id, Modifier.weight(1f), height = 34.dp) { onSelect(id) }
+        }
+        return
+    }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         for ((id, label) in options) {
             val on = selected == id
@@ -776,6 +784,11 @@ private fun ValueSlider(label: String, value: Int, min: Int, max: Int, unit: Str
 
 @Composable
 private fun SheetButton(label: String, color: Color, filled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    // W3: Cancel is a secondary button of the theme, Apply its main button.
+    if (LocalControls.current?.theme != null) {
+        GlassButton(label, color, modifier, emphasis = if (filled) ControlEmphasis.Main else ControlEmphasis.Secondary, onClick = onClick)
+        return
+    }
     val inverse = if (color == Color.White) Color(0xFF16181C) else Color.White
     Box(
         modifier

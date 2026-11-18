@@ -213,11 +213,14 @@ fun HomeScreen(
     val look by data.settings.derive { controlLook() }
     val glass by data.settings.derive { glassConfig() }
     // P4 (0.9.13): the theme of buttons and chips, everywhere on the home screen.
-    val controlTheme by data.settings.derive { controlTheme() }
+    val controlTheme = rememberControlTheme(data.settings)
+    androidx.compose.runtime.SideEffect { ThemeInk.update(controlTheme) }
     val controls = remember(look, glass, controlTheme) { ControlEnv(look, glass, null, theme = controlTheme) }
     // Presses of this screen, for the touch effect and the moving wallpaper (0.8.0, D111).
     val touchFx = remember { TouchFx() }
-    androidx.compose.runtime.CompositionLocalProvider(LocalControls provides controls, LocalTouchFx provides touchFx) {
+    // W3: the theme's particle bursts, thrown by themed controls and drawn over everything.
+    val particles = remember { ParticleBursts() }
+    androidx.compose.runtime.CompositionLocalProvider(LocalControls provides controls, LocalTouchFx provides touchFx, LocalParticles provides particles) {
         HomeScreenBody(data, wallpaper, returnState, callbacks, mode)
     }
 }
@@ -274,7 +277,9 @@ private fun HomeScreenBody(
     remember { IconPaint.init(data.iconPalette.value) }
     LaunchedEffect(iconPalette) { IconPaint.fromData(iconPalette, this) }
     if (live) IconPaintTiming()
-    LaunchedEffect(theme, colourTick, savedImageKey(wallpaper)) { HomeTheme.apply(context, theme) }
+    // W3: the theme's accent (fixed blue by default, or a colour of the wallpaper) when the theme styles the controls.
+    val themeAccent = LocalControls.current?.theme?.accent
+    LaunchedEffect(theme, colourTick, savedImageKey(wallpaper), themeAccent) { HomeTheme.apply(context, theme, themeAccent) }
     val glassBase by store.derive { glassConfig() }
     // E3 (0.9.7): every glass surface takes a touch of the block now or next's colour, easing from one to the next.
     val moduleGlass by store.derive { get(LauncherSettings.StudyGlassTint) }
@@ -538,8 +543,12 @@ private fun HomeScreenBody(
     val transitionStyle by store.derive { get(LauncherSettings.WallpaperTransition) }
     if (live) SystemWallpaperOffsets(controller)
     val touchFx = LocalTouchFx.current
-    val touchConfig by store.derive { touchFxConfig() }
-    val wallpaperFx by store.derive { wallpaperFxConfig() }
+    val touchBase by store.derive { touchFxConfig() }
+    val wallpaperBase by store.derive { wallpaperFxConfig() }
+    // W3: the theme's board effect, a press splash or a moving background, when it has one.
+    val themeEffect = LocalControls.current?.theme?.effect
+    val touchConfig = remember(touchBase, themeEffect) { ThemeEffects.touch(themeEffect, touchBase) }
+    val wallpaperFx = remember(wallpaperBase, themeEffect) { ThemeEffects.wallpaper(themeEffect, wallpaperBase) }
     if (touchFx != null) SideEffect { touchFx.config = touchConfig }
     val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
 
@@ -563,18 +572,32 @@ private fun HomeScreenBody(
             )
     ) {
         // ---- Home: wallpaper and pages, recorded so glass surfaces can refract them ----
+        // W3: the theme's blur behind sheets (WM Keyboard's window blur), easing in and out with them. Sheets whose
+        // point is to preview the screen behind them (clock, widget options, wallpaper) leave it sharp.
+        val windowBlurDp = LocalControls.current?.theme?.windowBlurDp ?: 0
+        val sheetOpen = controller.layoutsSheet || controller.tagging != null || controller.wallpaperStrip || controller.widgetPicker ||
+            controller.todaySheet || controller.homeMenu || controller.menu != null || controller.openFolder != null
+        val sheetBlur by androidx.compose.animation.core.animateFloatAsState(
+            if (windowBlurDp > 0 && sheetOpen) 1f else 0f,
+            androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = MotionScale.stiffness(420f)),
+            label = "sheetBlur",
+        )
         Box(Modifier.fillMaxSize().layerBackdrop(homeBackdrop)) {
           // Blurs wallpaper and pages together while the drawer is open.
           Box(
               Modifier
                   .fillMaxSize()
                   .graphicsLayer {
-                      if (!motionShown.liveBlur) return@graphicsLayer
+                      val sheetRadius = windowBlurDp.dp.toPx() * sheetBlur
+                      if (!motionShown.liveBlur) {
+                          renderEffect = if (sheetRadius >= 0.5f) BlurEffect(sheetRadius, sheetRadius, TileMode.Clamp) else null
+                          return@graphicsLayer
+                      }
                       val p = controller.drawer.value.coerceIn(0f, 1f)
                       val searchP = if (studio?.surface == "search") 1f else controller.searchAmount
                       val drawerRadius = motionShown.homeBlurDp.dp.toPx() * p
                       val searchRadius = searchBlurDp.dp.toPx() * searchP
-                      val radius = maxOf(drawerRadius, searchRadius)
+                      val radius = maxOf(drawerRadius, searchRadius, sheetRadius)
                       renderEffect = if (radius >= 0.5f) BlurEffect(radius, radius, TileMode.Clamp) else null
                   }
           ) {
@@ -943,6 +966,7 @@ private fun HomeScreenBody(
         if (mode == HomeMode.PreviewEffects && touchFx != null) EffectsDemo(touchFx, glass, lightBackground, overlayBackdrop)
         // What a press throws over the screen (0.8.0, D111), above everything it was pressed on.
         if (touchFx != null) TouchFxLayer(touchFx, touchConfig)
+        LocalParticles.current?.let { ParticleLayer(it) }
         if (live) NoticeHost(controller, glass, lightBackground, overlayBackdrop)
         // W1 (0.10.0): after an update, what it brought, once.
         if (live) WhatsNewHost(controller, glass, lightBackground, overlayBackdrop)

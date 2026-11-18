@@ -87,8 +87,9 @@ fun MorphingPill(
         RoundedCornerShape(MorphCorner(config.cornerPercent, if (bar != null) 30 else 50) { controller.morph() })
     }
     val gestures = remember(config, controller) { Modifier.morphGestures(config, controller) }
-    val homeColor = if (glass.lightGlass(Surfaces.Pill, lightBackground)) Color(0xFF16181C) else Color.White
-    val searchColor = if (glass.lightGlass(Surfaces.Drawer, drawerLight)) Color(0xFF16181C) else Color.White
+    // W3: the home pill's and the drawer pill's text in the theme's pill looks, else light or dark from the glass.
+    val homeColor = pillContentColor(dev.liquid.launcher.core.data.ThemePill.HOME, if (glass.lightGlass(Surfaces.Pill, lightBackground)) Color(0xFF16181C) else Color.White)
+    val searchColor = pillContentColor(dev.liquid.launcher.core.data.ThemePill.DRAWER, if (glass.lightGlass(Surfaces.Drawer, drawerLight)) Color(0xFF16181C) else Color.White)
     val surface = if (open && !searchMode) Surfaces.Drawer else Surfaces.Pill
     val homeWidth = with(density) { (controller.screenWidth * config.widthFraction).toDp() }
     val searchWidth = with(density) { controller.screenWidth.toDp() } - SearchSideMargin * 2
@@ -114,7 +115,7 @@ fun MorphingPill(
                 scaleX = 1f - st * 0.55f
                 transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
             }
-            .liquidGlass(backdrop, shape, glass.style(surface, if (open) drawerLight else lightBackground))
+            .morphPillSurface({ controller.morph() }, backdrop, shape, glass.style(surface, if (open) drawerLight else lightBackground))
             .clip(shape)
             .then(if (interactive) gestures else Modifier),
         contentAlignment = Alignment.Center,
