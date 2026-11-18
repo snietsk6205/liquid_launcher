@@ -46,6 +46,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -134,7 +135,7 @@ internal fun LayoutsSheet(
                             .padding(4.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        LayoutMiniature(layout, color, current)
+                        LayoutMiniature(layout, color, current, controller)
                         Spacer(Modifier.height(6.dp))
                         Text(
                             layout.name,
@@ -236,26 +237,63 @@ private fun SheetChip(label: String, icon: Int, color: Color, onClick: () -> Uni
     GlassButton(label, color, icon = icon, emphasis = ControlEmphasis.Secondary, onClick = onClick)
 }
 
-/** The layout's home page drawn small: dots for apps, blocks for widgets and folders. */
+/**
+ * The layout's home page drawn small (W8, P8: a real preview): its own wallpaper, or the one on screen, behind; the
+ * apps' real icons in their places; blocks for widgets and folders.
+ */
 @Composable
-private fun LayoutMiniature(layout: SavedLayout, color: Color, current: Boolean) {
+private fun LayoutMiniature(layout: SavedLayout, color: Color, current: Boolean, controller: HomeController) {
     val (columns, rows) = layout.gridSize()
     val page = layout.layout.pages.getOrNull(layout.layout.defaultIndex)
     val shape = RoundedCornerShape(12.dp)
+    val apps by controller.data.apps.apps.collectAsState()
+    val byRef = remember(apps) { apps.associateBy { it.ref } }
+    val context = LocalContext.current
+    val onScreen by WallpaperStore.get(context).image.collectAsState()
+    val own by androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, layout.id, layout.wallpaper) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            controller.data.layouts.wallpaperFile(layout)?.let { file ->
+                runCatching {
+                    val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = 8 }
+                    android.graphics.BitmapFactory.decodeFile(file.path, options)?.asImageBitmap()
+                }.getOrNull()
+            }
+        }
+    }
+    val picture = own ?: onScreen
     Canvas(
         Modifier
             .size(width = 78.dp, height = 140.dp)
             .clip(shape)
             .background(color.copy(alpha = if (current) 0.16f else 0.07f))
             .border(if (current) 2.dp else 1.dp, color.copy(alpha = if (current) 0.9f else 0.3f), shape)
-            .padding(6.dp)
     ) {
-        val cw = size.width / columns
-        val ch = size.height / rows
+        if (picture != null) {
+            val scale = maxOf(size.width / picture.width, size.height / picture.height)
+            val w = picture.width * scale
+            val h = picture.height * scale
+            drawImage(
+                picture,
+                dstOffset = androidx.compose.ui.unit.IntOffset(((size.width - w) / 2f).toInt(), ((size.height - h) / 2f).toInt()),
+                dstSize = androidx.compose.ui.unit.IntSize(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1)),
+                alpha = 0.9f,
+            )
+        }
+        val pad = 6.dp.toPx()
+        val cw = (size.width - 2 * pad) / columns
+        val ch = (size.height - 2 * pad) / rows
         for (item in page?.items.orEmpty()) {
-            val topLeft = Offset(item.x * cw + 1.5f, item.y * ch + 1.5f)
+            val topLeft = Offset(pad + item.x * cw + 1.5f, pad + item.y * ch + 1.5f)
             val area = Size(item.w * cw - 3f, item.h * ch - 3f)
-            if (item.kind == ItemKind.APP) {
+            val icon = if (item.kind == ItemKind.APP) item.app?.let { byRef[it] }?.let { it.homeIcon ?: it.icon } else null
+            if (icon != null) {
+                val d = (minOf(cw, ch) * 0.78f).toInt().coerceAtLeast(1)
+                drawImage(
+                    icon,
+                    dstOffset = androidx.compose.ui.unit.IntOffset((topLeft.x + (area.width - d) / 2f).toInt(), (topLeft.y + (area.height - d) / 2f).toInt()),
+                    dstSize = androidx.compose.ui.unit.IntSize(d, d),
+                )
+            } else if (item.kind == ItemKind.APP) {
                 drawCircle(color.copy(alpha = 0.75f), radius = minOf(cw, ch) * 0.36f, center = topLeft + Offset(area.width / 2, area.height / 2))
             } else {
                 drawRoundRect(color.copy(alpha = 0.45f), topLeft, area, CornerRadius(5.dp.toPx()))

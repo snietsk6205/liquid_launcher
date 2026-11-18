@@ -44,6 +44,8 @@ Versions marked *not published on its own* were built but came to the phone insi
   buttons; tasks and times).
 - With the drawer's tabs at the top, their pill rises out of the home pill as the drawer opens and sinks back into
   it as it closes, following the finger.
+- The layouts sheet shows real previews: each layout's home page with its own wallpaper (or the one on screen) and
+  the apps' real icons, instead of dots.
 - A layout for a time of day: choose it on the Layouts page, with its hours (from, until, over midnight too) and
   days (Monday to Friday, the weekend, every day). It comes in and goes by itself like the trip-home and exam-week
   layouts, which come first; the layout from before comes back unless you switched by hand.
