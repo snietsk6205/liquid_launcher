@@ -69,8 +69,16 @@ internal fun MainScreen(
         if (query.isNotBlank()) {
             // W4: a result opens its page on its tab, with the option lit up.
             val results = remember(query) { LauncherSettings.search(query) }
-            if (results.isEmpty()) {
+            // 0.10.2: a page's own editors (the search page's cards, the pill's items…) are found too.
+            val editors = remember(query) { dev.liquid.launcher.core.settings.SettingsMap.searchEditors(query) }
+            if (results.isEmpty() && editors.isEmpty()) {
                 BodyText("No option matches \"$query\"", Modifier.padding(20.dp))
+            }
+            editors.forEach { e ->
+                val surface = dev.liquid.launcher.core.settings.SettingsMap.surface(e.surfaceId)
+                NavRow(e.title, listOfNotNull(surface?.entry?.title, surface?.title, e.tab.title).joinToString(" › ") + "\n" + e.summary) {
+                    open(Screen.Page(e.surfaceId, e.tab))
+                }
             }
             results.take(60).forEach { setting -> SearchResultRow(setting, open) }
             return@ScreenScaffold

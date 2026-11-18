@@ -70,4 +70,15 @@ class SettingsMapTest {
         store.set(LauncherSettings.HapticsEnabled, true)
         assertEquals(null, SettingDependencies.whyOff(LauncherSettings.HapticsStrength, store))
     }
+
+    @Test
+    fun pageEditorsAreFoundBySearch() {
+        for (e in SettingsMap.editors) {
+            val surface = SettingsMap.surface(e.surfaceId)
+            assertTrue(e.surfaceId, surface != null && surface in SettingsMap.visibleSurfaces)
+        }
+        assertEquals("search", SettingsMap.searchEditors("cards").first().surfaceId)
+        assertTrue(SettingsMap.searchEditors("search page cards").isNotEmpty())
+        assertTrue(SettingsMap.searchEditors("nothing like this").isEmpty())
+    }
 }

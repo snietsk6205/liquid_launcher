@@ -159,11 +159,13 @@ object SettingsMap {
             "study", "Study companion", "The line under the clock, the hub, quiet, speed bump, arrival home, calendars and Claude",
             SettingsEntry.STUDY, listOf("study"),
             mapOf(
+                // 0.10.2: what Med looked for first sits on the first tab: the line under the clock and its colour, how the
+                // hub opens and how its blocks show.
                 L to listOf(
-                    "study.enabled", "study.clockLine", "study.clockAction", "study.blockCards", "study.buttonSide", "study.tomorrow", "study.hubSize",
-                    "study.hubOpen",
+                    "study.enabled", "study.clockLine", "study.lineInk", "study.lineShadow", "study.clockAction", "study.hubOpen", "study.blockCards",
+                    "study.buttonSide", "study.tomorrow", "study.hubSize",
                 ),
-                K to listOf("study.glassTint", "study.hubDim", "study.hubBlur", "study.hubInk", "study.lineInk", "study.lineShadow"),
+                K to listOf("study.glassTint", "study.hubDim", "study.hubBlur", "study.hubInk"),
                 B to listOf(
                     "study.writeBack", "study.overdueDays", "study.noticeLead", "study.attendance", "study.leaveBy", "study.commute", "study.rest",
                     "study.windDown", "study.speedBump", "study.speedBumpTags", "study.quiet", "study.quietPeople", "study.quietEmail",
@@ -276,6 +278,34 @@ object SettingsMap {
             emptyMap(), internal = true,
         ),
     )
+
+    /**
+     * 0.10.2: what a page edits with an editor of its own rather than option rows (the search page's cards, the pill's
+     * items…), so settings search finds them too: its name, what it does, words to find it by, and its page and tab.
+     */
+    data class Editor(val title: String, val summary: String, val keywords: String, val surfaceId: String, val tab: SettingsTab)
+
+    val editors: List<Editor> = listOf(
+        Editor("Search page cards", "Which cards the search page shows and in what order: the Today line (calendar and exams), the study card, Ask Claude, your apps, and every other card",
+            "search page cards order today line calendar month exam countdown timeline widgets claude prompts commands next block apps calm", "search", SettingsTab.LAYOUT),
+        Editor("Pill items", "What the pill holds and in what order", "pill items slots icons order search apps claude study", "pill", SettingsTab.LAYOUT),
+        Editor("Pill study item", "How the pill's study item looks: icon, circle, picture, block name", "pill study item circle pebble ring look", "pill", SettingsTab.LOOK),
+        Editor("Home menu items", "The glass pills of the home menu (long press on empty space)", "home menu items pills long press order", "menus", SettingsTab.LAYOUT),
+        Editor("Long-press menu of apps", "The entries of an app's long-press menu", "app long press menu entries order", "menus", SettingsTab.LAYOUT),
+        Editor("Drawer tabs and tags", "Your drawer tabs, tags and their order", "drawer tabs tags order pinned", "tags", SettingsTab.LAYOUT),
+        Editor("Theme lab", "Every option of your WM Keyboard theme on every button, chip, pill, sheet and menu, with presets (Before 0.10.2)",
+            "theme lab keyboard wm colours colors pills search bar tint material accent blueberry preset before", "buttons", SettingsTab.LOOK),
+    )
+
+    /** The [editors] every word of [query] matches (in its name, what it does or its words). */
+    fun searchEditors(query: String): List<Editor> {
+        val words = query.lowercase().split(' ', ',', '-').filter { it.isNotBlank() }
+        if (words.isEmpty()) return emptyList()
+        return editors.filter { e ->
+            val text = (e.title + " " + e.summary + " " + e.keywords).lowercase()
+            words.all { it in text }
+        }
+    }
 
     val visibleSurfaces: List<SettingsSurface> get() = surfaces.filter { !it.internal }
 
