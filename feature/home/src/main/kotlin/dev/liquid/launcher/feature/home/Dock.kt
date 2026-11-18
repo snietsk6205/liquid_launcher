@@ -71,6 +71,8 @@ internal fun Dock(
             .fillMaxWidth()
             .height(config.height)
             .onPlaced { if (it.isAttached) controller.dockBounds = it.boundsInRoot() }
+            // W4: a long press between the icons offers "Customise the dock".
+            .then(if (interactive) Modifier.customiseOnLongPress(controller, "dock", "the dock") else Modifier)
             .then(if (config.glass) Modifier.liquidGlass(backdrop, shape, glass.style(Surfaces.Pill, lightBackground)).clip(shape) else Modifier)
             .padding(horizontal = 6.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,

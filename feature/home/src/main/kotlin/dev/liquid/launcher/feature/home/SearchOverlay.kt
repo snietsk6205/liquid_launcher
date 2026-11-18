@@ -194,7 +194,8 @@ fun SearchOverlay(
     Box(
         Modifier
             .fillMaxSize()
-            .pointerInput(Unit) { detectTapGestures { controller.closeSearch() } }
+            // W4: a long press on the empty page offers "Customise search".
+            .pointerInput(Unit) { detectTapGestures(onLongPress = { controller.offerCustomise("search", "search", it) }) { controller.closeSearch() } }
     ) {
         // The dim fades in place; the content moves.
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = progress.value.coerceIn(0f, 1f) }.background(Color.Black.copy(alpha = config.dim)))

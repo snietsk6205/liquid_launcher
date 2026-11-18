@@ -25,8 +25,26 @@ Versions marked *not published on its own* were built but came to the phone insi
   behind sheets blurs the home screen while one is open.
 - A frame meter: while the home screen keeps drawing (a moving background), the debug log says every ten seconds
   how many frames were late and what was on screen, so the cost of an effect is known on the phone itself.
+- "Customise …" on the home screen: a long press on the dock, an open folder, the search page or the hub (and on
+  the pill, while its long press is left on Settings) shows one glass chip that opens that surface's settings page.
+- Every option can be held for Reset, Explain (what it does, where it lives, its default, range, what it needs,
+  whether layouts keep it, its id) or Copy id.
 
 ### Changed
+- Settings in seven entries: Home, Drawer and search, Study, Look, Wallpaper and layouts, Motion and feel, System.
+  Each holds pages, one per surface (Pill, Dock, App drawer, Letter index, Liquid glass…); a page keeps its live
+  preview at the top and shows its options in tabs: Layout, Look, Behaviour, More. A dot marks what you changed,
+  the tabs count it, and "Reset" resets one tab.
+- Search shows where each option lives (Home › Pill › Behaviour) and opens its page on its tab with the option lit
+  up; "Recently changed" does the same. Search also matches page and entry names.
+- An option that only matters when another one is on stays in its place, greyed, and says why ("Only when
+  “Haptic feedback” is on") instead of disappearing.
+- Merged pages: Drawer motion into App drawer (Behaviour), Hand-over into Redirect, Detection with Exclusions and
+  safety, Home menu with Long-press menu (Menus). Effects and touch is split into Press and touch and Moving
+  wallpaper. Renamed: Theme → Colours and fonts, Scroll index → Letter index, Saved layouts and backup → Layouts
+  and backup. Setup checklist, Diagnostics, Calibration, Debug log, Updates and About are in System; the Theme lab
+  is in Look. No option was removed and none was reset: their stored names are unchanged, and links to the old
+  sections open the page that has their options.
 - The accent is a fixed blue (Blueberry, #5484ED) unless you had chosen your own colour. The main button keeps
   its block colour.
 - The search bar and the other pills are dark by default when a theme does not say otherwise.

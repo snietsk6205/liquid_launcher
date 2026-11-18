@@ -180,6 +180,24 @@ class HomeController(
     /** The home menu's glass pills are open. */
     var homeMenu by mutableStateOf(false)
 
+    /** W4: the "Customise" chip a long press on a surface shows: its settings page (a 0.9 section id), name, place. */
+    var customise by mutableStateOf<CustomiseOffer?>(null)
+
+    /** A long press on the pill: its action, or, left on the default (Settings), "Customise the pill". */
+    fun longPressPill(action: LauncherAction, at: androidx.compose.ui.geometry.Offset?) {
+        val bounds = pillBounds
+        if (action == LauncherAction.OpenSettings && bounds != null) {
+            offerCustomise("pill", "the pill", if (at != null) bounds.topLeft + at else bounds.topCenter)
+        } else {
+            run(action)
+        }
+    }
+
+    fun offerCustomise(section: String, title: String, at: androidx.compose.ui.geometry.Offset) {
+        Haptics.confirm(view)
+        customise = CustomiseOffer(section, title, at)
+    }
+
     /** Finger position (root coordinates) while sliding from the long press onto a home menu item, or null. */
     var homeMenuFinger by mutableStateOf<Offset?>(null)
 
@@ -1165,6 +1183,7 @@ class HomeController(
 
     fun closeAll(immediately: Boolean = false) {
         speedBump = null
+        customise = null
         homeMenu = false
         wallpaperStrip = false
         layoutsSheet = false
@@ -1183,6 +1202,7 @@ class HomeController(
     /** Back gesture: close the top-most thing. Returns false when nothing was open. */
     fun back(): Boolean {
         when {
+            customise != null -> customise = null
             speedBump != null -> speedBump = null
             renaming != null -> renaming = null
             tagging != null -> tagging = null

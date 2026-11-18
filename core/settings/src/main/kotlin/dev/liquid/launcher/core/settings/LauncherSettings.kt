@@ -2507,7 +2507,8 @@ object LauncherSettings {
             .filter { !it.hidden }
             .mapNotNull { setting ->
                 val title = setting.title.lowercase()
-                val text = setting.searchText + " " + sectionTitles[setting.section].orEmpty()
+                // W4: the page and entry it lives on count too ("pill look", "drawer behaviour").
+                val text = setting.searchText + " " + sectionTitles[setting.section].orEmpty() + " " + SettingsMap.path(setting).lowercase()
                 val textWords by lazy { text.split(' ', ',', '.', ':', ';', '(', ')', '"', '/', '-').filter { it.isNotBlank() } }
                 var score = 0
                 for (word in words) {

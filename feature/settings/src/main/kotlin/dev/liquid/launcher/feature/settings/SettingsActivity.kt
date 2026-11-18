@@ -20,6 +20,10 @@ import dev.liquid.launcher.core.settings.SettingsStore
 internal sealed interface Screen {
     data object Main : Screen
     data class Section(val id: String) : Screen
+    /** W4: one of the seven entries. */
+    data class Entry(val entry: dev.liquid.launcher.core.settings.SettingsEntry) : Screen
+    /** W4: a page, on [tab], with [highlight] (an option's key) lit up. */
+    data class Page(val id: String, val tab: dev.liquid.launcher.core.settings.SettingsTab? = null, val highlight: String? = null) : Screen
     data object Setup : Screen
     data object Calibration : Screen
     data object Diagnostics : Screen
@@ -56,6 +60,8 @@ class SettingsActivity : ComponentActivity() {
         const val SCREEN_UPDATES = "updates"
         const val SCREEN_THEME_LAB = "themeLab"
         const val SECTION_PREFIX = "section:"
+        /** W4: "page:pill" opens a page of Settings (long press → Customise on the home screen). */
+        const val PAGE_PREFIX = "page:"
 
         fun intent(context: Context, screen: String? = null): Intent =
             Intent(context, SettingsActivity::class.java)
@@ -85,7 +91,13 @@ private fun SettingsApp(
                     add(Screen.GlassBench)
                 }
                 else -> if (start != null && start.startsWith(SettingsActivity.SECTION_PREFIX)) {
-                    add(Screen.Section(start.removePrefix(SettingsActivity.SECTION_PREFIX)))
+                    // W4: a 0.9 section (a link from the home screen, or a gesture set to open one) opens its page.
+                    val section = start.removePrefix(SettingsActivity.SECTION_PREFIX)
+                    add(pageForSection(section) ?: Screen.Section(section))
+                } else if (start != null && start.startsWith(SettingsActivity.PAGE_PREFIX)) {
+                    // "page:study" or "page:study:behaviour": a page, on a tab.
+                    val (id, tab) = start.removePrefix(SettingsActivity.PAGE_PREFIX).split(':').let { it[0] to it.getOrNull(1) }
+                    add(Screen.Page(id, dev.liquid.launcher.core.settings.SettingsTab.entries.firstOrNull { it.name.equals(tab, ignoreCase = true) }))
                 }
             }
         }
@@ -96,7 +108,11 @@ private fun SettingsApp(
 
     when (val screen = stack.last()) {
         Screen.Main -> MainScreen(store, wallpaper, open, back)
-        is Screen.Section -> SectionScreen(store, screen.id, open, back)
+        is Screen.Section -> pageForSection(screen.id).let { page ->
+            PageScreen(store, page?.id ?: screen.id, page?.tab, null, open, back)
+        }
+        is Screen.Entry -> EntryScreen(store, wallpaper, screen.entry, open, back)
+        is Screen.Page -> PageScreen(store, screen.id, screen.tab, screen.highlight, open, back)
         Screen.Setup -> SetupScreen(store, wallpaper, open, back)
         Screen.Calibration -> CalibrationScreen(store, back)
         Screen.Diagnostics -> DiagnosticsScreen(store, open, back)

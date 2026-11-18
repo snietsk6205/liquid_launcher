@@ -571,7 +571,7 @@ internal fun TabMenu(
                         onDismiss()
                     }
                     "edit" -> MenuRow("Edit tabs and tags", LauncherIcons.Label, color) { onDismiss(); controller.openSection(LauncherSettings.Sections.Tags.id) }
-                    "settings" -> MenuRow("Drawer settings", LauncherIcons.Settings, color) { onDismiss(); controller.openSection(LauncherSettings.Sections.Drawer.id) }
+                    "settings" -> MenuRow("Customise the drawer", LauncherIcons.Settings, color) { onDismiss(); controller.openSection(LauncherSettings.Sections.Drawer.id) }
                 }
             }
         }

@@ -36,6 +36,7 @@ import dev.liquid.launcher.core.designsystem.LauncherIcon
 import dev.liquid.launcher.core.designsystem.LauncherIcons
 import dev.liquid.launcher.core.designsystem.WallpaperStore
 import dev.liquid.launcher.core.settings.LauncherSettings
+import dev.liquid.launcher.core.settings.SettingsEntry
 import dev.liquid.launcher.core.settings.SettingsStore
 import dev.liquid.launcher.core.settings.observe
 import dev.liquid.launcher.feature.redirect.RedirectStatus
@@ -64,27 +65,14 @@ internal fun MainScreen(
         )
 
         UpdateBanner(store) { open(Screen.Updates) }
-        if (query.isBlank()) {
-            NavRow("Theme lab", "Every option of your WM Keyboard theme, applied to the whole launcher, with a live preview") { open(Screen.ThemeLab) }
-        }
 
         if (query.isNotBlank()) {
+            // W4: a result opens its page on its tab, with the option lit up.
             val results = remember(query) { LauncherSettings.search(query) }
             if (results.isEmpty()) {
                 BodyText("No option matches \"$query\"", Modifier.padding(20.dp))
             }
-            results.forEach { setting ->
-                val section = LauncherSettings.Sections.all.firstOrNull { it.id == setting.section }
-                if (section != null) {
-                    Text(
-                        section.title,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(start = 20.dp, top = 10.dp),
-                    )
-                }
-                SettingRow(setting, store)
-            }
+            results.take(60).forEach { setting -> SearchResultRow(setting, open) }
             return@ScreenScaffold
         }
 
@@ -97,29 +85,14 @@ internal fun MainScreen(
         }
         if (recentSettings.isNotEmpty()) {
             SectionHeader("Recently changed")
-            recentSettings.forEach { setting ->
-                val section = LauncherSettings.Sections.all.firstOrNull { it.id == setting.section }
-                NavRow(setting.title, "In ${section?.title ?: "settings"}") { open(Screen.Section(setting.section)) }
-            }
+            recentSettings.forEach { setting -> SearchResultRow(setting, open) }
         }
 
-        SectionHeader("Get started")
-        NavRow("Setup checklist", "Permissions and phone settings the redirect needs") { open(Screen.Setup) }
-        NavRow("Diagnostics", "Device checks and the glass benchmark") { open(Screen.Diagnostics) }
-
-        LauncherSettings.Sections.all.groupBy { it.group }.forEach { (group, sections) ->
-            SectionHeader(group)
-            sections.forEach { section ->
-                NavRow(section.title, section.summary) { open(Screen.Section(section.id)) }
-            }
-            if (group == "Look") WallpaperRow(wallpaper)
+        // W4: seven entries; the pages of each are one surface of the launcher.
+        SectionHeader("Settings")
+        for (entry in SettingsEntry.entries) {
+            NavRow(entry.title, entry.summary) { open(Screen.Entry(entry)) }
         }
-
-        SectionHeader("Tools")
-        NavRow("Calibrate recents detection", "Only needed if recents is not recognised") { open(Screen.Calibration) }
-        NavRow("Debug log", "What the redirect saw and decided, and how long wallpaper changes took") { open(Screen.Log) }
-        NavRow("Updates", "Check GitHub for a new build and install it over this one") { open(Screen.Updates) }
-        NavRow("About", "Version and credits") { open(Screen.About) }
     }
 }
 
@@ -209,96 +182,6 @@ internal fun WallpaperRow(wallpaper: WallpaperStore) {
     if (image != null) {
         NavRow("Stop managing the wallpaper", "The system wallpaper stays as it is") {
             scope.launch { wallpaper.clear() }
-        }
-    }
-}
-
-@Composable
-internal fun SectionScreen(store: SettingsStore, sectionId: String, open: (Screen) -> Unit, onBack: () -> Unit) {
-    val section = LauncherSettings.Sections.all.first { it.id == sectionId }
-    val settings = remember(sectionId) { LauncherSettings.inSection(sectionId) }
-    val values by store.values.collectAsStateCompat()
-    val anyChanged = settings.any { values.containsKey(it.key) }
-    val preview = SettingsPreviews.provider?.takeIf { sectionId in SettingsPreviews.sections }
-
-    ScreenScaffold(title = section.title, onBack = onBack, scroll = false) {
-        // The preview stays in view while the options below scroll, so every change shows at once.
-        if (preview != null) {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(300.dp)
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-            ) {
-                Box(Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp))) { preview(sectionId) }
-            }
-        }
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 24.dp)
-        ) {
-            BodyText(
-                section.summary + ". Long-press an option to reset it. A dot marks options you changed.",
-                Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
-            when (sectionId) {
-                "pill" -> {
-                    PillItemsEditor(store)
-                    PillStudyEditor(store)
-                }
-                "menu" -> MenuEntriesEditor(store)
-                "search" -> SearchCardsEditor(store)
-                "tags" -> TabsAndTagsEditor()
-                "icons" -> IconPacksEditor(store)
-                "homeMenu" -> HomeMenuEditor(store)
-                "theme" -> ThemeEditor(store)
-                "glass" -> {
-                    NavRow(
-                        "Tune the glass",
-                        "Every value of the real glass on a live picture over your wallpaper, with presets; measures the frame rate too",
-                    ) { open(Screen.GlassTune) }
-                    LooksEditor(store)
-                }
-                "effects" -> LooksEditor(store)
-                "buttons" -> {
-                    // W3 (0.10.0): the Theme lab replaces the theme card and editor of 0.9.13 and 0.9.14.
-                    NavRow(
-                        "Theme lab",
-                        "Every option of your WM Keyboard theme on every button, chip, pill, sheet and menu, with a live preview, presets, import and export",
-                    ) { open(Screen.ThemeLab) }
-                }
-                "wallpaper" -> WallpaperEditor()
-                "study" -> StudyEditor(store)
-                "layouts" -> LayoutsAndBackupEditor()
-            }
-            // The options most changes are about first; the fine tuning waits under "Advanced".
-            val (advanced, basic) = settings.partition { LauncherSettings.isAdvanced(it) }
-            basic.forEach { setting ->
-                if (SettingDependencies.isVisible(setting, store)) SettingRow(setting, store)
-            }
-            val shownAdvanced = advanced.filter { SettingDependencies.isVisible(it, store) }
-            if (shownAdvanced.isNotEmpty()) {
-                // Open by itself when the section has nothing else, or something in it was changed.
-                var expanded by remember(sectionId) {
-                    mutableStateOf(basic.isEmpty() || advanced.any { values.containsKey(it.key) })
-                }
-                NavRow(
-                    if (expanded) "Advanced" else "Advanced (${shownAdvanced.size} more)",
-                    if (expanded) "Fine tuning; the defaults are chosen to work" else shownAdvanced.take(3).joinToString(", ") { it.title } + if (shownAdvanced.size > 3) "…" else "",
-                ) { expanded = !expanded }
-                if (expanded) shownAdvanced.forEach { SettingRow(it, store) }
-            }
-            if (anyChanged) {
-                OutlinedButton(
-                    onClick = { settings.forEach { store.reset(it) } },
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                ) { Text("Reset this section") }
-            }
         }
     }
 }

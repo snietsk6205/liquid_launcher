@@ -126,7 +126,8 @@ private fun Modifier.pillGestures(config: PillConfig, controller: HomeController
     .pointerInput(config.tap, config.longPress) {
         detectTapGestures(
             onTap = { controller.run(config.tap) },
-            onLongPress = { controller.run(config.longPress) },
+            // W4: left on its default (Settings), a long press offers "Customise the pill" first.
+            onLongPress = { at -> controller.longPressPill(config.longPress, at) },
         )
     }
     .pointerInput(config.swipeUp, config.swipeDown) {
@@ -205,7 +206,7 @@ internal fun RowScope.PillSlotView(
             interactionSource = interaction,
             indication = null,
             onClick = { if (tap != null) controller.run(tap) else onClick() },
-            onLongClick = { controller.run(long) },
+            onLongClick = { controller.longPressPill(long, null) },
         ).squishOn(interaction)
     }
 

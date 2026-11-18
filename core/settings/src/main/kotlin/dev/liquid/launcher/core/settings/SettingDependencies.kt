@@ -62,6 +62,17 @@ object SettingDependencies {
             launcherButtonsOnly.associate { it.key to (LauncherSettings.ThemeControls to setOf("launcher")) }
     }
 
+    /** Why [setting] does nothing now ("Only when “Haptic feedback” is on"), or null when it matters (W4). */
+    fun whyOff(setting: Setting<*>, store: SettingsStore): String? {
+        choiceParents[setting.key]?.let { (choice, values) ->
+            if (store.get(choice) !in values) {
+                return "Only when \u201C${choice.title}\u201D is " + values.joinToString(" or ") { "\u201C${choice.labelOf(it)}\u201D" }
+            }
+        }
+        val parent = parents[setting.key] ?: return null
+        return if (store.get(parent)) null else "Only when \u201C${parent.title}\u201D is on"
+    }
+
     fun isVisible(setting: Setting<*>, store: SettingsStore): Boolean {
         choiceParents[setting.key]?.let { (choice, values) -> if (store.get(choice) !in values) return false }
         val parent = parents[setting.key] ?: return true

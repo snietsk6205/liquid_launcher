@@ -696,17 +696,44 @@ CAL2EOF
   adb push "$OUT/cal2.sh" /data/local/tmp/cal2.sh >/dev/null 2>&1
   adb shell su 0 sh /data/local/tmp/cal2.sh >/dev/null 2>&1 || adb shell sh /data/local/tmp/cal2.sh >/dev/null 2>&1
   adb shell cmd notification allow_listener "$PKG/dev.liquid.launcher.QuietService" >/dev/null 2>&1
-  adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen section:study >/dev/null
+  adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" >/dev/null
   wait_top "SettingsActivity" 8 || true
   sleep 2
   QUIET_ON=0
-  # The row's text is its title and summary together, so the title is matched as a part.
-  for i in $(seq 1 18); do
-    dump 14d-settings
-    if tap_text 14d-settings "Quiet during blocks"; then QUIET_ON=1; break; fi
-    adb shell input swipe 540 1700 540 800 350
-    sleep 0.8
-  done
+  # W4 (0.10.1): search finds the option, and its result opens the Study page on the Behaviour tab with the row
+  # in view. The row's text is its title and summary together, so the title is matched as a part.
+  dump 14d-main
+  if tap_text 14d-main "Search settings" exact; then
+    sleep 1
+    adb shell input text "quiet%sduring"
+    sleep 2
+    dump 14d-results
+    if tap_text 14d-results "Quiet during blocks"; then
+      sleep 2.5
+      dump 14d-page
+      if on_screen 14d-page "Behaviour" && on_screen 14d-page "Quiet during blocks"; then
+        pass "a search result opens the option's page on its tab"
+        tap_text 14d-page "Quiet during blocks" && QUIET_ON=1
+      else
+        fail "a search result opens the option's page on its tab"
+        python3 ci/describe_ui.py "$OUT/14d-page.xml" 20 | sed 's/^/        /'
+      fi
+    else
+      note "no search result for quiet during"
+    fi
+  fi
+  if [ "$QUIET_ON" = 0 ]; then
+    # A page link that names its tab.
+    adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen page:study:behaviour >/dev/null
+    wait_top "SettingsActivity" 8 || true
+    sleep 2
+    for i in $(seq 1 18); do
+      dump 14d-settings
+      if tap_text 14d-settings "Quiet during blocks"; then QUIET_ON=1; break; fi
+      adb shell input swipe 540 1700 540 800 350
+      sleep 0.8
+    done
+  fi
   sleep 1
   adb shell am start -n "$HOME_ACTIVITY" >/dev/null
   wait_top "$HOME_ACTIVITY" 8 || true

@@ -28,6 +28,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.draw.alpha
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -165,63 +168,127 @@ private fun RowFrame(
 ) {
     val values by store.values.collectAsStateCompat()
     val changed = values.containsKey(setting.key)
-    var askReset by remember { mutableStateOf(false) }
+    val place = LocalRowContext.current
+    val off = place.whyOff
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var menu by remember { mutableStateOf(false) }
+    var explain by remember { mutableStateOf(false) }
 
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = { if (changed) askReset = true })
-            .padding(horizontal = 20.dp, vertical = 12.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(setting.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f, fill = false))
-                    if (changed) {
-                        Spacer(Modifier.width(8.dp))
-                        Box(
-                            Modifier
-                                .size(7.dp)
-                                .background(MaterialTheme.colorScheme.primary, CircleShape)
+    Box {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = {
+                        // W4: an option that does nothing now says why instead of changing.
+                        if (off == null) onClick() else android.widget.Toast.makeText(context, off, android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                    onLongClick = { menu = true },
+                )
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .alpha(if (off == null) 1f else 0.45f)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(setting.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f, fill = false))
+                        if (changed) {
+                            Spacer(Modifier.width(8.dp))
+                            Box(
+                                Modifier
+                                    .size(7.dp)
+                                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+                            )
+                        }
+                    }
+                    if (setting.summary.isNotEmpty()) {
+                        Text(
+                            setting.summary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    if (valueText != null) {
+                        Text(
+                            valueText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    if (off != null) {
+                        Text(off, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
-                if (setting.summary.isNotEmpty()) {
-                    Text(
-                        setting.summary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (valueText != null) {
-                    Text(
-                        valueText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+                if (trailing != null) {
+                    Spacer(Modifier.width(12.dp))
+                    trailing()
                 }
             }
-            if (trailing != null) {
-                Spacer(Modifier.width(12.dp))
-                trailing()
-            }
+            below?.invoke()
         }
-        below?.invoke()
+        // W4: hold an option to reset it, have it explained, or copy its id (for a message to Claude, a backup diff…).
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(
+                text = { Text(if (changed) "Reset to default" else "Already the default") },
+                enabled = changed,
+                onClick = {
+                    store.reset(setting)
+                    menu = false
+                },
+            )
+            DropdownMenuItem(text = { Text("Explain") }, onClick = {
+                explain = true
+                menu = false
+            })
+            DropdownMenuItem(text = { Text("Copy id") }, onClick = {
+                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Setting id", setting.key))
+                android.widget.Toast.makeText(context, "Copied ${setting.key}", android.widget.Toast.LENGTH_SHORT).show()
+                menu = false
+            })
+        }
     }
 
-    if (askReset) {
+    if (explain) {
         AlertDialog(
-            onDismissRequest = { askReset = false },
+            onDismissRequest = { explain = false },
             title = { Text(setting.title) },
-            text = { Text("Reset this option to its default?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    store.reset(setting)
-                    askReset = false
-                }) { Text("Reset") }
-            },
-            dismissButton = { TextButton(onClick = { askReset = false }) { Text("Cancel") } },
+            text = { Text(explanation(setting, store), style = MaterialTheme.typography.bodyMedium) },
+            confirmButton = { TextButton(onClick = { explain = false }) { Text("Close") } },
         )
+    }
+}
+
+/** Explain: what an option does, where it lives, what it takes, what it needs, and its id. */
+private fun explanation(setting: Setting<*>, store: SettingsStore): String {
+    val info = dev.liquid.launcher.core.settings.SettingsMap.info(setting)
+    return buildString {
+        if (info.summary.isNotEmpty()) append(info.summary).append("\n\n")
+        append("Where: ").append(dev.liquid.launcher.core.settings.SettingsMap.path(setting)).append('\n')
+        append("Kind: ").append(info.type)
+        if (info.values.isNotEmpty() && setting !is ChoiceSetting) append(", ").append(info.values)
+        append('\n')
+        val default = when (setting) {
+            is ChoiceSetting -> setting.labelOf(setting.default)
+            is BoolSetting -> if (setting.default) "on" else "off"
+            is ColorSetting -> setting.default.ifEmpty { setting.autoLabel }
+            else -> info.default.ifEmpty { "empty" }
+        }
+        append("Default: ").append(default).append('\n')
+        dev.liquid.launcher.core.settings.SettingDependencies.whyOff(setting, store)?.let { append(it).append(" (now off)\n") }
+            ?: info.dependsOn?.let { dep ->
+                val parent = dev.liquid.launcher.core.settings.LauncherSettings.all.firstOrNull { it.key == dep.substringBefore('=') }
+                if (parent != null) append("Needs: \u201C").append(parent.title).append("\u201D\n")
+            }
+        append(
+            when (info.scope) {
+                "layout" -> "Saved with each home layout"
+                "phone" -> "A fact about this phone, left out of backups"
+                else -> "The same in every layout"
+            },
+        ).append('\n')
+        if (info.level == "advanced") append("Fine tuning (under Advanced)\n")
+        append("Id: ").append(info.id)
     }
 }
 
@@ -231,7 +298,7 @@ private fun BoolRow(setting: BoolSetting, store: SettingsStore) {
     RowFrame(
         setting, store, valueText = null,
         onClick = { store.set(setting, !value) },
-        trailing = { Switch(checked = value, onCheckedChange = { store.set(setting, it) }) },
+        trailing = { Switch(checked = value, onCheckedChange = { store.set(setting, it) }, enabled = LocalRowContext.current.whyOff == null) },
     )
 }
 
@@ -257,6 +324,7 @@ private fun IntRow(setting: IntSetting, store: SettingsStore) {
                     dragging = false
                 },
                 valueRange = setting.min.toFloat()..setting.max.toFloat(),
+                enabled = LocalRowContext.current.whyOff == null,
             )
         },
     )

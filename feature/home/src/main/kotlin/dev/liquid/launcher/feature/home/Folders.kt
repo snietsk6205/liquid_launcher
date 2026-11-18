@@ -206,8 +206,9 @@ internal fun FolderOverlay(
                 .bloomLight()
                 .clip(shape)
                 .boardPicture(shape)
-                // Taps inside the card do not close it.
+                // Taps inside the card do not close it; a long press offers "Customise folders" (W4).
                 .pointerInput(Unit) { detectTapGestures { } }
+                .customiseOnLongPress(controller, "folders", "folders")
                 .padding(top = 20.dp, start = 20.dp, end = 20.dp),
         ) {
             BasicTextField(

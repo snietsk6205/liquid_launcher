@@ -965,6 +965,8 @@ private fun HomeScreenBody(
         Presence(controller.tagging) { app -> ProvideControls(controller, glass, null) { AppTagsSheet(app, controller, glass, lightBackground, overlayBackdrop) } }
         controller.iconPicking?.let { IconPickerDialog(it, controller) }
         controller.swipeEditing?.let { id -> layout.find(id)?.let { (_, item) -> SwipeActionsDialog(item, apps, controller) } }
+        // W4: "Customise …" after a long press on a surface.
+        controller.customise?.let { offer -> CustomiseChip(controller, offer, if (lightBackground) Color(0xFF16181C) else Color.White) }
         if (live) TransitionOverlay(controller, transitionStyle)
         if (mode == HomeMode.PreviewEffects && touchFx != null) EffectsDemo(touchFx, glass, lightBackground, overlayBackdrop)
         // What a press throws over the screen (0.8.0, D111), above everything it was pressed on.

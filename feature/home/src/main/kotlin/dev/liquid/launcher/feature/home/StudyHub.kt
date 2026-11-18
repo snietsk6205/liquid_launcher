@@ -242,6 +242,7 @@ internal fun StudyHub(glass: GlassConfig, lightBackground: Boolean, backdrop: Ba
                 .clip(shape)
                 .boardPicture(shape) { controller.hubAmount }
                 .clickable(interactionSource = null, indication = null) { }
+                .customiseOnLongPress(controller, "study", "the hub")
                 .draggable(drag, Orientation.Vertical, onDragStopped = { velocity -> controller.settleHub(velocity) })
                 .nestedScroll(connection),
         ) {
