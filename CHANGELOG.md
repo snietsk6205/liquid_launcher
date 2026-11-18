@@ -42,6 +42,13 @@ Versions marked *not published on its own* were built but came to the phone insi
 - The Now card and the Today widget have their own "Customise" sheet in edit mode, like the date and battery
   widgets: a glass card or none, corners, text or accent colour, and which parts show (the block's tasks and its
   buttons; tasks and times).
+- A layout for a time of day: choose it on the Layouts page, with its hours (from, until, over midnight too) and
+  days (Monday to Friday, the weekend, every day). It comes in and goes by itself like the trip-home and exam-week
+  layouts, which come first; the layout from before comes back unless you switched by hand.
+- Each wallpaper can keep its own look: in the wallpaper screen, "Blur and dim" → "This picture": blur, dim,
+  saturation and a vignette, used whenever that picture is the wallpaper.
+- "Tint colour" of the glass can be "The wallpaper's colour": every glass surface takes the wallpaper's muted tone
+  and follows it when the wallpaper changes.
 - A tag's own list: in the drawer's tag list, the apps button beside a tag opens every app with a check, and a
   search, to tag or untag many apps in one place.
 

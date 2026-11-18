@@ -217,7 +217,7 @@ object SettingsMap {
         ),
         SettingsSurface(
             "layouts", "Layouts", "Home setups to switch between, each with its wallpaper; export and import them", SettingsEntry.WALLPAPER, listOf("layouts"),
-            mapOf(B to listOf("layouts.autoSave")),
+            mapOf(B to listOf("layouts.autoSave", "layouts.windowFrom", "layouts.windowTo", "layouts.windowDays")),
         ),
         // ---- Motion and feel ----
         SettingsSurface(

@@ -128,6 +128,9 @@ internal class StudioState(store: SettingsStore) {
     var searchBlur by mutableIntStateOf(store.get(LauncherSettings.SearchBlur))
     var searchDim by mutableIntStateOf(store.get(LauncherSettings.SearchDim))
     var lockToo by mutableStateOf(store.get(LauncherSettings.WallpaperLockToo))
+
+    /** W8 (P8): the look of the picture shown, when it has its own (blur, dim, saturation, vignette); null: as for all. */
+    var pictureLook by mutableStateOf<dev.liquid.launcher.core.data.WallpaperLook?>(null)
     var forLayout by mutableStateOf(false)
     var busy by mutableStateOf(false)
 
@@ -136,6 +139,8 @@ internal class StudioState(store: SettingsStore) {
     var holding by mutableStateOf<WallpaperItem?>(null)
 
     fun select(pick: WallpaperPick, source: Bitmap, crop: CropSpec, parallax: Float) {
+        // A library picture brings its own look with it.
+        if (pick != this.pick) pictureLook = (pick as? WallpaperPick.Library)?.item?.look
         this.pick = pick
         this.source = source
         sourceImage = source.asImageBitmap()
@@ -291,6 +296,8 @@ internal fun WallpaperStudio(
             }
             settings.set(LauncherSettings.WallpaperHomeBlur, state.homeBlur)
             settings.set(LauncherSettings.WallpaperHomeDim, state.homeDim)
+            // W8 (P8): the picture now on screen keeps its own look (or goes back to the one for all).
+            data.wallpapers.get().current?.let { data.wallpapers.setLook(it, state.pictureLook) }
             settings.set(LauncherSettings.DrawerHomeBlur, state.drawerBlur)
             settings.set(LauncherSettings.DrawerDim, state.drawerDim)
             settings.set(LauncherSettings.SearchBlur, state.searchBlur)
@@ -621,12 +628,26 @@ private fun PlaceBar(state: StudioState, glass: GlassConfig, lightBackground: Bo
 
 @Composable
 private fun LookPage(state: StudioState, glass: GlassConfig, color: Color) {
-    Segmented(listOf("home" to "Home", "drawer" to "Drawer", "search" to "Search"), state.surface, color) { state.surface = it }
+    Segmented(listOf("home" to "Home", "picture" to "This picture", "drawer" to "Drawer", "search" to "Search"), state.surface, color) { state.surface = it }
     Spacer(Modifier.height(8.dp))
     when (state.surface) {
         "home" -> {
             ValueSlider("Blur", state.homeBlur, 0, 40, "dp", color) { state.homeBlur = it }
             ValueSlider("Dim", state.homeDim, 0, 80, "%", color) { state.homeDim = it }
+            if (state.pictureLook != null) PageLabel("This picture has its own look (see \"This picture\")", color)
+        }
+        "picture" -> {
+            // W8 (P8): a look kept with this picture, used whenever it is the wallpaper.
+            val own = state.pictureLook
+            ToggleRow("Its own look", own != null, color) { on ->
+                state.pictureLook = if (on) dev.liquid.launcher.core.data.WallpaperLook(blur = state.homeBlur, dim = state.homeDim) else null
+            }
+            if (own != null) {
+                ValueSlider("Blur", own.blur.coerceAtLeast(0), 0, 40, "dp", color) { state.pictureLook = own.copy(blur = it) }
+                ValueSlider("Dim", own.dim.coerceAtLeast(0), 0, 80, "%", color) { state.pictureLook = own.copy(dim = it) }
+                ValueSlider("Saturation", own.saturation, 0, 200, "%", color) { state.pictureLook = own.copy(saturation = it) }
+                ValueSlider("Vignette", own.vignette, 0, 100, "%", color) { state.pictureLook = own.copy(vignette = it) }
+            }
         }
         "drawer" -> {
             ValueSlider("Blur", state.drawerBlur, 0, 40, "dp", color) { state.drawerBlur = it }

@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -298,10 +299,13 @@ private fun HomeScreenBody(
     LaunchedEffect(saving) {
         if (saving) controller.notice(dev.liquid.launcher.core.common.NoticeKind.Info, "Battery under 30 %", "Widgets and moving effects rest until you are home or charging")
     }
-    val glass = remember(glassBase, tintShown, saving) {
-        val base = if (!saving) glassBase else glassBase.copy(
-            quality = glassBase.quality.cappedAt(GlassQuality.Frosted),
-            largeQuality = glassBase.largeQuality.cappedAt(GlassQuality.Frosted),
+    // W8 (P8): "The wallpaper's colour": the glass takes the wallpaper's muted tone, and follows it when it changes.
+    val wallTone by dev.liquid.launcher.core.common.WallpaperTones.tone.collectAsState()
+    val glass = remember(glassBase, tintShown, saving, wallTone) {
+        val toned = if (glassBase.tintMode == "tone") wallTone?.roles?.muted?.let { glassBase.copy(tintColor = Color(it)) } ?: glassBase else glassBase
+        val base = if (!saving) toned else toned.copy(
+            quality = toned.quality.cappedAt(GlassQuality.Frosted),
+            largeQuality = toned.largeQuality.cappedAt(GlassQuality.Frosted),
         )
         if (tintShown.alpha < 0.01f) base else base.copy(accentTint = tintShown.copy(alpha = 1f), accentAmount = 0.42f * tintShown.alpha)
     }
@@ -312,8 +316,13 @@ private fun HomeScreenBody(
     // The wallpaper screen tries values out on the real home screen before they are applied.
     val studio = remember(controller.wallpaperStudio) { if (controller.wallpaperStudio && live) StudioState(store) else null }
     val image = studio?.candidateImage ?: savedImage
-    val homeBlurDp = studio?.homeBlur ?: look.homeBlurDp
-    val homeDim = (studio?.homeDim?.div(100f)) ?: look.homeDim
+    // W8 (P8): the picture's own look, when it has one, over the one set for all.
+    val libraryState by data.wallpapers.state.collectAsState()
+    val pictureLook = if (studio != null) studio.pictureLook else libraryState.current?.let { id -> libraryState.items.firstOrNull { it.id == id }?.look }
+    val homeBlurDp = pictureLook?.blur?.takeIf { it >= 0 } ?: studio?.homeBlur ?: look.homeBlurDp
+    val homeDim = pictureLook?.dim?.takeIf { it >= 0 }?.div(100f) ?: (studio?.homeDim?.div(100f)) ?: look.homeDim
+    val saturation = (pictureLook?.saturation ?: 100) / 100f
+    val vignette = (pictureLook?.vignette ?: 0) / 100f
     val searchBlurDp = studio?.searchBlur ?: search.blurDp
     val drawerShown = if (studio != null) drawerConfig.copy(dim = studio.drawerDim / 100f) else drawerConfig
     val motionShown = if (studio != null) motion.copy(homeBlurDp = studio.drawerBlur) else motion
@@ -634,7 +643,7 @@ private fun HomeScreenBody(
                         }
                     },
                     modifier = Modifier.layerBackdrop(wallpaperBackdrop),
-                    filter = { controller.windDownFilter() },
+                    filter = { controller.wallpaperFilter(saturation) },
                 )
                 val deep = deepWallpaper
                 if (deep != null && placing == null) {
@@ -668,6 +677,19 @@ private fun HomeScreenBody(
             }
             }
             if (homeDim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = homeDim)))
+            // W8 (P8): the picture's vignette: its corners darker, the middle as it is.
+            if (vignette > 0.01f) {
+                Box(
+                    Modifier.fillMaxSize().drawBehind {
+                        drawRect(
+                            androidx.compose.ui.graphics.Brush.radialGradient(
+                                0.45f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.85f * vignette),
+                                center = center, radius = size.maxDimension * 0.75f,
+                            ),
+                        )
+                    },
+                )
+            }
             val pillSpace = (if (pill.enabled || controller.editMode) pill.heightDp + pill.offsetDp + 12 else 0) +
                 (if (dock.enabled) dock.height.value.toInt() + 8 else 0)
             // Remembered: a new gesture lambda would restart the detector and cancel a swipe in progress.

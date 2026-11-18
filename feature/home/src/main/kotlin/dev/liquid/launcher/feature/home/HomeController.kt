@@ -539,14 +539,28 @@ class HomeController(
         val s = data.settings
         val commuteId = s.get(LauncherSettings.StudyCommuteLayout).takeIf { it.isNotBlank() && data.layouts.find(it) != null }
         val examId = s.get(LauncherSettings.StudyExamLayout).takeIf { it.isNotBlank() && data.layouts.find(it) != null }
+        val windowId = s.get(LauncherSettings.LayoutWindowLayout).takeIf { it.isNotBlank() && data.layouts.find(it) != null }
         val active = s.get(LauncherSettings.ContextActive).ifBlank { null }
-        if (commuteId == null && examId == null && active == null) return
-        if (!data.study.enabled || !data.study.loaded.value) return
+        if (commuteId == null && examId == null && windowId == null && active == null) return
+        // The study contexts wait for the calendar; a time of day does not.
+        val studyReady = data.study.enabled && data.study.loaded.value
+        if (!studyReady && active != null && active != dev.liquid.launcher.core.data.ContextLayouts.WINDOW) return
         val now = System.currentTimeMillis()
-        val ctx = dev.liquid.launcher.core.data.ContextLayouts.context(data.study.day.value, now, data.study.homeAt.value, commuteId != null, examId != null)
+        val studyCtx = if (studyReady) {
+            dev.liquid.launcher.core.data.ContextLayouts.context(data.study.day.value, now, data.study.homeAt.value, commuteId != null, examId != null)
+        } else {
+            null
+        }
+        val ctx = studyCtx ?: dev.liquid.launcher.core.data.ContextLayouts.WINDOW.takeIf {
+            windowId != null && dev.liquid.launcher.core.data.ContextLayouts.inWindow(
+                s.get(LauncherSettings.LayoutWindowFrom), s.get(LauncherSettings.LayoutWindowTo), s.get(LauncherSettings.LayoutWindowDays),
+                java.time.LocalDateTime.now(),
+            )
+        }
         val wanted = when (ctx) {
             dev.liquid.launcher.core.data.ContextLayouts.COMMUTE -> commuteId
             dev.liquid.launcher.core.data.ContextLayouts.EXAM -> examId
+            dev.liquid.launcher.core.data.ContextLayouts.WINDOW -> windowId
             else -> null
         }
         val current = data.layouts.state.value.current
@@ -1391,6 +1405,24 @@ class HomeController(
     private var windDownMatrix: Pair<Float, androidx.compose.ui.graphics.ColorFilter?> = 0f to null
 
     /** The wallpaper's colour filter now, or null at full colour. Read while drawing. */
+    /** W8 (P8): the wallpaper's colour filter: the evening's wind-down and the picture's own saturation (1 = as it is). */
+    fun wallpaperFilter(saturation: Float): androidx.compose.ui.graphics.ColorFilter? {
+        if (kotlin.math.abs(saturation - 1f) < 0.01f) return windDownFilter()
+        val w = windDown.value
+        val cached = pictureMatrix
+        if (cached.first == w && cached.second == saturation) return cached.third
+        val matrix = androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(saturation * (1f - 0.68f * w)) }
+        val dim = 1f - 0.12f * w
+        if (w > 0.001f) {
+            matrix.timesAssign(androidx.compose.ui.graphics.ColorMatrix(floatArrayOf(dim, 0f, 0f, 0f, 0f, 0f, dim, 0f, 0f, 0f, 0f, 0f, dim, 0f, 0f, 0f, 0f, 0f, 1f, 0f)))
+        }
+        val filter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(matrix)
+        pictureMatrix = Triple(w, saturation, filter)
+        return filter
+    }
+
+    private var pictureMatrix: Triple<Float, Float, androidx.compose.ui.graphics.ColorFilter?> = Triple(-1f, -1f, null)
+
     fun windDownFilter(): androidx.compose.ui.graphics.ColorFilter? {
         val w = windDown.value
         if (w <= 0.001f) return null

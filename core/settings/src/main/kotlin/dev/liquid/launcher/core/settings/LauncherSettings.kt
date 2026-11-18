@@ -1480,8 +1480,9 @@ object LauncherSettings {
     )
     val GlassTintMode = ChoiceSetting(
         key = "glass.tintMode", default = "auto",
-        options = listOf("auto" to "Follow the wallpaper", "light" to "Light", "dark" to "Dark"),
+        options = listOf("auto" to "Follow the wallpaper", "light" to "Light", "dark" to "Dark", "tone" to "The wallpaper's colour"),
         title = "Tint colour",
+        summary = "\"The wallpaper's colour\" tints every glass surface with the wallpaper's own muted tone",
         section = "glass", keywords = "tint colour color light dark",
     )
 
@@ -2129,6 +2130,27 @@ object LauncherSettings {
     /** A4 / C4 (0.9.11): saved-layout ids, chosen in the Study companion screen; empty = none. */
     val StudyCommuteLayout = TextSetting(key = "study.commuteLayout", default = "", title = "Layout while travelling home", section = "study", hidden = true)
     val StudyExamLayout = TextSetting(key = "study.examLayout", default = "", title = "Layout in exam week", section = "study", hidden = true)
+    /** W8 (P8): a layout for a time of day: its id (chosen on the Layouts page; empty = none), from, to, which days. */
+    val LayoutWindowLayout = TextSetting(key = "layouts.windowLayout", default = "", title = "Layout for a time of day", section = "layouts", hidden = true)
+    private val halfHours = (0 until 48).map { i -> "%02d:%02d".format(i / 2, (i % 2) * 30) }.map { it to it }
+    val LayoutWindowFrom = ChoiceSetting(
+        key = "layouts.windowFrom", default = "08:00", options = halfHours,
+        title = "Time-of-day layout: from",
+        summary = "The layout chosen for a time of day comes in at this time",
+        section = "layouts", keywords = "layout time window schedule morning from start",
+    )
+    val LayoutWindowTo = ChoiceSetting(
+        key = "layouts.windowTo", default = "12:00", options = halfHours,
+        title = "Time-of-day layout: until",
+        summary = "…and goes at this time; the layout from before comes back unless you switched by hand. Earlier than \"from\": over midnight",
+        section = "layouts", keywords = "layout time window schedule until end",
+    )
+    val LayoutWindowDays = ChoiceSetting(
+        key = "layouts.windowDays", default = "weekdays",
+        options = listOf("weekdays" to "Monday to Friday", "weekend" to "Saturday and Sunday", "every" to "Every day"),
+        title = "Time-of-day layout: days",
+        section = "layouts", keywords = "layout time window days weekdays weekend",
+    )
     val ContextActive = TextSetting(key = "state.ctxActive", default = "", title = "Context layout on", section = "state", hidden = true)
     val ContextApplied = TextSetting(key = "state.ctxApplied", default = "", title = "Context layout applied", section = "state", hidden = true)
     val ContextBase = TextSetting(key = "state.ctxBase", default = "", title = "Layout before the context", section = "state", hidden = true)
@@ -2497,6 +2519,7 @@ object LauncherSettings {
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
         BackupAuto, BackupKeep, BackupWallpapers, BackupFolder, BackupLast,
+        LayoutWindowLayout, LayoutWindowFrom, LayoutWindowTo, LayoutWindowDays,
         StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyPlanLink, StudyLinkOpener,
         StudyAttendance, StudyLeaveBy, StudyCommute, StudyRest, StudyWindDown, StudySpeedBump, StudySpeedBumpTags, StudyFeedCalendar, StudyFeedLocal, StudyGlassTint,
         StudyCommuteLayout, StudyExamLayout, ContextActive, ContextApplied, ContextBase, LayoutTimerUntil, LayoutTimerLayout, LayoutTimerBack,

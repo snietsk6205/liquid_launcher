@@ -436,6 +436,14 @@ internal fun LayoutsAndBackupEditor() {
                 }
             }
         }
+        // W8 (P8): a layout for a time of day (its hours and days are the options below, on the Behaviour tab).
+        val settings = remember { SettingsStore.get(context) }
+        val window by settings.observe(LauncherSettings.LayoutWindowLayout)
+        if (state.layouts.isNotEmpty()) {
+            LayoutChoice("For a time of day (hours and days: Behaviour tab)", window, state.layouts) {
+                settings.set(LauncherSettings.LayoutWindowLayout, it)
+            }
+        }
         Row(Modifier.padding(top = 8.dp)) {
             OutlinedButton(onClick = { openOnHome(context, "layouts") }) { Text("Open layouts") }
             Spacer(Modifier.width(8.dp))

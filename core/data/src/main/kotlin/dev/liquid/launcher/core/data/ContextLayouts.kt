@@ -7,6 +7,31 @@ package dev.liquid.launcher.core.data
 object ContextLayouts {
     const val COMMUTE = "commute"
     const val EXAM = "exam"
+    /** W8 (P8): the layout chosen for a time of day. */
+    const val WINDOW = "window"
+
+    /**
+     * True when [time] is inside the window from [from] to [to] ("HH:MM"; [to] earlier than [from] runs over midnight)
+     * on [days] ("weekdays", "weekend" or "every"). The day is the one the window started on.
+     */
+    fun inWindow(from: String, to: String, days: String, time: java.time.LocalDateTime): Boolean {
+        fun minutes(t: String): Int? = t.split(':').takeIf { it.size == 2 }?.let { (h, m) -> h.toIntOrNull()?.let { hh -> m.toIntOrNull()?.let { hh * 60 + it } } }
+        val a = minutes(from) ?: return false
+        val b = minutes(to) ?: return false
+        if (a == b) return false
+        val m = time.hour * 60 + time.minute
+        val overnight = b < a
+        val inside = if (overnight) m >= a || m < b else m in a until b
+        if (!inside) return false
+        // After midnight in an overnight window, the window belongs to the day before.
+        val day = if (overnight && m < b) time.toLocalDate().minusDays(1) else time.toLocalDate()
+        val weekend = day.dayOfWeek == java.time.DayOfWeek.SATURDAY || day.dayOfWeek == java.time.DayOfWeek.SUNDAY
+        return when (days) {
+            "weekdays" -> !weekend
+            "weekend" -> weekend
+            else -> true
+        }
+    }
 
     /** The longest a trip home is assumed to last when the arrival is never noticed. */
     private const val MAX_TRIP_MS = 4 * 60 * 60_000L

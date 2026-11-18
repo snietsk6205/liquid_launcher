@@ -39,9 +39,18 @@ data class WallpaperItem(
     val folder: String? = null,
     /** Parallax it was placed with (extra width over the screen's), or -1 for the default. */
     val parallax: Float = -1f,
+    /** W8 (P8): this picture's own look on the home screen, or null for the one set for all. */
+    val look: WallpaperLook? = null,
 ) {
     val crop: CropSpec get() = CropSpec(cx, cy, zoom)
 }
+
+/**
+ * W8 (P8): how one picture sits on the home screen: its blur and dim (-1: as set for all), its saturation (100 is the
+ * picture's own) and a vignette darkening its corners (0: none).
+ */
+@Serializable
+data class WallpaperLook(val blur: Int = -1, val dim: Int = -1, val saturation: Int = 100, val vignette: Int = 0)
 
 /** A folder on the phone the library shows live (through the system file picker's permission). */
 @Serializable
@@ -97,6 +106,10 @@ object WallpaperLibraryOps {
 
     fun setFavourite(state: WallpaperLibraryState, id: String, on: Boolean): WallpaperLibraryState =
         state.copy(items = state.items.map { if (it.id == id) it.copy(favourite = on) else it })
+
+    /** W8 (P8): a picture's own look; null (or the plain look) goes back to the one set for all. */
+    fun setLook(state: WallpaperLibraryState, id: String, look: WallpaperLook?): WallpaperLibraryState =
+        state.copy(items = state.items.map { if (it.id == id) it.copy(look = look?.takeIf { l -> l != WallpaperLook() }) else it })
 
     /** Takes a picture out of the recent list without removing it from the library. */
     fun forget(state: WallpaperLibraryState, id: String): WallpaperLibraryState =
@@ -186,6 +199,8 @@ class WallpaperLibrary(
         store.update { WallpaperLibraryOps.markUsed(it, id, System.currentTimeMillis(), crop, parallax) }
 
     fun setFavourite(id: String, on: Boolean) = store.update { WallpaperLibraryOps.setFavourite(it, id, on) }
+
+    fun setLook(id: String, look: WallpaperLook?) = store.update { WallpaperLibraryOps.setLook(it, id, look) }
 
     fun forget(id: String) = store.update { WallpaperLibraryOps.forget(it, id) }
 
