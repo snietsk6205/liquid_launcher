@@ -706,14 +706,14 @@ else
     peek 14b-panel
     dump 14b-panel
     if on_screen 14b-panel "Recall the theorems" exact; then pass "the clock line opens Today with the block's tasks"; else fail "the clock line opens Today with the block's tasks"; fi
-    on_screen 14b-panel "Done" exact || note "the collapsed hub does not show the block's Done in sight"
-    # 0.10.1 (W7): the hub opens collapsed; "The whole day" first, so every part below is in sight.
-    if tap_text 14b-panel "The whole day"; then
+    on_screen 14b-panel "Done" exact || note "the hub does not show the block's Done in sight"
+    # 0.10.2: the hub opens with the whole day (0.10.1 opened it collapsed, with "The whole day" one tap away).
+    if on_screen 14b-panel "The whole day"; then
+      fail "the hub opens with the whole day, not collapsed"
+      tap_text 14b-panel "The whole day" || true
       sleep 1.5
-      pass "the collapsed hub opens to the whole day"
     else
-      fail "the collapsed hub offers the whole day"
-      python3 ci/describe_ui.py "$OUT/14b-panel.xml" 25 | sed 's/^/        /'
+      pass "the hub opens with the whole day"
     fi
     dump 14b-panel
     # "Done" first: once a task is ticked, its tick icon is also labelled "Done" (for accessibility) and comes earlier on screen.

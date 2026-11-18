@@ -429,7 +429,8 @@ internal fun BlockCard(
     val accent = eventColor(block)
     val notes = block.notes
     val canOpen = prefs.cards != "full"
-    var open by remember(block.key, prefs.cards, startOpen) { mutableStateOf(startOpen || prefs.cards == "full" || (prefs.cards == "compact" && running)) }
+    // 0.10.2: a block opens as "Blocks in Today" says; the block running now is no longer forced open.
+    var open by remember(block.key, prefs.cards, startOpen) { mutableStateOf(startOpen || prefs.cards == "full") }
     val showBody = open || prefs.cards == "preview"
     val shape = RoundedCornerShape(20.dp)
     Column(
@@ -528,10 +529,12 @@ internal fun BlockCard(
             if (block.status == StudyStatus.Open && controller.data.settings.get(dev.liquid.launcher.core.settings.LauncherSettings.SearchClaude) != "off") {
                 buttons += { ActionChip("Ask Claude", color, icon = LauncherIcons.Sparkle) { controller.askClaudeAbout(block) } }
             }
-            Row(
-                Modifier.fillMaxWidth().padding(top = 8.dp).horizontalScroll(rememberScrollState()),
+            // 0.10.2: the buttons wrap onto a second line instead of running off the card's edge.
+            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+            androidx.compose.foundation.layout.FlowRow(
+                Modifier.fillMaxWidth().padding(top = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp, if (prefs.buttonsEnd) Alignment.End else Alignment.Start),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 // The main button sits nearest the edge the buttons line up on: under the thumb on the right.
                 (if (prefs.buttonsEnd) buttons.asReversed() else buttons).forEach { it() }

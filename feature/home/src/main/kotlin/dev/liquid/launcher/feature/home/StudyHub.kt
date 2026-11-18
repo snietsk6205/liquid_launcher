@@ -336,7 +336,8 @@ private fun HubContent(controller: HomeController, color: Color, scroll: ScrollS
                 }
                 if (hero != null) {
                     SectionLabel(heroLabel(hero, now), color)
-                    BlockCard(hero, now, prefs, focus, color, controller, startOpen = true, brief = !controller.hubExpanded)
+                    // 0.10.2: folded or open as "Blocks in Today" says (compact: title, time and steps; a tap shows them).
+                    BlockCard(hero, now, prefs, focus, color, controller, brief = !controller.hubExpanded)
                 }
                 // W7: collapsed, the hub holds the block now or next; the rest of the day is one tap or a swipe up away.
                 if (!controller.hubExpanded) return@Column
@@ -418,10 +419,19 @@ private fun HubHeader(controller: HomeController, day: StudyDay, now: Long, colo
             DayRing(day, now, color, 38.dp)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text("Today", style = studyText(color, 18, FontWeight.SemiBold))
+                // 0.10.2: the count sits beside "Today" and the date has its own line, so neither is cut.
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text("Today", style = studyText(color, 18, FontWeight.SemiBold), maxLines = 1)
+                    if (day.blocks.isNotEmpty()) {
+                        Text(
+                            "  ${day.blocksDone}/${day.blocks.size} blocks",
+                            style = studyText(color, 12, alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(bottom = 2.dp),
+                        )
+                    }
+                }
                 val date = LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault()))
-                val progress = if (day.blocks.isEmpty()) "" else " · ${day.blocksDone}/${day.blocks.size} blocks"
-                Text(date + progress, style = studyText(color, 12, alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(date, style = studyText(color, 12, alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             HubIcon(LauncherIcons.Chat, "Tell Claude", color) { controller.run(LauncherAction.TellClaude) }
             Spacer(Modifier.width(6.dp))
@@ -522,8 +532,11 @@ private fun Timeline(
     focus: dev.liquid.launcher.core.data.StudyFocus?,
     color: Color,
 ) {
-    val rows = remember(day) { (day.classes.map { it to true } + day.blocks.map { it to false }).sortedBy { it.first.begin } }
-    if (rows.isEmpty() || (rows.size == 1 && hero != null && day.classes.isEmpty())) return
+    // 0.10.2: the block now or next is the card above, so the timeline leaves it out instead of showing it twice.
+    val rows = remember(day, hero?.key) {
+        (day.classes.map { it to true } + day.blocks.filter { it.key != hero?.key }.map { it to false }).sortedBy { it.first.begin }
+    }
+    if (rows.isEmpty()) return
     var open by remember { mutableStateOf<String?>(null) }
     SectionLabel("Timeline", color)
     val anyRunning = day.blocks.any { now >= it.begin && now < it.end }
@@ -789,9 +802,12 @@ private fun HubBar(
     }
     Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
         if (loaded) {
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            // 0.10.2: the chips wrap onto a second line instead of running off the hub's edge ("Quiz m…").
+            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+            androidx.compose.foundation.layout.FlowRow(
+                Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 controller.classForPhoto(now)?.let { cls ->
                     ActionChip("Board · ${cls.title.subject}", color, icon = LauncherIcons.Camera) { controller.boardPhoto() }

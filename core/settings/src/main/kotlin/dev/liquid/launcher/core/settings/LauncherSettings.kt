@@ -1949,8 +1949,8 @@ object LauncherSettings {
             "full" to "Everything, always",
         ),
         title = "Blocks in Today",
-        summary = "Tap a block's title to open or close it. In compact mode the block running now starts open",
-        section = "study", keywords = "study today block card expand collapse description notes details",
+        summary = "Compact: each block shows its title, time and step count, and a tap shows its steps and buttons (the block now or next too). Tap a block's title to open or close it",
+        section = "study", keywords = "study today hub block card cards expand collapse folded compact steps description notes details",
     )
     val StudyButtonSide = ChoiceSetting(
         key = "study.buttonSide", default = "end",
@@ -2232,14 +2232,16 @@ object LauncherSettings {
         section = "study", keywords = "study hub size height pill",
     )
     // W7 (0.10.1): how the hub opens, and reading it over any wallpaper.
+    // 0.10.2: the whole day by default (the block now or next, the timeline, tasks, tomorrow); collapsed stays a choice.
     val StudyHubOpen = ChoiceSetting(
-        key = "study.hubOpen", default = "collapsed",
+        key = "study.hubOpen", default = "full",
         options = listOf(
+            "full" to "The whole day: the block now or next, the timeline, tasks and tomorrow",
             "collapsed" to "Collapsed: the block now or next; the whole day one tap or swipe up away",
-            "full" to "The whole day at once",
         ),
         title = "Study hub opens",
-        section = "study", keywords = "study hub collapsed expanded open compact size",
+        summary = "At full height with the whole day, or collapsed to the block now or next",
+        section = "study", keywords = "study hub today panel collapsed expanded full whole day open compact size height half",
     )
     val StudyHubDim = IntSetting(
         key = "study.hubDim", default = 26, min = 0, max = 80, step = 2, unit = "%",
