@@ -29,6 +29,14 @@ Versions marked *not published on its own* were built but came to the phone insi
   the pill, while its long press is left on Settings) shows one glass chip that opens that surface's settings page.
 - Every option can be held for Reset, Explain (what it does, where it lives, its default, range, what it needs,
   whether layouts keep it, its id) or Copy id.
+- Backup and Claude (Settings → System): "Back up now", with or without wallpapers. A backup every day into a
+  folder you choose (on the phone or a cloud drive), keeping the newest seven copies. Restoring first shows what
+  the backup holds and every option it would change (now → then).
+- Tune with Claude: "Send to Claude" shares every option (what it does, its range, default and value now) with your
+  question and the rules for answering (only a JSON list of changes) to the Claude app; "Export for AI" saves the
+  same as a Markdown file. Paste Claude's answer back: every change is listed before anything happens, entries that
+  are not valid (an unknown option, a wrong kind of value, out of range) are shown in red and left out, and "Undo"
+  puts everything back in one tap. The launcher makes no network call for this.
 
 ### Changed
 - Settings in seven entries: Home, Drawer and search, Study, Look, Wallpaper and layouts, Motion and feel, System.
@@ -42,13 +50,15 @@ Versions marked *not published on its own* were built but came to the phone insi
 - Merged pages: Drawer motion into App drawer (Behaviour), Hand-over into Redirect, Detection with Exclusions and
   safety, Home menu with Long-press menu (Menus). Effects and touch is split into Press and touch and Moving
   wallpaper. Renamed: Theme → Colours and fonts, Scroll index → Letter index, Saved layouts and backup → Layouts
-  and backup. Setup checklist, Diagnostics, Calibration, Debug log, Updates and About are in System; the Theme lab
-  is in Look. No option was removed and none was reset: their stored names are unchanged, and links to the old
+  and backup, which is now Layouts (backup moved to System → Backup and Claude). Setup checklist, Diagnostics,
+  Calibration, Debug log, Updates and About are in System; the Theme lab is in Look. No option was removed and none was reset: their stored names are unchanged, and links to the old
   sections open the page that has their options.
 - The accent is a fixed blue (Blueberry, #5484ED) unless you had chosen your own colour. The main button keeps
   its block colour.
 - The search bar and the other pills are dark by default when a theme does not say otherwise.
 - A theme's moving background and press splash take the place of the launcher's own while the theme has one.
+
+- Backups now include the theme's pictures (its background, textures and stickers).
 
 ### Removed
 - The theme editor of 0.9.14 (Settings → Buttons → Edit the theme): the Theme lab replaces it, with every option

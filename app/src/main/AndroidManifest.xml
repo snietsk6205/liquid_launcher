@@ -10,6 +10,8 @@
     <!-- Only for the in-app updater: checking GitHub releases and downloading a new build when asked. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Study companion: study blocks and tasks are calendar events; ticks are written back to them. -->
+    <!-- W5: the daily backup job survives a restart. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -59,6 +61,12 @@
                 android:resource="@xml/update_paths" />
         </provider>
             <!-- C5 (0.9.16): notifications wait during study blocks; only with the user's notification access. -->
+        <!-- W5: the daily backup into the folder chosen in Settings → System → Backup and Claude. -->
+        <service
+            android:name="dev.liquid.launcher.core.data.BackupJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <service
             android:name="dev.liquid.launcher.QuietService"
             android:exported="true"

@@ -16,7 +16,7 @@ enum class SettingsEntry(val title: String, val summary: String) {
     LOOK("Look", "The Theme lab, colours and fonts, icons, liquid glass and buttons"),
     WALLPAPER("Wallpaper and layouts", "Your wallpapers, blur and dim, changing by themselves; layouts and backup"),
     MOTION("Motion and feel", "Animations, haptics, press and touch effects, the moving wallpaper, notices"),
-    SYSTEM("System", "The redirect, setup, diagnostics, the debug log, updates and about"),
+    SYSTEM("System", "The redirect, backup and Claude, setup, diagnostics, the debug log, updates and about"),
 }
 
 /** The tabs of a page, in this order. */
@@ -213,7 +213,7 @@ object SettingsMap {
             ),
         ),
         SettingsSurface(
-            "layouts", "Layouts and backup", "Home setups to switch between; back up and restore everything", SettingsEntry.WALLPAPER, listOf("layouts"),
+            "layouts", "Layouts", "Home setups to switch between, each with its wallpaper; export and import them", SettingsEntry.WALLPAPER, listOf("layouts"),
             mapOf(B to listOf("layouts.autoSave")),
         ),
         // ---- Motion and feel ----
@@ -257,6 +257,12 @@ object SettingsMap {
             "safety", "Detection and safety", "When not to redirect, the loop guard, and how the system launcher is recognised", SettingsEntry.SYSTEM,
             listOf("exclusions", "detection"),
             mapOf(B to listOf("exclude.*", "redirect.systemHomePause", "guard.*"), M to listOf("detect.*")),
+        ),
+        SettingsSurface(
+            "backup", "Backup and Claude", "Back up now or every day to a folder, restore with a preview of what changes, tune with Claude",
+            SettingsEntry.SYSTEM, listOf("backup"),
+            mapOf(B to listOf("backup.*")),
+            rest = B,
         ),
         SettingsSurface(
             "log", "Debug log", "What is recorded, in how much detail", SettingsEntry.SYSTEM, listOf("log"),

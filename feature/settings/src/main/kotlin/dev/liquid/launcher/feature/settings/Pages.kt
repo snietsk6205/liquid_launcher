@@ -110,6 +110,7 @@ private val editorTabs: Map<String, Set<SettingsTab>> = mapOf(
     "wallpaper" to setOf(SettingsTab.LOOK),
     "study" to setOf(SettingsTab.LAYOUT),
     "layouts" to setOf(SettingsTab.LAYOUT),
+    "backup" to setOf(SettingsTab.BEHAVIOUR, SettingsTab.MORE),
 )
 
 @Composable
@@ -143,6 +144,8 @@ private fun PageEditors(surface: String, tab: SettingsTab, store: SettingsStore,
         "wallpaper" to SettingsTab.LOOK -> WallpaperEditor()
         "study" to SettingsTab.LAYOUT -> StudyEditor(store)
         "layouts" to SettingsTab.LAYOUT -> LayoutsAndBackupEditor()
+        "backup" to SettingsTab.BEHAVIOUR -> BackupEditor(store)
+        "backup" to SettingsTab.MORE -> ClaudeEditor(store)
     }
 }
 

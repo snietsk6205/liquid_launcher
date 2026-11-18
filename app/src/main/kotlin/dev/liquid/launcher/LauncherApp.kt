@@ -44,6 +44,8 @@ class LauncherApp : Application() {
         dev.liquid.launcher.core.data.ThemeApply.firstRun(settings)
         // W3 (0.10.0): the theme becomes a WM Keyboard document, once (the fixed blue accent unless you chose one).
         dev.liquid.launcher.core.data.ThemeStore.migrate010(settings)
+        // W5: the daily backup job, if it is on.
+        runCatching { dev.liquid.launcher.core.data.AutoBackup.schedule(this) }
         DebugLog.enabled = settings.get(LauncherSettings.LogEnabled)
         DebugLog.maxEntries = settings.get(LauncherSettings.LogSize)
         DebugLog.verbosity = when (settings.get(LauncherSettings.LogVerbosity)) {

@@ -393,7 +393,6 @@ internal fun LayoutsAndBackupEditor() {
     val scope = rememberCoroutineScope()
     var message by remember { mutableStateOf<String?>(null) }
     var exporting by remember { mutableStateOf<String?>(null) }
-    var confirmRestore by remember { mutableStateOf<android.net.Uri?>(null) }
 
     val exportLayout = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         val id = exporting ?: return@rememberLauncherForActivityResult
@@ -415,17 +414,6 @@ internal fun LayoutsAndBackupEditor() {
             message = if (added != null) "Imported \"${added.name}\". Apps that are not installed stay empty." else "That file is not a saved layout"
         }
     }
-    val writeBackup = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                runCatching { context.contentResolver.openOutputStream(uri)?.use { data.backup(it) } != null }.getOrDefault(false)
-            }
-            message = if (ok) "Backup saved" else "Backup failed"
-        }
-    }
-    val readBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> confirmRestore = uri }
-
     InfoCard {
         Text("Saved layouts", style = MaterialTheme.typography.titleMedium)
         BodyText("Switch between them from the home menu or the layouts sheet. Hold a layout there to rename, duplicate or give it a wallpaper.")
@@ -455,48 +443,11 @@ internal fun LayoutsAndBackupEditor() {
         }
     }
 
-    InfoCard {
-        Text("Backup", style = MaterialTheme.typography.titleMedium)
-        BodyText(
-            "One file with your settings, home screen, tags and tabs, app names and icons, saved layouts and wallpapers. " +
-                "Counters and measurements of this phone are left out."
-        )
-        Row(Modifier.padding(top = 8.dp)) {
-            Button(onClick = {
-                val stamp = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
-                writeBackup.launch("liquid-launcher-$stamp.llbackup")
-            }) { Text("Back up") }
-            Spacer(Modifier.width(8.dp))
-            OutlinedButton(onClick = { readBackup.launch(arrayOf("*/*")) }) { Text("Restore…") }
-        }
-    }
-
     message?.let { text ->
         AlertDialog(
             onDismissRequest = { message = null },
             text = { Text(text) },
             confirmButton = { TextButton(onClick = { message = null }) { Text("OK") } },
-        )
-    }
-    confirmRestore?.let { uri ->
-        AlertDialog(
-            onDismissRequest = { confirmRestore = null },
-            title = { Text("Restore this backup?") },
-            text = { Text("Everything you set up now is replaced by the backup. The redirect keeps working.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmRestore = null
-                    scope.launch {
-                        val error = withContext(Dispatchers.IO) {
-                            runCatching { context.contentResolver.openInputStream(uri)?.use { data.restore(it) } ?: "Could not open the file" }
-                                .getOrElse { it.message ?: it.toString() }
-                        }
-                        WallpaperStore.get(context).load()
-                        message = error?.let { "Restore failed: $it" } ?: "Restored"
-                    }
-                }) { Text("Restore") }
-            },
-            dismissButton = { TextButton(onClick = { confirmRestore = null }) { Text("Cancel") } },
         )
     }
 }

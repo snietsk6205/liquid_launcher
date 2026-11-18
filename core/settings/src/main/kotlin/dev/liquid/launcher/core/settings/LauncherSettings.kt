@@ -37,6 +37,7 @@ object LauncherSettings {
         val HomeMenu = SettingsSection("homeMenu", "Home menu", "The two glass pills from holding empty space: items, order, labels", "Home screen")
         val Wallpaper = SettingsSection("wallpaper", "Wallpaper", "Your library, placing and parallax, blur and dim per screen, transitions, changing automatically", "Look")
         val Layouts = SettingsSection("layouts", "Saved layouts and backup", "Home setups you can switch between; back up and restore everything", "Layouts and backup")
+        val Backup = SettingsSection("backup", "Backup and Claude", "Back up now or every day to a folder, restore with a preview, tune the settings with Claude", "Layouts and backup")
         val Search = SettingsSection("search", "Search", "How search opens, where its field sits, blur and zoom, the keyboard, Ask Claude and web search", "App drawer")
         val Notices = SettingsSection("notices", "Glass notices", "Short glass labels for layout switches, wallpapers, tag filters, the redirect, updates and study blocks", "Motion and feedback")
         val Study = SettingsSection("study", "Study companion", "Study blocks and tasks from your calendar: Now card, Today, notices, quick actions", "Study")
@@ -56,7 +57,7 @@ object LauncherSettings {
             Home, Pill, Dock, Folders, HomeMenu, Menu, Gestures,
             Drawer, Tags, DrawerMotion, DrawerIndex, Search,
             Motion, Notices,
-            Layouts,
+            Layouts, Backup,
             Study,
             Redirect, Detection, Exclusions, Handover, Log,
         )
@@ -2308,6 +2309,31 @@ object LauncherSettings {
 
     // ---- Saved layouts ----
 
+    // ---- Backup (W5, 0.10.1) ----
+
+    val BackupAuto = BoolSetting(
+        key = "backup.auto", default = false,
+        title = "Back up every day",
+        summary = "Into the folder you choose, once a day while the battery is not low; the newest copies are kept",
+        section = "backup", keywords = "backup daily automatic folder saf copy",
+    )
+    val BackupKeep = IntSetting(
+        key = "backup.keep", default = 7, min = 1, max = 30, unit = "copies",
+        title = "Copies kept",
+        summary = "Older daily backups in the folder are deleted",
+        section = "backup", keywords = "backup keep copies old delete",
+    )
+    val BackupWallpapers = BoolSetting(
+        key = "backup.wallpapers", default = false,
+        title = "Include wallpapers",
+        summary = "The pictures of your wallpaper library; they make a backup much bigger. Without them, a backup restored on another phone lists only the pictures it finds",
+        section = "backup", keywords = "backup wallpapers pictures size",
+    )
+    /** The folder chosen for daily backups (a document tree URI of this phone). */
+    val BackupFolder = TextSetting(key = "state.backup.folder", default = "", title = "Backup folder", section = "state", hidden = true)
+    /** The last daily backup: "time|file name" or "time|!what went wrong". */
+    val BackupLast = TextSetting(key = "state.backup.last", default = "", title = "Last daily backup", section = "state", hidden = true)
+
     val LayoutsAutoSave = BoolSetting(
         key = "layouts.autoSave", default = true,
         title = "Keep changes in each layout",
@@ -2421,6 +2447,7 @@ object LauncherSettings {
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
+        BackupAuto, BackupKeep, BackupWallpapers, BackupFolder, BackupLast,
         StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyPlanLink, StudyLinkOpener,
         StudyAttendance, StudyLeaveBy, StudyCommute, StudyRest, StudyWindDown, StudySpeedBump, StudySpeedBumpTags, StudyFeedCalendar, StudyFeedLocal, StudyGlassTint,
         StudyCommuteLayout, StudyExamLayout, ContextActive, ContextApplied, ContextBase, LayoutTimerUntil, LayoutTimerLayout, LayoutTimerBack,

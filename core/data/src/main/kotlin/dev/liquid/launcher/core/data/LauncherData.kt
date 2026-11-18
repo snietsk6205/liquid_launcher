@@ -222,7 +222,7 @@ class LauncherData private constructor(private val context: Context) {
      * wallpaper library, and the files under [fileDirs] (wallpapers and the library's pictures,
      * layout wallpapers, fonts), relative to the app's files.
      */
-    fun backup(out: java.io.OutputStream, fileDirs: List<String> = listOf("wallpaper", "layouts", "fonts")) {
+    fun backup(out: java.io.OutputStream, fileDirs: List<String> = listOf("wallpaper", "layouts", "fonts", "theme")) {
         val json = LayoutsRepository.json
         java.util.zip.ZipOutputStream(out).use { zip ->
             fun entry(name: String, text: String) {
@@ -248,6 +248,81 @@ class LauncherData private constructor(private val context: Context) {
             }
         }
         DebugLog.event("Backup", "backup written")
+    }
+
+    /** W5: what a backup holds and what restoring it would change, read before anything changes. */
+    class BackupPreview(
+        val created: Long,
+        /** Option title, value now, value in the backup. */
+        val settings: List<Triple<String, String, String>>,
+        /** "Home screen: 3 pages, 41 items (now 2 pages, 30 items)", tags, layouts, wallpapers, files. */
+        val parts: List<String>,
+        val error: String?,
+    )
+
+    fun previewBackup(input: java.io.InputStream): BackupPreview {
+        val json = LayoutsRepository.json
+        val texts = HashMap<String, String>()
+        var files = 0
+        var bytes = 0L
+        try {
+            java.util.zip.ZipInputStream(input).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    if (entry.isDirectory) continue
+                    if (entry.name.startsWith("files/")) {
+                        files++
+                        bytes += zip.skip(Long.MAX_VALUE)
+                    } else {
+                        texts[entry.name] = zip.readBytes().decodeToString()
+                    }
+                }
+            }
+            val head = texts["backup.json"] ?: return BackupPreview(0, emptyList(), emptyList(), "This is not a Liquid Launcher backup")
+            val created = Regex("\"created\":(\\d+)").find(head)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+            val then = texts["settings.json"]?.let { json.decodeFromString(MapSerializer(String.serializer(), String.serializer()), it) }.orEmpty()
+            val now = settings.exportValues().filterKeys { !LauncherSettings.isDeviceState(it) }
+            val changes = ArrayList<Triple<String, String, String>>()
+            for (setting in LauncherSettings.all) {
+                if (setting.hidden || LauncherSettings.isDeviceState(setting.key)) continue
+                val a = now[setting.key]
+                val b = then[setting.key]
+                if (a == b) continue
+                changes += Triple(setting.title, SettingsAI.shown(setting, decodeStored(setting, a)), SettingsAI.shown(setting, decodeStored(setting, b)))
+            }
+            val parts = ArrayList<String>()
+            texts["data/layout.json"]?.let { json.decodeFromString(HomeLayout.serializer(), it) }?.let { home ->
+                val current = layout.layout.value
+                parts += "Home screen: ${home.pages.size} page(s), ${home.pages.sumOf { it.items.size }} item(s), ${home.dock.size} in the dock " +
+                    "(now ${current.pages.size}, ${current.pages.sumOf { it.items.size }}, ${current.dock.size})"
+            }
+            texts["data/organisation.json"]?.let { json.decodeFromString(Organisation.serializer(), it) }?.let { org ->
+                val current = organisationStore.get()
+                parts += "Tags: ${org.tags.size}, drawer tabs: ${org.tabs.size} (now ${current.tags.size}, ${current.tabs.size})"
+            }
+            texts["data/apps.json"]?.let { json.decodeFromString(MapSerializer(String.serializer(), AppMeta.serializer()), it) }?.let { meta ->
+                parts += "Names, tags and icons of ${meta.size} app(s) (now ${metaStore.get().size})"
+            }
+            texts["data/layouts.json"]?.let { json.decodeFromString(LayoutsState.serializer(), it) }?.let { saved ->
+                parts += "Saved layouts: ${saved.layouts.joinToString { it.name }.ifEmpty { "none" }} (now ${layoutsStore.get().layouts.size})"
+            }
+            texts["data/wallpapers.json"]?.let { json.decodeFromString(WallpaperLibraryState.serializer(), it) }?.let { library ->
+                parts += "Wallpaper library: ${library.items.size} picture(s) (now ${wallpapersStore.get().items.size})"
+            }
+            parts += if (files == 0) "No files" else "$files file(s), ${bytes / 1024 / 1024} MB (wallpapers, fonts, theme pictures)"
+            return BackupPreview(created, changes, parts, null)
+        } catch (e: Exception) {
+            DebugLog.error("Backup", "preview failed: $e")
+            return BackupPreview(0, emptyList(), emptyList(), e.message ?: e.toString())
+        }
+    }
+
+    /** A value as [SettingsStore.exportValues] writes it ("b:true", "i:3", "s:…"), read for [setting]; null: its default. */
+    private fun decodeStored(setting: dev.liquid.launcher.core.settings.Setting<*>, text: String?): Any? {
+        text ?: return setting.default
+        val one = SettingsStore.inMemory()
+        one.importValues(mapOf(setting.key to text), setOf(setting.key))
+        return one.get(setting)
     }
 
     /**
