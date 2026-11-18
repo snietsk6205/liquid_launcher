@@ -180,6 +180,9 @@ class HomeController(
     /** The home menu's glass pills are open. */
     var homeMenu by mutableStateOf(false)
 
+    /** W8 (P8): the layout whose wallpaper is being chosen from the library; null when none. */
+    var layoutWallpaperPick by mutableStateOf<String?>(null)
+
     /** W6: apps picked in the drawer for one action on all of them; null while not picking. */
     var selection by mutableStateOf<Set<AppRef>?>(null)
 
@@ -1293,6 +1296,7 @@ class HomeController(
     /** Back gesture: close the top-most thing. Returns false when nothing was open. */
     fun back(): Boolean {
         when {
+            layoutWallpaperPick != null -> layoutWallpaperPick = null
             customise != null -> customise = null
             bulkTag != null -> bulkTag = null
             tagApps != null -> tagApps = null

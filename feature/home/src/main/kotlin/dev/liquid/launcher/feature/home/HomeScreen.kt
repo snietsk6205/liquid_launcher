@@ -997,6 +997,7 @@ private fun HomeScreenBody(
         val picked = controller.selection
         if (bulk != null && picked != null) ProvideControls(controller, glass, null) { BulkTagSheet(controller, bulk, picked, glass, lightBackground, overlayBackdrop) }
         Presence(controller.tagApps) { tag -> ProvideControls(controller, glass, null) { TagAppsSheet(controller, tag, glass, lightBackground, overlayBackdrop) } }
+        Presence(controller.layoutWallpaperPick) { id -> ProvideControls(controller, glass, null) { LayoutWallpaperSheet(controller, id, glass, lightBackground, overlayBackdrop) } }
         // W4: "Customise …" after a long press on a surface.
         controller.customise?.let { offer -> CustomiseChip(controller, offer, if (lightBackground) Color(0xFF16181C) else Color.White) }
         if (live) TransitionOverlay(controller, transitionStyle)

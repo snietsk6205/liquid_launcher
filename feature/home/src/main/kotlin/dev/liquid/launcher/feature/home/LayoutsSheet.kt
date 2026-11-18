@@ -44,6 +44,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.asImageBitmap
@@ -199,6 +200,11 @@ internal fun LayoutsSheet(
                         controller.data.layouts.setWallpaper(layout.id, file, controller.data.wallpapers.get().current)
                         holding = null
                     }
+                    // W8 (P8): any picture of the library as this layout's wallpaper, not only the one on screen.
+                    DialogRow("Choose its wallpaper…") {
+                        holding = null
+                        controller.layoutWallpaperPick = layout.id
+                    }
                     DialogRow("Add it to the home menu") {
                         val key = LauncherSettings.HomeMenuSetup
                         val encoded = dev.liquid.launcher.core.data.LauncherAction.SwitchLayout(layout.id).encode()
@@ -335,4 +341,85 @@ internal fun SaveLayoutDialog(controller: HomeController) {
         },
         dismissButton = { TextButton(onClick = { controller.savingLayout = false }) { Text("Cancel") } },
     )
+}
+
+/**
+ * W8 (P8): the wallpaper library as a grid; the picture tapped becomes the wallpaper of the layout being set up
+ * (placed as the library has it), shown whenever that layout comes back.
+ */
+@Composable
+internal fun LayoutWallpaperSheet(controller: HomeController, layoutId: String, glass: GlassConfig, lightBackground: Boolean, backdrop: com.kyant.backdrop.Backdrop) {
+    val context = LocalContext.current
+    val library by controller.data.wallpapers.state.collectAsState()
+    val layouts by controller.data.layouts.state.collectAsState()
+    val layout = layouts.layouts.firstOrNull { it.id == layoutId }
+    var busy by remember { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    fun choose(item: dev.liquid.launcher.core.data.WallpaperItem) {
+        if (busy || layout == null) return
+        busy = true
+        scope.launch {
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    val store = WallpaperStore.get(context)
+                    val source = Wallpapers.source(context, controller.data, WallpaperPick.Library(item)) ?: return@runCatching false
+                    val bitmap = store.render(source, item.crop, item.parallax.takeIf { it >= 0f } ?: Wallpapers.defaultParallax(controller.data))
+                    val file = java.io.File(context.cacheDir, "layout-wallpaper.png")
+                    file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                    controller.data.layouts.setWallpaper(layoutId, file, item.id)
+                    file.delete()
+                    true
+                }.getOrDefault(false)
+            }
+            busy = false
+            controller.toast(
+                when {
+                    !ok -> "Could not use that picture"
+                    layouts.current == layoutId -> "${layout.name} keeps this wallpaper; it shows the next time you switch to it"
+                    else -> "${layout.name} will come with this wallpaper"
+                },
+            )
+            if (ok) controller.layoutWallpaperPick = null
+        }
+    }
+    LiquidSheet(
+        onDismiss = { controller.layoutWallpaperPick = null },
+        glass = glass,
+        lightBackground = lightBackground,
+        backdrop = backdrop,
+        title = "Wallpaper for ${layout?.name ?: "this layout"}",
+        actions = {
+            Spacer(Modifier.weight(1f))
+            GlassButton(if (busy) "Placing…" else "Cancel", LocalSheetContent.current, emphasis = ControlEmphasis.Secondary) { controller.layoutWallpaperPick = null }
+        },
+        scroll = null,
+    ) {
+        if (library.items.isEmpty()) {
+            SheetText("No pictures in the library yet. Add some in the wallpaper screen.", Modifier.padding(vertical = 8.dp))
+        }
+        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+            columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(library.items.size, key = { library.items[it].id }) { i ->
+                val item = library.items[i]
+                val thumb by androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, item.id) {
+                    value = controller.data.wallpapers.thumbnail(item)
+                }
+                val chosen = layout?.wallpaperId == item.id
+                Box(
+                    Modifier
+                        .size(width = 96.dp, height = 150.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(LocalSheetContent.current.copy(alpha = 0.08f))
+                        .border(if (chosen) 2.dp else 0.dp, if (chosen) HomeTheme.accent else Color.Transparent, RoundedCornerShape(14.dp))
+                        .clickable { choose(item) },
+                ) {
+                    thumb?.let { androidx.compose.foundation.Image(it, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.matchParentSize()) }
+                }
+            }
+        }
+    }
 }
