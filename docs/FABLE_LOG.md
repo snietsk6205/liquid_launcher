@@ -865,7 +865,8 @@ light from the picture). The drawing, the lab and the migration are in progress 
 ## Session of 2026-11-18 (Opus 5.5): 0.10.1 final release
 
 **Released:** 0.10.0 (the safety release, run 78, published after a re-run: the first attempt hit the emulator's
-"isn't responding" flake) and **0.10.1** (this entry's release commit). Two releases, as agreed.
+"isn't responding" flake) and **0.10.1** (run 85, published 2026-11-18 09:34 UTC on its third attempt). Two releases,
+as agreed.
 
 The first 0.10.1 release run (83) published nothing: four emulator checks failed. Two were real bugs of this session:
 the top tabs pill's rise (P5) moved the drawer's invisible tabs over the home pill while the drawer was closed, so they
@@ -874,7 +875,11 @@ took the pill's touches (in edit mode, the edit bar's: Pages and Widgets did not
 the list). The second attempt (run 84) passed those, but its tap on the block's Done missed in the
 collapsed hub (with the chip above the list, the button sat at the hub's lower edge): the collapsed hub is now at
 most half the screen, its block shows its buttons right after its steps (the notes, cut to two lines, under them),
-and check 14b opens the whole day before ticking (noting whether Done is in sight when collapsed).
+and check 14b opens the whole day before ticking (noting whether Done is in sight when collapsed). Run 85 then
+passed every check of this session; its first two attempts failed only checks 2 and 3 (Home pressed right after the
+first start: the redirect engine saw no window event, or saw it and did not act), which passed in runs 80, 83 and 84
+with the same redirect code, and the third attempt passed everything. That start-up flake is worth a look: see the
+next step.
 
 **Workstreams**
 
@@ -926,7 +931,7 @@ minute on the home screen with a moving background.
 5. "Send to Claude" goes to the app in "App that gets Tell Claude" (com.anthropic.claude by default), else the share
    sheet. Right app?
 
-**Exact next step:** open the smoke output of the 0.10.1 release run (checks 9d picking, 14d search → Behaviour tab)
-and fix anything noted; then the theme's limits above (SINK dipping the neighbours first, then the Individual pills'
+**Exact next step:** make emulator checks 2 and 3 wait for the redirect engine's first window event after the first
+start (they flaked twice in run 85 before passing; a slow first start, not a code change, as far as the logs show); then the theme's limits above (SINK dipping the neighbours first, then the Individual pills'
 glass during the morph). Read the "Frames:" lines Med's phone writes and put the numbers in this log; if a moving
 background or texture is late on more than 1 % of frames, lower its default amount.
