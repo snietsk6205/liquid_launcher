@@ -324,8 +324,9 @@ internal fun WallpaperStudio(
                         alpha = shown
                     }
                     .sheetSurface(backdrop, sheetShape, glass, lightBackground)
-                .bloomLight()
+                    .bloomLight()
                     .clip(sheetShape)
+                    .boardPicture(sheetShape)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                     .padding(horizontal = 16.dp, vertical = 14.dp),
             ) {
@@ -341,7 +342,7 @@ internal fun WallpaperStudio(
                 }
                 if (state.page == "pictures") {
                     Spacer(Modifier.height(10.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy((8 * themeGap).dp)) {
                         SmallChip(LauncherIcons.Crop, "Place", color, Modifier.weight(1f)) { placeCurrent() }
                         val pickedItem = (state.pick as? WallpaperPick.Library)?.item?.let { data.wallpapers.find(it.id) }
                             ?: library.current?.takeIf { state.pick == null }?.let { data.wallpapers.find(it) }
@@ -358,7 +359,7 @@ internal fun WallpaperStudio(
                     ToggleRow("Only for the layout \"${currentLayout.name}\"", state.forLayout, color) { state.forLayout = it }
                 }
                 Spacer(Modifier.height(6.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy((10 * themeGap).dp)) {
                     SheetButton("Cancel", color, filled = false, modifier = Modifier.weight(1f)) { close() }
                     SheetButton(if (state.busy) "Working…" else "Apply", color, filled = true, modifier = Modifier.weight(1f)) { if (!state.busy) apply() }
                 }
@@ -419,7 +420,7 @@ private fun PicturesPage(
 ) {
     val data = controller.data
     // Where to look: recent (each picture once), favourites, everything, then each linked folder.
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp)) {
         TabChip("Recent", state.tab == "recent", color) { state.tab = "recent" }
         TabChip("Favourites", state.tab == "favourites", color) { state.tab = "favourites" }
         TabChip("All", state.tab == "all", color) { state.tab = "all" }
@@ -609,7 +610,7 @@ private fun PlaceBar(state: StudioState, glass: GlassConfig, lightBackground: Bo
             if (state.parallax > 0f) sweep()
         }
         Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy((10 * themeGap).dp)) {
             SheetButton("Reset", color, filled = false, modifier = Modifier.weight(1f)) { state.crop = CropSpec.Centre }
             SheetButton("Done", color, filled = true, modifier = Modifier.weight(1f)) { state.adjusting = false }
         }
@@ -680,12 +681,12 @@ private fun PageLabel(text: String, color: Color) {
 internal fun Segmented(options: List<Pair<String, String>>, selected: String, color: Color, onSelect: (String) -> Unit) {
     // W3: in the theme, the choices are its chips (selected: its selected chip).
     if (LocalControls.current?.theme != null) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp)) {
             for ((id, label) in options) ThemeChip(label, selected == id, Modifier.weight(1f), height = 34.dp) { onSelect(id) }
         }
         return
     }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp)) {
         for ((id, label) in options) {
             val on = selected == id
             Box(

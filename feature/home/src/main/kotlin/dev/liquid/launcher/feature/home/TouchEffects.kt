@@ -600,6 +600,28 @@ private fun DrawScope.paintSplat(kit: SplashKit, cx: Float, cy: Float, age: Long
 // ---- Moving wallpaper ----
 
 /**
+ * What the home screen draws that costs frames (W3): the moving background, its amount and speed, and the theme's
+ * textures and material. The app's frame meter writes it next to the frame times it logs.
+ */
+object FrameCost {
+    @Volatile var label: String = ""
+        private set
+
+    internal fun describe(fx: WallpaperFxConfig, theme: dev.liquid.launcher.core.data.LiquidTheme?) {
+        val parts = mutableListOf<String>()
+        if (fx.kind != "none") parts += "moving background ${fx.kind} (amount %.2f, speed %.2f, size %.2f)".format(fx.amount, fx.speed, fx.size)
+        if (theme != null) {
+            val textures = listOfNotNull(theme.button.texture, theme.main.texture, theme.chip.texture).filter { it.isNotBlank() && it != "NONE" }
+            if (textures.isNotEmpty()) parts += "textures " + textures.distinct().joinToString("/") { it.substringAfterLast('/').take(24) }
+            theme.material?.takeIf { !it.plain }?.let { parts += "material ${it.kind}" + if (it.texture != "NONE") " (${it.texture})" else "" }
+            theme.board?.takeIf { it.image != null }?.let { parts += "sheet picture (blur ${it.imageBlurDp.toInt()} dp)" }
+            if (theme.frost.enabled) parts += "frost blur %.0f".format(theme.frost.blurDp)
+        }
+        label = parts.joinToString("; ")
+    }
+}
+
+/**
  * An effect moving over the wallpaper, under the icons (D113): drawn inside the layer glass
  * samples, so the pill and the dock bend it like the picture. [running] false (an app, the
  * drawer or search over the home screen) stops its clock; speed 0 holds one still frame.

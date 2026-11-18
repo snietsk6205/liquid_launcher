@@ -291,7 +291,7 @@ internal fun NowCard(controller: HomeController, surface: StudySurface) {
                         if (tasks.size > room && room > 0) Text("+ ${tasks.size - room} more", style = label(color, 11, alpha = 0.6f))
                     }
                     if (surface.interactive) {
-                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp)) {
                             if (current.status == StudyStatus.Open) {
                                 ActionChip("Done", color, filled = true, accent = accent) { controller.studyStatus(current, StudyStatus.Done) }
                                 ActionChip("Skip", color) { controller.studyStatus(current, StudyStatus.Skipped) }
@@ -329,7 +329,7 @@ internal fun NowCard(controller: HomeController, surface: StudySurface) {
                         if (open.size > room && room > 0) Text("+ ${open.size - room} more", style = label(color, 11, alpha = 0.6f))
                     }
                     if (surface.interactive) {
-                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp)) {
                             ActionChip("Today", color) { controller.run(LauncherAction.Today) }
                             ActionChip("Tell Claude", color) { controller.run(LauncherAction.TellClaude) }
                             ActionChip("Plan", color) { controller.run(LauncherAction.StudyPlan) }
@@ -519,7 +519,7 @@ internal fun BlockCard(
             }
             Row(
                 Modifier.fillMaxWidth().padding(top = 8.dp).horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp, if (prefs.buttonsEnd) Alignment.End else Alignment.Start),
+                horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp, if (prefs.buttonsEnd) Alignment.End else Alignment.Start),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // The main button sits nearest the edge the buttons line up on: under the thumb on the right.

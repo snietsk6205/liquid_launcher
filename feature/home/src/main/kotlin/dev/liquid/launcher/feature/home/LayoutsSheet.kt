@@ -92,7 +92,7 @@ internal fun LayoutsSheet(
         backdrop = backdrop,
         title = "Layouts",
         actions = {
-            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy((8 * themeGap).dp)) {
                 SheetChip("Save as new…", LauncherIcons.Save, color) { controller.savingLayout = true }
                 if (state.current != null) {
                     SheetChip("Save changes", LauncherIcons.Check, color) {

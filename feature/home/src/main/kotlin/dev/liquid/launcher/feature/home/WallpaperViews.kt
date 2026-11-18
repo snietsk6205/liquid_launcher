@@ -177,6 +177,7 @@ internal fun WallpaperStrip(
                 .sheetSurface(backdrop, shape, glass, lightBackground)
                 .bloomLight()
                 .clip(shape)
+                .boardPicture(shape)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .padding(vertical = 12.dp),
         ) {
@@ -201,7 +202,7 @@ internal fun WallpaperStrip(
             }
             Row(
                 Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy((8 * themeGap).dp),
             ) {
                 StripButton(LauncherIcons.Shuffle, "Shuffle", color, Modifier.weight(1f), controller, ControlEmphasis.Secondary) {
                     controller.wallpaperStrip = false

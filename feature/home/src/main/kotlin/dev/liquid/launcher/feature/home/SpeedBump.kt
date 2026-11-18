@@ -88,6 +88,7 @@ internal fun SpeedBumpOverlay(bump: SpeedBump, glass: GlassConfig, lightBackgrou
                 .sheetSurface(backdrop, shape, glass, lightBackground, exported = layer)
                 .bloomLight()
                 .clip(shape)
+                .boardPicture(shape)
                 .clickable(interactionSource = null, indication = null) { }
                 .padding(horizontal = 22.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,

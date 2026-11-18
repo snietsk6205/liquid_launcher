@@ -205,6 +205,7 @@ internal fun FolderOverlay(
                 .sheetSurface(backdrop, shape, glass, lightBackground)
                 .bloomLight()
                 .clip(shape)
+                .boardPicture(shape)
                 // Taps inside the card do not close it.
                 .pointerInput(Unit) { detectTapGestures { } }
                 .padding(top = 20.dp, start = 20.dp, end = 20.dp),

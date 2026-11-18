@@ -142,7 +142,9 @@ private fun WhatsNewCard(
                 .padding(start = 16.dp, end = 16.dp, bottom = above + 12.dp)
                 .fillMaxWidth()
                 .sheetSurface(backdrop, shape, glass, lightBackground)
+                .bloomLight()
                 .clip(shape)
+                .boardPicture(shape)
                 .padding(start = 18.dp, end = 14.dp, top = 14.dp, bottom = 12.dp),
         ) {
             Text(

@@ -46,6 +46,17 @@ class ThemeStoreTest {
     }
 
     @Test
+    fun aKeyboardThemeGetsADarkSearchBarAndKeepsWhatItSays() {
+        val keyboard = """{"name":"Mine","keyBackground":469512766,"liquidLauncher":{"card":{"background":4278190335}}}"""
+        val s = migrated { it.set(LauncherSettings.ThemeJson, keyboard) }
+        val doc = ThemeStore.doc(s)
+        assertEquals(0xA6141218, doc.color("${ThemeDoc.EXT}.space.background"))
+        assertEquals(0xFF0000FF, doc.color("${ThemeDoc.EXT}.card.background"))
+        assertEquals(469512766L, doc.color("keyBackground"))
+        assertEquals(0xA6141218, ThemeResolve.resolve(doc).space?.fill)
+    }
+
+    @Test
     fun itRunsOnce() {
         val s = migrated { }
         ThemeStore.save(s, ThemeStore.doc(s).withColor("accent", 0xFF00FF00))

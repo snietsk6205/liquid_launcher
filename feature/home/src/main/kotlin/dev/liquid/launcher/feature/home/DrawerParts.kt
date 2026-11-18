@@ -584,7 +584,7 @@ private fun MenuRow(label: String, icon: Int?, color: Color, indent: Boolean = f
         Modifier
             .fillMaxWidth()
             .squishClickable(onClick = onClick)
-            .padding(start = if (indent) 54.dp else 20.dp, end = 20.dp, top = 12.dp, bottom = 12.dp),
+            .padding(start = if (indent) 54.dp else 20.dp, end = 20.dp, top = menuRowPadding, bottom = menuRowPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {

@@ -240,6 +240,7 @@ internal fun StudyHub(glass: GlassConfig, lightBackground: Boolean, backdrop: Ba
                 .sheetSurface(backdrop, shape, glass, lightBackground, exported = layer)
                 .bloomLight()
                 .clip(shape)
+                .boardPicture(shape) { controller.hubAmount }
                 .clickable(interactionSource = null, indication = null) { }
                 .draggable(drag, Orientation.Vertical, onDragStopped = { velocity -> controller.settleHub(velocity) })
                 .nestedScroll(connection),
@@ -622,7 +623,7 @@ private fun ArrivalCallout(controller: HomeController, day: StudyDay, now: Long,
                     if (homeWifi.isBlank()) " Set your home Wi-Fi and it is noticed by itself." else "",
                 style = studyText(color, 12, alpha = 0.75f),
             )
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp, Alignment.End)) {
                 if (homeWifi.isBlank()) ActionChip("This Wi-Fi is home", color, icon = LauncherIcons.Home) { controller.rememberHomeWifi() }
                 ActionChip("I'm home", color, filled = true, icon = LauncherIcons.Home) { controller.markHomeNow() }
             }
@@ -647,7 +648,7 @@ private fun ArrivalCallout(controller: HomeController, day: StudyDay, now: Long,
             },
             style = studyText(color, 12, alpha = 0.75f),
         )
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp, Alignment.End)) {
             ActionChip("Keep", color) { controller.keepEvening() }
             if (cut != null && victim != null) {
                 ActionChip("Shift only", color) { controller.applyShift(plain) }
@@ -669,7 +670,7 @@ private fun AttendanceCallout(controller: HomeController, day: StudyDay, now: Lo
     HubCallout(color) {
         Text("${due.title.subject} ${studyClock(due.begin)} · were you there?", style = studyText(color, 14, FontWeight.SemiBold))
         Text("Absent writes a note for tonight's check-in; !abs in search counts them.", style = studyText(color, 12, alpha = 0.75f))
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp, Alignment.End)) {
             ActionChip("Absent", color, icon = LauncherIcons.Close) { controller.answerAttendance(due, false) }
             ActionChip("Present", color, filled = true, icon = LauncherIcons.Check) { controller.answerAttendance(due, true) }
         }
@@ -748,7 +749,7 @@ private fun HubBar(
         if (loaded) {
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp),
             ) {
                 controller.classForPhoto(now)?.let { cls ->
                     ActionChip("Board · ${cls.title.subject}", color, icon = LauncherIcons.Camera) { controller.boardPhoto() }

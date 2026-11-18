@@ -51,9 +51,22 @@ object ThemeStore {
         val chosen = accent.isNotEmpty() && !accent.equals(V013_ACCENT, ignoreCase = true)
         doc = doc.withColor("accent", if (chosen) ThemeDoc.parseColor(accent) ?: ThemeDocs.BLUE else ThemeDocs.BLUE)
         doc = doc.withString("${ThemeDoc.EXT}.mainColor", settings.get(LauncherSettings.ButtonMain))
+        doc = withLauncherDefaults(doc)
         settings.set(LauncherSettings.ThemeJson, doc.encode())
         settings.set(LauncherSettings.ThemePrevious, doc.encode())
         DebugLog.event("Theme", "moved to the 0.10 theme document; accent ${if (chosen) "kept ($accent)" else "fixed blue"}")
+    }
+
+    /**
+     * What a keyboard theme cannot say, from the launcher's default where the document has nothing: the search bar and
+     * the other pills dark (W3), cards, and the pills' shared look. Anything already there is kept.
+     */
+    fun withLauncherDefaults(doc: ThemeDoc): ThemeDoc {
+        var out = doc
+        for (path in listOf("space.background", "space.text", "card.background", "card.cornerDp", "pillLook")) {
+            if (out.extElement(path) == null) ThemeDocs.Default.extElement(path)?.let { out = out.with("${ThemeDoc.EXT}.$path", it) }
+        }
+        return out
     }
 
     // ---- pictures ----
@@ -115,7 +128,7 @@ object ThemeStore {
             }
             d = d.without("assets")
         }
-        return d
+        return withLauncherDefaults(d)
     }
 
     /**

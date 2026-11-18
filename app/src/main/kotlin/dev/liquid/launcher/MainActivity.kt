@@ -26,6 +26,7 @@ import dev.liquid.launcher.feature.settings.SettingsActivity
 class MainActivity : ComponentActivity() {
 
     private val returnState = HomeReturnState()
+    private val frameMeter = FrameMeter()
     private var firstStart = true
     private var resumed = false
     private var pausedAt = 0L
@@ -270,6 +271,7 @@ class MainActivity : ComponentActivity() {
         // And ask the phone to sync the study calendars (at most every 5 minutes): some phones sync them hours late.
         dev.liquid.launcher.core.data.LauncherData.get(this).study.requestSync()
         resumed = true
+        window.addOnFrameMetricsAvailableListener(frameMeter, android.os.Handler(mainLooper))
         RedirectStatus.onLauncherResumed()
         window.decorView.post {
             Choreographer.getInstance().postFrameCallback { RedirectStatus.onLauncherFrame() }
@@ -278,6 +280,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         resumed = false
+        runCatching { window.removeOnFrameMetricsAvailableListener(frameMeter) }
+        frameMeter.flush()
         pausedAt = SystemClock.uptimeMillis()
         // The system takes its picture of this screen about now. If it shows the keyboard, or something
         // that is closed while the launcher is away, the redirect must not bring that picture back.

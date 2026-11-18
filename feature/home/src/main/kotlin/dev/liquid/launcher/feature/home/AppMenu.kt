@@ -168,7 +168,7 @@ fun AppMenu(
                                     controller.menu = null
                                     controller.openShortcut(shortcut)
                                 }
-                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                                .padding(horizontal = 16.dp, vertical = menuRowPadding - 2.dp),
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                         ) {
                             AppIconImage(shortcut.icon ?: target.app.icon, Modifier.size(22.dp), null)
@@ -188,7 +188,7 @@ fun AppMenu(
                                     controller.menu = null
                                     row.onClick()
                                 }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                .padding(horizontal = 16.dp, vertical = menuRowPadding),
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                         ) {
                             LauncherIcon(row.icon, contentDescription = null, tint = color, size = 20.dp)

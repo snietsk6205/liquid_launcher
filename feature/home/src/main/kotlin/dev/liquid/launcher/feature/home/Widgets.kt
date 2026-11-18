@@ -157,6 +157,7 @@ internal fun WidgetPicker(glass: GlassConfig, lightBackground: Boolean, backdrop
                 .sheetSurface(backdrop, shape, glass, lightBackground, exported = layer)
                 .bloomLight()
                 .clip(shape)
+                .boardPicture(shape)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .padding(horizontal = 14.dp, vertical = 14.dp),
         ) {

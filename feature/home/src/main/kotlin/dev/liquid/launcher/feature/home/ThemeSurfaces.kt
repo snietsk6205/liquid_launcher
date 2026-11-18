@@ -18,6 +18,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -157,6 +161,69 @@ internal fun Modifier.sheetSurface(
     return m
 }
 
+/**
+ * The board's picture and stickers as a modifier, for sheets that are a Column (the hub, the studios, folders, the
+ * tag list…): drawn over the glass, under the content, clipped to [shape]; [amount] fades them (the hub while it
+ * grows out of the pill). One layer holds the blurred picture, recorded only when the size or the picture changes.
+ */
+@Composable
+internal fun Modifier.boardPicture(shape: Shape, amount: () -> Float = { 1f }): Modifier {
+    val theme = currentTheme ?: return this
+    val board = theme.board ?: return this
+    val image = rememberThemeImage(board.image, 1080)
+    val decals = theme.decals.map { it to rememberThemeImage(it.image, 512) }
+    val picture = image?.takeIf { board.imageOpacity > 0.01f }
+    if (picture == null && decals.none { it.second != null }) return this
+    val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    return drawWithContent {
+        val a = amount().coerceIn(0f, 1f)
+        if (a > 0.01f) {
+            val clip = androidx.compose.ui.graphics.Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithContent)) }
+            clipPath(clip) {
+                if (picture != null) {
+                    val r = board.imageBlurDp.dp.toPx()
+                    layer.renderEffect = if (r > 0.5f) BlurEffect(r, r, TileMode.Clamp) else null
+                    layer.alpha = board.imageOpacity * a
+                    layer.record {
+                        val scale = max(size.width / picture.width, size.height / picture.height)
+                        val w = picture.width * scale
+                        val h = picture.height * scale
+                        drawImage(
+                            picture,
+                            dstOffset = IntOffset(((size.width - w) / 2f).toInt(), ((size.height - h) / 2f).toInt()),
+                            dstSize = IntSize(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1)),
+                        )
+                    }
+                    drawLayer(layer)
+                }
+                for ((decal, sticker) in decals) {
+                    sticker ?: continue
+                    val w = size.width * decal.scale
+                    val h = w * sticker.height / sticker.width.coerceAtLeast(1)
+                    val c = Offset(size.width * decal.x, size.height * decal.y)
+                    rotate(decal.rotationDeg, c) {
+                        drawImage(
+                            sticker,
+                            dstOffset = IntOffset((c.x - w / 2f).toInt(), (c.y - h / 2f).toInt()),
+                            dstSize = IntSize(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1)),
+                            alpha = decal.opacity * a,
+                        )
+                    }
+                }
+            }
+        }
+        drawContent()
+    }
+}
+
+/** W3: the vertical padding of a menu row (its icon and text are 20 dp), so the row is as tall as the theme says. */
+internal val menuRowPadding: androidx.compose.ui.unit.Dp
+    @Composable get() = currentTheme?.menuRowDp?.let { ((it - 20) / 2f).coerceAtLeast(4f).dp } ?: 12.dp
+
+/** W3: a gap between buttons in a row, scaled by the theme's "Gaps". */
+internal val themeGap: Float
+    @Composable get() = currentTheme?.gapScale ?: 1f
+
 /** The board's picture (opacity, blur) and its stickers, behind a sheet's content; nothing without them. */
 @Composable
 internal fun BoardPicture(modifier: Modifier) {
@@ -263,7 +330,17 @@ internal fun Modifier.pillSurface(which: String, backdrop: Backdrop, shape: Corn
     val space = pillTheme(which) ?: return liquidGlass(backdrop, shape, fallback)
     val frost = pillFrost(which) ?: return liquidGlass(backdrop, shape, fallback)
     val env = LocalControls.current ?: return liquidGlass(backdrop, shape, fallback)
-    var m = controlPanel(space, frost, "SPACE_BAR", backdrop, shape, env.glass, large = false)
+    // W3: the theme's material (wood, metal, stitched leather…) on the pills as on the buttons: the face is drawn over
+    // clear glass instead of the glass being tinted.
+    val material = currentTheme?.material?.takeIf { space.material && !it.plain }
+    var m = controlPanel(space, frost, "SPACE_BAR", backdrop, shape, env.glass, large = false, face = material != null)
+    if (material != null) {
+        val glassOn = frost.on("SPACE_BAR") && env.glass.quality != GlassQuality.Tint
+        val fill = Color(space.fill).let { if (glassOn) it else it.copy(alpha = max(it.alpha, frost.fallbackOpacity)) }
+        val text = Color(space.text)
+        val accent = HomeTheme.accent
+        m = m.drawBehind { drawMaterialFace(material, fill, text, accent, shape, 0f) }
+    }
     val picture = rememberThemeImage(space.texture)
     if (picture != null) m = m.drawBehind { drawTexture(picture, space.textureScale, space.textureOpacity, shape) }
     return m
@@ -273,7 +350,7 @@ internal fun Modifier.pillSurface(which: String, backdrop: Backdrop, shape: Corn
  * A panel in a kind's colours (menus, cards, pills): its shadow, its colour over the frost of [surface] where that is
  * glass and something is behind, else the colour made solid, and its border.
  */
-private fun Modifier.controlPanel(kind: ControlTheme, frost: ThemeFrost, surface: String, backdrop: Backdrop?, shape: CornerBasedShape, glass: GlassConfig, large: Boolean): Modifier {
+private fun Modifier.controlPanel(kind: ControlTheme, frost: ThemeFrost, surface: String, backdrop: Backdrop?, shape: CornerBasedShape, glass: GlassConfig, large: Boolean, face: Boolean = false): Modifier {
     var m = this
     if (kind.shadowDp > 0.01f) {
         val c = kind.shadowColor?.let { Color(it) } ?: Color.Black
@@ -281,7 +358,9 @@ private fun Modifier.controlPanel(kind: ControlTheme, frost: ThemeFrost, surface
     }
     val fill = Color(kind.fill)
     m = if (frost.on(surface) && backdrop != null && glass.quality != GlassQuality.Tint) {
-        m.liquidGlass(backdrop, shape, frostStyle(frost, glass, fill, large))
+        m.liquidGlass(backdrop, shape, frostStyle(frost, glass, if (face) Color.Transparent else fill, large))
+    } else if (face) {
+        m
     } else {
         m.clip(shape).background(fill.copy(alpha = max(fill.alpha, frost.fallbackOpacity)))
     }
@@ -304,9 +383,13 @@ internal fun Modifier.morphPillSurface(progress: () -> Float, backdrop: Backdrop
     val drawerFill = Color(drawer.fill)
     val glassOn = frost.on("SPACE_BAR") && env.glass.quality != GlassQuality.Tint
     val base = if (glassOn) liquidGlass(backdrop, shape, frostStyle(frost, env.glass, Color.Transparent, large = false)) else this
+    val material = currentTheme?.material?.takeIf { home.material && !it.plain }
+    val text = Color(home.text)
+    val accent = HomeTheme.accent
     return base.drawBehind {
-        val fill = androidx.compose.ui.graphics.lerp(homeFill, drawerFill, progress().coerceIn(0f, 1f))
-        drawPath(outlinePath(shape), if (glassOn) fill else fill.copy(alpha = max(fill.alpha, frost.fallbackOpacity)))
+        val blended = androidx.compose.ui.graphics.lerp(homeFill, drawerFill, progress().coerceIn(0f, 1f))
+        val fill = if (glassOn) blended else blended.copy(alpha = max(blended.alpha, frost.fallbackOpacity))
+        if (material != null) drawMaterialFace(material, fill, text, accent, shape, 0f) else drawPath(outlinePath(shape), fill)
     }
 }
 

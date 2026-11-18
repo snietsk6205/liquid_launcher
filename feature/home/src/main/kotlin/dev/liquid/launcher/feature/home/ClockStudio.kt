@@ -116,6 +116,7 @@ internal fun ClockStudio(
                 .sheetSurface(backdrop, shape, glass, lightBackground)
                 .bloomLight()
                 .clip(shape)
+                .boardPicture(shape)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         ) {

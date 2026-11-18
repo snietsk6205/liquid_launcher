@@ -6,6 +6,40 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
+## 0.10.1 — 2026-11-18
+
+### Added
+- The Theme lab (the first row of Settings): every option of a WM Keyboard theme, in nine groups (Glass,
+  Material, Textures, Colours, Shape and size, Press effect, Moving background, Background image, Extras) and
+  Pills. A large live preview shows a sample, the home screen, the drawer or search, and every change is applied at
+  once. Undo and redo, reset per group, and a long press on an option to reset it, explain it or copy its id.
+  Options that only matter with another one are greyed, with the reason.
+- Presets in the lab: your keyboard backup, the look you had before this version, the default. Import and export
+  of `.wmtheme.json` files, and "Export my tuning" (only what you changed).
+- Any colour of the theme can follow the wallpaper: its dominant, vibrant, muted, dark or light colour.
+- The three pills (home, drawer, search) share one look, or each has its own; "Copy from" copies one to another.
+- The theme reaches every surface: sheets, menus, cards, fields, checkboxes, the pills, the hub. Buttons take the
+  keyboard's material (caps, metal, wood, leather, paper, neon…) with its edge and label effect, textures, the 11
+  shapes, sizes, gaps, fonts, the press motion, the light under the finger and particle bursts. The moving
+  background moves over the home wallpaper; the background picture and stickers sit behind sheets; the blur
+  behind sheets blurs the home screen while one is open.
+- A frame meter: while the home screen keeps drawing (a moving background), the debug log says every ten seconds
+  how many frames were late and what was on screen, so the cost of an effect is known on the phone itself.
+
+### Changed
+- The accent is a fixed blue (Blueberry, #5484ED) unless you had chosen your own colour. The main button keeps
+  its block colour.
+- The search bar and the other pills are dark by default when a theme does not say otherwise.
+- A theme's moving background and press splash take the place of the launcher's own while the theme has one.
+
+### Removed
+- The theme editor of 0.9.14 (Settings → Buttons → Edit the theme): the Theme lab replaces it, with every option
+  it had.
+- Keyboard options that mean nothing in a launcher are kept in the theme file but not shown: the suggestion bar,
+  toolbar, one-handed panel and navigation bar colours, landscape and animated backgrounds, popup placement,
+  gesture trail width, sounds, key lighting, per-key overrides, and the "meld" splash (letters merging between
+  keys).
+
 ## 0.10.0 — 2026-11-17
 
 ### Added

@@ -550,6 +550,9 @@ private fun HomeScreenBody(
     val touchConfig = remember(touchBase, themeEffect) { ThemeEffects.touch(themeEffect, touchBase) }
     val wallpaperFx = remember(wallpaperBase, themeEffect) { ThemeEffects.wallpaper(themeEffect, wallpaperBase) }
     if (touchFx != null) SideEffect { touchFx.config = touchConfig }
+    // W3: what is on screen, written next to the frame times in the debug log (FrameMeter), so their cost is known.
+    val costTheme = LocalControls.current?.theme
+    SideEffect { FrameCost.describe(wallpaperFx, costTheme) }
     val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
 
     Box(

@@ -827,7 +827,7 @@ internal fun SearchWidgets(
     val density = androidx.compose.ui.platform.LocalDensity.current
     val rows = env?.grid?.rows ?: 6
     val cell = with(density) { (controller.screenHeight * 0.8f / rows.coerceAtLeast(1)).toDp() }
-    Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy((8 * themeGap).dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
         if (widgets.isEmpty()) {
             Text(
                 "Add widgets here: music, notes, weather, your study block…",
@@ -856,7 +856,7 @@ internal fun SearchWidgets(
             if (controller.searchEditing) {
                 // Covers the widget while editing, so the buttons are all that can be touched.
                 Box(Modifier.matchParentSize().clip(RoundedCornerShape(22.dp)).background(Color.Black.copy(alpha = 0.35f)).pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } })
-                Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp)) {
                     if (i > 0) GlassButton(null, color, icon = LauncherIcons.ArrowUp, contentDescription = "Move up") { controller.moveSearchWidget(item.id, up = true) }
                     if (i < widgets.size - 1) GlassButton(null, color, icon = LauncherIcons.ArrowDown, contentDescription = "Move down") { controller.moveSearchWidget(item.id, up = false) }
                     GlassButton(null, color, icon = LauncherIcons.RemoveCircle, contentDescription = "Shorter") { controller.resizeSearchWidget(item.id, -1) }

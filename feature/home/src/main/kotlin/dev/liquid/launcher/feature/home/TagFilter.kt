@@ -529,7 +529,7 @@ internal fun TagSheet(
       Layout(
         modifier = Modifier.fillMaxSize(),
         content = {
-          Box(Modifier.sheetSurface(backdrop, RoundedCornerShape(radiusDp), glass, lightBackground))
+          Box(Modifier.sheetSurface(backdrop, RoundedCornerShape(radiusDp), glass, lightBackground).bloomLight().boardPicture(RoundedCornerShape(radiusDp)))
           Column(
             Modifier
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
@@ -600,7 +600,7 @@ internal fun TagSheet(
             }
             Row(
                 Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy((8 * themeGap).dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // With several tags selected, show apps with any of them or only those with all.

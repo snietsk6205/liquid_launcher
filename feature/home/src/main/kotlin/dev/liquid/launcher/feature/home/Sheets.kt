@@ -139,7 +139,7 @@ internal fun LiquidSheet(
                 if (actions != null) {
                     Row(
                         Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy((8 * themeGap).dp),
                         verticalAlignment = Alignment.CenterVertically,
                         content = actions,
                     )
