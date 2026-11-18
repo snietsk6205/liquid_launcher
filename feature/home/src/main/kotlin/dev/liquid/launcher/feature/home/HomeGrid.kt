@@ -516,8 +516,17 @@ internal fun WidgetContent(item: HomeItem, env: PageEnv, controller: HomeControl
     }
     if (item.widget == "now" || item.widget == "today") {
         // Ticks and buttons work on the live home screen, not while editing or in a preview.
-        val boxed by controller.data.settings.derive { get(LauncherSettings.WidgetBackground) == "glass" }
-        val surface = StudySurface(env.glass, env.lightBackground, env.wallpaperBackdrop, env.interactive && !env.editMode, boxed)
+        val boxedForAll by controller.data.settings.derive { get(LauncherSettings.WidgetBackground) == "glass" }
+        // W8 (P7): this widget's own card, corners, colour and parts (its Customise sheet in edit mode).
+        val o = item.options.orEmpty()
+        val look = WidgetLook.of(item)
+        val surface = StudySurface(
+            env.glass, env.lightBackground, env.wallpaperBackdrop, env.interactive && !env.editMode,
+            boxed = when (o["card"]) { "glass" -> true; "none" -> false; else -> boxedForAll },
+            corner = when (o["corner"]) { "s" -> 14.dp; "l" -> 36.dp; else -> 26.dp },
+            tint = if (look.accent) HomeTheme.accent else null,
+            shows = look::shows,
+        )
         if (item.widget == "now") NowCard(controller, surface) else TodayWidget(controller, surface)
     }
 }

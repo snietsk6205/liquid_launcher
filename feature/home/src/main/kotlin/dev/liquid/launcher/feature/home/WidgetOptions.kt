@@ -75,6 +75,9 @@ internal val WidgetParts: Map<String, List<Triple<String, String, Boolean>>> = m
     "date" to listOf(Triple("weekday", "Weekday", true), Triple("month", "Month", true), Triple("year", "Year", false)),
     "battery" to listOf(Triple("ring", "Ring", true), Triple("percent", "Percentage", true), Triple("charging", "\"charging\"", true)),
     "calendar" to listOf(Triple("grid", "Month", true), Triple("agenda", "Next events", true)),
+    // W8 (P7): the Now card and the Today widget.
+    "now" to listOf(Triple("tasks", "The block's tasks", true), Triple("buttons", "Done, Skip, Focus…", true)),
+    "today" to listOf(Triple("tasks", "Tasks", true), Triple("times", "Times", true)),
 )
 
 /**
@@ -86,7 +89,8 @@ internal fun WidgetOptionsSheet(item: HomeItem, glass: GlassConfig, lightBackgro
     val color = sheetContentColor(glass, lightBackground)
     val o = item.options.orEmpty()
     fun set(key: String, value: String?) = controller.setItemOption(item.id, key, value)
-    val calendar = item.widget == "calendar"
+    // The calendar, the Now card and Today sit on a card: their card and corners instead of size, weight and font.
+    val calendar = item.widget == "calendar" || item.widget == "now" || item.widget == "today"
     ProvideControls(controller, glass, null) {
         // W2: the shared sheet: the options scroll, "Done" stays at the bottom.
         LiquidSheet(
@@ -97,6 +101,8 @@ internal fun WidgetOptionsSheet(item: HomeItem, glass: GlassConfig, lightBackgro
             title = when (item.widget) {
                 "battery" -> "Battery widget"
                 "calendar" -> "Calendar widget"
+                "now" -> "Now card"
+                "today" -> "Today widget"
                 else -> "Date widget"
             },
             cornerRadius = 30.dp,

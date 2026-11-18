@@ -39,6 +39,9 @@ Versions marked *not published on its own* were built but came to the phone insi
   puts everything back in one tap. The launcher makes no network call for this.
 - Picking many apps in the drawer: hold an app and choose Select, then tap the others. A bar offers Tag, Untag,
   Hide and Add to home for all of them at once.
+- The Now card and the Today widget have their own "Customise" sheet in edit mode, like the date and battery
+  widgets: a glass card or none, corners, text or accent colour, and which parts show (the block's tasks and its
+  buttons; tasks and times).
 - A tag's own list: in the drawer's tag list, the apps button beside a tag opens every app with a check, and a
   search, to tag or untag many apps in one place.
 

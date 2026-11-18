@@ -92,7 +92,7 @@ internal fun BoxScope.ResizeFrame(item: HomeItem, pageIndex: Int, env: PageEnv, 
             Text("Customise", style = TextStyle(fontFamily = HomeTheme.font, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium))
         }
     }
-    if (item.widget == "date" || item.widget == "battery" || item.widget == "calendar") {
+    if (item.widget == "date" || item.widget == "battery" || item.widget == "calendar" || item.widget == "now" || item.widget == "today") {
         // P7 (0.9.22): size, weight, colour, font and parts, changing on the widget as you choose.
         Row(
             Modifier

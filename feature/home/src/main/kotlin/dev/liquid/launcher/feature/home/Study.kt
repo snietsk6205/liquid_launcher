@@ -135,8 +135,12 @@ internal class StudySurface(
     val interactive: Boolean,
     /** On a glass card (true) or straight on the wallpaper like the clock (false, the default since 0.9.10). */
     val boxed: Boolean = true,
+    /** W8 (P7): this widget's own options: the card's corners, the accent colour, and which parts show. */
+    val corner: Dp = 26.dp,
+    val tint: Color? = null,
+    val shows: (part: String, default: Boolean) -> Boolean = { _, default -> default },
 ) {
-    val color: Color get() = when {
+    val color: Color get() = tint ?: when {
         !boxed -> if (lightBackground) Color(0xFF16181C) else Color.White
         glass.lightGlass(Surfaces.Menu, lightBackground) -> Color(0xFF16181C)
         else -> Color.White
@@ -146,7 +150,7 @@ internal class StudySurface(
 /** The glass card every study widget sits on; its buttons are glass on that glass (0.6.4). */
 @Composable
 private fun StudyCard(surface: StudySurface, controller: HomeController, onClick: (() -> Unit)?, content: @Composable () -> Unit) {
-    val shape = RoundedCornerShape(26.dp)
+    val shape = RoundedCornerShape(surface.corner)
     val layer = rememberLayerBackdrop()
     Box(
         Modifier
@@ -282,7 +286,7 @@ internal fun NowCard(controller: HomeController, surface: StudySurface) {
                         Box(Modifier.fillMaxWidth(gone).height(4.dp).clip(RoundedCornerShape(50)).background(accent))
                     }
                     Text("${time(current.begin)} – ${time(current.end)}", style = label(color, 11, alpha = 0.7f), modifier = Modifier.padding(top = 3.dp))
-                    val tasks = current.tasks
+                    val tasks = if (surface.shows("tasks", true)) current.tasks else emptyList()
                     Column(Modifier.weight(1f)) {
                         // Open tasks first, so what is left to do stays in view.
                         tasks.sortedBy { it.done }.take(room).forEach { task ->
@@ -290,7 +294,7 @@ internal fun NowCard(controller: HomeController, surface: StudySurface) {
                         }
                         if (tasks.size > room && room > 0) Text("+ ${tasks.size - room} more", style = label(color, 11, alpha = 0.6f))
                     }
-                    if (surface.interactive) {
+                    if (surface.interactive && surface.shows("buttons", true)) {
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp)) {
                             if (current.status == StudyStatus.Open) {
                                 ActionChip("Done", color, filled = true, accent = accent) { controller.studyStatus(current, StudyStatus.Done) }
@@ -363,14 +367,16 @@ internal fun TodayWidget(controller: HomeController, surface: StudySurface) {
                     val open = day.openTasks
                     Text(if (open > 0) "$open to do" else "all done", style = label(color, 12, alpha = 0.7f))
                 }
-                val rows = day.blocks.map { it to true } + (day.overdue + day.tasks).map { it to false }
+                val rows = day.blocks.map { it to true } + (if (surface.shows("tasks", true)) (day.overdue + day.tasks).map { it to false } else emptyList())
                 if (rows.isEmpty()) Text("Nothing planned", style = label(color, 12, alpha = 0.7f), modifier = Modifier.padding(top = 4.dp))
                 rows.take(room).forEach { (event, isBlock) ->
                     val done = event.status != StudyStatus.Open
                     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                         if (isBlock) {
                             val running = now >= event.begin && now < event.end
-                            Text(time(event.begin), modifier = Modifier.width(42.dp), style = label(color, 12, if (running) FontWeight.Bold else FontWeight.Normal, alpha = if (running) 1f else 0.7f))
+                            if (surface.shows("times", true)) {
+                                Text(time(event.begin), modifier = Modifier.width(42.dp), style = label(color, 12, if (running) FontWeight.Bold else FontWeight.Normal, alpha = if (running) 1f else 0.7f))
+                            }
                             Box(Modifier.size(7.dp).clip(CircleShape).background(eventColor(event)))
                             Spacer(Modifier.width(7.dp))
                         } else {
