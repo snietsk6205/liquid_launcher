@@ -9,11 +9,11 @@ Versions marked *not published on its own* were built but came to the phone insi
 ## 0.10.1 — 2026-11-18
 
 ### Added
-- The Theme lab (the first row of Settings): every option of a WM Keyboard theme, in nine groups (Glass,
-  Material, Textures, Colours, Shape and size, Press effect, Moving background, Background image, Extras) and
-  Pills. A large live preview shows a sample, the home screen, the drawer or search, and every change is applied at
-  once. Undo and redo, reset per group, and a long press on an option to reset it, explain it or copy its id.
-  Options that only matter with another one are greyed, with the reason.
+- The Theme lab (Settings → Look): every option of a WM Keyboard theme, in nine groups (Glass, Material,
+  Textures, Colours, Shape and size, Press effect, Moving background, Background image, Extras) and Pills. A large
+  live preview shows a sample, the home screen, the drawer or search, and every change is applied at once. Undo
+  and redo, reset per group, and a long press on an option to reset it, explain it or copy its id. Options that
+  only matter with another one are greyed, with the reason.
 - Presets in the lab: your keyboard backup, the look you had before this version, the default. Import and export
   of `.wmtheme.json` files, and "Export my tuning" (only what you changed).
 - Any colour of the theme can follow the wallpaper: its dominant, vibrant, muted, dark or light colour.
@@ -77,14 +77,13 @@ Versions marked *not published on its own* were built but came to the phone insi
 - Merged pages: Drawer motion into App drawer (Behaviour), Hand-over into Redirect, Detection with Exclusions and
   safety, Home menu with Long-press menu (Menus). Effects and touch is split into Press and touch and Moving
   wallpaper. Renamed: Theme → Colours and fonts, Scroll index → Letter index, Saved layouts and backup → Layouts
-  and backup, which is now Layouts (backup moved to System → Backup and Claude). Setup checklist, Diagnostics,
-  Calibration, Debug log, Updates and About are in System; the Theme lab is in Look. No option was removed and none was reset: their stored names are unchanged, and links to the old
-  sections open the page that has their options.
+  (backup moved to System → Backup and Claude). Setup checklist, Diagnostics, Calibration, Debug log, Updates and
+  About are in System; the Theme lab is in Look. No option was removed and none was reset: their stored names are
+  unchanged, and links to the old sections open the page that has their options.
 - The accent is a fixed blue (Blueberry, #5484ED) unless you had chosen your own colour. The main button keeps
   its block colour.
 - The search bar and the other pills are dark by default when a theme does not say otherwise.
 - A theme's moving background and press splash take the place of the launcher's own while the theme has one.
-
 - Backups now include the theme's pictures (its background, textures and stickers).
 
 ### Removed
