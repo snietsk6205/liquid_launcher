@@ -867,6 +867,12 @@ light from the picture). The drawing, the lab and the migration are in progress 
 **Released:** 0.10.0 (the safety release, run 78, published after a re-run: the first attempt hit the emulator's
 "isn't responding" flake) and **0.10.1** (this entry's release commit). Two releases, as agreed.
 
+The first 0.10.1 release run (83) published nothing: four emulator checks failed. Two were real bugs of this session:
+the top tabs pill's rise (P5) moved the drawer's invisible tabs over the home pill while the drawer was closed, so they
+took the pill's touches (in edit mode, the edit bar's: Pages and Widgets did nothing); and the collapsed hub's
+"The whole day" sat at the end of its list, out of sight. Fixed (no rise while the drawer is closed; the chip above
+the list) and released again.
+
 **Workstreams**
 
 | | State | What |

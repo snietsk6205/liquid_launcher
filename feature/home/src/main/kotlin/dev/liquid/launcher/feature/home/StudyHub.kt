@@ -307,6 +307,23 @@ private fun HubContent(controller: HomeController, color: Color, scroll: ScrollS
                 ActionChip("Switch it on", color, filled = true) { controller.setupStudy() }
             }
         } else {
+            // W7: collapsed, the hub holds the block now or next; "The whole day" stays in sight above the list.
+            if (!controller.hubExpanded) {
+                val rest = day.blocks.count { it != hero } + day.tasks.size + day.overdue.size
+                val tomorrow = if (prefs.tomorrow != "off") day.tomorrowBlocks.size + day.tomorrowTasks.size else 0
+                if (rest > 0 || tomorrow > 0 || day.notes.isNotEmpty() || day.waitingToSync > 0) {
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.Center) {
+                        ActionChip(
+                            "The whole day" + when {
+                                rest > 0 -> " · $rest more"
+                                tomorrow > 0 -> " and tomorrow"
+                                else -> ""
+                            },
+                            color,
+                        ) { controller.expandHub(true) }
+                    }
+                }
+            }
             Column(Modifier.weight(1f).verticalScroll(scroll)) {
                 AttendanceCallout(controller, day, now, color)
                 ArrivalCallout(controller, day, now, homeAt, color)
@@ -322,23 +339,7 @@ private fun HubContent(controller: HomeController, color: Color, scroll: ScrollS
                     BlockCard(hero, now, prefs, focus, color, controller, startOpen = true)
                 }
                 // W7: collapsed, the hub holds the block now or next; the rest of the day is one tap or a swipe up away.
-                if (!controller.hubExpanded) {
-                    val rest = day.blocks.count { it != hero } + day.tasks.size + day.overdue.size
-                    val tomorrow = if (prefs.tomorrow != "off") day.tomorrowBlocks.size + day.tomorrowTasks.size else 0
-                    if (rest > 0 || tomorrow > 0 || day.notes.isNotEmpty() || day.waitingToSync > 0) {
-                        Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.Center) {
-                            ActionChip(
-                                "The whole day" + when {
-                                    rest > 0 -> " · $rest more"
-                                    tomorrow > 0 -> " and tomorrow"
-                                    else -> ""
-                                },
-                                color,
-                            ) { controller.expandHub(true) }
-                        }
-                    }
-                    return@Column
-                }
+                if (!controller.hubExpanded) return@Column
                 Timeline(controller, day, now, hero, prefs, focus, color)
                 if (day.overdue.isNotEmpty()) {
                     SectionLabel("Still open from earlier", color)

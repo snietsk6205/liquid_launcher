@@ -1129,6 +1129,9 @@ private fun Modifier.riseFromPill(controller: HomeController): Modifier = compos
             val pill = controller.pillBounds ?: return@graphicsLayer
             if (own.width <= 1f || own.height <= 1f) return@graphicsLayer
             val p = controller.drawer.value.coerceIn(0f, 1f)
+            // Closed, the drawer is out of sight and so stays the pill: brought over the home pill, an invisible
+            // pill would still take its touches (and the edit bar's in its place).
+            if (p <= 0.001f) return@graphicsLayer
             val t = 1f - androidx.compose.animation.core.FastOutSlowInEasing.transform(p)
             translationX = (pill.center.x - own.center.x) * t
             translationY = (pill.center.y - own.center.y) * t
