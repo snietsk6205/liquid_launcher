@@ -861,3 +861,63 @@ light from the picture). The drawing, the lab and the migration are in progress 
    theme, and the chips' current look (your keyboard's chip colours) stays the default.
 3. The blue you marked is your Proba 2 block colour (Google Calendar's Blueberry, #5484ED). It is now the fixed
    default accent; the main button keeps the block's colour as before ("Main button colour").
+
+## Session of 2026-11-18 (Opus 5.5): 0.10.1 final release
+
+**Released:** 0.10.0 (the safety release, run 78, published after a re-run: the first attempt hit the emulator's
+"isn't responding" flake) and **0.10.1** (this entry's release commit). Two releases, as agreed.
+
+**Workstreams**
+
+| | State | What |
+|---|---|---|
+| W0 | Done | Releases only on the marker, notes from CHANGELOG.md (0.10.0). |
+| W1 | Done | Changelog, release notes on the Updates screen, What's new once (0.10.0). |
+| W2 | Done | Sheets and menus never overflow (0.10.0). |
+| W3 | Done, with the limits below | Theme document (`ThemeDoc`, `ThemeFields`, `ThemeResolve`, `ThemeStore`), the Theme lab (`ThemeLab.kt`), drawing (`ThemeDraw.kt`, `ThemeSurfaces.kt`, `ThemePress.kt`), migration `migrate010` (accent fixed blue unless chosen, main button colour kept, dark pills where a theme says nothing). Picture and stickers behind every sheet, material on the pills, menu row height and gaps in real rows. Frame meter. |
+| W4 | Done | `SettingsMap` (7 entries, 26 pages, 4 tabs; every one of the 365 options placed, the internal ones on a hidden page; keys unchanged; 0.9 section ids map to pages), `SettingInfo`, `Pages.kt` (entry and page screens, sticky preview, tab chips with counts, Reset per tab), rows held for Reset / Explain / Copy id, greyed rows with the reason (`SettingDependencies.whyOff`), search and Recently changed open page + tab + highlight, `page:<id>[:<tab>]` links, "Customise" chip from home (dock, folder, search page, hub, pill on its default). Emulator check 14d goes through search. |
+| W5 | Done | Backup and Claude page (System): Back up now (wallpapers optional, theme pictures always), daily backup to a SAF folder with JobScheduler keeping N copies (`AutoBackup`, `BackupJobService`), restore preview (`LauncherData.previewBackup`), `SettingsAI` (Markdown export with the answer rules, Send to Claude by ACTION_SEND with a question, paste, check, apply valid entries, red for invalid, one-tap Undo). No network. |
+| W6 | Done | Select in the drawer's app menu, picking with checks, the bar (Tag, Untag, Hide, Add to home), bulk tag sheet, a tag's own list of all apps with checks and search. Emulator check 9d. |
+| W7 | Done | Hub opens collapsed (≤ 46 % of the screen) with a second spring to the whole day (chip, handle, pushing the list up); "Study hub opens"; dim, blur and text colour of the hub (auto-contrast); the clock's study line auto-contrast + soft halo or clock / white / black. The rail part was already done in 0.9.6 (short liquid rail ≤ 180 dp, edge letters kept as "String"). |
+| W8 | Done | P5: the top tabs pill rises out of the home pill. P7: Now card and Today widget Customise sheets. P8: layout for a time of day (from, until, days, over midnight), a look per wallpaper (blur, dim, saturation, vignette), glass tint "The wallpaper's colour", real layout previews, any library picture as a layout's wallpaper ("Choose its wallpaper…"). |
+
+Decisions of this session: D139–D143 in DECISIONS.md (theme document, settings map, Claude patches, daily backup,
+frame meter).
+
+**Cost of the moving background and textures.** The emulator draws in software, so its frame times say nothing about
+the phone. Instead, `app/FrameMeter.kt` listens to Android's own frame metrics while the home screen is in front and,
+every ~10 s of continuous drawing, writes one line to the debug log: frames drawn, late frames (missed deadline),
+average and worst frame time, GPU time, and what was on screen (moving background kind, amount, speed, size; the
+theme's textures, material, sheet picture, frost blur). By construction: a moving background records 3 to ~120
+primitives per frame on the UI thread (orbs: 3–7 radial gradients; starfield and fireflies: up to ~120 dots) and stops
+its clock whenever an app, the drawer or search covers it, or on battery saving; textures are drawn from one cached
+tile per control (no per-frame decoding); the sheet picture's blur is a layer recorded only when its size or picture
+changes. No measured numbers from the HONOR yet: they will be in Settings → System → Debug log ("Frames:") after a
+minute on the home screen with a moving background.
+
+**Known limits and bugs**
+- Theme: the SINK press motion does not dip the neighbouring buttons as WM Keyboard does; with Individual pills the
+  drawer pill blends its fill during the morph but switches its glass values at the end; the "meld" splash has no
+  launcher equivalent and is not offered; keyboard-only options are kept in the file but not shown (see 0.10.1's
+  changelog).
+- Settings: the "Customise" chip is not offered on the drawer's empty area (icons cover it; the drawer's tab menu has
+  "Customise the drawer").
+- Backup: the daily job runs when Android lets it (about once a day, battery not low). A backup without wallpapers
+  restored on another phone keeps only the library pictures that phone has.
+- Picking apps: only from the drawer (not from search results); the bar covers the drawer's first row while picking.
+- Hub: pulling down from the whole day closes the hub (not to the collapsed height first).
+- Wallpaper look: saturation and vignette apply to the home screen, not to the copy handed to the system (lock screen).
+
+**Questions for Med**
+1. The search bar and the other pills are dark for every theme that does not set them, your keyboard backup included
+   (its space bar colour is nearly transparent). Keep it, or follow the keyboard's space bar?
+2. The hub now opens collapsed. Is ≤ 46 % of the screen the right collapsed height?
+3. The line under the clock now picks dark or light for the wallpaper, with a halo (before: the clock's colour). Keep?
+4. Backup and Claude is in System. Would you rather have it under Wallpaper and layouts?
+5. "Send to Claude" goes to the app in "App that gets Tell Claude" (com.anthropic.claude by default), else the share
+   sheet. Right app?
+
+**Exact next step:** open the smoke output of the 0.10.1 release run (checks 9d picking, 14d search → Behaviour tab)
+and fix anything noted; then the theme's limits above (SINK dipping the neighbours first, then the Individual pills'
+glass during the morph). Read the "Frames:" lines Med's phone writes and put the numbers in this log; if a moving
+background or texture is late on more than 1 % of frames, lower its default amount.
