@@ -43,6 +43,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -608,7 +610,8 @@ internal fun TagSheet(
                         singleLine = true,
                         textStyle = TextStyle(fontFamily = HomeTheme.font, color = fieldInk, fontSize = 15.sp),
                         cursorBrush = SolidColor(fieldInk),
-                        modifier = Modifier.fillMaxWidth(),
+                        // The hint is the field's label too (screen readers, and the emulator test finds the field by it).
+                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Find a tag" },
                     )
                 }
             }

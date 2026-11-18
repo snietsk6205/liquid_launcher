@@ -35,6 +35,18 @@ class SettingsStoreTest {
     }
 
     @Test
+    fun aStoredValueEqualToTheDefaultIsNoChange() {
+        // As a restore or an older version can leave it (0.10.2: "Export for AI" listed these as changed).
+        val store = SettingsStore.inMemory()
+        store.importValues(mapOf(LauncherSettings.OnHomeDelay.key to "i:${LauncherSettings.OnHomeDelay.default}"), setOf(LauncherSettings.OnHomeDelay.key))
+        assertTrue(store.values.value.containsKey(LauncherSettings.OnHomeDelay.key))
+        assertFalse(store.isChanged(LauncherSettings.OnHomeDelay))
+        // Reset still removes it.
+        store.reset(LauncherSettings.OnHomeDelay)
+        assertFalse(store.values.value.containsKey(LauncherSettings.OnHomeDelay.key))
+    }
+
+    @Test
     fun listsRoundTrip() {
         val store = SettingsStore.inMemory()
         store.set(LauncherSettings.LearnedIds, listOf("a:id/x", "a:id/y"))

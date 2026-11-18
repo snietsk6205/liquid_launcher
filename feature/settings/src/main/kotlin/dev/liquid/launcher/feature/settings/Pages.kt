@@ -184,7 +184,7 @@ internal fun PageScreen(store: SettingsStore, surfaceId: String, startTab: Setti
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 for (t in tabs) {
-                    val changed = SettingsMap.settingsOf(surface, t).count { values.containsKey(it.key) }
+                    val changed = SettingsMap.settingsOf(surface, t).count { store.isChanged(it, values) }
                     FilterChip(
                         selected = t == tab,
                         onClick = { tab = t },
@@ -218,7 +218,7 @@ internal fun PageScreen(store: SettingsStore, surfaceId: String, startTab: Setti
             basic.forEach { PageRow(it, store, highlight) { y -> target = y } }
             if (advanced.isNotEmpty()) {
                 var expanded by remember(surfaceId, tab) {
-                    mutableStateOf(basic.isEmpty() || advanced.any { values.containsKey(it.key) || it.key == highlight })
+                    mutableStateOf(basic.isEmpty() || advanced.any { store.isChanged(it, values) || it.key == highlight })
                 }
                 NavRow(
                     if (expanded) "Advanced" else "Advanced (${advanced.size} more)",
@@ -226,7 +226,7 @@ internal fun PageScreen(store: SettingsStore, surfaceId: String, startTab: Setti
                 ) { expanded = !expanded }
                 if (expanded) advanced.forEach { PageRow(it, store, highlight) { y -> target = y } }
             }
-            if (settings.any { values.containsKey(it.key) }) {
+            if (settings.any { store.isChanged(it, values) }) {
                 OutlinedButton(
                     onClick = { settings.forEach { store.reset(it) } },
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),

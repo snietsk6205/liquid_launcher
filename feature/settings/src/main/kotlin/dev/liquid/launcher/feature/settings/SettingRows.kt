@@ -167,7 +167,7 @@ private fun RowFrame(
     below: @Composable (() -> Unit)? = null,
 ) {
     val values by store.values.collectAsStateCompat()
-    val changed = values.containsKey(setting.key)
+    val changed = store.isChanged(setting, values)
     val place = LocalRowContext.current
     val off = place.whyOff
     val context = androidx.compose.ui.platform.LocalContext.current

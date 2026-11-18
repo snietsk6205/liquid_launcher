@@ -49,7 +49,19 @@ class SettingsStore internal constructor(
     fun <T> flow(setting: Setting<T>): Flow<T> =
         _values.map { decode(setting, it[setting.key]) }.distinctUntilChanged()
 
-    fun isChanged(setting: Setting<*>): Boolean = _values.value.containsKey(setting.key)
+    /**
+     * Whether [setting] differs from its default. 0.10.2: a value stored equal to the default (kept from a version whose
+     * default was different, or written by a restore or a Claude patch) is no change, so "Export for AI", the dots and
+     * the tabs' counts only list real changes.
+     */
+    fun isChanged(setting: Setting<*>): Boolean = isChanged(setting, _values.value)
+
+    /** As [isChanged], against [values] (a snapshot a screen reads, so it updates with it). */
+    fun isChanged(setting: Setting<*>, values: Map<String, Any>): Boolean {
+        val stored = values[setting.key] ?: return false
+        @Suppress("UNCHECKED_CAST")
+        return decode(setting as Setting<Any?>, stored) != setting.default
+    }
 
     fun <T> set(setting: Setting<T>, value: T) {
         noteChanged(setting)
@@ -77,7 +89,7 @@ class SettingsStore internal constructor(
     }
 
     fun reset(setting: Setting<*>) {
-        if (!isChanged(setting)) return
+        if (!_values.value.containsKey(setting.key)) return
         _values.update { it - setting.key }
         persist { prefs ->
             prefs.remove(booleanPreferencesKey(setting.key))

@@ -74,7 +74,9 @@ clear_anr() {
 
 pass() { echo "PASS: $1"; }
 note() { echo "NOTE: $1"; }
-fail() { echo "FAIL: $1"; echo "      top: $(top_activity)"; FAILS=$((FAILS + 1)); }
+FAILED_CHECKS=""
+fail() { echo "FAIL: $1"; echo "      top: $(top_activity)"; FAILS=$((FAILS + 1)); FAILED_CHECKS="$FAILED_CHECKS
+  - $1"; }
 redirect_count() { grep -c 'REDIRECT (' "$LOG" || true; }
 
 # redirect_trace : what the redirect engine said last, without the service's reconnect noise
@@ -1013,6 +1015,6 @@ echo
 if [ "$FAILS" -eq 0 ]; then
   echo "SMOKE RESULT: all checks passed"
 else
-  echo "SMOKE RESULT: $FAILS check(s) failed"
+  echo "SMOKE RESULT: $FAILS check(s) failed:$FAILED_CHECKS"
 fi
 exit "$FAILS"
