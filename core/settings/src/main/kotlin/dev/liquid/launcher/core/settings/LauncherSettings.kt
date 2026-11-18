@@ -2204,6 +2204,55 @@ object LauncherSettings {
         title = "Study hub height",
         section = "study", keywords = "study hub size height pill",
     )
+    // W7 (0.10.1): how the hub opens, and reading it over any wallpaper.
+    val StudyHubOpen = ChoiceSetting(
+        key = "study.hubOpen", default = "collapsed",
+        options = listOf(
+            "collapsed" to "Collapsed: the block now or next; the whole day one tap or swipe up away",
+            "full" to "The whole day at once",
+        ),
+        title = "Study hub opens",
+        section = "study", keywords = "study hub collapsed expanded open compact size",
+    )
+    val StudyHubDim = IntSetting(
+        key = "study.hubDim", default = 26, min = 0, max = 80, step = 2, unit = "%",
+        title = "Dim behind the hub",
+        summary = "How much the home screen darkens while the hub is open",
+        section = "study", keywords = "study hub dim dark readability contrast",
+    )
+    val StudyHubBlur = IntSetting(
+        key = "study.hubBlur", default = 0, min = 0, max = 40, step = 2, unit = "dp",
+        title = "Blur behind the hub",
+        summary = "Blurs the home screen while the hub is open, so its text reads over a busy wallpaper",
+        section = "study", keywords = "study hub blur readability",
+    )
+    val StudyHubInk = ChoiceSetting(
+        key = "study.hubInk", default = "auto",
+        options = listOf(
+            "auto" to "Automatic: light over a dark hub or a strong dim, else the theme's",
+            "light" to "Light",
+            "dark" to "Dark",
+        ),
+        title = "Text in the hub",
+        section = "study", keywords = "study hub text colour color contrast readability",
+    )
+    val StudyLineInk = ChoiceSetting(
+        key = "study.lineInk", default = "auto",
+        options = listOf(
+            "auto" to "Automatic: dark over a light wallpaper, light over a dark one",
+            "clock" to "Like the clock",
+            "white" to "White",
+            "black" to "Black",
+        ),
+        title = "Colour of the line under the clock",
+        section = "study", keywords = "study clock line colour color contrast readability white black",
+    )
+    val StudyLineShadow = BoolSetting(
+        key = "study.lineShadow", default = true,
+        title = "Soft shadow under the line",
+        summary = "A soft halo behind the line under the clock, so it reads over any picture",
+        section = "study", keywords = "study clock line shadow halo readability",
+    )
     val StudyHubBounce = IntSetting(
         key = "study.hubBounce", default = 35, min = 0, max = 100, step = 5, unit = "%",
         title = "Study hub bounce",
@@ -2453,7 +2502,7 @@ object LauncherSettings {
         StudyCommuteLayout, StudyExamLayout, ContextActive, ContextApplied, ContextBase, LayoutTimerUntil, LayoutTimerLayout, LayoutTimerBack,
         StudyQuiet, StudyQuietPeople, StudyQuietEmail, StudyQuietTags, StudyAnnales,
         StudyArrival, StudyHomeWifi, StudyArrivalCharger, StudyShiftLead, StudyLatestEnd, StudyClassCalendars, StudyHeader, StudyCheckin, StudyTemplates,
-        StudyHubSize, StudyHubBounce, StudyClockAction,
+        StudyHubSize, StudyHubBounce, StudyClockAction, StudyHubOpen, StudyHubDim, StudyHubBlur, StudyHubInk, StudyLineInk, StudyLineShadow,
         NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,
         NoticeLayout, NoticeWallpaper, NoticeTags, NoticeRedirect, NoticeUpdate, NoticeStudy, NoticeTask, NoticeInfo,
         GlassQuality, GlassEngine, GlassAuto, GlassCap, GlassFullPercent, GlassTintMode,

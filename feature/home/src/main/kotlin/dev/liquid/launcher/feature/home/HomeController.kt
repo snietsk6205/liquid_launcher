@@ -300,6 +300,22 @@ class HomeController(
     val hub = Animatable(0f)
     val hubAmount: Float get() = hub.value.coerceIn(0f, 1f)
 
+    /** W7: the open hub's height between collapsed (0: the block now or next) and the whole day (1), on its own spring. */
+    val hubExpand = Animatable(1f)
+    val hubExpanded: Boolean get() = hubExpand.targetValue > 0.5f
+
+    fun expandHub(expand: Boolean) {
+        if (hubExpanded == expand) return
+        Haptics.tick(view)
+        scope.launch {
+            hubExpand.animateTo(
+                if (expand) 1f else 0f,
+                spring(dampingRatio = 0.82f, stiffness = MotionScale.stiffness(420f), visibilityThreshold = 0.001f),
+                initialVelocity = hubExpand.velocity,
+            )
+        }
+    }
+
     /** What the hub grows from and shrinks back into (root px): the pill, or what was tapped. Null: the pill's usual place. */
     var hubOrigin: androidx.compose.ui.geometry.Rect? = null
 
@@ -336,6 +352,11 @@ class HomeController(
         hubOrigin = from ?: pillBounds
         hubDragPos = null
         menu = null
+        // W7: from closed, the hub opens collapsed unless set to show the whole day at once.
+        if (!todaySheet && hub.value < 0.05f) {
+            val full = data.settings.get(LauncherSettings.StudyHubOpen) == "full"
+            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { hubExpand.snapTo(if (full) 1f else 0f) }
+        }
         todaySheet = true
         scope.launch { hub.animateTo(1f, hubSpring(opening = true), initialVelocity = velocity ?: hub.velocity) }
     }

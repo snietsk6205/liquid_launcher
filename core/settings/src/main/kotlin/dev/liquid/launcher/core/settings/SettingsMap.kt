@@ -159,8 +159,11 @@ object SettingsMap {
             "study", "Study companion", "The line under the clock, the hub, quiet, speed bump, arrival home, calendars and Claude",
             SettingsEntry.STUDY, listOf("study"),
             mapOf(
-                L to listOf("study.enabled", "study.clockLine", "study.clockAction", "study.blockCards", "study.buttonSide", "study.tomorrow", "study.hubSize"),
-                K to listOf("study.glassTint"),
+                L to listOf(
+                    "study.enabled", "study.clockLine", "study.clockAction", "study.blockCards", "study.buttonSide", "study.tomorrow", "study.hubSize",
+                    "study.hubOpen",
+                ),
+                K to listOf("study.glassTint", "study.hubDim", "study.hubBlur", "study.hubInk", "study.lineInk", "study.lineShadow"),
                 B to listOf(
                     "study.writeBack", "study.overdueDays", "study.noticeLead", "study.attendance", "study.leaveBy", "study.commute", "study.rest",
                     "study.windDown", "study.speedBump", "study.speedBumpTags", "study.quiet", "study.quietPeople", "study.quietEmail",

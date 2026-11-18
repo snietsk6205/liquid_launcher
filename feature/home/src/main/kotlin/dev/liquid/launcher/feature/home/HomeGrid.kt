@@ -26,6 +26,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -480,8 +481,27 @@ internal fun WidgetContent(item: HomeItem, env: PageEnv, controller: HomeControl
         ) {
             ClockFace(style, env.contentColor, env.shadow, env.glass, env.lightBackground, env.wallpaperBackdrop, Modifier.weight(1f))
             if (glance != null) {
+                // W7: the line reads over any wallpaper: dark over a light one, light over a dark one (or as chosen),
+                // with a soft halo in the opposite tone.
+                val lineInk by controller.data.settings.derive { get(LauncherSettings.StudyLineInk) }
+                val lineHalo by controller.data.settings.derive { get(LauncherSettings.StudyLineShadow) }
+                val lineColor = when (lineInk) {
+                    "white" -> Color.White
+                    "black" -> Color(0xFF111316)
+                    "clock" -> env.contentColor
+                    else -> if (env.lightBackground) Color(0xFF111316) else Color.White
+                }
+                val lineShadow = if (lineHalo) {
+                    val dark = lineColor.luminance() > 0.5f
+                    androidx.compose.ui.graphics.Shadow(
+                        if (dark) Color.Black.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.7f),
+                        androidx.compose.ui.geometry.Offset(0f, 1.5f), 12f,
+                    )
+                } else {
+                    env.shadow
+                }
                 StudyLine(
-                    glance, controller, env.contentColor, env.shadow, env.interactive && !env.editMode,
+                    glance, controller, lineColor, lineShadow, env.interactive && !env.editMode,
                     Modifier.padding(horizontal = if (style.plate == "none") 0.dp else 10.dp).padding(bottom = 2.dp),
                 )
             }

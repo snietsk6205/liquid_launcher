@@ -43,6 +43,13 @@ Versions marked *not published on its own* were built but came to the phone insi
   search, to tag or untag many apps in one place.
 
 ### Changed
+- The study hub opens collapsed: the block now or next, with "The whole day" one tap away (or push the list up,
+  or tap the handle); it springs between the two heights and any spring can be caught by the finger. "Study hub
+  opens" in Settings → Study brings back the whole day at once.
+- The hub reads over any wallpaper: "Dim behind the hub", "Blur behind the hub" (the home screen blurs as the hub
+  grows), and "Text in the hub" (automatic: light over a dark hub or a strong dim; or always light or dark).
+- The line under the clock picks its colour for the wallpaper behind it (dark over a light picture, light over a
+  dark one) with a soft halo; it can also follow the clock, or be always white or always black.
 - Settings in seven entries: Home, Drawer and search, Study, Look, Wallpaper and layouts, Motion and feel, System.
   Each holds pages, one per surface (Pill, Dock, App drawer, Letter index, Liquid glass…); a page keeps its live
   preview at the top and shows its options in tabs: Layout, Look, Behaviour, More. A dot marks what you changed,

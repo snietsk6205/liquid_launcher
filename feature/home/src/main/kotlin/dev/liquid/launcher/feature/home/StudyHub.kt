@@ -125,7 +125,10 @@ internal class HubGeometry(
         val h = controller.screenHeight
         val margin = with(density) { 10.dp.toPx() }
         val bottom = h - maxOf(nav.getBottom(density), ime.getBottom(density)) - margin
-        val top = maxOf(status.getTop(density) + margin, bottom - h * fraction)
+        // W7: collapsed, the hub is at most half the screen; it springs to the full height as it expands.
+        val collapsed = minOf(fraction, 0.46f)
+        val f = collapsed + (fraction - collapsed) * controller.hubExpand.value
+        val top = maxOf(status.getTop(density) + margin, bottom - h * f)
         return Rect(margin, top, w - margin, bottom)
     }
 
@@ -193,6 +196,10 @@ private class HubScroll(private val controller: HomeController) : NestedScrollCo
         if (source == NestedScrollSource.UserInput && available.y < 0f && controller.hubDragging) {
             return Offset(0f, controller.dragHubBy(available.y))
         }
+        // W7: pushing the collapsed hub's list up opens the whole day.
+        if (source == NestedScrollSource.UserInput && available.y < -4f && !controller.hubExpanded && controller.hub.value > 0.95f) {
+            controller.expandHub(true)
+        }
         return Offset.Zero
     }
 
@@ -218,7 +225,15 @@ internal fun StudyHub(glass: GlassConfig, lightBackground: Boolean, backdrop: Ba
     val status = WindowInsets.statusBars
     val fraction by controller.data.settings.derive { get(LauncherSettings.StudyHubSize) / 100f }
     val geometry = remember(controller, density, nav, ime, status, fraction) { HubGeometry(controller, density, nav, ime, status, fraction) }
-    val color = sheetContentColor(glass, lightBackground)
+    // W7: the text over the hub: chosen, or light where the hub is dark or the dim behind it is strong.
+    val ink by controller.data.settings.derive { get(LauncherSettings.StudyHubInk) }
+    val dim by controller.data.settings.derive { get(LauncherSettings.StudyHubDim) / 100f }
+    val themed = sheetContentColor(glass, lightBackground)
+    val color = when (ink) {
+        "light" -> Color.White
+        "dark" -> Color(0xFF16181C)
+        else -> if (dim >= 0.45f) Color.White else themed
+    }
     val shape = remember(geometry) { RoundedCornerShape(HubCorner(geometry) { controller.hub.value }) }
     val layer = rememberLayerBackdrop()
     val scroll = rememberScrollState()
@@ -231,7 +246,7 @@ internal fun StudyHub(glass: GlassConfig, lightBackground: Boolean, backdrop: Ba
             Modifier
                 .fillMaxSize()
                 .graphicsLayer { alpha = controller.hubAmount }
-                .background(Color.Black.copy(alpha = 0.26f))
+                .background(Color.Black.copy(alpha = dim))
                 .pointerInput(controller) { detectTapGestures { controller.closeHub() } },
         )
         Box(
@@ -306,6 +321,19 @@ private fun HubContent(controller: HomeController, color: Color, scroll: ScrollS
                     SectionLabel(heroLabel(hero, now), color)
                     BlockCard(hero, now, prefs, focus, color, controller, startOpen = true)
                 }
+                // W7: collapsed, the hub holds the block now or next; the rest of the day is one tap or a swipe up away.
+                if (!controller.hubExpanded) {
+                    val rest = day.blocks.count { it != hero } + day.tasks.size + day.overdue.size
+                    if (rest > 0 || day.notes.isNotEmpty()) {
+                        Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.Center) {
+                            ActionChip(
+                                "The whole day" + if (rest > 0) " · $rest more" else "",
+                                color,
+                            ) { controller.expandHub(true) }
+                        }
+                    }
+                    return@Column
+                }
                 Timeline(controller, day, now, hero, prefs, focus, color)
                 if (day.overdue.isNotEmpty()) {
                     SectionLabel("Still open from earlier", color)
@@ -365,11 +393,18 @@ private fun heroLabel(block: StudyEvent, now: Long): String = when {
 @Composable
 private fun HubHeader(controller: HomeController, day: StudyDay, now: Long, color: Color) {
     Column(Modifier.fillMaxWidth()) {
+        // W7: the handle, wider while collapsed; a tap on it shows the whole day or folds it back.
+        val wide = 36f + 14f * (1f - controller.hubExpand.value.coerceIn(0f, 1f))
         Box(
             Modifier
                 .align(Alignment.CenterHorizontally)
-                .padding(bottom = 8.dp)
-                .size(width = 36.dp, height = 4.dp)
+                .clip(RoundedCornerShape(50))
+                .clickable(onClickLabel = if (controller.hubExpanded) "Fold the day" else "The whole day") {
+                    controller.expandHub(!controller.hubExpanded)
+                }
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .padding(bottom = 2.dp)
+                .size(width = wide.dp, height = 4.dp)
                 .clip(RoundedCornerShape(50))
                 .background(color.copy(alpha = 0.3f)),
         )

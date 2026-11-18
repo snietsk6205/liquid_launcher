@@ -585,13 +585,15 @@ private fun HomeScreenBody(
             androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = MotionScale.stiffness(420f)),
             label = "sheetBlur",
         )
+        // W7: the blur behind the study hub, in step with it growing out of the pill.
+        val hubBlurDp by store.derive { get(LauncherSettings.StudyHubBlur) }
         Box(Modifier.fillMaxSize().layerBackdrop(homeBackdrop)) {
           // Blurs wallpaper and pages together while the drawer is open.
           Box(
               Modifier
                   .fillMaxSize()
                   .graphicsLayer {
-                      val sheetRadius = windowBlurDp.dp.toPx() * sheetBlur
+                      val sheetRadius = maxOf(windowBlurDp.dp.toPx() * sheetBlur, hubBlurDp.dp.toPx() * controller.hubAmount)
                       if (!motionShown.liveBlur) {
                           renderEffect = if (sheetRadius >= 0.5f) BlurEffect(sheetRadius, sheetRadius, TileMode.Clamp) else null
                           return@graphicsLayer
