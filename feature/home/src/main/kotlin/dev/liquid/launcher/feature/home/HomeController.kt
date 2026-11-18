@@ -808,6 +808,9 @@ class HomeController(
     /** Search sends what is typed to Claude: the field's icon switches it, the "Ask Claude" action opens search this way. */
     var askClaudeMode by mutableStateOf(false)
 
+    /** 0.10.2: the search page's "Today · …" line opened onto the calendar month and the exam countdown. */
+    var searchGlanceOpen by mutableStateOf(false)
+
     /** The Claude app's package (the one "Tell Claude" uses). */
     val claudePackage: String get() = data.settings.get(LauncherSettings.StudyClaudeApp).trim().ifEmpty { "com.anthropic.claude" }
 
@@ -1242,6 +1245,7 @@ class HomeController(
         searchDragPosition = null
         searchOpen = false
         searchEditing = false
+        searchGlanceOpen = false
         val v = if (velocity.isNaN()) search.velocity else velocity
         scope.launch {
             if (immediately) search.snapTo(0f) else search.animateTo(0f, searchSpring(opening = false), initialVelocity = v)

@@ -549,7 +549,27 @@ for i in 1 2 3 4 5; do adb shell input keyevent KEYCODE_DEL; done
 sleep 1
 peek 10b-search-empty
 dump 10b-search-empty
-if on_screen 10b-search-empty "Add widget" exact; then pass "the search screen offers widgets"; else fail "the search screen offers widgets"; fi
+# 0.10.2: the page is calm with nothing typed; its "Today · …" line opens the widgets (with Add widget) and the exams.
+if on_screen 10b-search-empty "Add widget" exact; then
+  pass "the search screen offers widgets"
+elif tap_text 10b-search-empty "Today · "; then
+  sleep 1.2
+  peek 10b-search-glance
+  dump 10b-search-glance
+  if on_screen 10b-search-glance "Add widget" exact; then pass "the search page's Today line opens its widgets"; else fail "the search page's Today line opens its widgets"; fi
+  tap_text 10b-search-glance "Today · " || true
+  sleep 0.8
+else
+  fail "the search screen shows its Today line"
+  python3 ci/describe_ui.py "$OUT/10b-search-empty.xml" 25 | sed 's/^/        /'
+fi
+# 0.10.2: "!" offers the study commands as you type.
+adb shell input text "!"
+sleep 1.2
+dump 10b-search-bang
+if on_screen 10b-search-bang "!next" exact; then pass "typing ! offers the study commands"; else fail "typing ! offers the study commands"; fi
+adb shell input keyevent KEYCODE_DEL
+sleep 0.8
 # 0.7.2: a question offers Ask Claude, and the field sits just above the keyboard (its height is in the log).
 adb shell input text "how%sdo%smagnets%swork"
 sleep 1.5

@@ -830,7 +830,7 @@ object LauncherSettings {
 
     /** Ids of the search page's cards, top to bottom (see SearchCards in core/data). Edited with its own editor. */
     val SearchCards = StringListSetting(
-        key = "search.cards", default = listOf("widgets", "timeline", "exam", "annales", "absences", "grades", "flashcard", "review", "next", "commands", "claude", "apps"),
+        key = "search.cards", default = listOf("glance", "next", "claude", "apps"),
         title = "Search page cards", section = "search", hidden = true,
     )
 

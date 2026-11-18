@@ -37,10 +37,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -98,16 +100,27 @@ internal fun SearchPage(
     val now = remember(tick, day) { System.currentTimeMillis() }
     BoxWithConstraints(modifier.fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
         val room = maxHeight
+        val scroll = rememberScrollState()
         Column(
             Modifier
                 .fillMaxWidth()
+                // 0.10.2: what is scrolled past the top fades out under a soft edge instead of being cut.
+                .fadingTop(scroll)
                 // From the bottom: the cards nearest the field show first, the rest are a scroll up away.
-                .verticalScroll(rememberScrollState(), reverseScrolling = true)
-                .padding(bottom = 4.dp),
+                .verticalScroll(scroll, reverseScrolling = true)
+                .padding(top = 6.dp, bottom = 4.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             for (id in cards) {
                 when (id) {
+                    // 0.10.2: one calm line; the calendar month (the page's widgets) and the exam countdown one tap away.
+                    "glance" -> {
+                        if (controller.searchGlanceOpen) {
+                            if ("widgets" !in cards) Column { SearchWidgets(controller, widgets, env, room) }
+                            if (loaded && "exam" !in cards) ExamCountdown(controller, day.exams, day.unconfirmedExams, now)
+                        }
+                        GlanceLine(controller, day, loaded, now)
+                    }
                     "widgets" -> Column { SearchWidgets(controller, widgets, env, room) }
                     "timeline" -> if (loaded) DayStrip(controller, day, now)
                     "exam" -> if (loaded) ExamCountdown(controller, day.exams, day.unconfirmedExams, now)
@@ -196,6 +209,65 @@ private fun AnnalesCard(controller: HomeController, day: StudyDay, now: Long) {
     }
 }
 
+/** The scrolling stack's top edge fades out while there is more above it (0.10.2: nothing looks cut). */
+private fun Modifier.fadingTop(scroll: androidx.compose.foundation.ScrollState): Modifier = this
+    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        // Reverse scrolling: the stack starts at its bottom, so there is more above while not scrolled to the end.
+        if (scroll.value < scroll.maxValue) {
+            val edge = 28.dp.toPx().coerceAtMost(size.height / 3f)
+            drawRect(
+                Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black, startY = 0f, endY = edge),
+                size = Size(size.width, edge),
+                blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+            )
+        }
+    }
+
+/**
+ * 0.10.2: "Today · 24 days to Checkpoint 2" on one line (the date when no exam is coming); a tap opens the calendar
+ * month (the search page's widgets) and the exam countdown above it, a second tap folds them.
+ */
+@Composable
+private fun GlanceLine(controller: HomeController, day: StudyDay, loaded: Boolean, now: Long) {
+    val exam = if (loaded) day.exams.firstOrNull { it.begin > now } else null
+    val text = "Today · " + if (exam != null) {
+        val (count, unit) = examCountdown(exam.begin, now)
+        val name = exam.rawTitle.trim().substringBefore(" (").trim().ifEmpty { "the exam" }
+        if (unit.isEmpty()) "$name now" else "$count $unit to $name"
+    } else {
+        java.time.LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault()))
+    }
+    val open = controller.searchGlanceOpen
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(50))
+            .squishClickable {
+                Haptics.tick(controller.view)
+                controller.searchGlanceOpen = !open
+            }
+            .cardFill(0.07f)
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LauncherIcon(LauncherIcons.Calendar, contentDescription = null, tint = Ink.copy(alpha = 0.8f), size = 16.dp)
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text,
+            // Amber from 14 days, red from 3, as the exam countdown; plain before.
+            style = searchText(13, FontWeight.Medium, color = exam?.let { e -> ((e.begin - now) / 86_400_000L).takeIf { it <= 14 }?.let { examColor(it) } } ?: Ink),
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+        )
+        val turn by androidx.compose.animation.core.animateFloatAsState(if (open) 180f else 0f, label = "glance")
+        LauncherIcon(
+            LauncherIcons.ArrowUp, contentDescription = if (open) "Fold the calendar and exams" else "Calendar and exams",
+            tint = Ink.copy(alpha = 0.7f), size = 18.dp, modifier = Modifier.graphicsLayer { rotationZ = turn },
+        )
+    }
+}
+
 /** A card of the search page: a faint pane on the dimmed wallpaper; a tap may grow the study hub out of it. */
 @Composable
 private fun SearchPane(onClick: ((Rect?) -> Unit)?, content: @Composable () -> Unit) {
@@ -239,7 +311,8 @@ private fun NextBlockCard(controller: HomeController, day: StudyDay, now: Long) 
         val nextStep = tasks.firstOrNull { !it.done }
         Column(Modifier.animateContentSize(spring(dampingRatio = 0.86f, stiffness = MotionScale.stiffness(520f)))) {
             Row(Modifier.height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.width(4.dp).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(accent))
+                // 0.10.2: today's progress (blocks done of the day's, in their colours) beside the block now or next.
+                DayRing(day, now, Ink, 34.dp)
                 Spacer(Modifier.width(11.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
@@ -273,7 +346,7 @@ private fun NextBlockCard(controller: HomeController, day: StudyDay, now: Long) 
             // The next step, tickable from here: the most likely tap after "what am I doing now".
             if (nextStep != null && (running || hero.end <= now)) {
                 Spacer(Modifier.height(8.dp))
-                Box(Modifier.padding(start = 15.dp)) {
+                Box(Modifier.padding(start = 45.dp)) {
                     TaskRow(nextStep.text, false, Ink, true) { controller.studyTick(hero, nextStep.index, true) }
                 }
             }
@@ -627,11 +700,14 @@ private fun ReviewNumber(value: String, label: String, color: Color = Ink) {
 
 // ---- study commands (D3) and Claude ----
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun CommandChips(controller: HomeController) {
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+    // 0.10.2: the chips wrap onto a second line instead of running off the edge.
+    androidx.compose.foundation.layout.FlowRow(
+        Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         for ((command, label) in StudyCommands.chips) {
             GlassButton(label, Ink, icon = StudyCommands.icon(command)) {
@@ -642,26 +718,35 @@ private fun CommandChips(controller: HomeController) {
     }
 }
 
+/**
+ * 0.10.2: one "Ask Claude" chip. Your prompt templates (D2) are under it: its arrow shows them (wrapping, never cut),
+ * and typing "?" lists them too; the chip itself switches the field to Claude.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun ClaudeChips(controller: HomeController, hero: StudyEvent?) {
     val claudeOn by controller.data.settings.derive { get(LauncherSettings.SearchClaude) != "off" }
     if (!claudeOn) return
     val templates by controller.data.settings.derive { get(LauncherSettings.StudyTemplates) }
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+    val prompts = remember(templates) { claudePrompts(templates) }
+    var open by remember { mutableStateOf(false) }
+    androidx.compose.foundation.layout.FlowRow(
+        Modifier.fillMaxWidth().animateContentSize(spring(dampingRatio = 0.86f, stiffness = MotionScale.stiffness(520f))),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         GlassButton("Ask Claude", Ink, icon = LauncherIcons.Sparkle, emphasis = ControlEmphasis.Main) {
             Haptics.tick(controller.view)
             controller.askClaudeMode = true
         }
-        // The prompt templates (D2) about the block now, when there is one.
-        if (hero != null) {
-            for (line in templates.take(4)) {
-                val label = line.substringBefore('|').trim()
-                val prompt = line.substringAfter('|', "").trim()
-                if (label.isEmpty() || prompt.isEmpty()) continue
+        if (prompts.isNotEmpty()) {
+            GlassButton(null, Ink, icon = if (open) LauncherIcons.ArrowDown else LauncherIcons.ArrowUp, contentDescription = if (open) "Hide your prompts" else "Your prompts") {
+                Haptics.tick(controller.view)
+                open = !open
+            }
+        }
+        if (open) {
+            for ((label, prompt) in prompts) {
                 GlassButton(label, Ink) {
                     controller.closeSearch(immediately = true)
                     controller.askTemplate(prompt, hero)
@@ -669,6 +754,13 @@ private fun ClaudeChips(controller: HomeController, hero: StudyEvent?) {
             }
         }
     }
+}
+
+/** Your prompt templates ("Label | prompt" lines) as label and prompt. */
+internal fun claudePrompts(templates: List<String>): List<Pair<String, String>> = templates.mapNotNull { line ->
+    val label = line.substringBefore('|').trim()
+    val prompt = line.substringAfter('|', "").trim()
+    if (label.isEmpty() || prompt.isEmpty()) null else label to prompt
 }
 
 /** The study commands of search (D3). */
@@ -689,6 +781,24 @@ internal object StudyCommands {
         if (!t.startsWith("!")) return null
         val word = t.drop(1).substringBefore(' ')
         return word.takeIf { it in setOf("next", "exam", "exams", "plan", "abs") }?.let { if (it == "exams") "exam" else it }
+    }
+
+    /** What each command shows, for the list offered while "!" is typed (0.10.2). */
+    val about = listOf(
+        "!next" to "The block now or next and its steps",
+        "!exam" to "Your next exams and how far away they are",
+        "!plan" to "Open your study plan",
+        "!abs" to "Absences per module against the limit",
+    )
+
+    /**
+     * The commands [text] could still become while it is typed ("!" alone: all of them; "!e": !exam), or null when it
+     * is not the start of one (a web bang such as "!w" stays a bang).
+     */
+    fun started(text: String): List<Pair<String, String>>? {
+        val t = text.trim().lowercase(Locale.ROOT)
+        if (!t.startsWith("!") || ' ' in t) return null
+        return about.filter { it.first.startsWith(t) }.takeIf { it.isNotEmpty() }
     }
 
     /** The question after "?" ("" while nothing follows), or null when [text] does not start with "?". */

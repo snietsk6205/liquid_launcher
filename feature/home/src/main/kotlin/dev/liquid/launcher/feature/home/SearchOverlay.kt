@@ -90,6 +90,12 @@ private sealed interface SearchResult {
 
     /** A row of a study command, "!next", "!exam", "!plan", "!abs" (0.9.3, D3). */
     data class Study(val row: StudyRow) : SearchResult
+
+    /** 0.10.2: a study command offered while "!" is being typed; a tap puts it in the field. */
+    data class Command(val command: String, val about: String) : SearchResult
+
+    /** 0.10.2: one of your prompt templates, offered while "?" is typed alone; a tap asks Claude with it. */
+    data class Prompt(val label: String, val prompt: String) : SearchResult
 }
 
 /**
@@ -139,8 +145,9 @@ fun SearchOverlay(
     val studyDay by controller.data.study.day.collectAsState()
     val studyLoaded by controller.data.study.loaded.collectAsState()
     val minute = rememberMinuteTick()
-    val results = remember(query, visible, usage, config.engine, config.claude, askMode, studyDay, studyLoaded, minute) {
-        buildResults(query, visible, usage, config.engine, config.claude, askMode, studyDay, studyLoaded)
+    val templates by controller.data.settings.derive { get(dev.liquid.launcher.core.settings.LauncherSettings.StudyTemplates) }
+    val results = remember(query, visible, usage, config.engine, config.claude, askMode, studyDay, studyLoaded, minute, templates) {
+        buildResults(query, visible, usage, config.engine, config.claude, askMode, studyDay, studyLoaded, templates)
     }
 
     fun open(result: SearchResult) {
@@ -156,6 +163,12 @@ fun SearchOverlay(
             is SearchResult.Web -> controller.openUrl(result.url)
             // D1: sent with "[1A ESSAI · P2 · now: <block or free>]" in front while the study companion is on.
             is SearchResult.Claude -> controller.askClaude(controller.withStudyHeader(result.prompt))
+            is SearchResult.Command -> {
+                Haptics.tick(controller.view)
+                controller.searchQuery = result.command
+                return
+            }
+            is SearchResult.Prompt -> controller.askTemplate(result.prompt, heroBlock(studyDay, System.currentTimeMillis()))
             is SearchResult.Study -> {
                 val key = result.row.key
                 when {
@@ -281,6 +294,8 @@ private fun resultKey(result: SearchResult): String = when (result) {
     is SearchResult.Web -> "web"
     is SearchResult.Claude -> "claude"
     is SearchResult.Study -> "study:" + result.row.key
+    is SearchResult.Command -> "command:" + result.command
+    is SearchResult.Prompt -> "prompt:" + result.label
 }
 
 private fun fieldHint(askMode: Boolean): String = if (askMode) "Ask Claude anything…" else "Apps, calculations, web, Claude…"
@@ -294,20 +309,25 @@ private fun buildResults(
     askMode: Boolean,
     studyDay: dev.liquid.launcher.core.data.StudyDay = dev.liquid.launcher.core.data.StudyDay(),
     studyLoaded: Boolean = false,
+    templates: List<String> = emptyList(),
 ): List<SearchResult> {
     val text = query.trim()
     if (text.isEmpty()) return emptyList()
     // Switched to Claude (the field's icon or the "Ask Claude" action): everything typed goes there.
     if (askMode) return listOf(SearchResult.Claude(text))
-    // "?text": straight to Claude (D3).
+    // "?text": straight to Claude (D3); "?" alone lists your prompts (0.10.2).
     if (claude != "off") {
         StudyCommands.question(text)?.let { question ->
-            return if (question.isEmpty()) emptyList() else listOf(SearchResult.Claude(question))
+            return if (question.isEmpty()) claudePrompts(templates).map { (label, prompt) -> SearchResult.Prompt(label, prompt) } else listOf(SearchResult.Claude(question))
         }
     }
     // "!next", "!exam", "!plan", "!abs" (D3).
     StudyCommands.parse(text)?.let { command ->
         return studyRows(command, studyDay, System.currentTimeMillis(), studyLoaded).map { SearchResult.Study(it) }
+    }
+    // 0.10.2: "!" and the start of a command ("!n") offer the study commands, one tap each.
+    StudyCommands.started(text)?.let { commands ->
+        return commands.map { (command, about) -> SearchResult.Command(command, about) }
     }
     if (claude != "off") {
         ClaudeQuery.bang(text)?.let { prompt ->
@@ -385,6 +405,22 @@ private fun ResultRow(result: SearchResult, claudeApp: AppEntry?, modifier: Modi
                 }
                 Spacer(Modifier.width(8.dp))
                 LauncherIcon(LauncherIcons.Sparkle, contentDescription = null, tint = Color.White.copy(alpha = 0.55f), size = 18.dp)
+            }
+            is SearchResult.Command -> {
+                IconBox(StudyCommands.icon(result.command))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(result.command, style = style.copy(fontWeight = FontWeight.Medium))
+                    Text(result.about, style = style.copy(fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f)), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            is SearchResult.Prompt -> {
+                IconBox(LauncherIcons.Sparkle, HomeTheme.accent.copy(alpha = 0.35f))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(result.label, style = style.copy(fontWeight = FontWeight.Medium))
+                    Text("“${result.prompt}”", style = style.copy(fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f)), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
             }
             is SearchResult.Study -> {
                 IconBox(result.row.icon, (result.row.color ?: Color.White).copy(alpha = 0.28f))
