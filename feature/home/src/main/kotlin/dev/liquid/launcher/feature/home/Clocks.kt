@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -37,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -69,7 +71,7 @@ import kotlin.math.sin
  * Clock settings and the theme, so a clock placed before 0.7 looks as it did.
  */
 data class ClockStyle(
-    /** "digital", "stacked", "minimal", "analog", "words" or "flip". */
+    /** "digital", "stacked", "minimal", "analog", "words", "flip", "tall" or "glance" (0.10.2). */
     val design: String = "digital",
     /** "theme" (the theme's clock font) or a font id (see [ClockFonts]). */
     val font: String = "theme",
@@ -135,8 +137,11 @@ data class ClockStyle(
     }
 
     companion object {
+        // 0.10.2: "Tall" (condensed bevelled digits, dots, a bold date above) and "Stacked" (hours over minutes, heavy and
+        // rounded, in a light tint of the wallpaper, with the date and the study line above); the stacked design of
+        // before keeps its id as "Two lines".
         val Designs = listOf(
-            "digital" to "Digital", "stacked" to "Stacked", "minimal" to "Minimal",
+            "digital" to "Digital", "tall" to "Tall", "glance" to "Stacked", "stacked" to "Two lines", "minimal" to "Minimal",
             "analog" to "Analog", "words" to "Words", "flip" to "Flip",
         )
 
@@ -262,10 +267,15 @@ internal class ClockColours(val primary: Color, val secondary: Color, val shadow
  * The colours [style] draws in over this wallpaper: its colour (automatic, the accent, the icons' tone from the
  * wallpaper, or a fixed one), its second colour and its shadow.
  */
-internal fun clockColours(style: ClockStyle, contentColor: Color, contentShadow: Shadow?, glass: GlassConfig, lightBackground: Boolean): ClockColours {
+internal fun clockColours(
+    style: ClockStyle, contentColor: Color, contentShadow: Shadow?, glass: GlassConfig, lightBackground: Boolean,
+    roles: dev.liquid.launcher.core.common.WallpaperPalette? = dev.liquid.launcher.core.common.WallpaperTones.tone.value?.roles,
+): ClockColours {
     val onGlass = style.plate == "glass" || style.plate == "frosted"
     val auto = when {
         onGlass -> if (glass.lightGlass(Surfaces.Clock, lightBackground)) Color(0xFF16181C) else Color.White
+        // 0.10.2: the Stacked design is a light tint of the wallpaper's own colour unless a colour is chosen.
+        style.design == "glance" -> wallpaperTint(roles, lightBackground) ?: contentColor
         else -> contentColor
     }
     // The icons' colours are read only by a clock that uses them ("tone"). They ease over 260 ms on every
@@ -278,6 +288,13 @@ internal fun clockColours(style: ClockStyle, contentColor: Color, contentShadow:
         secondary = parseColor(style.color2, HomeTheme.accent, tone),
         shadow = if (style.shadow && !onGlass && style.fill != "glass") contentShadow else null,
     )
+}
+
+/** A light tint of the wallpaper's colour (its most vivid one, softened), a little deeper over a light wallpaper; null when unknown. */
+private fun wallpaperTint(roles: dev.liquid.launcher.core.common.WallpaperPalette?, lightBackground: Boolean): Color? {
+    roles ?: return null
+    val hsl = dev.liquid.launcher.core.common.WallpaperPalette.hsl(roles.vibrant)
+    return Color(dev.liquid.launcher.core.common.WallpaperPalette.withHsl(roles.vibrant, s = minOf(hsl[1], 0.5f), l = if (lightBackground) 0.78f else 0.86f))
 }
 
 private fun parseColor(value: String, auto: Color, tone: Color): Color = when (value) {
@@ -346,7 +363,9 @@ fun ClockFace(
     val context = androidx.compose.ui.platform.LocalContext.current
     val plateShape = RoundedCornerShape(style.corner.dp)
     val onGlass = style.plate == "glass" || style.plate == "frosted"
-    val colours = clockColours(style, contentColor, contentShadow, glass, lightBackground)
+    // Observed, so a design in the wallpaper's tint follows a new wallpaper at once.
+    val tone by dev.liquid.launcher.core.common.WallpaperTones.tone.collectAsState()
+    val colours = clockColours(style, contentColor, contentShadow, glass, lightBackground, tone?.roles)
     val ink = ClockInk(
         family = ClockFonts.family(context, style.font),
         weight = if (style.weight in 100..900) FontWeight(style.weight) else HomeTheme.clockWeight,
@@ -394,7 +413,7 @@ fun ClockFace(
             else -> rememberMinuteTick()
         }
         val time = remember(now / 1000) { LocalTime.now() }
-        val date = if (style.date != "off" && style.design != "minimal") dateText(style.dateFormat, now) else null
+        val date = if (style.date != "off" && style.design !in OwnDate) dateText(style.dateFormat, now) else null
         // The date line takes a share of the height; the face gets the rest.
         val dateShare = if (date != null) 0.2f else 0f
         val faceHeight = boxHeight * (1f - dateShare)
@@ -406,6 +425,8 @@ fun ClockFace(
                 else -> Alignment.Center
             }) {
                 when (style.design) {
+                    "tall" -> TallFace(style, ink, time, now, boxWidth, faceHeight, horizontal)
+                    "glance" -> GlanceFace(style, ink, time, boxWidth, faceHeight, horizontal)
                     "stacked" -> StackedFace(style, ink, time, boxWidth, faceHeight, horizontal)
                     "minimal" -> MinimalFace(style, ink, time, now, boxWidth, faceHeight, horizontal)
                     "analog" -> AnalogFace(style, ink, time, now)
@@ -419,11 +440,17 @@ fun ClockFace(
     }
 }
 
+/** Designs that place the date themselves: minimal under the time, tall above in bold, glance in its line above. */
+private val OwnDate = setOf("minimal", "tall", "glance")
+
 private fun minOfLuminance(a: Int, b: Int): Int =
     if (androidx.core.graphics.ColorUtils.calculateLuminance(a) < androidx.core.graphics.ColorUtils.calculateLuminance(b)) a else b
 
 private fun maxOfLuminance(a: Int, b: Int): Int =
     if (androidx.core.graphics.ColorUtils.calculateLuminance(a) >= androidx.core.graphics.ColorUtils.calculateLuminance(b)) a else b
+
+/** The date as [style] writes it (for the line above the Stacked design, 0.10.2). */
+internal fun clockDateText(style: ClockStyle): String = dateText(style.dateFormat, System.currentTimeMillis())
 
 private fun dateText(pattern: String, now: Long): String = try {
     // [now] only keys the recomposition; the date is today's.
@@ -444,12 +471,15 @@ private fun minutes(time: LocalTime) = "%02d".format(time.minute)
  * Measured with the widest digits, so the size does not change as the time does.
  */
 @Composable
-private fun fitSize(template: String, ink: ClockInk, width: Dp, height: Dp, percent: Int, lines: Int = 1): TextUnit {
+private fun fitSize(
+    template: String, ink: ClockInk, width: Dp, height: Dp, percent: Int, lines: Int = 1,
+    transform: androidx.compose.ui.text.style.TextGeometricTransform? = null,
+): TextUnit {
     val measurer = rememberTextMeasurer(cacheSize = 8)
     val density = LocalDensity.current
-    return remember(template, ink.family, ink.weight, ink.spacing, width, height, percent, lines, density) {
+    return remember(template, ink.family, ink.weight, ink.spacing, width, height, percent, lines, density, transform) {
         val reference = 100f
-        val layout = measurer.measure(template, ink.plain(reference.sp))
+        val layout = measurer.measure(template, ink.plain(reference.sp).let { if (transform != null) it.copy(textGeometricTransform = transform) else it })
         val w = layout.size.width.coerceAtLeast(1)
         val h = layout.size.height.coerceAtLeast(1)
         val scale = with(density) { minOf(width.toPx() / w, height.toPx() / h) }
@@ -457,9 +487,17 @@ private fun fitSize(template: String, ink: ClockInk, width: Dp, height: Dp, perc
     }
 }
 
-/** One part of the time; rolls or fades when it changes. */
+/**
+ * One part of the time; rolls or fades when it changes. 0.10.2: with [bevel], a light edge up and to the left and a
+ * shaded one down and to the right ([shade]'s colour); with [rounded], the strokes thickened by that many px with
+ * round joins (heavy, rounded digits from any font).
+ */
 @Composable
-private fun Changing(text: String, style: ClockStyle, textStyle: TextStyle) {
+private fun Changing(text: String, style: ClockStyle, textStyle: TextStyle, bevel: Dp = 0.dp, shade: Color = Color.White, rounded: Float = 0f) {
+    if (bevel > 0.dp || rounded > 0f) {
+        ChangingContent(text, style) { value -> LayeredDigits(value, textStyle, bevel, shade, rounded) }
+        return
+    }
     if (style.change == "none") {
         Text(text, style = textStyle, maxLines = 1, softWrap = false)
         return
@@ -480,6 +518,59 @@ private fun Changing(text: String, style: ClockStyle, textStyle: TextStyle) {
         Text(value, style = textStyle, maxLines = 1, softWrap = false)
     }
 }
+
+/** As [Changing], for any content. */
+@Composable
+private fun ChangingContent(text: String, style: ClockStyle, content: @Composable (String) -> Unit) {
+    if (style.change == "none") {
+        content(text)
+        return
+    }
+    AnimatedContent(
+        targetState = text,
+        transitionSpec = {
+            val transform: ContentTransform = if (style.change == "roll") {
+                (slideInVertically(tween(MotionScale.ms(320))) { it / 2 } + fadeIn(tween(MotionScale.ms(240)))) togetherWith
+                    (slideOutVertically(tween(MotionScale.ms(320))) { -it / 2 } + fadeOut(tween(MotionScale.ms(180))))
+            } else {
+                fadeIn(tween(MotionScale.ms(260))) togetherWith fadeOut(tween(MotionScale.ms(260)))
+            }
+            transform.using(SizeTransform(clip = false))
+        },
+        label = "clock",
+    ) { value -> content(value) }
+}
+
+/** Digits drawn in layers: the bevel's shaded and light edges, the thickening stroke, then the face itself. */
+@Composable
+private fun LayeredDigits(text: String, style: TextStyle, bevel: Dp, shade: Color, rounded: Float) {
+    val density = LocalDensity.current
+    Box {
+        if (bevel > 0.dp) {
+            val e = with(density) { bevel.toPx() }
+            val base = style.brush
+            val dark = lerpColor(shade, Color.Black, 0.45f).copy(alpha = shade.alpha * 0.7f)
+            val light = lerpColor(shade, Color.White, 0.6f).copy(alpha = shade.alpha * 0.7f)
+            Text(text, style = style.copy(color = dark, shadow = null), maxLines = 1, softWrap = false, modifier = Modifier.graphicsLayerOffset(e, e))
+            Text(text, style = style.copy(color = light, shadow = null), maxLines = 1, softWrap = false, modifier = Modifier.graphicsLayerOffset(-e * 0.7f, -e * 0.7f))
+            Text(text, style = style.copy(brush = base), maxLines = 1, softWrap = false)
+        } else {
+            Text(text, style = style, maxLines = 1, softWrap = false)
+            Text(
+                text, maxLines = 1, softWrap = false,
+                style = style.copy(
+                    shadow = null,
+                    drawStyle = androidx.compose.ui.graphics.drawscope.Stroke(width = rounded, join = androidx.compose.ui.graphics.StrokeJoin.Round, cap = StrokeCap.Round),
+                ),
+            )
+        }
+    }
+}
+
+/** Moves what is drawn by ([x], [y]) px without moving the layout. */
+private fun Modifier.graphicsLayerOffset(x: Float, y: Float): Modifier = this.then(
+    Modifier.graphicsLayer { translationX = x; translationY = y }
+)
 
 @Composable
 private fun DigitalFace(style: ClockStyle, ink: ClockInk, time: LocalTime, width: Dp, height: Dp) {
@@ -505,6 +596,75 @@ private fun StackedFace(style: ClockStyle, ink: ClockInk, time: LocalTime, width
     Column(horizontalAlignment = horizontal, verticalArrangement = Arrangement.Center) {
         Changing(hours(style, time), style, ink.style(size, lineHeight = 0.9f))
         Changing(minutes(time), style, ink.style(size, ink.secondary, lineHeight = 0.9f))
+    }
+}
+
+/**
+ * 0.10.2, "Tall": tall condensed digits (any font, narrowed) with a soft bevel, a light edge towards the light and a
+ * shaded one away from it; the colon as two dots; a small bold date line above when the date is on.
+ */
+@Composable
+private fun TallFace(style: ClockStyle, ink: ClockInk, time: LocalTime, now: Long, width: Dp, height: Dp, horizontal: Alignment.Horizontal) {
+    val date = if (style.date != "off") dateText(style.dateFormat, now) else null
+    val dateShare = if (date != null) 0.16f else 0f
+    val digitsHeight = height * (1f - dateShare)
+    val condensed = androidx.compose.ui.text.style.TextGeometricTransform(scaleX = 0.7f)
+    // The template is sized with the condensing applied, so the digits fill the height.
+    val size = fitSize("88 88", ink, width, digitsHeight, style.size, transform = condensed)
+    val density = LocalDensity.current
+    val edge = with(density) { (size.toPx() * 0.016f).coerceAtLeast(1f).toDp() }
+    val base = ink.style(size, lineHeight = 0.92f).copy(textGeometricTransform = condensed, shadow = null)
+    Column(horizontalAlignment = horizontal, verticalArrangement = Arrangement.Center) {
+        if (date != null) {
+            val dateSize = fitSize(date, ink, width * 0.8f, height * dateShare * 0.8f, 100)
+            Text(
+                date, maxLines = 1,
+                style = ink.style(minOf(dateSize.value, size.value * 0.16f).sp).copy(fontWeight = FontWeight.Bold, letterSpacing = 0.04.em),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Changing(hours(style, time), style, base, bevel = edge, shade = ink.primary)
+            ColonDots(size, ink.primary, edge, ink.shadow)
+            Changing(minutes(time), style, base, bevel = edge, shade = ink.primary)
+        }
+    }
+}
+
+/** Tall's colon: two round dots, bevelled like the digits. */
+@Composable
+private fun ColonDots(size: TextUnit, color: Color, edge: Dp, shadow: Shadow?) {
+    val density = LocalDensity.current
+    val dot = with(density) { (size.toPx() * 0.11f).toDp() }
+    Canvas(Modifier.size(width = dot * 2.2f, height = with(density) { (size.toPx() * 0.62f).toDp() })) {
+        val r = dot.toPx() / 2f
+        val e = edge.toPx()
+        val cx = this.size.width / 2f
+        for (cy in listOf(this.size.height * 0.3f, this.size.height * 0.72f)) {
+            shadow?.let { drawCircle(it.color, r, Offset(cx + it.offset.x, cy + it.offset.y)) }
+            drawCircle(lerpColor(color, Color.Black, 0.45f).copy(alpha = color.alpha * 0.7f), r, Offset(cx + e, cy + e))
+            drawCircle(lerpColor(color, Color.White, 0.6f).copy(alpha = color.alpha * 0.7f), r, Offset(cx - e * 0.7f, cy - e * 0.7f))
+            drawCircle(color, r, Offset(cx, cy))
+        }
+    }
+}
+
+private fun lerpColor(a: Color, b: Color, t: Float): Color = androidx.compose.ui.graphics.lerp(a, b, t)
+
+/**
+ * 0.10.2, "Stacked": hours over minutes in big, heavy, rounded digits (any font, its strokes thickened with round
+ * joins), in a light tint of the wallpaper's colour unless a colour is chosen. The date and the study line sit above
+ * it, at a glance (placed by the clock widget).
+ */
+@Composable
+private fun GlanceFace(style: ClockStyle, ink: ClockInk, time: LocalTime, width: Dp, height: Dp, horizontal: Alignment.Horizontal) {
+    val size = fitSize("88", ink, width, height * 0.5f, style.size)
+    val density = LocalDensity.current
+    val heavy = if (style.weight in 100..900) FontWeight(style.weight) else FontWeight.Black
+    val stroke = with(density) { size.toPx() * 0.03f }
+    val text = ink.style(size, lineHeight = 0.86f).copy(fontWeight = heavy)
+    Column(horizontalAlignment = horizontal, verticalArrangement = Arrangement.Center) {
+        Changing(hours(style, time), style, text, rounded = stroke)
+        Changing(minutes(time), style, text, rounded = stroke)
     }
 }
 

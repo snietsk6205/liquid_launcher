@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
@@ -471,6 +472,42 @@ internal fun WidgetContent(item: HomeItem, env: PageEnv, controller: HomeControl
         // The study block running now (or next) as a line under the clock, when the companion is on (0.6.3, D92).
         val showStudy by controller.data.settings.derive { get(LauncherSettings.StudyClockLine) != "off" }
         val glance = if (showStudy) rememberStudyGlance(controller) else null
+        // 0.10.2: by default the line, its ring and its ✓ are in the clock design's own colour (from the wallpaper when
+        // the clock takes it from there) with the clock's own shadow; or, as chosen, dark over a light wallpaper and light
+        // over a dark one, white, or black, with a soft halo in the opposite tone.
+        val lineInk by controller.data.settings.derive { get(LauncherSettings.StudyLineInk) }
+        val lineHalo by controller.data.settings.derive { get(LauncherSettings.StudyLineShadow) }
+        val tone by dev.liquid.launcher.core.common.WallpaperTones.tone.collectAsState()
+        val clock = clockColours(style, env.contentColor, env.shadow, env.glass, env.lightBackground, tone?.roles)
+        val followsClock = lineInk == "clock"
+        val lineColor = when (lineInk) {
+            "white" -> Color.White
+            "black" -> Color(0xFF111316)
+            "clock" -> clock.primary
+            else -> if (env.lightBackground) Color(0xFF111316) else Color.White
+        }
+        val lineShadow = when {
+            !lineHalo -> null
+            followsClock -> clock.shadow
+            else -> {
+                val dark = lineColor.luminance() > 0.5f
+                androidx.compose.ui.graphics.Shadow(
+                    if (dark) Color.Black.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.55f),
+                    androidx.compose.ui.geometry.Offset(0f, 1.5f), 10f,
+                )
+            }
+        }
+        // 0.10.2: the Stacked design reads at a glance: the date and the study line above the digits.
+        val atAGlance = style.design == "glance"
+        val studyLine: @Composable () -> Unit = {
+            if (glance != null) {
+                StudyLine(
+                    glance, controller, lineColor, lineShadow, env.interactive && !env.editMode,
+                    Modifier.padding(horizontal = if (style.plate == "none") 0.dp else 10.dp).padding(bottom = 2.dp),
+                    ownColours = followsClock,
+                )
+            }
+        }
         Column(
             Modifier.fillMaxSize(),
             horizontalAlignment = when (style.align) {
@@ -479,38 +516,23 @@ internal fun WidgetContent(item: HomeItem, env: PageEnv, controller: HomeControl
                 else -> Alignment.CenterHorizontally
             },
         ) {
-            ClockFace(style, env.contentColor, env.shadow, env.glass, env.lightBackground, env.wallpaperBackdrop, Modifier.weight(1f))
-            if (glance != null) {
-                // 0.10.2: by default the line, its ring and its ✓ are in the clock design's own colour (from the
-                // wallpaper when the clock takes it from there) with the clock's own shadow; or, as chosen, dark over a
-                // light wallpaper and light over a dark one, white, or black, with a soft halo in the opposite tone.
-                val lineInk by controller.data.settings.derive { get(LauncherSettings.StudyLineInk) }
-                val lineHalo by controller.data.settings.derive { get(LauncherSettings.StudyLineShadow) }
-                val clock = clockColours(style, env.contentColor, env.shadow, env.glass, env.lightBackground)
-                val followsClock = lineInk == "clock"
-                val lineColor = when (lineInk) {
-                    "white" -> Color.White
-                    "black" -> Color(0xFF111316)
-                    "clock" -> clock.primary
-                    else -> if (env.lightBackground) Color(0xFF111316) else Color.White
+            if (atAGlance) {
+                if (style.date != "off") {
+                    rememberMinuteTick()
+                    androidx.compose.material3.Text(
+                        clockDateText(style),
+                        style = androidx.compose.ui.text.TextStyle(
+                            fontFamily = HomeTheme.font, color = clock.primary, fontSize = 16.sp,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, shadow = clock.shadow,
+                        ),
+                        maxLines = 1,
+                        modifier = Modifier.padding(horizontal = if (style.plate == "none") 6.dp else 16.dp).padding(top = 2.dp),
+                    )
                 }
-                val lineShadow = when {
-                    !lineHalo -> null
-                    followsClock -> clock.shadow
-                    else -> {
-                        val dark = lineColor.luminance() > 0.5f
-                        androidx.compose.ui.graphics.Shadow(
-                            if (dark) Color.Black.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.55f),
-                            androidx.compose.ui.geometry.Offset(0f, 1.5f), 10f,
-                        )
-                    }
-                }
-                StudyLine(
-                    glance, controller, lineColor, lineShadow, env.interactive && !env.editMode,
-                    Modifier.padding(horizontal = if (style.plate == "none") 0.dp else 10.dp).padding(bottom = 2.dp),
-                    ownColours = followsClock,
-                )
+                studyLine()
             }
+            ClockFace(style, env.contentColor, env.shadow, env.glass, env.lightBackground, env.wallpaperBackdrop, Modifier.weight(1f))
+            if (!atAGlance) studyLine()
         }
     }
     when (item.widget) {

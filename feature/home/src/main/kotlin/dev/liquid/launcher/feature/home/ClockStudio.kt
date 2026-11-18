@@ -145,7 +145,8 @@ internal fun ClockStudio(
                     ) {
                         Box(Modifier.size(width = 96.dp, height = 62.dp)) {
                             ClockFace(
-                                style = style.copy(design = id, plate = "none", date = "off", size = 100, color = style.color.ifEmpty { ColorSetting.format(colorToArgb(color)) }, seconds = "off", change = "none", shadow = false),
+                                // 0.10.2: Stacked shows its own default (a light tint of the wallpaper) until a colour is chosen.
+                                style = style.copy(design = id, plate = "none", date = "off", size = 100, color = if (id == "glance") style.color else style.color.ifEmpty { ColorSetting.format(colorToArgb(color)) }, seconds = "off", change = "none", shadow = false),
                                 contentColor = color,
                                 contentShadow = null,
                                 glass = glass,

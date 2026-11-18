@@ -667,6 +667,26 @@ if tap_text 11-edit "Widgets" exact; then
 else
   fail "edit mode has a Widgets button"
 fi
+# 0.10.2: the clock's gallery offers the two new designs; a look at each (the default layout's first widget is the clock).
+if tap_text 11-edit "Customise" exact; then
+  sleep 1.5
+  dump 12-clock
+  if on_screen 12-clock "Tall" exact && on_screen 12-clock "Stacked" exact; then
+    pass "the clock gallery offers Tall and Stacked"
+    for design in Tall Stacked; do
+      if tap_text 12-clock "$design" exact; then sleep 1.2; peek "12-clock-$design"; fi
+    done
+  else
+    fail "the clock gallery offers Tall and Stacked"
+    python3 ci/describe_ui.py "$OUT/12-clock.xml" 25 | sed 's/^/        /'
+  fi
+  dump 12-clock2
+  tap_text 12-clock2 "Cancel" exact || adb shell input keyevent KEYCODE_BACK
+  sleep 1
+  dump 11-edit
+else
+  note "no Customise button on a widget in edit mode"
+fi
 tap_text 11-edit "Done" exact || adb shell input keyevent KEYCODE_BACK
 sleep 1
 
