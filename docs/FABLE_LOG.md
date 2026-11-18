@@ -931,7 +931,15 @@ minute on the home screen with a moving background.
 5. "Send to Claude" goes to the app in "App that gets Tell Claude" (com.anthropic.claude by default), else the share
    sheet. Right app?
 
-**Exact next step:** make emulator checks 2 and 3 wait for the redirect engine's first window event after the first
+**After the release:** Med used 0.10.1 and wrote his feedback; it is the brief for the next session:
+`docs/NEXT_SESSION_PROMPT.md` (pills back to liquid, his keyboard theme as the default with wallpaper colours, the
+pill's long press, the hub opening full with folded cards, the clock line in the clock's colours, a calmer search
+page, the tag list from the bottom, a movable and smoother letter index, two clock designs). His answers: everything
+follows the wallpaper, accent included; switch his phone to the new default (current look kept as a preset); the hub
+opens full, cards folded; the search page with fewer cards. The local type check is now in the repo:
+`tools/typecheck/` (see its README).
+
+**Exact next step:** follow `docs/NEXT_SESSION_PROMPT.md`. Before that brief existed the next step was: make emulator checks 2 and 3 wait for the redirect engine's first window event after the first
 start (they flaked twice in run 85 before passing; a slow first start, not a code change, as far as the logs show); then the theme's limits above (SINK dipping the neighbours first, then the Individual pills'
 glass during the morph). Read the "Frames:" lines Med's phone writes and put the numbers in this log; if a moving
 background or texture is late on more than 1 % of frames, lower its default amount.
