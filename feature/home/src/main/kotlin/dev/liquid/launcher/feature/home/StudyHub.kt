@@ -324,10 +324,15 @@ private fun HubContent(controller: HomeController, color: Color, scroll: ScrollS
                 // W7: collapsed, the hub holds the block now or next; the rest of the day is one tap or a swipe up away.
                 if (!controller.hubExpanded) {
                     val rest = day.blocks.count { it != hero } + day.tasks.size + day.overdue.size
-                    if (rest > 0 || day.notes.isNotEmpty()) {
+                    val tomorrow = if (prefs.tomorrow != "off") day.tomorrowBlocks.size + day.tomorrowTasks.size else 0
+                    if (rest > 0 || tomorrow > 0 || day.notes.isNotEmpty() || day.waitingToSync > 0) {
                         Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.Center) {
                             ActionChip(
-                                "The whole day" + if (rest > 0) " · $rest more" else "",
+                                "The whole day" + when {
+                                    rest > 0 -> " · $rest more"
+                                    tomorrow > 0 -> " and tomorrow"
+                                    else -> ""
+                                },
                                 color,
                             ) { controller.expandHub(true) }
                         }

@@ -696,7 +696,16 @@ else
     sleep 3
     if event_text | grep -q '\[x\] Recall the theorems'; then pass "a tick is written into the event's description"; else fail "a tick is written into the event's description"; event_text | head -8; fi
     if event_text | grep -q '— launcher: done .* · 1/2 tasks'; then pass "the status line counts the ticked task"; else fail "the status line counts the ticked task"; event_text | tail -2; fi
-    # 0.6.4: tomorrow opens from Today, and each of its blocks opens to its steps.
+    # 0.6.4: tomorrow opens from Today, and each of its blocks opens to its steps. 0.10.1 (W7): the hub opens
+    # collapsed, so "The whole day" comes first.
+    dump 14b-collapsed
+    if tap_text 14b-collapsed "The whole day"; then
+      sleep 1.5
+      pass "the collapsed hub opens to the whole day"
+    else
+      fail "the collapsed hub offers the whole day"
+      python3 ci/describe_ui.py "$OUT/14b-collapsed.xml" 20 | sed 's/^/        /'
+    fi
     dump 14b-panel3
     if tap_text 14b-panel3 "Tomorrow · "; then
       sleep 1.5
