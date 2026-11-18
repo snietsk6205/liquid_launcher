@@ -946,13 +946,73 @@ background or texture is late on more than 1 % of frames, lower its default amou
 
 ## Session of 2026-11-18, afternoon (Opus 5.5): 0.10.2 and 0.10.3, Med's feedback on 0.10.1
 
-Brief: `docs/NEXT_SESSION_PROMPT.md` (items 1 to 11). Working branch: `ccr-f4d083cc-vpyudk` (the session's assigned
-branch, fast-forwarded from `claude/exciting-knuth-s83frp` at `51ecd76`). CI now also builds `ccr-*` branches
-(`.github/workflows/build.yml`), so releases come from this branch like before.
+Brief: `docs/NEXT_SESSION_PROMPT.md` (items 1 to 11). Working branch: `ccr-f4d083cc-vpyudk` (the branch this session was
+given; fast-forwarded from `claude/exciting-knuth-s83frp` at `51ecd76`; the `claude/…` branches were not touched). CI
+now also builds `ccr-*` branches (D148), so releases still come from the session's branch through the marker.
 
-**State at the 0.10.2 release commit (interim; the final entry follows at the end of the session):** items 1 to 8
-done, item 11 partly (Export for AI, the CI warm-up for checks 2 and 3, failed checks listed at the end of the
-emulator output). Item 9 (clock designs Tall and Stacked) is written and type-checks, kept out of 0.10.2 for 0.10.3.
-Run 86 (items 1 and 2) passed every emulator check; run 87 (items 3 to 7) failed only the new check "the tag list's
-search sits at the bottom" (the test could not find the field: Compose hides a text field's overlaid hint from the
-screen dump; fixed by labelling the field, as the per-app tag sheet's field already was).
+**Released:** RELEASES_PLACEHOLDER
+
+**Items**
+
+| # | State | What |
+|---|---|---|
+| 1 | Done | Pills: no fill of their own (the theme's key colour over its frost, as WM Keyboard's space bar); the search bar has its own tint, a third of 0.10.1's (`liquidLauncher.space.searchBackground`, Theme lab › Colours › Pills › "Search bar tint"); "Material on the pills" (off by default). `ThemeStore.migrate0102` removes 0.10.1's `0xA6141218`/`0xFFF2F2F5` only where they are still exactly that (the theme, each individual pill, the look kept from before 0.10). D146. |
+| 2 | Done | `ThemeDocs.Default` is `wallpaper-stoped.wmtheme.json` field for field plus the launcher's block: every colour follows a wallpaper role with its own opacity (`ThemeDocs.defaultFollow`), main button "plain" (vibrant). Deviations: sheets show the wallpaper (`frost.backdrop` AUTO), the swoosh splash left out, id `liquid_default`. Texts that follow the wallpaper or are Auto are made readable (D145; `WallpaperPalette.average` is new and refreshed once). The phone switches once; the look before is the lab preset "Before 0.10.2" (variants carried over); Blueberry is a one-tap accent in the colour dialog. The 0.10.1 default stays as `ThemeDocs.Legacy010` for converting 0.9.13 themes. D144. |
+| 3 | Done | A long press on the pill runs its action; `LauncherAction.CustomisePill` is offered in the pill's four gesture pickers only (`ActionSetting.pillActions`). `LauncherAction`'s lists became lazy (a class-initialisation cycle could put null in them). |
+| 4 | Done | "Study hub opens" defaults to the whole day; cards follow "Blocks in Today" (the hero no longer forced open); the timeline leaves out the hero; header count beside "Today", date on its own line; chips and a card's buttons wrap (FlowRow). |
+| 5 | Done | "Colour of the line under the clock" defaults to "Like the clock", which now really is the clock design's colour (`clockColours`, shared with `ClockFace`); the ring and the ✓ take it too, with the clock's own shadow. |
+| 6 | Done | Default cards: `glance` ("Today · 24 days to …", opens the widgets and the exam countdown), `next` (with the day ring), `claude` (one chip, prompts under its arrow), `apps`. `!` lists the study commands, `?` alone your prompts. Rows wrap, the stack fades under a soft top edge. D149. |
+| 7 | Done | The drawer's tag list from the bottom (reverse list: pinned, most used, then A to Z at the top; best match nearest the field); the field above Clear and Done; pin left, tick right. The field is labelled for screen readers (run 87's check could not find it). |
+| 8 | Done | "String: top end", "String: bottom end" (only that stretch takes the finger), "Letter colour" (wallpaper by default); per-edge springs, a cross-fade between edges, proximity-based growth and bold; a lane in the grid for letters shown at rest; the frame meter counts index drags apart (`FrameCost.activity`, lines from 30 frames). |
+| 9 | Done, depth not | Designs "tall" (Tall) and "glance" (Stacked) in `Clocks.kt`; the old "stacked" keeps its id as "Two lines". Depth effect not done: it needs the wallpaper's subject cut out, and no offline way does that well for Med's pictures (ML Kit's subject segmentation downloads its model through Play services at first use; the bundled selfie segmentation only knows people in photos, not illustrations). A real alternative would be a mask Med paints once per wallpaper; not started (question 8). |
+| 10 | Done | "Already there" below; the looked-for study options moved to their page's first tab; settings search finds page editors (`SettingsMap.editors`). |
+| 11 | Partly | Done: Export for AI and the dots count only real changes (D147); CI warms the redirect engine up before checks 2 and 3 (they passed first time in runs 86 to 88); failed checks are listed at the end of the emulator output; a CI look at the two clock designs; individual pills blend their glass during the morph (`liquidGlass(…, quality) { style }` reads the style while drawing, `lerpGlass`). Not done: "Frames:" numbers from the phone (no debug log this session); SINK's neighbours and picking from search (plans below). |
+
+**Already there (item 10)**, as it was before this session:
+- Pill colour: Look › Theme lab › Colours › Pills › Fill. Setting it to Auto would have removed the dark fill; 0.10.1
+  had written the dark value into the theme itself, so it showed as "set".
+- Colours from the wallpaper: Theme lab › any colour › "Follow the wallpaper" (dominant, vibrant, muted, dark, light).
+  Your keyboard theme: Theme lab › Presets › "my backup" (nice liquid, not "wallpaper stoped").
+- Long press on the pill: Home › Pill › Behaviour (Settings by default, hijacked by the Customise chip; any other
+  action already worked).
+- Study hub opens, Blocks in Today: Study › Study companion › Layout.
+- Colour of the line under the clock: Study › Study companion › Look (now Layout); "Like the clock" existed but used
+  the home's text colour.
+- The search page's cards: Drawer and search › Search › Layout (the card editor; search could not find it before).
+- Rail position: Drawer and search › Letter index › Layout (rail only). Nothing existed for the string's ends, the
+  letter colour, the tag list's order, or the clock designs.
+
+**Frames.** No debug log from the phone this session, so no phone numbers yet. The emulator's lines (software
+drawing, meaningless for the phone) show the meter works with the new theme, e.g. run 86: "600 drawn, 599 late,
+256.7 ms on average; material LETTERPRESS (PAPER); frost blur 9". On the phone: a minute on the home screen with a
+moving background, then a few drags of the letter index, then Settings › System › Debug log; the lines start with
+"Frames:" (the index's end with "letter index (string…)").
+
+**Known bugs and limits**
+- The two clock designs are only seen as CI ASCII peeks (`12-clock-Tall`, `12-clock-Stacked`); Tall's bevel (1.6 %
+  of the font size) and Stacked's thickening (3 %) want a look on the phone.
+- Readable text is judged against the wallpaper's average colour; over a very mixed picture a pill can still pick the
+  weaker ink (the drawer's and the search page's pills re-check against their page).
+- With "Both edges" the index lane is kept on both sides (about 10 dp each).
+- "Material on the pills" absent counts as off: an imported theme with a material no longer dresses the pills (0.10.1
+  did).
+- Old limits still open: SINK does not dip the neighbouring buttons; picking apps only from the drawer; pulling down
+  from the whole day closes the hub. (Individual pills now blend their glass during the morph.)
+
+**Questions for Med**
+1. Your keyboard theme says "Behind the glass: Nothing", which in the launcher makes sheets solid. I made sheets show
+   the wallpaper (your board colour is fully see-through). Keep?
+2. Your keyboard's Letterpress material (paper grain, inset edge) now dresses the buttons; the pills stay clear glass
+   ("Material on the pills" off). Keep?
+3. The keyboard's swoosh splash was left out so your own touch effect (swoosh, rainbow) stays. Want the keyboard's?
+4. Text turns to a dark (or light) ink below a 3:1 contrast. Too eager, or not enough?
+5. Stacked clock: its tint is the wallpaper's vibrant colour, softened (lightness 86 %, 78 % on a light wallpaper).
+   Right?
+6. Search page: your prompts are under the Ask Claude chip's arrow (and on "?"). Rather shown at once?
+7. Depth effect: would you paint the subject once per wallpaper (a mask) so the clock can pass behind it?
+
+**Exact next step:** read Med's feedback on 0.10.3 and his debug log's "Frames:" lines (write the numbers here; if
+a moving background, texture or the letter index is late on more than 1 % of frames, lower its default). Then the old
+limits: (1) SINK: a shared touch field read by each themed button's `graphicsLayer`, dipping by distance (the
+dynamic glass of `Glass.kt` shows how to read per-frame values while drawing); (2) picking from search results: a long
+press on an app result starts the drawer's picking with that app.

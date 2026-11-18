@@ -6,6 +6,26 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
+## 0.10.3 — 2026-11-18
+
+### Added
+- Two clock designs in the clock's gallery (edit mode → Customise on the clock). Tall: tall condensed digits
+  with a soft bevel, the colon as two round dots and a small bold date above. Stacked: hours over minutes in
+  big, heavy, rounded digits in a light tint of the wallpaper's colour, with the date and the study line
+  above them. Both follow the clock's colour, size, weight, font, fill and shadow.
+- Settings search also finds what a page edits with its own editor: the search page's cards, the pill's
+  items and study item, the home and app menus, the drawer's tabs and tags, and the Theme lab.
+
+### Changed
+- The stacked clock design of before is called "Two lines" (hours and minutes in two colours); clocks that
+  use it look as before.
+- Study → Study companion: the line under the clock and its colour, how the hub opens and how its blocks
+  show are on the first tab (Layout), where you look first.
+
+### Fixed
+- With individual pills, the glass (blur, rim, bend) now flows from the home pill's to the drawer pill's as the
+  drawer opens, like their colours; it used to switch at the end.
+
 ## 0.10.2 — 2026-11-18
 
 ### Added

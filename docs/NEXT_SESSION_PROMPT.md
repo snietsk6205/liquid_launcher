@@ -1,5 +1,8 @@
 # Liquid Launcher: my feedback on 0.10.1 (brief for the next session)
 
+> Status: handled by the session of 2026-11-18 afternoon (0.10.2 and 0.10.3, branch `ccr-f4d083cc-vpyudk`); what was
+> done, what was not and why are in `docs/FABLE_LOG.md`, last section.
+
 Continue Liquid Launcher (repo `snietsk6205/liquid_launcher`, branch `claude/exciting-knuth-s83frp`; the last
 session also worked on `claude/exciting-knuth-s83frp-1jp272`, both end at the same commit). 0.10.1 is released and
 on my HONOR 90 Lite. This session is my feedback after using it.

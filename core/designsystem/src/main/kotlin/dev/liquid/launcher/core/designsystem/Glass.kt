@@ -191,6 +191,76 @@ fun Modifier.liquidGlass(backdrop: Backdrop, shape: CornerBasedShape, style: Gla
             .border(1.dp, style.rimColor.copy(alpha = 0.18f + 0.3f * style.rim), shape)
     }
 
+/**
+ * 0.10.2: glass whose values are read while drawing ([style] is called in the backdrop's own lambdas), so two looks can
+ * blend frame by frame, as the individual pills do while the home pill grows into the drawer's, without a frame ever
+ * recomposing. [quality] decides how it is drawn and must not change while it is used.
+ */
+fun Modifier.liquidGlass(backdrop: Backdrop, shape: CornerBasedShape, quality: GlassQuality, style: () -> GlassStyle): Modifier =
+    when (quality) {
+        GlassQuality.Tint -> liquidGlass(backdrop, shape, style())
+        else -> drawBackdrop(
+            backdrop = backdrop,
+            shape = { shape },
+            highlight = {
+                val s = style()
+                if (s.rim <= 0.01f) null else Highlight.Default.copy(
+                    alpha = s.rim.coerceIn(0f, 1f),
+                    style = HighlightStyle.Default(color = s.rimColor, angle = s.lightAngle),
+                )
+            },
+            shadow = {
+                val s = style()
+                if (s.shadow <= 0.01f) null else Shadow.Default.copy(alpha = s.shadow.coerceIn(0f, 1f))
+            },
+            innerShadow = {
+                val s = style()
+                if (s.glow <= 0.01f) null else InnerShadow.Default.copy(
+                    radius = (6f + 10f * s.glow).dp,
+                    color = s.rimColor.copy(alpha = 0.55f),
+                    alpha = s.glow.coerceIn(0f, 1f),
+                )
+            },
+            effects = {
+                val s = style()
+                look(s)
+                if (quality == GlassQuality.Full) {
+                    if (s.blur > 0.dp) blur(s.blur.toPx())
+                    if (!realGlass(shape, s) && s.refraction > 0f) {
+                        lens(
+                            refractionHeight = (10f + 10f * s.refraction).dp.toPx(),
+                            refractionAmount = (32f * s.refraction).dp.toPx(),
+                            depthEffect = s.depth,
+                            chromaticAberration = s.dispersion,
+                        )
+                    }
+                } else {
+                    blur(maxOf(s.blur, 12.dp).toPx())
+                }
+            },
+            onDrawSurface = { drawRect(style().tint) },
+        )
+    }
+
+/** From glass [a] to glass [b] by [t]: every amount eased, switches (dispersion, depth, engine) taken half way. */
+fun lerpGlass(a: GlassStyle, b: GlassStyle, t: Float): GlassStyle {
+    if (t <= 0f || a == b) return a
+    if (t >= 1f) return b
+    fun f(x: Float, y: Float) = x + (y - x) * t
+    fun d(x: Dp, y: Dp) = Dp(f(x.value, y.value))
+    val second = t >= 0.5f
+    return a.copy(
+        blur = d(a.blur, b.blur), refraction = f(a.refraction, b.refraction),
+        tint = androidx.compose.ui.graphics.lerp(a.tint, b.tint, t), rim = f(a.rim, b.rim),
+        saturation = f(a.saturation, b.saturation), brightness = f(a.brightness, b.brightness),
+        dispersion = if (second) b.dispersion else a.dispersion, depth = if (second) b.depth else a.depth,
+        rimColor = androidx.compose.ui.graphics.lerp(a.rimColor, b.rimColor, t), lightAngle = f(a.lightAngle, b.lightAngle),
+        shadow = f(a.shadow, b.shadow), glow = f(a.glow, b.glow), engine = if (second) b.engine else a.engine,
+        bevel = d(a.bevel, b.bevel), thickness = f(a.thickness, b.thickness), dispersionAmount = f(a.dispersionAmount, b.dispersionAmount),
+        swell = f(a.swell, b.swell), specular = f(a.specular, b.specular), shade = f(a.shade, b.shade), grain = f(a.grain, b.grain),
+    )
+}
+
 /** Older form used by the glass benchmark: one quality tier with default blur and refraction. */
 fun Modifier.liquidGlass(backdrop: Backdrop, shape: CornerBasedShape, quality: GlassQuality, tint: Color): Modifier =
     liquidGlass(backdrop, shape, GlassStyle(quality, 4.dp, 0.6f, tint))

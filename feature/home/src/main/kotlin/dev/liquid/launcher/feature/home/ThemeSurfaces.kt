@@ -413,7 +413,15 @@ internal fun Modifier.morphPillSurface(progress: () -> Float, backdrop: Backdrop
     val homeFill = Color(home.fill)
     val drawerFill = Color(drawer.fill)
     val glassOn = frost.on("SPACE_BAR") && env.glass.quality != GlassQuality.Tint
-    val base = if (glassOn) liquidGlass(backdrop, shape, frostStyle(frost, env.glass, Color.Transparent, large = false)) else this
+    val homeGlass = frostStyle(frost, env.glass, Color.Transparent, large = false)
+    // 0.10.2: individual pills blend their glass (blur, rim, bend…) along with their fill as the pill grows into the
+    // drawer's, read while drawing; before, the glass switched to the drawer pill's at the end.
+    val drawerGlass = pillFrost(dev.liquid.launcher.core.data.ThemePill.DRAWER)?.let { frostStyle(it, env.glass, Color.Transparent, large = false) } ?: homeGlass
+    val base = when {
+        !glassOn -> this
+        drawerGlass == homeGlass -> liquidGlass(backdrop, shape, homeGlass)
+        else -> liquidGlass(backdrop, shape, homeGlass.quality) { dev.liquid.launcher.core.designsystem.lerpGlass(homeGlass, drawerGlass, progress().coerceIn(0f, 1f)) }
+    }
     val material = currentTheme?.material?.takeIf { home.material && !it.plain }
     val text = Color(home.text)
     val accent = HomeTheme.accent
