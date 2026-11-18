@@ -943,3 +943,16 @@ opens full, cards folded; the search page with fewer cards. The local type check
 start (they flaked twice in run 85 before passing; a slow first start, not a code change, as far as the logs show); then the theme's limits above (SINK dipping the neighbours first, then the Individual pills'
 glass during the morph). Read the "Frames:" lines Med's phone writes and put the numbers in this log; if a moving
 background or texture is late on more than 1 % of frames, lower its default amount.
+
+## Session of 2026-11-18, afternoon (Opus 5.5): 0.10.2 and 0.10.3, Med's feedback on 0.10.1
+
+Brief: `docs/NEXT_SESSION_PROMPT.md` (items 1 to 11). Working branch: `ccr-f4d083cc-vpyudk` (the session's assigned
+branch, fast-forwarded from `claude/exciting-knuth-s83frp` at `51ecd76`). CI now also builds `ccr-*` branches
+(`.github/workflows/build.yml`), so releases come from this branch like before.
+
+**State at the 0.10.2 release commit (interim; the final entry follows at the end of the session):** items 1 to 8
+done, item 11 partly (Export for AI, the CI warm-up for checks 2 and 3, failed checks listed at the end of the
+emulator output). Item 9 (clock designs Tall and Stacked) is written and type-checks, kept out of 0.10.2 for 0.10.3.
+Run 86 (items 1 and 2) passed every emulator check; run 87 (items 3 to 7) failed only the new check "the tag list's
+search sits at the bottom" (the test could not find the field: Compose hides a text field's overlaid hint from the
+screen dump; fixed by labelling the field, as the per-app tag sheet's field already was).

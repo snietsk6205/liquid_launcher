@@ -6,6 +6,57 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
+## 0.10.2 — 2026-11-18
+
+### Added
+- "Customise the pill" is an action of its own: choose it for the pill's long press (or tap or swipe) to
+  get the chip that opens the pill's settings page.
+- The letter index (String) can sit lower and shorter: "String: top end" and "String: bottom end" in
+  Settings → Drawer and search → Letter index → Layout. Only that stretch of the edge takes your finger;
+  the rest of the edge keeps Back.
+- "Letter colour" for the index (Look tab): from the wallpaper by default, or the theme's text, the
+  accent, your own colour, or white and dark as before.
+- In the Theme lab: "Search bar tint" and "Material on the pills" (Colours → Pills), the preset
+  "Before 0.10.2", and Blueberry (the fixed blue) one tap away for the accent.
+- On the search page, typing "!" lists the study commands and typing "?" lists your Claude prompts.
+- The frame meter also measures dragging the letter index: "Frames: … letter index" lines in the
+  debug log.
+
+### Changed
+- The pills are liquid glass again: the home and drawer pills have no dark fill, only the theme's own
+  frost and its see-through colour. The search bar keeps a tint, a third as strong as before.
+- Your WM Keyboard theme "wallpaper stoped" is the default theme, for every button, chip, round button,
+  sheet, menu, card and the pills. Every colour follows the wallpaper and keeps its own transparency:
+  buttons, menus, sheets and cards take its dark colour, chips its muted one, the main button, the
+  accent and pressed buttons its vibrant one, text its light one. Text turns dark where light text
+  would not read. Your phone switched to it once; the look you had is the preset "Before 0.10.2".
+- A long press on the pill runs its own action again (Settings by default) instead of showing
+  "Customise the pill". The Customise chip stays on the dock, folders, the search page and the hub.
+- The study hub opens at full height with the whole day: the block now or next, the timeline, tasks,
+  tomorrow. Collapsed is still a choice ("Study hub opens").
+- Block cards in the hub follow "Blocks in Today": in compact mode a block shows its title, time and
+  step count, and a tap shows its steps and buttons (the block now or next too).
+- The line under the clock, its ring and its ✓ take the clock's own colour (from the wallpaper when
+  the clock takes it there), with the clock's own soft shadow instead of a halo.
+- The search page is calmer: the field, your apps, one study card (the block now or next with today's
+  progress) and one Ask Claude chip. "Today · 24 days to …" opens the calendar month and the exam
+  countdown. Every other card can be added back in the search page's settings.
+- The drawer's tag list works from the bottom: Clear and Done, the search field above them and your
+  pinned tags right above it, with the list growing upwards. The pin is on the left of each tag, the
+  tick on the right.
+- The letter index follows the finger more smoothly: each edge's string has its own spring, the
+  letters fade across between edges instead of jumping, and the letters near the finger grow and turn
+  bold gradually.
+
+### Fixed
+- The block now or next appeared twice in the hub (its card and the timeline).
+- The hub's header ("0/3 …") and its row of chips ("Quiz m…") were cut; the chips now wrap.
+- On the search page the calendar was cut under the status bar and the chip rows ran off the edge.
+- The index letters touched the last column's labels in the drawer; the list now keeps a lane clear.
+- "Like the clock" for the line under the clock used the screen's text colour, not the clock's.
+- "Export for AI" listed options as changed when their stored value was the default (for example
+  Press motion "squishy"); Settings showed a dot on them too. Only real changes count now.
+
 ## 0.10.1 — 2026-11-18
 
 ### Added
