@@ -367,7 +367,18 @@ class LauncherData private constructor(private val context: Context) {
             org?.let { organisationStore.set(it) }
             saved?.let { layoutsStore.set(it) }
             // Linked phone folders need the picker's permission again on a new phone, so they are not restored.
-            library?.let { restored -> wallpapersStore.set(restored.copy(folders = wallpapersStore.get().folders)) }
+            // W5: a backup made without its wallpapers keeps only the library pictures this phone has.
+            library?.let { restored ->
+                val dir = File(context.filesDir, "wallpaper/library")
+                val present = restored.items.filter { File(dir, it.file).exists() }
+                wallpapersStore.set(
+                    restored.copy(
+                        items = present,
+                        current = restored.current?.takeIf { id -> present.any { it.id == id } },
+                        folders = wallpapersStore.get().folders,
+                    ),
+                )
+            }
             DebugLog.event("Backup", "restored (${files.size} files)")
             return null
         } catch (e: Exception) {

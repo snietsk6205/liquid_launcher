@@ -31,7 +31,8 @@ Versions marked *not published on its own* were built but came to the phone insi
   whether layouts keep it, its id) or Copy id.
 - Backup and Claude (Settings → System): "Back up now", with or without wallpapers. A backup every day into a
   folder you choose (on the phone or a cloud drive), keeping the newest seven copies. Restoring first shows what
-  the backup holds and every option it would change (now → then).
+  the backup holds and every option it would change (now → then); a backup without wallpapers keeps only the
+  library pictures the phone has.
 - Tune with Claude: "Send to Claude" shares every option (what it does, its range, default and value now) with your
   question and the rules for answering (only a JSON list of changes) to the Claude app; "Export for AI" saves the
   same as a Markdown file. Paste Claude's answer back: every change is listed before anything happens, entries that
