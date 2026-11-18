@@ -950,7 +950,9 @@ Brief: `docs/NEXT_SESSION_PROMPT.md` (items 1 to 11). Working branch: `ccr-f4d08
 given; fast-forwarded from `claude/exciting-knuth-s83frp` at `51ecd76`; the `claude/…` branches were not touched). CI
 now also builds `ccr-*` branches (D148), so releases still come from the session's branch through the marker.
 
-**Released:** RELEASES_PLACEHOLDER
+**Released:** 0.10.2 (run 88, published 2026-11-18 14:42 UTC, every check passed on the first attempt) and 0.10.3
+(pushed with the marker as run 89; its result is in the log commit that follows it). Two releases, as agreed. Run 87
+(items 3 to 7, no release) failed one new check only, fixed before 0.10.2.
 
 **Items**
 
