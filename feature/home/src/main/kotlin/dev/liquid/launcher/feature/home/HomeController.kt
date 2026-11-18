@@ -180,6 +180,60 @@ class HomeController(
     /** The home menu's glass pills are open. */
     var homeMenu by mutableStateOf(false)
 
+    /** W6: apps picked in the drawer for one action on all of them; null while not picking. */
+    var selection by mutableStateOf<Set<AppRef>?>(null)
+
+    /** W6: the tag sheet for the picked apps: true adds a tag to all, false takes one off all. */
+    var bulkTag by mutableStateOf<Boolean?>(null)
+
+    /** W6: the sheet listing every app with a check for this tag. */
+    var tagApps by mutableStateOf<dev.liquid.launcher.core.data.Tag?>(null)
+
+    fun startSelecting(first: AppRef) {
+        menu = null
+        Haptics.confirm(view)
+        selection = setOf(first)
+    }
+
+    fun toggleSelected(ref: AppRef) {
+        val now = selection ?: return
+        Haptics.tick(view)
+        selection = if (ref in now) now - ref else now + ref
+    }
+
+    fun endSelecting() {
+        selection = null
+        bulkTag = null
+    }
+
+    /** Every picked app on the home screen, then one notice. */
+    fun addSelectionToHome() {
+        val picked = selection ?: return
+        var layout = data.layout.layout.value
+        val (columns, rows) = gridSize()
+        var placed = 0
+        for (ref in picked) {
+            if (layout.pages.any { page -> page.items.any { it.app == ref } }) continue
+            val start = if (::pager.isInitialized) pager.currentPage else 0
+            val order = (start until layout.pages.size) + (0 until start)
+            val added = order.firstNotNullOfOrNull { page -> gridFor(page).let { (pc, pr) -> LayoutOps.addApp(layout, page, ref, pc, pr) } }
+                ?: LayoutOps.addPage(layout).let { withPage -> LayoutOps.addApp(withPage, withPage.pages.size - 1, ref, columns, rows) }
+                ?: continue
+            layout = added
+            placed++
+        }
+        if (placed > 0) data.layout.commit(layout)
+        toast(if (placed == 0) "Already on the home screen" else if (placed == 1) "1 app added to home" else "$placed apps added to home")
+        endSelecting()
+    }
+
+    fun hideSelection() {
+        val picked = selection ?: return
+        data.apps.setHidden(picked, true)
+        toast(if (picked.size == 1) "1 app hidden from the drawer" else "${picked.size} apps hidden from the drawer")
+        endSelecting()
+    }
+
     /** W4: the "Customise" chip a long press on a surface shows: its settings page (a 0.9 section id), name, place. */
     var customise by mutableStateOf<CustomiseOffer?>(null)
 
@@ -1184,6 +1238,8 @@ class HomeController(
     fun closeAll(immediately: Boolean = false) {
         speedBump = null
         customise = null
+        endSelecting()
+        tagApps = null
         homeMenu = false
         wallpaperStrip = false
         layoutsSheet = false
@@ -1203,6 +1259,9 @@ class HomeController(
     fun back(): Boolean {
         when {
             customise != null -> customise = null
+            bulkTag != null -> bulkTag = null
+            tagApps != null -> tagApps = null
+            selection != null -> endSelecting()
             speedBump != null -> speedBump = null
             renaming != null -> renaming = null
             tagging != null -> tagging = null

@@ -468,6 +468,53 @@ if [ -n "$APP_LABEL" ]; then
   fi
 fi
 
+# 0.10.1 (W6): picking apps in the drawer. Select in an app's menu shows the bar; Tag puts a tag on every picked app.
+if [ -n "$APP_LABEL" ]; then
+  echo "== 9d. Picking apps in the drawer"
+  adb shell input swipe 540 1500 540 400 450
+  sleep 2
+  dump 09d-drawer
+  POS=$(python3 ci/find_text.py "$OUT/09d-drawer.xml" "$APP_LABEL" exact) || POS=""
+  if [ -n "$POS" ]; then
+    adb shell input swipe $POS $POS 1000
+    sleep 1.2
+    dump 09d-menu
+    if tap_text 09d-menu "Select" exact; then
+      sleep 1.2
+      dump 09d-bar
+      if on_screen 09d-bar "1 app picked"; then
+        pass "Select in the drawer starts picking apps"
+        if tap_text 09d-bar "Tag" exact; then
+          sleep 1.5
+          dump 09d-sheet
+          # Sorted by name, so the first row with "tag1" is tag1 itself.
+          if tap_text 09d-sheet "tag1"; then
+            sleep 1.2
+            dump 09d-after
+            if on_screen 09d-after "1 app picked"; then fail "tagging the picked apps ends picking"; else pass "a tag goes onto the picked apps at once"; fi
+          else
+            fail "the tag sheet for picked apps lists the tags"
+            python3 ci/describe_ui.py "$OUT/09d-sheet.xml" 20
+          fi
+        else
+          fail "the picking bar offers Tag"
+        fi
+      else
+        fail "Select in the drawer starts picking apps"
+        python3 ci/describe_ui.py "$OUT/09d-bar.xml" 20
+      fi
+    else
+      note "no Select row in the drawer's menu"
+    fi
+  else
+    note "the app was not found in the drawer for the picking check"
+  fi
+  adb shell input keyevent KEYCODE_BACK
+  sleep 0.6
+  adb shell input keyevent KEYCODE_BACK
+  sleep 1
+fi
+
 # Search: swipe down, type a calculation.
 clear_anr
 adb shell input swipe 540 900 540 1700 250

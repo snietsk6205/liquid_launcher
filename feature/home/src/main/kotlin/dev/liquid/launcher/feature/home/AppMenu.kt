@@ -56,7 +56,13 @@ private data class MenuRow(val icon: Int, val label: String, val onClick: () -> 
 private fun rowsFor(target: MenuTarget, entries: List<MenuEntry>, controller: HomeController): List<MenuRow> {
     val app = target.app
     val apps = controller.data.apps
-    return entries.mapNotNull { entry ->
+    // W6: in the drawer, "Select" starts picking apps for one action on all of them.
+    val select = if (target.itemId == null && target.folderId == null && controller.drawerOpen) {
+        listOf(MenuRow(LauncherIcons.CheckCircle, "Select") { controller.startSelecting(app.ref) })
+    } else {
+        emptyList()
+    }
+    return select + entries.mapNotNull { entry ->
         when (entry) {
             MenuEntry.Shortcuts -> null // drawn as its own block, loaded from the app
             MenuEntry.Info -> MenuRow(LauncherIcons.Info, "App info") { apps.showAppInfo(app) }

@@ -965,6 +965,14 @@ private fun HomeScreenBody(
         Presence(controller.tagging) { app -> ProvideControls(controller, glass, null) { AppTagsSheet(app, controller, glass, lightBackground, overlayBackdrop) } }
         controller.iconPicking?.let { IconPickerDialog(it, controller) }
         controller.swipeEditing?.let { id -> layout.find(id)?.let { (_, item) -> SwipeActionsDialog(item, apps, controller) } }
+        // W6: picking apps in the drawer, tagging them together, and a tag's own list of apps.
+        val picking by remember { derivedStateOf { controller.selection != null && controller.drawerOpen } }
+        if (picking) controller.selection?.let { picked -> SelectionBar(controller, picked, glass, lightBackground, overlayBackdrop) }
+        if (controller.selection != null && !picking) SideEffect { controller.endSelecting() }
+        val bulk = controller.bulkTag
+        val picked = controller.selection
+        if (bulk != null && picked != null) ProvideControls(controller, glass, null) { BulkTagSheet(controller, bulk, picked, glass, lightBackground, overlayBackdrop) }
+        Presence(controller.tagApps) { tag -> ProvideControls(controller, glass, null) { TagAppsSheet(controller, tag, glass, lightBackground, overlayBackdrop) } }
         // W4: "Customise …" after a long press on a surface.
         controller.customise?.let { offer -> CustomiseChip(controller, offer, if (lightBackground) Color(0xFF16181C) else Color.White) }
         if (live) TransitionOverlay(controller, transitionStyle)

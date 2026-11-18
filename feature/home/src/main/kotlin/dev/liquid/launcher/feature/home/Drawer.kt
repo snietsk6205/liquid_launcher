@@ -846,6 +846,11 @@ private fun DrawerItem(
     val handler = remember(app, controller) {
         object : IconGestureHandler {
             override fun onTap() {
+                // W6: while picking apps, a tap picks or unpicks.
+                if (controller.selection != null) {
+                    controller.toggleSelected(app.ref)
+                    return
+                }
                 val bounds = holder.value?.takeIf { it.isAttached }?.boundsInRoot()
                 val rect = bounds?.let { AndroidRect(it.left.toInt(), it.top.toInt(), it.right.toInt(), it.bottom.toInt()) }
                 val options = controller.launchOptions(view, rect)
@@ -853,11 +858,16 @@ private fun DrawerItem(
             }
 
             override fun onLongPress() {
+                if (controller.selection != null) {
+                    controller.toggleSelected(app.ref)
+                    return
+                }
                 val bounds = holder.value?.takeIf { it.isAttached }?.boundsInRoot() ?: return
                 controller.menu = MenuTarget(app, null, bounds)
             }
 
             override fun onDragStart(grab: Offset, finger: Offset) {
+                if (controller.selection != null) return
                 val size = holder.value?.size ?: IntSize.Zero
                 controller.startDrag(
                     DragState(
@@ -887,7 +897,18 @@ private fun DrawerItem(
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        AppIcon(app, false, Modifier.size(config.iconSizeDp.dp), app.label)
+        val picked = controller.selection?.let { app.ref in it }
+        Box {
+            AppIcon(
+                app, false,
+                Modifier.size(config.iconSizeDp.dp).graphicsLayer { if (picked == false) alpha = 0.55f },
+                app.label,
+            )
+            // W6: picked apps carry a check.
+            if (picked != null) {
+                Box(Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-4).dp)) { ThemeCheck(picked, color, 20.dp) }
+            }
+        }
         if (config.labels) {
             Text(
                 text = app.label,

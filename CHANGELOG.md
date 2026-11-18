@@ -37,6 +37,10 @@ Versions marked *not published on its own* were built but came to the phone insi
   same as a Markdown file. Paste Claude's answer back: every change is listed before anything happens, entries that
   are not valid (an unknown option, a wrong kind of value, out of range) are shown in red and left out, and "Undo"
   puts everything back in one tap. The launcher makes no network call for this.
+- Picking many apps in the drawer: hold an app and choose Select, then tap the others. A bar offers Tag, Untag,
+  Hide and Add to home for all of them at once.
+- A tag's own list: in the drawer's tag list, the apps button beside a tag opens every app with a check, and a
+  search, to tag or untag many apps in one place.
 
 ### Changed
 - Settings in seven entries: Home, Drawer and search, Study, Look, Wallpaper and layouts, Motion and feel, System.

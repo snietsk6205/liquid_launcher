@@ -585,6 +585,10 @@ internal fun TagSheet(
                             },
                             onToggle = { controller.filterByTags(if (tag.id in filter) filter - tag.id else filter + tag.id) },
                             onPin = { togglePin(tag) },
+                            onApps = {
+                                controller.tagSheet = false
+                                controller.tagApps = tag
+                            },
                         )
                     }
                 }
@@ -672,6 +676,7 @@ private fun TagRow(
     onOnly: () -> Unit,
     onToggle: () -> Unit,
     onPin: () -> Unit,
+    onApps: () -> Unit,
 ) {
     val accent = HomeTheme.accent
     Row(
@@ -684,6 +689,8 @@ private fun TagRow(
         }
         Text(tag.name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp))
         Text("$count", modifier = Modifier.padding(horizontal = 8.dp), style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.6f), fontSize = 13.sp))
+        // W6: every app with a check for this tag.
+        ThemeToggleIcon(LauncherIcons.Apps, false, color, "Apps in ${tag.name}", onApps)
         ThemeToggleIcon(LauncherIcons.Star, pinned, color, if (pinned) "Unpin" else "Pin", onPin)
     }
 }

@@ -229,6 +229,25 @@ class AppsRepository(
         meta.copy(tags = if (on) (meta.tags + tagId).distinct() else meta.tags - tagId)
     }
 
+    /** W6: a tag on or off for many apps at once, written once. */
+    fun setTag(refs: Collection<AppRef>, tagId: String, on: Boolean) = changeMetaOf(refs) { meta ->
+        meta.copy(tags = if (on) (meta.tags + tagId).distinct() else meta.tags - tagId)
+    }
+
+    /** W6: many apps hidden from (or shown in) the drawer at once. */
+    fun setHidden(refs: Collection<AppRef>, hidden: Boolean) = changeMetaOf(refs) { it.copy(hidden = hidden) }
+
+    private fun changeMetaOf(refs: Collection<AppRef>, change: (AppMeta) -> AppMeta) {
+        meta.update { all ->
+            var out = all
+            for (ref in refs) {
+                val updated = change(out[ref.key] ?: AppMeta())
+                out = if (updated == AppMeta()) out - ref.key else out + (ref.key to updated)
+            }
+            out
+        }
+    }
+
     private fun changeMeta(ref: AppRef, change: (AppMeta) -> AppMeta) {
         meta.update { all ->
             val updated = change(all[ref.key] ?: AppMeta())
