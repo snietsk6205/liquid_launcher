@@ -474,6 +474,14 @@ if [ -n "$APP_LABEL" ]; then
       else
         fail "the drawer's tag list keeps Clear and Done in sight with 30 tags"
       fi
+      # 0.10.2: its search field sits at the bottom, just above Clear and Done (the list grows upwards from it).
+      FIND_Y=$(python3 ci/find_text.py "$OUT/09c-tag-list.xml" "Find a tag" | cut -d' ' -f2) || FIND_Y=""
+      DONE_Y=$(python3 ci/find_text.py "$OUT/09c-tag-list.xml" "Done" exact | cut -d' ' -f2) || DONE_Y=""
+      if [ -n "$FIND_Y" ] && [ -n "$DONE_Y" ] && [ "$FIND_Y" -lt "$DONE_Y" ] && [ "$FIND_Y" -gt $((DONE_Y - 320)) ]; then
+        pass "the tag list's search sits at the bottom, above Clear and Done"
+      else
+        fail "the tag list's search sits at the bottom, above Clear and Done (field ${FIND_Y:-?}, Done ${DONE_Y:-?})"
+      fi
       adb shell input keyevent KEYCODE_BACK
       sleep 0.8
     else

@@ -469,6 +469,10 @@ internal fun Modifier.tagSwipe(enabled: () -> Boolean, onSwipe: (Int) -> Unit): 
  * The full tag list over the drawer: its own search, pinned tags, most used, then all A to Z,
  * each with how many apps it has. Tap a name to show only that tag; tap the circle to select
  * several; the pin keeps a tag at the front of the chips.
+ *
+ * 0.10.2: everything the thumb needs is at the bottom: the buttons, the search field above them and the pinned
+ * tags right above the field; the list grows upwards from there (most used, then all A to Z). The pin is on the
+ * left of a row and the tick on the right.
  */
 @Composable
 internal fun TagSheet(
@@ -491,7 +495,9 @@ internal fun TagSheet(
     val sections = remember(org, query, pinned, usage, counts) {
         val all = org.tags.sortedBy { it.name.lowercase() }
         if (query.isNotBlank()) {
-            listOf("Matching" to all.filter { it.name.contains(query.trim(), ignoreCase = true) })
+            // The best match nearest the field: names that start with what is typed first.
+            val q = query.trim()
+            listOf("Matching" to all.filter { it.name.contains(q, ignoreCase = true) }.sortedBy { if (it.name.startsWith(q, ignoreCase = true)) 0 else 1 })
         } else {
             val pinnedTags = pinned.mapNotNull { org.tag(it) }
             val used = TagFilterOps.ordered(org.tags.filter { it.id !in pinned }, emptyList(), "used", usage, counts, now)
@@ -535,6 +541,50 @@ internal fun TagSheet(
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .padding(top = 14.dp, bottom = 10.dp),
           ) {
+            // W2: the list takes the height that is left above the search and the buttons, and scrolls.
+            // 0.10.2: it grows upwards from the field: the pinned tags (or the best match) nearest the thumb, then the
+            // most used, then all A to Z at the top; a section's title sits above its rows.
+            LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false).padding(bottom = 6.dp), reverseLayout = true) {
+                if (org.tags.isEmpty()) {
+                    item {
+                        Text(
+                            "No tags yet. Hold an app and choose Tags, or create one from the tabs pill.",
+                            modifier = Modifier.padding(22.dp),
+                            style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.8f), fontSize = 14.sp),
+                        )
+                    }
+                }
+                for ((title, list) in sections) {
+                    // Reversed layout: emitted from the bottom up. A to Z reads downwards; the others start at the bottom.
+                    val rows = if (title == "All tags") list.asReversed() else list
+                    items(rows, key = { "$title:${it.id}" }) { tag ->
+                        TagRow(
+                            tag = tag,
+                            count = counts[tag.id] ?: 0,
+                            selected = tag.id in filter,
+                            pinned = tag.id in pinned,
+                            color = color,
+                            onOnly = {
+                                controller.filterByTags(setOf(tag.id))
+                                controller.tagSheet = false
+                            },
+                            onToggle = { controller.filterByTags(if (tag.id in filter) filter - tag.id else filter + tag.id) },
+                            onPin = { togglePin(tag) },
+                            onApps = {
+                                controller.tagSheet = false
+                                controller.tagApps = tag
+                            },
+                        )
+                    }
+                    item(key = "h:$title") {
+                        Text(
+                            title,
+                            modifier = Modifier.padding(start = 22.dp, top = 10.dp, bottom = 4.dp),
+                            style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.65f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+                        )
+                    }
+                }
+            }
             // Search field of its own: with many tags, typing two letters is faster than scrolling.
             // W3: the search field in the theme's button colours.
             val (fieldBackground, fieldInk) = fieldStyle(color)
@@ -560,46 +610,6 @@ internal fun TagSheet(
                         cursorBrush = SolidColor(fieldInk),
                         modifier = Modifier.fillMaxWidth(),
                     )
-                }
-            }
-            // W2: the list takes the height that is left between the search and the buttons, and scrolls.
-            LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false).padding(top = 6.dp)) {
-                for ((title, list) in sections) {
-                    item(key = "h:$title") {
-                        Text(
-                            title,
-                            modifier = Modifier.padding(start = 22.dp, top = 10.dp, bottom = 4.dp),
-                            style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.65f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
-                        )
-                    }
-                    items(list, key = { "$title:${it.id}" }) { tag ->
-                        TagRow(
-                            tag = tag,
-                            count = counts[tag.id] ?: 0,
-                            selected = tag.id in filter,
-                            pinned = tag.id in pinned,
-                            color = color,
-                            onOnly = {
-                                controller.filterByTags(setOf(tag.id))
-                                controller.tagSheet = false
-                            },
-                            onToggle = { controller.filterByTags(if (tag.id in filter) filter - tag.id else filter + tag.id) },
-                            onPin = { togglePin(tag) },
-                            onApps = {
-                                controller.tagSheet = false
-                                controller.tagApps = tag
-                            },
-                        )
-                    }
-                }
-                if (org.tags.isEmpty()) {
-                    item {
-                        Text(
-                            "No tags yet. Hold an app and choose Tags, or create one from the tabs pill.",
-                            modifier = Modifier.padding(22.dp),
-                            style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.8f), fontSize = 14.sp),
-                        )
-                    }
                 }
             }
             Row(
@@ -680,18 +690,19 @@ private fun TagRow(
 ) {
     val accent = HomeTheme.accent
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onOnly).padding(start = 10.dp, end = 10.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onOnly).padding(start = 6.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // W3: the check and the pin in the theme's chip and round-button colours.
-        Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onToggle), contentAlignment = Alignment.Center) {
-            ThemeCheck(selected, color, 22.dp)
-        }
-        Text(tag.name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp))
+        // W3: the pin and the check in the theme's round-button and chip colours. 0.10.2: the pin on the left, the
+        // tick on the right, under the thumb.
+        ThemeToggleIcon(LauncherIcons.Star, pinned, color, if (pinned) "Unpin" else "Pin", onPin)
+        Text(tag.name, modifier = Modifier.weight(1f).padding(start = 4.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp))
         Text("$count", modifier = Modifier.padding(horizontal = 8.dp), style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.6f), fontSize = 13.sp))
         // W6: every app with a check for this tag.
         ThemeToggleIcon(LauncherIcons.Apps, false, color, "Apps in ${tag.name}", onApps)
-        ThemeToggleIcon(LauncherIcons.Star, pinned, color, if (pinned) "Unpin" else "Pin", onPin)
+        Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onToggle), contentAlignment = Alignment.Center) {
+            ThemeCheck(selected, color, 22.dp)
+        }
     }
 }
 
