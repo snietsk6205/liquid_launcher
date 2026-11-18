@@ -78,6 +78,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.composed
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onSizeChanged
@@ -552,7 +554,7 @@ fun AppDrawer(
                     controller = controller,
                     interactive = interactive,
                     modifier = if (tabsTop) {
-                        Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = (baseHeader - tabsH) / 2)
+                        Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = (baseHeader - tabsH) / 2).riseFromPill(controller)
                     } else {
                         Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = SearchZone)
                     },
@@ -1112,4 +1114,28 @@ private fun drawerCloseConnection(controller: HomeController) = object : NestedS
         }
         return Velocity.Zero
     }
+}
+
+/**
+ * W8 (P5): the tabs pill at the top of the drawer rises out of the home pill as the drawer opens, and sinks back
+ * into it as the drawer closes: from the pill's place and size to its own, read while drawing, so a drawer caught
+ * mid-way carries it along with the finger.
+ */
+private fun Modifier.riseFromPill(controller: HomeController): Modifier = composed {
+    var own by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    this
+        .onGloballyPositioned { own = it.boundsInRoot() }
+        .graphicsLayer {
+            val pill = controller.pillBounds ?: return@graphicsLayer
+            if (own.width <= 1f || own.height <= 1f) return@graphicsLayer
+            val p = controller.drawer.value.coerceIn(0f, 1f)
+            val t = 1f - androidx.compose.animation.core.FastOutSlowInEasing.transform(p)
+            translationX = (pill.center.x - own.center.x) * t
+            translationY = (pill.center.y - own.center.y) * t
+            val sx = (pill.width / own.width).coerceIn(0.3f, 1.5f)
+            val sy = (pill.height / own.height).coerceIn(0.3f, 1.5f)
+            scaleX = 1f + (sx - 1f) * t
+            scaleY = 1f + (sy - 1f) * t
+            alpha = (p * 1.6f).coerceIn(0f, 1f)
+        }
 }

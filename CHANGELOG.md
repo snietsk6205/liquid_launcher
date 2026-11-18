@@ -42,6 +42,8 @@ Versions marked *not published on its own* were built but came to the phone insi
 - The Now card and the Today widget have their own "Customise" sheet in edit mode, like the date and battery
   widgets: a glass card or none, corners, text or accent colour, and which parts show (the block's tasks and its
   buttons; tasks and times).
+- With the drawer's tabs at the top, their pill rises out of the home pill as the drawer opens and sinks back into
+  it as it closes, following the finger.
 - A layout for a time of day: choose it on the Layouts page, with its hours (from, until, over midnight too) and
   days (Monday to Friday, the weekend, every day). It comes in and goes by itself like the trip-home and exam-week
   layouts, which come first; the layout from before comes back unless you switched by hand.
