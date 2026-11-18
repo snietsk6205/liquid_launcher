@@ -42,6 +42,7 @@ object SettingDependencies {
             LauncherSettings.IndexVisibility, LauncherSettings.IndexReach, LauncherSettings.IndexEnds, LauncherSettings.IndexLetterSize,
             LauncherSettings.IndexSpacing, LauncherSettings.IndexBubble, LauncherSettings.IndexBubblePlace, LauncherSettings.IndexLetterGap,
             LauncherSettings.IndexBubbleGap, LauncherSettings.IndexTrack, LauncherSettings.IndexSpring, LauncherSettings.IndexHideDelay,
+            LauncherSettings.IndexStringTop, LauncherSettings.IndexStringBottom,
         )
         val railOnly = listOf(LauncherSettings.IndexRailHeight, LauncherSettings.IndexRailLift, LauncherSettings.IndexRailInset)
         val launcherButtonsOnly = listOf(
@@ -57,6 +58,7 @@ object SettingDependencies {
             LauncherSettings.PillStudyFrame.key to (look to setOf("glyph", "app", "picture")),
             LauncherSettings.PillStudyRing.key to (look to setOf("glyph", "app", "picture")),
             LauncherSettings.PillStudyTint.key to (look to setOf("glyph", "app", "picture", "circle")),
+            LauncherSettings.IndexLetterCustom.key to (LauncherSettings.IndexLetterColour to setOf("custom")),
         ) + stringOnly.associate { it.key to (index to setOf("string")) } + railOnly.associate { it.key to (index to setOf("rail")) } +
             realGlassOnly.associate { it.key to (LauncherSettings.GlassEngine to setOf("real")) } +
             launcherButtonsOnly.associate { it.key to (LauncherSettings.ThemeControls to setOf("launcher")) }

@@ -410,7 +410,7 @@ fun AppDrawer(
     DisposableEffect(Unit) { onDispose { controller.tabsBar = null } }
 
     val useIndex = motion.scrollbar == "index" && !searching && currentTab.sort == "az"
-    // The index floats over the list, so both sides keep the same margin whether it shows or not.
+    // The index floats over the list; letters that show at rest get a lane of their own (0.10.2, below).
     val highlight = remember { IndexHighlight() }
     val density = LocalDensity.current
     val keyboardOrNav = WindowInsets.ime.union(WindowInsets.navigationBars)
@@ -428,11 +428,16 @@ fun AppDrawer(
     }
     val bottomExtra = SearchZone + belowStrip + if (stripAbove) tagConfig.stripHeight() else 0.dp
     val statusInsets = WindowInsets.statusBars
-    val padding = remember(keyboardOrNav, statusInsets, density, bottomExtra, headerHeight, config.sideMarginDp) {
+    // 0.10.2: while the string's letters show at rest ("Always", or "While scrolling"), the list keeps a lane clear of
+    // them on their edge(s): the letters rest 16 dp in, so the lane is that plus half a letter and a small gap.
+    val lane = if (useIndex && indexConfig.style == "string" && indexConfig.visibility != "touch") (16f + indexConfig.letterSp * 0.36f + 6f).dp else 0.dp
+    val laneRight = if (indexConfig.side != "left") lane else 0.dp
+    val laneLeft = if (indexConfig.side != "right") lane else 0.dp
+    val padding = remember(keyboardOrNav, statusInsets, density, bottomExtra, headerHeight, config.sideMarginDp, laneLeft, laneRight) {
         DrawerPadding(
             keyboardOrNav, statusInsets, density, headerHeight + 4.dp, bottomExtra,
-            left = config.sideMarginDp.dp,
-            right = config.sideMarginDp.dp,
+            left = maxOf(config.sideMarginDp.dp, laneLeft),
+            right = maxOf(config.sideMarginDp.dp, laneRight),
         )
     }
 

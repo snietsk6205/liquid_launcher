@@ -1326,6 +1326,36 @@ object LauncherSettings {
         summary = "How long the letters stay after you let go or stop scrolling (not with \"Always\")",
         section = "drawerIndex", keywords = "index hide delay fade time",
     )
+    // 0.10.2: where the string's ends sit (lower and shorter, within thumb reach), and what colour its letters are.
+    val IndexStringTop = IntSetting(
+        key = "index.stringTop", default = 0, min = 0, max = 60, step = 2, unit = "% from the top",
+        title = "String: top end",
+        summary = "Where the string's first letter can sit, measured down the list from its top. Raise both ends' values to bring the string lower, within thumb reach",
+        section = "drawerIndex", keywords = "index string position top end lower shorter thumb reach move length",
+    )
+    val IndexStringBottom = IntSetting(
+        key = "index.stringBottom", default = 100, min = 40, max = 100, step = 2, unit = "% from the top",
+        title = "String: bottom end",
+        summary = "Where the string's last letter can sit. The letters keep their spacing between the two ends and get tighter when they would not fit; only this part of the edge takes the finger, the rest keeps Back",
+        section = "drawerIndex", keywords = "index string position bottom end lower shorter thumb reach move length",
+    )
+    val IndexLetterColour = ChoiceSetting(
+        key = "index.letterColour", default = "wallpaper",
+        options = listOf(
+            "wallpaper" to "From the wallpaper: its light or dark tone, whichever reads",
+            "theme" to "The theme's text",
+            "accent" to "The accent",
+            "custom" to "My colour",
+            "plain" to "White or dark, from the drawer's glass (before 0.10.2)",
+        ),
+        title = "Letter colour",
+        section = "drawerIndex", keywords = "index letter colour color wallpaper accent theme tint",
+    )
+    val IndexLetterCustom = ColorSetting(
+        key = "index.letterCustom", default = "#FFFFFF", autoLabel = "White",
+        title = "My letter colour",
+        section = "drawerIndex", keywords = "index letter colour color custom",
+    )
     val IndexFocus = BoolSetting(
         key = "index.focus", default = true,
         title = "Highlight the letter's apps",
@@ -2518,7 +2548,7 @@ object LauncherSettings {
         DrawerWork, DrawerCloseOnLaunch, DrawerSideMargin, DrawerDim, DrawerTabsPosition,
         DrawerTransition, DrawerTravel, DrawerPillMorph, DrawerSpeed, DrawerBounce, DrawerRise, DrawerHomeScale, DrawerHomeBlur, DrawerBlurLive,
         DrawerScrollbar, DrawerScrollBubble, DrawerScrollEffect, DrawerScrollStrength, DrawerOverscroll,
-        IndexStyle, IndexRailHeight, IndexRailLift, IndexRailInset, IndexVisibility, IndexSide, IndexTrack, IndexReach, IndexEnds, IndexLetterSize, IndexSpacing, IndexBubble, IndexBubblePlace, IndexLetterGap, IndexBubbleGap, IndexHaptics, IndexFollow, IndexSpring, IndexHideDelay, IndexFocus, DrawerTopSections,
+        IndexStyle, IndexRailHeight, IndexRailLift, IndexRailInset, IndexVisibility, IndexSide, IndexTrack, IndexReach, IndexEnds, IndexLetterSize, IndexSpacing, IndexBubble, IndexBubblePlace, IndexLetterGap, IndexBubbleGap, IndexHaptics, IndexFollow, IndexSpring, IndexHideDelay, IndexFocus, IndexStringTop, IndexStringBottom, IndexLetterColour, IndexLetterCustom, DrawerTopSections,
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
         TagStripPosition, TagButtonPosition, TagButtonSize, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
         MenuEntries,

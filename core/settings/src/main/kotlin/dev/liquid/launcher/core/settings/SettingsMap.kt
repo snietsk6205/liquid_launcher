@@ -138,10 +138,10 @@ object SettingsMap {
             "index", "Letter index", "The letters at the drawer's edge: the short rail or the full strip", SettingsEntry.DRAWER, listOf("drawerIndex"),
             mapOf(
                 L to listOf(
-                    "index.style", "index.railHeight", "index.railLift", "index.railInset", "index.side", "index.reach", "index.ends",
-                    "index.letterSize", "index.spacing", "index.letterGap", "index.bubblePlace", "index.bubbleGap",
+                    "index.style", "index.stringTop", "index.stringBottom", "index.railHeight", "index.railLift", "index.railInset", "index.side",
+                    "index.reach", "index.ends", "index.letterSize", "index.spacing", "index.letterGap", "index.bubblePlace", "index.bubbleGap",
                 ),
-                K to listOf("index.visibility", "index.bubble", "index.focus"),
+                K to listOf("index.visibility", "index.letterColour", "index.letterCustom", "index.bubble", "index.focus"),
                 B to listOf("index.haptics", "index.follow", "index.track", "index.spring", "index.hideDelay"),
             ),
         ),

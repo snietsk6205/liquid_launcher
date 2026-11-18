@@ -18,12 +18,14 @@ internal class FrameMeter : Window.OnFrameMetricsAvailableListener {
     private var gpuNs = 0L
     private var worstNs = 0L
     private var label = ""
+    private var minFrames = 120
 
     override fun onFrameMetricsAvailable(window: Window, metrics: FrameMetrics, dropCount: Int) {
         val now = FrameCost.label
         if (now != label) {
             flush()
             label = now
+            minFrames = FrameCost.minFrames
         }
         val total = metrics.getMetric(FrameMetrics.TOTAL_DURATION)
         val deadline = metrics.getMetric(FrameMetrics.DEADLINE).takeIf { it > 0 } ?: 16_666_667L
@@ -38,7 +40,7 @@ internal class FrameMeter : Window.OnFrameMetricsAvailableListener {
 
     /** Writes the frames counted so far (when there were enough to say something) and starts again. */
     fun flush() {
-        if (frames >= 120) {
+        if (frames >= minFrames) {
             val avg = totalNs / frames / 1e6
             val gpu = gpuNs / frames / 1e6
             DebugLog.event(

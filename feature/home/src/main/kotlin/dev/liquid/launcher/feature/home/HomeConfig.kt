@@ -203,6 +203,12 @@ data class IndexConfig(
     val hideMs: Int,
     /** The held letter's apps stay bright, others fade. */
     val focus: Boolean,
+    /** 0.10.2: the string's ends, as fractions of the list's height from its top. */
+    val stringTop: Float = 0f,
+    val stringBottom: Float = 1f,
+    /** 0.10.2: "wallpaper", "theme", "accent", "custom" or "plain". */
+    val letterColour: String = "wallpaper",
+    val letterCustom: Color? = null,
 )
 
 /** How the drawer opens and scrolls. */
@@ -434,6 +440,10 @@ fun SettingsStore.indexConfig() = IndexConfig(
     },
     hideMs = get(S.IndexHideDelay),
     focus = get(S.IndexFocus),
+    stringTop = get(S.IndexStringTop) / 100f,
+    stringBottom = maxOf(get(S.IndexStringBottom), get(S.IndexStringTop) + 30) / 100f,
+    letterColour = get(S.IndexLetterColour),
+    letterCustom = dev.liquid.launcher.core.settings.ColorSetting.parse(get(S.IndexLetterCustom))?.let { Color(it) },
 )
 
 fun SettingsStore.drawerMotion(): DrawerMotion {

@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -151,9 +152,17 @@ private class IndexTouch {
     /** The edge the string is pulled from: true = right. */
     var fromRight by mutableStateOf(true)
 
-    /** How far the string's apex is pulled in from its edge right now (pixels), and its speed. */
-    var pull by mutableFloatStateOf(0f)
-    var pullVelocity = 0f
+    /**
+     * 0.10.2: each edge has a string of its own (its pull, speed and the height it bends around), so touching the other
+     * edge while one is still springing back never makes either jump: the old one settles where it is.
+     */
+    val right = Bend()
+    val left = Bend()
+
+    fun bend(onRight: Boolean): Bend = if (onRight) right else left
+
+    /** The pull of the string being touched (or last touched). */
+    val pull: Float get() = bend(fromRight).pull
 
     /** Where the finger wants the apex. */
     var pullTarget = 0f
@@ -169,6 +178,40 @@ private class IndexTouch {
 
     /** The rail's magnifier: the entry under the finger, continuous (0.9.6). */
     var lens by mutableFloatStateOf(0f)
+}
+
+/** One edge's string: how far its apex is pulled in (pixels, read while drawing), its speed, and the height it bends around. */
+@Stable
+private class Bend {
+    var pull by mutableFloatStateOf(0f)
+    var velocity = 0f
+    var y by mutableFloatStateOf(0f)
+}
+
+/**
+ * The letters' colour (0.10.2, "Letter colour"): by default from the wallpaper, its light tone over a dark drawer and
+ * its dark tone over a light one, deepened or lightened until it reads; or the theme's text, the accent, your own
+ * colour, or white or dark as before.
+ */
+private fun indexLetterColour(
+    config: IndexConfig,
+    lightGlass: Boolean,
+    roles: dev.liquid.launcher.core.common.WallpaperPalette?,
+    themeText: Color?,
+): Color {
+    val plain = if (lightGlass) Color(0xFF16181C) else Color.White
+    return when (config.letterColour) {
+        "plain" -> plain
+        "theme" -> themeText ?: plain
+        "accent" -> HomeTheme.accent
+        "custom" -> config.letterCustom ?: plain
+        else -> {
+            val p = roles ?: return plain
+            val pick = if (lightGlass) p.dark else p.light
+            val l = dev.liquid.launcher.core.common.WallpaperPalette.hsl(pick)[2]
+            Color(dev.liquid.launcher.core.common.WallpaperPalette.withHsl(pick, l = if (lightGlass) minOf(l, 0.2f) else maxOf(l, 0.84f)))
+        }
+    }
 }
 
 /**
@@ -259,8 +302,17 @@ internal fun ScrollIndex(
     val density = LocalDensity.current
     val touch = remember { IndexTouch() }
     val pop = highlight.pop
-    val color = if (glass.lightGlass(Surfaces.Drawer, lightBackground)) Color(0xFF16181C) else Color.White
+    val tone by dev.liquid.launcher.core.common.WallpaperTones.tone.collectAsState()
+    val themeText = currentTheme?.button?.text?.let { Color(it) }
+    val color = indexLetterColour(config, glass.lightGlass(Surfaces.Drawer, lightBackground), tone?.roles, themeText)
     SideEffect { if (!touch.touching && config.side != "both") touch.fromRight = config.side != "left" }
+    // 0.10.2: the column fades across when the other edge is touched (both edges), instead of jumping there.
+    val side = remember { Animatable(if (config.side == "left") 0f else 1f) }
+    LaunchedEffect(touch.fromRight) {
+        side.animateTo(if (touch.fromRight) 1f else 0f, spring(dampingRatio = 1f, stiffness = MotionScale.stiffness(900f)))
+    }
+    // The frame meter counts a drag of the index apart (0.10.2), so its cost on the phone is in the debug log.
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { FrameCost.activity = null } }
 
     // ---- visibility ----
     val scrolling by remember(state) { derivedStateOf { state.isScrollInProgress } }
@@ -283,31 +335,41 @@ internal fun ScrollIndex(
     // ---- the list following the finger ----
     GlideList(state, index, touch, config.followMs)
 
-    // ---- the string: one spring pulls the apex after the finger, and back to the edge on release ----
+    // ---- the strings: a spring pulls the touched edge's apex after the finger, and each back to its edge on release ----
     LaunchedEffect(touch.touching, config.stiffness) {
-        if (!touch.touching && abs(touch.pull) < 0.5f && abs(touch.pullVelocity) < 5f) return@LaunchedEffect
+        fun still(b: Bend) = abs(b.pull) < 0.5f && abs(b.velocity) < 5f
+        if (!touch.touching && still(touch.right) && still(touch.left)) return@LaunchedEffect
         var last = 0L
         while (isActive) {
+            // One step per frame the display draws, from the frame's own time (no fixed step that could jump).
             val now = withFrameNanos { it }
             val dt = if (last == 0L) 1f / 90f else ((now - last) / 1_000_000_000f).coerceIn(0.001f, 0.05f)
             last = now
             val held = touch.touching
-            val target = if (held) touch.pullTarget else 0f
             val stiffness = config.stiffness
-            // Held: it follows without wobbling. Let go: under-damped, so it snaps back like a plucked string.
-            val damping = 2f * (if (held) 0.86f else 0.5f) * sqrt(stiffness)
-            var x = touch.pull
-            var v = touch.pullVelocity
-            repeat(2) {
-                val h = dt / 2f
-                v += (-stiffness * (x - target) - damping * v) * h
-                x += v * h
+            for (b in arrayOf(touch.right, touch.left)) {
+                val pulled = held && b === touch.bend(touch.fromRight)
+                if (!pulled && still(b)) {
+                    if (b.pull != 0f) b.pull = 0f
+                    b.velocity = 0f
+                    continue
+                }
+                val target = if (pulled) touch.pullTarget else 0f
+                // Held: it follows without wobbling. Let go: under-damped, so it snaps back like a plucked string.
+                val damping = 2f * (if (pulled) 0.86f else 0.5f) * sqrt(stiffness)
+                var x = b.pull
+                var v = b.velocity
+                repeat(2) {
+                    val h = dt / 2f
+                    v += (-stiffness * (x - target) - damping * v) * h
+                    x += v * h
+                }
+                b.velocity = v
+                b.pull = x
             }
-            touch.pullVelocity = v
-            touch.pull = x
-            if (!held && abs(x) < 0.5f && abs(v) < 5f) {
-                touch.pull = 0f
-                touch.pullVelocity = 0f
+            if (!held && still(touch.right) && still(touch.left)) {
+                touch.right.pull = 0f
+                touch.left.pull = 0f
                 break
             }
         }
@@ -317,8 +379,13 @@ internal fun ScrollIndex(
         val height = constraints.maxHeight.toFloat()
         val width = constraints.maxWidth.toFloat()
         val n = entries.size
-        val spacing = minOf(with(density) { config.spacingDp.dp.toPx() }, (height - with(density) { 16.dp.toPx() }) / n).coerceAtLeast(1f)
-        val top = (height - spacing * n) / 2f
+        // 0.10.2: the string lies between its two ends ("String: top end" and "bottom end"); the letters keep their
+        // spacing in the middle of that stretch and get tighter when they would not fit.
+        val spanTop = height * config.stringTop.coerceIn(0f, 0.9f)
+        val spanBottom = (height * config.stringBottom).coerceIn(spanTop + 1f, height)
+        val span = spanBottom - spanTop
+        val spacing = minOf(with(density) { config.spacingDp.dp.toPx() }, (span - with(density) { 16.dp.toPx() }) / n).coerceAtLeast(1f)
+        val top = spanTop + (span - spacing * n) / 2f
         val edge = with(density) { EdgeInset.toPx() }
         val letterGap = with(density) { config.letterGapDp.dp.toPx() }
         val bubbleGap = with(density) { config.bubbleGapDp.dp.toPx() }
@@ -343,14 +410,14 @@ internal fun ScrollIndex(
             val slot = (y - top) / spacing - 0.5f
             return if (reverse) (n - 1) - slot else slot
         }
-        /** Where the letter at height [y] is drawn: on the string, pulled in around the finger. */
-        fun letterX(y: Float): Float {
-            val right = touch.fromRight
-            val pull = touch.pull
+        /** Where the letter at height [y] is drawn on the [right] (or left) edge's string, pulled in around where it was held. */
+        fun letterX(y: Float, right: Boolean): Float {
+            val b = touch.bend(right)
+            val pull = b.pull
             if (abs(pull) < 0.01f) return restX(right)
-            val slots = (y - touch.fingerY) / spacing
+            val slots = (y - b.y) / spacing
             // Distance from the finger to the end of the column on this letter's side, in letters.
-            val toEnd = if (slots < 0f) (touch.fingerY - (top + 0.5f * spacing)) / spacing else ((top + (n - 0.5f) * spacing) - touch.fingerY) / spacing
+            val toEnd = if (slots < 0f) (b.y - (top + 0.5f * spacing)) / spacing else ((top + (n - 0.5f) * spacing) - b.y) / spacing
             val w = stringWeight(slots, stringReach(toEnd, freeReach, config.pinned))
             return if (right) restX(true) - pull * w else restX(false) + pull * w
         }
@@ -369,6 +436,7 @@ internal fun ScrollIndex(
         fun follow(x: Float, y: Float) {
             touch.fingerX = x
             touch.fingerY = y.coerceIn(top + 0.5f * spacing, top + (n - 0.5f) * spacing)
+            touch.bend(touch.fromRight).y = touch.fingerY
             val inward = if (touch.fromRight) restX(true) - x else x - restX(false)
             touch.pullTarget = pullFor(inward, letterGap, config.track, maxPull)
             val position = positionAt(touch.fingerY)
@@ -421,21 +489,43 @@ internal fun ScrollIndex(
                     state.firstVisibleItemScrollOffset
                     val held = touch.touching
                     val highlighted = if (held) touch.active else index.entryForRow(currentRow(state, index))
-                    for (i in 0 until n) {
-                        val y = centreY(i)
-                        val x = letterX(y)
-                        val on = i == highlighted
-                        val layout: TextLayoutResult = if (on) bold[i] else normal[i]
-                        val w = layout.size.width.toFloat()
-                        val h = layout.size.height.toFloat()
-                        // Lighter at rest: the letters float over the apps' labels.
-                        val alpha = if (on) 1f else if (held) 0.86f else 0.5f
-                        val grow = if (on && held) 1.3f else 1f
-                        scale(grow, Offset(x, y)) {
-                            if (entries[i].section && glyph(entries[i].label, true) != "★") {
-                                drawCircle(color.copy(alpha = alpha * 0.8f), radius = maxOf(w, h) * 0.62f, center = Offset(x, y), style = Stroke(1.dp.toPx()))
+                    // 0.10.2: everything here is read while drawing (positions, springs, the side), so a frame never
+                    // recomposes; the letters near the finger grow, brighten and turn bold with their distance from it,
+                    // so moving from one letter to the next is smooth, and they ease back with the highlight's spring.
+                    val heldAmount = pop.value.coerceIn(0f, 1f)
+                    val onRight = side.value
+                    for (right in booleanArrayOf(true, false)) {
+                        val weight = if (right) onRight else 1f - onRight
+                        if (weight < 0.01f) continue
+                        val bendY = touch.bend(right).y
+                        val touched = right == touch.fromRight
+                        for (i in 0 until n) {
+                            val y = centreY(i)
+                            val x = letterX(y, right)
+                            val on = i == highlighted && touched
+                            val near = if (touched && heldAmount > 0.01f) {
+                                val t = (1f - abs(y - bendY) / (spacing * 1.6f)).coerceIn(0f, 1f)
+                                t * t * (3f - 2f * t) * heldAmount
+                            } else 0f
+                            // Lighter at rest: the letters float over the apps' labels.
+                            val rest = if (on) 1f else 0.5f
+                            val base = rest + (0.86f - rest) * heldAmount
+                            val alpha = ((base + (1f - base) * near) * weight).coerceIn(0f, 1f)
+                            val boldWeight = maxOf(near, if (on) 1f - heldAmount else 0f)
+                            val grow = 1f + 0.3f * near
+                            val plainLayout: TextLayoutResult = normal[i]
+                            val w = plainLayout.size.width.toFloat()
+                            val h = plainLayout.size.height.toFloat()
+                            scale(grow, Offset(x, y)) {
+                                if (entries[i].section && glyph(entries[i].label, true) != "★") {
+                                    drawCircle(color.copy(alpha = alpha * 0.8f), radius = maxOf(w, h) * 0.62f, center = Offset(x, y), style = Stroke(1.dp.toPx()))
+                                }
+                                if (boldWeight < 0.99f) drawText(plainLayout, topLeft = Offset(x - w / 2f, y - h / 2f), alpha = alpha * (1f - boldWeight))
+                                if (boldWeight > 0.01f) {
+                                    val b = bold[i]
+                                    drawText(b, topLeft = Offset(x - b.size.width / 2f, y - b.size.height / 2f), alpha = alpha * boldWeight)
+                                }
                             }
-                            drawText(layout, topLeft = Offset(x - w / 2f, y - h / 2f), alpha = alpha)
                         }
                     }
                 }
@@ -458,7 +548,8 @@ internal fun ScrollIndex(
                             val x = if (right) minOf(touch.fingerX, restX(true) - edge) else maxOf(touch.fingerX, restX(false) + edge)
                             // "Beside": past the letter under the finger, which rides the string's apex (it grows by 1.3 while held).
                             val letterHalf = (bold.getOrNull(touch.active)?.size?.width ?: 0) * 0.65f
-                            val anchor = if (right) restX(true) - touch.pull - letterHalf else restX(false) + touch.pull + letterHalf
+                            val pull = touch.bend(right).pull
+                            val anchor = if (right) restX(true) - pull - letterHalf else restX(false) + pull + letterHalf
                             val centre = bubbleCentre(
                                 config.bubblePlace, x, touch.fingerY, anchor, right,
                                 placeable.width.toFloat(), placeable.height.toFloat(), bubbleGap, aboveGap, 0f, width,
@@ -480,7 +571,8 @@ internal fun ScrollIndex(
                     .drawBehind {
                         touch.fingerX
                         touch.fingerY
-                        touch.pull
+                        touch.right.pull
+                        touch.left.pull
                     }
                     .then(
                         if (config.bubble == "glass") {
@@ -500,17 +592,23 @@ internal fun ScrollIndex(
         // ---- touch strips: one per edge in use ----
         if (interactive) {
             val stripPx = with(density) { IndexStrip.toPx() }
+            // 0.10.2: only the string's stretch (and a little beyond) takes the finger; the rest of the edge keeps Back.
+            val reachPad = with(density) { 24.dp.toPx() }
+            val stripTop = (spanTop - reachPad).coerceAtLeast(0f)
+            val stripHeight = ((spanBottom + reachPad).coerceAtMost(height) - stripTop).coerceAtLeast(1f)
+            val label = "letter index (string" + (if (config.side == "both") ", both edges" else "") + ")"
             for (right in listOf(true, false)) {
                 if (config.side != "both" && (config.side != "left") != right) continue
                 Box(
                     Modifier
                         .align(if (right) Alignment.TopEnd else Alignment.TopStart)
-                        .fillMaxHeight()
+                        .offset { IntOffset(0, stripTop.roundToInt()) }
+                        .height(with(density) { stripHeight.toDp() })
                         .width(IndexStrip)
                         // Pulling in from the edge is the system's back gesture; ask for the strip (the system grants up to 200 dp per edge).
                         .systemGestureExclusion()
-                        .pointerInput(index, reverse, spacing, top, width, config.track, right) {
-                            // The strip's own x in the index box, to turn finger positions into box positions.
+                        .pointerInput(index, reverse, spacing, top, width, stripTop, config.track, right) {
+                            // The strip's own place in the index box, to turn finger positions into box positions.
                             val stripLeft = if (right) width - stripPx else 0f
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
@@ -518,16 +616,18 @@ internal fun ScrollIndex(
                                 touch.fromRight = right
                                 touch.active = -1
                                 touch.touching = true
-                                follow(stripLeft + down.position.x, down.position.y)
+                                FrameCost.activity = label
+                                follow(stripLeft + down.position.x, stripTop + down.position.y)
                                 scope.launch { pop.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = MotionScale.stiffness(700f))) }
                                 while (true) {
                                     val event = awaitPointerEvent()
                                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                     change.consume()
                                     if (!change.pressed) break
-                                    follow(stripLeft + change.position.x, change.position.y)
+                                    follow(stripLeft + change.position.x, stripTop + change.position.y)
                                 }
                                 touch.touching = false
+                                FrameCost.activity = null
                                 scope.launch { pop.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = MotionScale.stiffness(500f))) }
                             }
                         }
@@ -630,7 +730,9 @@ private fun RailIndex(
     val density = LocalDensity.current
     val touch = remember { IndexTouch() }
     val pop = highlight.pop
-    val color = if (glass.lightGlass(Surfaces.Drawer, lightBackground)) Color(0xFF16181C) else Color.White
+    val tone by dev.liquid.launcher.core.common.WallpaperTones.tone.collectAsState()
+    val themeText = currentTheme?.button?.text?.let { Color(it) }
+    val color = indexLetterColour(config, glass.lightGlass(Surfaces.Drawer, lightBackground), tone?.roles, themeText)
     val accent = HomeTheme.accent
     val right = config.side != "left"
     SideEffect { highlight.enabled = config.focus }

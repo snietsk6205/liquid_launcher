@@ -604,8 +604,19 @@ private fun DrawScope.paintSplat(kit: SplashKit, cx: Float, cy: Float, age: Long
  * textures and material. The app's frame meter writes it next to the frame times it logs.
  */
 object FrameCost {
-    @Volatile var label: String = ""
-        private set
+    @Volatile private var base: String = ""
+
+    /**
+     * 0.10.2: something the finger is doing that has a cost of its own (the letter index while it is dragged), or
+     * null. Its frames are counted apart, so the debug log says what dragging the index costs on the phone.
+     */
+    @Volatile var activity: String? = null
+
+    /** What is on screen, for the frame meter's line: the activity first, then what keeps drawing. */
+    val label: String get() = activity?.let { a -> if (base.isEmpty()) a else "$a; $base" } ?: base
+
+    /** An activity's frames are worth a line from 30 (a drag lasts a second or two); a still screen's from 120. */
+    val minFrames: Int get() = if (activity != null) 30 else 120
 
     internal fun describe(fx: WallpaperFxConfig, theme: dev.liquid.launcher.core.data.LiquidTheme?) {
         val parts = mutableListOf<String>()
@@ -617,7 +628,7 @@ object FrameCost {
             theme.board?.takeIf { it.image != null }?.let { parts += "sheet picture (blur ${it.imageBlurDp.toInt()} dp)" }
             if (theme.frost.enabled) parts += "frost blur %.0f".format(theme.frost.blurDp)
         }
-        label = parts.joinToString("; ")
+        base = parts.joinToString("; ")
     }
 }
 
