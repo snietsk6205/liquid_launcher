@@ -871,7 +871,10 @@ The first 0.10.1 release run (83) published nothing: four emulator checks failed
 the top tabs pill's rise (P5) moved the drawer's invisible tabs over the home pill while the drawer was closed, so they
 took the pill's touches (in edit mode, the edit bar's: Pages and Widgets did nothing); and the collapsed hub's
 "The whole day" sat at the end of its list, out of sight. Fixed (no rise while the drawer is closed; the chip above
-the list) and released again.
+the list). The second attempt (run 84) passed those, but its tap on the block's Done missed in the
+collapsed hub (with the chip above the list, the button sat at the hub's lower edge): the collapsed hub is now at
+most half the screen, its block shows its buttons right after its steps (the notes, cut to two lines, under them),
+and check 14b opens the whole day before ticking (noting whether Done is in sight when collapsed).
 
 **Workstreams**
 
@@ -884,7 +887,7 @@ the list) and released again.
 | W4 | Done | `SettingsMap` (7 entries, 26 pages, 4 tabs; every one of the 365 options placed, the internal ones on a hidden page; keys unchanged; 0.9 section ids map to pages), `SettingInfo`, `Pages.kt` (entry and page screens, sticky preview, tab chips with counts, Reset per tab), rows held for Reset / Explain / Copy id, greyed rows with the reason (`SettingDependencies.whyOff`), search and Recently changed open page + tab + highlight, `page:<id>[:<tab>]` links, "Customise" chip from home (dock, folder, search page, hub, pill on its default). Emulator check 14d goes through search. |
 | W5 | Done | Backup and Claude page (System): Back up now (wallpapers optional, theme pictures always), daily backup to a SAF folder with JobScheduler keeping N copies (`AutoBackup`, `BackupJobService`), restore preview (`LauncherData.previewBackup`), `SettingsAI` (Markdown export with the answer rules, Send to Claude by ACTION_SEND with a question, paste, check, apply valid entries, red for invalid, one-tap Undo). No network. |
 | W6 | Done | Select in the drawer's app menu, picking with checks, the bar (Tag, Untag, Hide, Add to home), bulk tag sheet, a tag's own list of all apps with checks and search. Emulator check 9d. |
-| W7 | Done | Hub opens collapsed (≤ 46 % of the screen) with a second spring to the whole day (chip, handle, pushing the list up); "Study hub opens"; dim, blur and text colour of the hub (auto-contrast); the clock's study line auto-contrast + soft halo or clock / white / black. The rail part was already done in 0.9.6 (short liquid rail ≤ 180 dp, edge letters kept as "String"). |
+| W7 | Done | Hub opens collapsed (≤ 50 % of the screen; the hero block brief: its buttons right after its steps) with a second spring to the whole day (chip, handle, pushing the list up); "Study hub opens"; dim, blur and text colour of the hub (auto-contrast); the clock's study line auto-contrast + soft halo or clock / white / black. The rail part was already done in 0.9.6 (short liquid rail ≤ 180 dp, edge letters kept as "String"). |
 | W8 | Done | P5: the top tabs pill rises out of the home pill. P7: Now card and Today widget Customise sheets. P8: layout for a time of day (from, until, days, over midnight), a look per wallpaper (blur, dim, saturation, vignette), glass tint "The wallpaper's colour", real layout previews, any library picture as a layout's wallpaper ("Choose its wallpaper…"). |
 
 Decisions of this session: D139–D143 in DECISIONS.md (theme document, settings map, Claude patches, daily backup,
@@ -917,7 +920,7 @@ minute on the home screen with a moving background.
 **Questions for Med**
 1. The search bar and the other pills are dark for every theme that does not set them, your keyboard backup included
    (its space bar colour is nearly transparent). Keep it, or follow the keyboard's space bar?
-2. The hub now opens collapsed. Is ≤ 46 % of the screen the right collapsed height?
+2. The hub now opens collapsed. Is half the screen the right collapsed height?
 3. The line under the clock now picks dark or light for the wallpaper, with a halo (before: the clock's colour). Keep?
 4. Backup and Claude is in System. Would you rather have it under Wallpaper and layouts?
 5. "Send to Claude" goes to the app in "App that gets Tell Claude" (com.anthropic.claude by default), else the share

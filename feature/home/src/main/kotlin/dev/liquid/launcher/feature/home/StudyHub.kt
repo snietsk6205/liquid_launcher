@@ -126,7 +126,7 @@ internal class HubGeometry(
         val margin = with(density) { 10.dp.toPx() }
         val bottom = h - maxOf(nav.getBottom(density), ime.getBottom(density)) - margin
         // W7: collapsed, the hub is at most half the screen; it springs to the full height as it expands.
-        val collapsed = minOf(fraction, 0.46f)
+        val collapsed = minOf(fraction, 0.5f)
         val f = collapsed + (fraction - collapsed) * controller.hubExpand.value
         val top = maxOf(status.getTop(density) + margin, bottom - h * f)
         return Rect(margin, top, w - margin, bottom)
@@ -336,7 +336,7 @@ private fun HubContent(controller: HomeController, color: Color, scroll: ScrollS
                 }
                 if (hero != null) {
                     SectionLabel(heroLabel(hero, now), color)
-                    BlockCard(hero, now, prefs, focus, color, controller, startOpen = true)
+                    BlockCard(hero, now, prefs, focus, color, controller, startOpen = true, brief = !controller.hubExpanded)
                 }
                 // W7: collapsed, the hub holds the block now or next; the rest of the day is one tap or a swipe up away.
                 if (!controller.hubExpanded) return@Column

@@ -421,6 +421,8 @@ private fun paneRim(color: Color): Modifier {
 internal fun BlockCard(
     block: StudyEvent, now: Long, prefs: TodayPrefs, focus: dev.liquid.launcher.core.data.StudyFocus?, color: Color, controller: HomeController,
     startOpen: Boolean = false,
+    /** W7: in the collapsed hub, the buttons come right after the steps and the notes are cut to two lines. */
+    brief: Boolean = false,
 ) {
     val running = now >= block.begin && now < block.end
     val done = block.status != StudyStatus.Open
@@ -484,15 +486,18 @@ internal fun BlockCard(
             tasks.forEach { task ->
                 TaskRow(task.text, task.done, color, true) { controller.studyTick(block, task.index, !task.done) }
             }
-            if (notes.isNotBlank()) {
-                Text(
-                    notes, style = label(color, 12, alpha = 0.78f),
-                    maxLines = if (open) Int.MAX_VALUE else 3, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .padding(top = 3.dp)
-                        .then(if (canOpen) Modifier.clickable(interactionSource = null, indication = null) { open = !open } else Modifier),
-                )
+            val notesText: @Composable () -> Unit = {
+                if (notes.isNotBlank()) {
+                    Text(
+                        notes, style = label(color, 12, alpha = 0.78f),
+                        maxLines = if (brief) 2 else if (open) Int.MAX_VALUE else 3, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .padding(top = 3.dp)
+                            .then(if (canOpen) Modifier.clickable(interactionSource = null, indication = null) { open = !open } else Modifier),
+                    )
+                }
             }
+            if (!brief) notesText()
             val buttons = ArrayList<@Composable () -> Unit>()
             if (block.status == StudyStatus.Open) {
                 buttons += { ActionChip("Done", color, filled = running, accent = accent) { controller.studyStatus(block, StudyStatus.Done) } }
@@ -531,6 +536,7 @@ internal fun BlockCard(
                 // The main button sits nearest the edge the buttons line up on: under the thumb on the right.
                 (if (prefs.buttonsEnd) buttons.asReversed() else buttons).forEach { it() }
             }
+            if (brief) notesText()
         }
     }
 }

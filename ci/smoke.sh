@@ -686,6 +686,16 @@ else
     peek 14b-panel
     dump 14b-panel
     if on_screen 14b-panel "Recall the theorems" exact; then pass "the clock line opens Today with the block's tasks"; else fail "the clock line opens Today with the block's tasks"; fi
+    on_screen 14b-panel "Done" exact || note "the collapsed hub does not show the block's Done in sight"
+    # 0.10.1 (W7): the hub opens collapsed; "The whole day" first, so every part below is in sight.
+    if tap_text 14b-panel "The whole day"; then
+      sleep 1.5
+      pass "the collapsed hub opens to the whole day"
+    else
+      fail "the collapsed hub offers the whole day"
+      python3 ci/describe_ui.py "$OUT/14b-panel.xml" 25 | sed 's/^/        /'
+    fi
+    dump 14b-panel
     # "Done" first: once a task is ticked, its tick icon is also labelled "Done" (for accessibility) and comes earlier on screen.
     tap_text 14b-panel "Done" exact || true
     sleep 3
@@ -696,16 +706,7 @@ else
     sleep 3
     if event_text | grep -q '\[x\] Recall the theorems'; then pass "a tick is written into the event's description"; else fail "a tick is written into the event's description"; event_text | head -8; fi
     if event_text | grep -q '— launcher: done .* · 1/2 tasks'; then pass "the status line counts the ticked task"; else fail "the status line counts the ticked task"; event_text | tail -2; fi
-    # 0.6.4: tomorrow opens from Today, and each of its blocks opens to its steps. 0.10.1 (W7): the hub opens
-    # collapsed, so "The whole day" comes first.
-    dump 14b-collapsed
-    if tap_text 14b-collapsed "The whole day"; then
-      sleep 1.5
-      pass "the collapsed hub opens to the whole day"
-    else
-      fail "the collapsed hub offers the whole day"
-      python3 ci/describe_ui.py "$OUT/14b-collapsed.xml" 20 | sed 's/^/        /'
-    fi
+    # 0.6.4: tomorrow opens from Today, and each of its blocks opens to its steps.
     dump 14b-panel3
     if tap_text 14b-panel3 "Tomorrow · "; then
       sleep 1.5
