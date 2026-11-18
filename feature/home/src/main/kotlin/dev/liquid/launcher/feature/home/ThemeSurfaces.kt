@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -307,11 +308,16 @@ internal fun themedCardSurface(backdrop: Backdrop?, glass: GlassConfig): Pair<Mo
 
 // ---- the three pills: the space bar ----
 
-/** The space bar's look for [which] pill: its own theme when the pills are individual, else the theme's. */
+/**
+ * The space bar's look for [which] pill: its own theme when the pills are individual, else the theme's; the search bar
+ * with its own light tint when the theme gives it one (0.10.2).
+ */
 @Composable
 internal fun pillTheme(which: String): ControlTheme? {
     val theme = currentTheme ?: return null
-    return (theme.pills[which] ?: theme).space
+    theme.pills[which]?.let { return it.space }
+    if (which == dev.liquid.launcher.core.data.ThemePill.SEARCH) theme.search?.let { return it }
+    return theme.space
 }
 
 @Composable
@@ -320,9 +326,34 @@ internal fun pillFrost(which: String): ThemeFrost? {
     return (theme.pills[which] ?: theme).frost
 }
 
-/** The text colour on [which] pill, else [fallback]. */
+/**
+ * The text colour on [which] pill, else [fallback]. [lightBehind] says what the pill sits on where that is not the
+ * wallpaper itself (the drawer's dimmed page, the search page): a see-through pill whose text the theme keeps readable
+ * then takes the theme's dark or light ink for that background (0.10.2).
+ */
 @Composable
-internal fun pillContentColor(which: String, fallback: Color): Color = pillTheme(which)?.let { Color(it.text) } ?: fallback
+internal fun pillContentColor(which: String, fallback: Color, lightBehind: Boolean? = null): Color {
+    val pill = pillTheme(which) ?: return fallback
+    val theme = currentTheme
+    if (lightBehind != null && theme != null && theme.adaptive && dev.liquid.launcher.core.data.ThemeColors.alpha(pill.fill) < 0.55f &&
+        theme.pills[which] == null
+    ) {
+        val fill = Color(pill.fill)
+        val ink = Color(if (lightBehind) theme.inkDark else theme.inkLight)
+        val text = Color(pill.text)
+        // Keep the theme's text when it already reads on that background.
+        val behind = if (lightBehind) Color(0xFFE6E6EA) else Color(0xFF1C1D22)
+        val bg = androidx.compose.ui.graphics.lerp(behind, fill.copy(alpha = 1f), fill.alpha)
+        return if (contrastOf(text, bg) >= 3f) text else ink
+    }
+    return Color(pill.text)
+}
+
+private fun contrastOf(a: Color, b: Color): Float {
+    val la = a.luminance() + 0.05f
+    val lb = b.luminance() + 0.05f
+    return max(la, lb) / kotlin.math.min(la, lb)
+}
 
 /** [which] pill's surface: the space bar's colour, picture, border and shadow over its frost; else the launcher's glass. */
 @Composable

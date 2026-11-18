@@ -2,6 +2,7 @@
 # Downloads a fixed jar set from Maven Central for the local type-check harness.
 set -u
 cd "$(dirname "$0")"
+mkdir -p lib kc
 M=https://repo.maven.apache.org/maven2
 get() { # group artifact version dir [ext]
   local g=${1//.//} a=$2 v=$3 d=$4 e=${5:-jar}

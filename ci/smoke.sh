@@ -146,6 +146,26 @@ if wait_top "$HOME_ACTIVITY" 15; then pass "launcher activity starts"; else fail
 sleep 4
 look 01-home 30
 
+# Warm-up (0.10.2): run 85 failed checks 2 and 3 twice right after the first start, when the redirect engine had not yet
+# handled a window of the system launcher (its first event after start can come late). Press Home once here and wait
+# until the engine logs its first window event, then bring the launcher back; the checks below press Home after that.
+echo "== Warm-up: the redirect engine's first window event"
+for i in $(seq 1 30); do service_ready && break; sleep 0.5; done
+adb shell am start -n "$HOME_ACTIVITY" >/dev/null
+wait_top "$HOME_ACTIVITY" 8 || true
+sleep 1
+WINDOWS=$(grep -c 'Redirect: window: ' "$LOG" || true)
+adb shell input keyevent KEYCODE_HOME
+SEEN=0
+for i in $(seq 1 40); do
+  if [ "$(grep -c 'Redirect: window: ' "$LOG" || true)" -gt "$WINDOWS" ]; then SEEN=1; break; fi
+  sleep 0.5
+done
+if [ "$SEEN" = 1 ]; then note "the redirect engine saw its first window after $((i / 2)) s"; else note "no window event within 20 s of the first Home press"; redirect_trace; fi
+wait_top "$HOME_ACTIVITY" 6 || adb shell am start -n "$HOME_ACTIVITY" >/dev/null
+wait_top "$HOME_ACTIVITY" 6 || true
+sleep 2
+
 echo "== 2. Home button while on the launcher returns to the launcher"
 # A freshly booted emulator sometimes shows "Pixel Launcher isn't responding"; that dialog
 # is the emulator's, not ours, so close system dialogs and allow one retry.

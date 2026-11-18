@@ -177,6 +177,8 @@ object ThemeFields {
         role("Secondary buttons (Cancel, Edit, Shuffle…)", "Secondary buttons", "modifierKeyBackground", "modifierKeyText", null, null)
         role("Main buttons (Apply, Mark done)", "Main buttons", "enterKeyBackground", "enterKeyText", null, "pressedEnterKeyText")
         role("Pills (home, drawer, search bar)", "Pills", "liquidLauncher.space.background", "liquidLauncher.space.text", "liquidLauncher.space.pressed", null)
+        add(ThemeField("liquidLauncher.space.searchBackground", "Search bar tint", c, "Pills", ThemeFieldKind.COLOR, "The search page's field: a tint over the pills' glass so its text reads over the page (Auto: the pills' fill). Its opacity is how much shows through"))
+        add(ThemeField("liquidLauncher.pillMaterial", "Material on the pills", c, "Pills", ThemeFieldKind.BOOL, "The theme's material (paper, metal, wood…) on the three pills as on buttons; off keeps them clear liquid glass", needs = "keyMaterial?", needsReason = "Needs a material (Material group)"))
         role("Chips", "Chips", "chipBackground", "chipText", null, null)
         add(ThemeField("chipActiveBackground", "Selected fill", c, "Chips", ThemeFieldKind.COLOR, "Chips: the colour of a selected chip"))
         add(ThemeField("chipActiveText", "Selected text", c, "Chips", ThemeFieldKind.COLOR, "Chips: the text of a selected chip"))

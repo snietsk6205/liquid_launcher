@@ -21,6 +21,25 @@ object ThemeResolve {
     fun resolve(doc: ThemeDoc, palette: WallpaperPalette? = null, fallbackName: String = "Imported theme"): LiquidTheme {
         val r = Reader(doc, palette)
         val dark = r.bool("dark") ?: true
+        // 0.10.2: with colours that follow the wallpaper, a text that follows it too or is left on Auto is checked
+        // against what it sits on (its fill over the wallpaper's average colour) and becomes a dark or a light ink where
+        // it would not read. A text colour you fixed stays as you set it.
+        val adaptive = palette != null && doc.followed.isNotEmpty()
+        val behind = palette?.let { ThemeColors.opaque(it.average.toLong() and 0xFFFFFFFFL) } ?: if (dark) 0xFF1C1D22 else 0xFFE8E8EC
+        val inkDark = palette?.let { p ->
+            val d = p.dark.toLong() and 0xFFFFFFFFL
+            if (ThemeColors.luminance(d) <= 0.035f) ThemeColors.opaque(d) else WallpaperPalette.withHsl(p.dark, l = 0.12f).toLong() and 0xFFFFFFFFL
+        } ?: 0xFF16181C
+        val inkLight = palette?.let { p ->
+            val l = p.light.toLong() and 0xFFFFFFFFL
+            if (ThemeColors.luminance(l) >= 0.72f) ThemeColors.opaque(l) else WallpaperPalette.withHsl(p.light, l = 0.94f).toLong() and 0xFFFFFFFFL
+        } ?: 0xFFF2F2F5
+        /** The first of [paths] the theme sets (a text colour's source), or null when they are all on Auto. */
+        fun source(vararg paths: String): String? = paths.firstOrNull { doc.color(it) != null }
+        /** [text] (from [path], null: worked out) made readable on [fill], unless it is a colour you fixed. */
+        fun ink(text: Long, fill: Long, path: String?): Long =
+            if (!adaptive || (path != null && doc.follow(path) == null)) text
+            else ThemeColors.readable(text, fill, behind, inkDark, inkLight)
         val board = r.color("boardBackground") ?: 0xFF17181C
         val key = r.color("keyBackground") ?: 0xFF303338
         val keyText = r.color("keyText") ?: 0xFFE9E9EE
@@ -64,9 +83,15 @@ object ThemeResolve {
         fun glowColor(kind: String) = r.color("${ThemeDoc.EXT}.glowColor.$kind")
         val material = r.material()
 
+        val buttonText = ink(keyText, key, "keyText")
+        // While pressed: your pressed text, else the text made readable on the pressed fill when that differs.
+        fun pressedInk(restText: Long, textPath: String, explicit: String): Long? = r.color(explicit)
+            ?: ink(r.color(textPath) ?: restText, pressed, if (doc.follow("pressedKeyBackground") != null) null else textPath).takeIf { it != restText }
+        val chipActiveText = r.color("chipActiveText")?.let { ink(it, chipActive, "chipActiveText") }
+            ?: ink(ThemeColors.legibleOn(chipActive, listOf(accent, keyText)), chipActive, null)
         val button = ControlTheme(
-            fill = key, text = keyText, pressed = pressed, pressedText = r.color("pressedKeyText"),
-            active = chipActive, activeText = r.color("chipActiveText") ?: ThemeColors.legibleOn(chipActive, listOf(accent, keyText)),
+            fill = key, text = buttonText, pressed = pressed, pressedText = pressedInk(buttonText, "keyText", "pressedKeyText"),
+            active = chipActive, activeText = chipActiveText,
             gradient = r.gradient("keyGradient"), border = r.color("keyBorderColor"), borderWidthDp = r.float("keyBorderWidthDp") ?: 0f,
             glowDp = glow("key"), glowColor = glowColor("key"),
             shadowDp = (r.float("keyElevationDp") ?: 0f).coerceIn(0f, 8f), shadowColor = r.color("keyShadowColor"),
@@ -75,13 +100,14 @@ object ThemeResolve {
             heightDp = height, hint = hint, material = material != null,
         )
         val modifierTheme = button.copy(
-            fill = modifier, text = r.color("modifierKeyText") ?: keyText,
+            fill = modifier, text = ink(r.color("modifierKeyText") ?: keyText, modifier, source("modifierKeyText", "keyText")),
             cornerDp = r.int("modifierKeyCornerRadiusDp") ?: keyCorner, glass = "MODIFIER_KEYS" in surfaces,
             texture = modTexture, gradient = null,
         )
+        val mainText = ink(enterText, enter, source("enterKeyText"))
         val main = ControlTheme(
             // WM Keyboard presses every key, the enter key included, in the pressed key colour.
-            fill = enter, text = enterText, pressed = pressed, pressedText = r.color("pressedEnterKeyText"),
+            fill = enter, text = mainText, pressed = pressed, pressedText = pressedInk(mainText, "enterKeyText", "pressedEnterKeyText"),
             active = chipActive, activeText = button.activeText,
             border = r.color("keyBorderColor"), borderWidthDp = r.float("keyBorderWidthDp") ?: 0f,
             glowDp = glow("enter"), glowColor = glowColor("enter"),
@@ -90,21 +116,23 @@ object ThemeResolve {
             texture = r.string("keyTextureEnter") ?: modTexture, pressedTexture = pressedTexture, textureScale = scale,
             textureOpacity = texOpacity, heightDp = height, hint = hint, material = material != null,
         )
+        val chipFill = r.color("chipBackground") ?: modifier
         val chip = ControlTheme(
-            fill = r.color("chipBackground") ?: modifier,
-            text = r.color("chipText") ?: r.color("modifierKeyText") ?: keyText,
+            fill = chipFill,
+            text = ink(r.color("chipText") ?: r.color("modifierKeyText") ?: keyText, chipFill, source("chipText", "modifierKeyText", "keyText")),
             pressed = pressed, active = chipActive,
-            activeText = r.color("chipActiveText") ?: ThemeColors.legibleOn(chipActive, listOf(accent, keyText)),
+            activeText = chipActiveText,
             border = r.color("chipBorderColor"), borderWidthDp = r.float("chipBorderWidthDp") ?: 0f,
             glowDp = glow("chip"), glowColor = glowColor("chip"),
             shape = LiquidThemes.shapeName(r.string("chipShape"), "ROUNDED", allowCircle = false), cornerDp = r.int("chipCornerRadiusDp") ?: 12,
             glass = "CHIPS" in surfaces, heightDp = height, hint = hint,
         )
+        val toolFill = r.color("toolCircleBackground") ?: ThemeColors.blendOver(keyText, board, 0.14f)
         val tool = ControlTheme(
-            fill = r.color("toolCircleBackground") ?: ThemeColors.blendOver(keyText, board, 0.14f),
-            text = r.color("toolbarIcon") ?: secondary,
+            fill = toolFill,
+            text = ink(r.color("toolbarIcon") ?: secondary, toolFill, source("toolbarIcon")),
             pressed = toolActive, active = toolActive,
-            activeText = r.color("toolCircleActiveIcon") ?: ThemeColors.legibleOn(toolActive, listOf(accent, keyText)),
+            activeText = ink(r.color("toolCircleActiveIcon") ?: ThemeColors.legibleOn(toolActive, listOf(accent, keyText)), toolActive, source("toolCircleActiveIcon")),
             border = r.color("toolBorderColor"), borderWidthDp = r.float("toolBorderWidthDp") ?: 0f,
             glowDp = glow("tool"), glowColor = glowColor("tool"),
             shadowDp = (r.float("toolElevationDp") ?: 0f).coerceIn(0f, 8f),
@@ -113,20 +141,31 @@ object ThemeResolve {
         )
         val ext = ThemeDoc.EXT
         val spaceFill = r.color("$ext.space.background") ?: key
+        /** The pills' text on [fill]: yours, else readable on a fill of their own, else the buttons' text. */
+        fun pillText(fill: Long, ownFill: Boolean): Long {
+            r.color("$ext.space.text")?.let { return ink(it, fill, "$ext.space.text") }
+            return if (ownFill) ink(ThemeColors.legibleOn(ThemeColors.opaque(fill), listOf(keyText)), fill, null) else ink(keyText, fill, "keyText")
+        }
         val space = button.copy(
             fill = spaceFill,
-            text = r.color("$ext.space.text") ?: if (r.color("$ext.space.background") != null) ThemeColors.legibleOn(ThemeColors.opaque(spaceFill), listOf(keyText)) else keyText,
+            text = pillText(spaceFill, r.color("$ext.space.background") != null),
             pressed = r.color("$ext.space.pressed") ?: pressed,
             glass = "SPACE_BAR" in surfaces, texture = r.string("keyTextureSpace") ?: keyTexture,
             glowDp = glow("space"), glowColor = glowColor("space"), heightDp = null,
+            // 0.10.2: the pills are clear liquid glass; the material dresses them only when "Material on the pills" is on.
+            material = button.material && (r.bool("$ext.pillMaterial") ?: false),
         )
-        // Text on a mostly see-through surface reads against the wallpaper: light for a dark theme, dark for a light one.
+        // 0.10.2: the search page's field keeps a light tint of its own over the pills' glass, so its text reads over the page.
+        val search = r.color("$ext.space.searchBackground")?.let { f -> space.copy(fill = f, text = pillText(f, true)) }
+        // Text on a mostly see-through surface reads against the wallpaper: light for a dark theme, dark for a light one;
+        // 0.10.2: with colours that follow the wallpaper, against the wallpaper's own colour behind the fill.
         fun textOn(fill: Long, preferred: Long): Long =
-            if (ThemeColors.alpha(fill) >= 0.55f) ThemeColors.legibleOn(ThemeColors.opaque(fill), listOf(preferred))
+            if (adaptive) ThemeColors.readable(preferred, fill, behind, inkDark, inkLight)
+            else if (ThemeColors.alpha(fill) >= 0.55f) ThemeColors.legibleOn(ThemeColors.opaque(fill), listOf(preferred))
             else if (dark) (if (ThemeColors.luminance(preferred) > 0.4f) preferred else 0xFFF2F2F5) else (if (ThemeColors.luminance(preferred) < 0.3f) preferred else 0xFF16181C)
         val cardFill = r.color("$ext.card.background") ?: ThemeColors.withAlpha(board, 0.42f)
         val card = ControlTheme(
-            fill = cardFill, text = r.color("$ext.card.text") ?: textOn(cardFill, keyText),
+            fill = cardFill, text = r.color("$ext.card.text")?.let { ink(it, cardFill, "$ext.card.text") } ?: textOn(cardFill, keyText),
             pressed = pressed, active = chipActive, activeText = button.activeText,
             border = r.color("$ext.card.border"), borderWidthDp = r.float("$ext.card.borderWidthDp") ?: 0f,
             shadowDp = (r.float("cardElevationDp") ?: 0f).coerceIn(0f, 8f),
@@ -135,7 +174,7 @@ object ThemeResolve {
         )
         val popupFill = r.color("popupBackground") ?: ThemeColors.blendOver(keyText, ThemeColors.opaque(board), 0.08f)
         val popupSelected = r.color("popupSelectedBackground") ?: pressed
-        val popupText = r.color("popupText") ?: textOn(popupFill, keyText)
+        val popupText = r.color("popupText")?.let { ink(it, popupFill, "popupText") } ?: textOn(popupFill, keyText)
         val popup = ControlTheme(
             fill = popupFill, text = popupText, pressed = popupSelected,
             active = popupSelected, activeText = r.color("popupSelectedText") ?: ThemeColors.legibleOn(ThemeColors.opaque(popupSelected), listOf(popupText, keyText)),
@@ -239,6 +278,10 @@ object ThemeResolve {
             mainColor = r.string("$ext.mainColor") ?: "block",
             windowBlurDp = if (r.bool("frost.windowBlur") == true) (r.int("frost.windowBlurRadiusDp") ?: 4).coerceIn(4, 64) else 0,
             pills = pills,
+            search = search,
+            adaptive = adaptive,
+            inkDark = inkDark,
+            inkLight = inkLight,
         )
     }
 
@@ -356,12 +399,211 @@ object ThemeDocs {
         else -> JsonPrimitive(v.toString())
     }
 
+    /** The pills' dark fill and its text that 0.10.0 and 0.10.1 added to themes that did not say (0.10.2 takes them out again). */
+    const val DARK_PILL = 0xA6141218L
+    const val DARK_PILL_TEXT = 0xFFF2F2F5L
+
+    /** The search bar's tint since 0.10.2: a third of [DARK_PILL]'s, so the liquid shows through it. */
+    const val SEARCH_TINT = 0x37141218L
+
     /**
-     * The launcher's default theme (0.10.0): your keyboard theme's buttons, chips and round buttons as 0.9.14 drew them,
-     * its frost on every surface, sheets and menus as dark glass (so text reads on bright wallpapers), dark pills (the
-     * search bar is no longer washed out), and the fixed blue accent. Nothing moves and no material is set.
+     * Your WM Keyboard theme "wallpaper stoped" (docs/reference/wallpaper-stoped.wmtheme.json), field for field as the
+     * keyboard wrote it (its background picture removed).
+     */
+    private const val KEYBOARD = """
+        {
+            "id": "custom_1793966705811",
+            "name": "wallpaper stoped",
+            "dark": true,
+            "boardBackground": 1381915,
+            "boardGradient": null,
+            "backgroundImage": null,
+            "backgroundImageLandscape": null,
+            "backgroundImageOpacity": 1.0,
+            "backgroundImageBlur": 3.3675797,
+            "backgroundAnimated": false,
+            "backgroundImageBase64": null,
+            "backgroundImageLandscapeBase64": null,
+            "backgroundPhoto": {"provider":"unsplash","photoId":"coy_MhYMLHs","photographer":"meow meow","photographerUrl":"https://unsplash.com/@vegito988","photoUrl":"https://unsplash.com/photos/winged-person-with-halo-in-sky-coy_MhYMLHs","altText":"A person with wings and a halo looking toward a cloudy sky","avgColor":"#8c8c8c"},
+            "backgroundPhotoLandscape": null,
+            "suggestionBarBackground": null,
+            "toolbarBackground": null,
+            "oneHandedPanelBackground": null,
+            "oneHandedPanelIcon": null,
+            "navigationBarBackground": null,
+            "keyShape": "PILL",
+            "keyTexture": null,
+            "keyTextureModifier": null,
+            "keyTextureEnter": null,
+            "keyTextureSpace": null,
+            "keyTexturePressed": null,
+            "keyTextureScale": null,
+            "keyTextureOpacity": 0.96,
+            "keyGradient": null,
+            "keyBackground": 472657461,
+            "keyText": 4293519854,
+            "modifierKeyBackground": 471933737,
+            "modifierKeyText": null,
+            "hintText": null,
+            "enterKeyBackground": 4281809215,
+            "enterKeyText": 4294243576,
+            "pressedKeyBackground": 4281414457,
+            "keyBorderColor": null,
+            "keyBorderWidthDp": 0.0,
+            "keyElevationDp": 0.0,
+            "keyShadowColor": null,
+            "accent": 4285362036,
+            "gestureTrailColor": null,
+            "popupBackground": 4281611838,
+            "popupText": null,
+            "popupPlacement": null,
+            "popupBorderColor": null,
+            "popupBorderWidthDp": 0.0,
+            "popupElevationDp": null,
+            "popupSelectedBackground": null,
+            "popupSelectedText": null,
+            "popupTexture": null,
+            "menuShape": null,
+            "toolbarIcon": null,
+            "toolCircleBackground": 1647062581,
+            "toolCircleActiveBackground": 2318480185,
+            "toolCircleActiveIcon": 4286808965,
+            "toolBorderColor": null,
+            "toolBorderWidthDp": 0.0,
+            "toolElevationDp": 0.0,
+            "chipBackground": 4280690734,
+            "suggestionText": null,
+            "secondarySuggestionText": null,
+            "secondarySuggestionScale": null,
+            "suggestionPillBackground": null,
+            "primarySuggestionPillBackground": null,
+            "secondaryText": null,
+            "dividerColor": null,
+            "emojiSearchBackground": null,
+            "emojiSearchText": null,
+            "clipboardChipBackground": null,
+            "clipboardChipText": null,
+            "chipText": null,
+            "chipActiveBackground": null,
+            "chipActiveText": null,
+            "chipBorderColor": null,
+            "chipBorderWidthDp": 0.0,
+            "cardElevationDp": 0.0,
+            "chipShape": null,
+            "chipCornerRadiusDp": null,
+            "cardShape": null,
+            "keyCornerRadiusDp": null,
+            "modifierKeyCornerRadiusDp": null,
+            "actionKeyCornerRadiusDp": null,
+            "popupCornerRadiusDp": null,
+            "toolCircleRadiusDp": null,
+            "popupShape": null,
+            "toolShape": "PILL",
+            "toolWidthDp": null,
+            "toolbarHeightDp": null,
+            "popupHeightDp": null,
+            "popupFloatingHeightDp": null,
+            "keyHeightDp": null,
+            "keyGapScale": null,
+            "sidePadScale": null,
+            "sidePadLeftScale": null,
+            "sidePadRightScale": null,
+            "fontScale": null,
+            "boldKeyLabels": null,
+            "hintFontScale": null,
+            "gestureTrailWidthDp": null,
+            "gestureTrailOpacity": null,
+            "animation": "NONE",
+            "animationSpeed": 1.0,
+            "fontId": null,
+            "scriptFontIds": {},
+            "soundStyle": null,
+            "soundCustomId": null,
+            "decals": [],
+            "keyEffect": null,
+            "keyEffectParam": null,
+            "keyEffectIntensity": 1.0,
+            "keyEffectImages": [],
+            "keyEffectColor": null,
+            "keyEffectCustomColor": null,
+            "keyEffectSize": 1.0,
+            "keyEffectSpeed": 1.0,
+            "keyEffectSpread": 1.0,
+            "keyEffectGravity": 1.0,
+            "keyEffectDurationMs": 650,
+            "keyOverrides": {},
+            "keyIcons": {},
+            "textureSlices": {},
+            "ruleSheet": null,
+            "assets": {},
+            "followWallpaper": false,
+            "wallpaperRoles": {},
+            "frost": {"enabled":true,"windowBlur":false,"windowBlurRadiusDp":4,"fallbackOpacity":0.92,"surfaces":["KEYS","MODIFIER_KEYS","ENTER_KEY","SPACE_BAR","BARS","TOOLS","CHIPS","CARDS","POPUPS","MENUS"],"backdropBlur":9.0,"saturation":1.25,"brightness":0.0,"rim":0.86,"rimColor":null,"grain":0.0,"backdrop":"NONE","wallpaperBand":"BOTTOM","style":"FROSTED","refraction":0.6,"dispersion":0.25,"blurBoard":false,"accentBoard":true,"cutout":false},
+            "keyMaterial": {"kind":"LETTERPRESS","bevelDp":null,"topInsetDp":null,"skirtShade":null,"gloss":null,"lightAngleDeg":null,"texture":null,"textureOpacity":null,"edge":null,"edgeColor":null,"edgeWidthDp":null,"label":null,"labelColor":null,"iridescence":null,"softShadow":null},
+            "boardEffect": {"kind":"SWOOSH","colors":[],"density":0.5,"speed":0.4,"intensity":0.4,"scale":1.0,"reactive":0.4,"halfLifeMs":1200,"orbSpots":[]},
+            "keyLighting": null,
+            "touchBloom": {"color":null,"light":0.5,"radiusDp":100.0,"dip":0.4,"wobble":0.5,"motion":"SQUISH"},
+            "keySkin": null,
+            "familyName": null,
+            "variants": [],
+            "basedOn": null
+        }
+    """
+
+    /** What follows the wallpaper in [Default], by role (0.10.2). */
+    val defaultFollow: Map<String, String> = linkedMapOf(
+        "keyBackground" to WallpaperRole.DARK,
+        "modifierKeyBackground" to WallpaperRole.DARK,
+        "toolCircleBackground" to WallpaperRole.DARK,
+        "popupBackground" to WallpaperRole.DARK,
+        "boardBackground" to WallpaperRole.DARK,
+        "${ThemeDoc.EXT}.card.background" to WallpaperRole.DARK,
+        "${ThemeDoc.EXT}.space.searchBackground" to WallpaperRole.DARK,
+        "chipBackground" to WallpaperRole.MUTED,
+        "enterKeyBackground" to WallpaperRole.VIBRANT,
+        "accent" to WallpaperRole.VIBRANT,
+        "pressedKeyBackground" to WallpaperRole.VIBRANT,
+        "toolCircleActiveBackground" to WallpaperRole.VIBRANT,
+        "keyText" to WallpaperRole.LIGHT,
+        "enterKeyText" to WallpaperRole.LIGHT,
+        "toolCircleActiveIcon" to WallpaperRole.LIGHT,
+    )
+
+    /**
+     * The launcher's default theme (0.10.2): your keyboard theme "wallpaper stoped" for every button, chip, round button,
+     * sheet, menu, card and the pills. Every colour follows the wallpaper and keeps its own opacity: buttons, secondary
+     * and round buttons, menus, sheets and cards take the wallpaper's dark colour, chips its muted one, the main button,
+     * the accent and pressed controls its vibrant one, text its light one (a dark ink where that would not read). The
+     * pills are its clear frosted glass without a fill of their own; the search bar keeps a light tint.
+     *
+     * Three things differ from the keyboard's file: sheets show the wallpaper through their see-through board (the
+     * keyboard's "Behind the glass: Nothing" would make them solid in the launcher), the keyboard's swoosh splash is
+     * left out (your own touch effect stays), and it has an id of its own (an export does not replace the keyboard's).
      */
     val Default: ThemeDoc by lazy {
+        val ext = ThemeDoc.EXT
+        var d = ThemeDoc.parse(KEYBOARD.trim()) ?: error("the default theme does not parse")
+        d = d.withString("id", "liquid_default")
+            .withString("frost.backdrop", "AUTO")
+            .with("boardEffect", null)
+            .withInt("$ext.format", 1)
+            .withString("$ext.source", "Liquid Launcher: default, your WM Keyboard theme \"wallpaper stoped\" in the wallpaper's colours")
+            .withString("$ext.mainColor", "plain")
+            .withString("$ext.pillLook", "shared")
+            .withBool("$ext.pillMaterial", false)
+            .withColor("$ext.space.searchBackground", SEARCH_TINT)
+            .withColor("$ext.card.background", 0x59141218L)
+            .withInt("$ext.card.cornerDp", 22)
+        for ((field, role) in defaultFollow) d = d.withFollow(field, role)
+        d
+    }
+
+    /**
+     * The default theme of 0.10.0 and 0.10.1: your first keyboard theme's buttons, chips and round buttons as 0.9.14
+     * drew them, its frost on every surface, sheets and menus as dark glass, dark pills, and the fixed blue accent.
+     * Kept, unchanged, as the base a 0.9.13 theme is converted onto ([fromV1]), so that conversion never changes.
+     */
+    val Legacy010: ThemeDoc by lazy {
         ThemeDoc(
             obj(
                 "id" to "liquid_default",
@@ -408,10 +650,10 @@ object ThemeDocs {
 
     /**
      * A 0.9.13 / 0.9.14 launcher theme as a document: its buttons as the keys, its main button as the enter key, its
-     * chips and round buttons, its frost; what that format did not have (sheets, menus, pills, cards) from [Default].
+     * chips and round buttons, its frost; what that format did not have (sheets, menus, pills, cards) from [Legacy010].
      */
     fun fromV1(t: LiquidTheme): ThemeDoc {
-        var d = Default
+        var d = Legacy010
         fun c(path: String, v: Long?) { d = d.withColor(path, v) }
         d = d.withString("name", t.name).withBool("dark", t.dark).withColor("accent", t.accent)
         c("keyBackground", t.button.fill); c("keyText", t.button.text); c("pressedKeyBackground", t.button.pressed)

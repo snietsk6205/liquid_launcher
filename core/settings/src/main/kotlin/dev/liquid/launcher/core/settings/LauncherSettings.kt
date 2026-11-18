@@ -1543,6 +1543,9 @@ object LauncherSettings {
     // W3 (0.10.0): the theme became a WM Keyboard document (ThemeDoc) once; the look before stays as a preset.
     val ThemeMigrated010 = BoolSetting(key = "state.theme010", default = false, title = "Theme moved to the 0.10 format", section = "state", hidden = true)
     val ThemePrevious = TextSetting(key = "theme.previous", default = "", title = "The look before the Theme lab", section = "buttons", hidden = true)
+    // 0.10.2: your keyboard theme became the default once, in the wallpaper's colours; the look before stays as a preset.
+    val ThemeMigrated0102 = BoolSetting(key = "state.theme0102", default = false, title = "Theme moved to the 0.10.2 default", section = "state", hidden = true)
+    val ThemeBefore0102 = TextSetting(key = "theme.before0102", default = "", title = "The look before 0.10.2", section = "buttons", hidden = true)
     val ButtonStyle = ChoiceSetting(
         key = "buttons.style", default = "glass",
         options = listOf(
@@ -2531,7 +2534,7 @@ object LauncherSettings {
         GlassQuality, GlassEngine, GlassAuto, GlassCap, GlassFullPercent, GlassTintMode,
         GlassBevel, GlassThickness, GlassSpecular, GlassShade, GlassGrain, GlassRim,
         GlassSaturation, GlassBrightness, GlassDepth, GlassSwell, GlassDispersion, GlassDispersionAmount, GlassGlow, GlassShadow, GlassRimColour, GlassLightAngle,
-        ThemeControls, ThemeJson, ThemeColoursApplied, ThemeMigrated010, ThemePrevious,
+        ThemeControls, ThemeJson, ThemeColoursApplied, ThemeMigrated010, ThemePrevious, ThemeMigrated0102, ThemeBefore0102,
         ButtonStyle, ButtonShape, ButtonSize, ButtonTint, ButtonRim, ButtonRefraction, ButtonMain, ButtonSquish,
         TouchEffect, TouchWhere, TouchAmount, TouchSpeed, TouchBrightness, TouchSize, TouchColour, TouchCustomColour,
         PressFeel, PressDepth, PressSpeed, EditWobble, PressWobble, TouchLight,

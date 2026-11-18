@@ -45,12 +45,21 @@ object WallpaperTones {
     /** Counts wallpapers set outside the launcher (another app, the system settings) since start. */
     val outsideChanges: StateFlow<Int> = _outsideChanges
 
+    /**
+     * True when the saved palette predates 0.10.2 (no average colour): the wallpaper's picture should give it again,
+     * once, when it is next loaded.
+     */
+    @Volatile
+    var paletteOutdated = false
+        private set
+
     /** Reads the saved colours once per process. */
     fun load(context: Context) {
         if (loaded) return
         loaded = true
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (!prefs.contains("primary")) return
+        paletteOutdated = prefs.getString("palette", null)?.split(',')?.size != 6
         _tone.value = WallpaperTone(
             primary = prefs.getInt("primary", 0),
             secondary = prefs.getInt("secondary", 0).takeIf { prefs.contains("secondary") },
@@ -63,6 +72,7 @@ object WallpaperTones {
 
     fun set(context: Context, tone: WallpaperTone) {
         loaded = true
+        if (tone.palette != null) paletteOutdated = false
         _tone.value = tone
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply {
             clear()

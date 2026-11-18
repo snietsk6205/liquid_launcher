@@ -107,6 +107,27 @@ import kotlinx.serialization.json.JsonPrimitive
  * share one look or have a full theme each. Settings shows this screen through SettingsPreviews (this module draws it).
  */
 
+/**
+ * A pill's own theme as it starts: the whole theme without pills of its own, with the pills' colours (and its follow
+ * roles); the search bar with its tint as its fill (0.10.2).
+ */
+private fun pillSeed(d: ThemeDoc, which: String): ThemeDoc {
+    val ext = ThemeDoc.EXT
+    val follow = d.followed
+    var p = ThemeDoc(JsonObject(d.json - ext + (ext to JsonObject(emptyMap()))))
+    for ((field, role) in follow) if (!field.startsWith("$ext.")) p = p.withFollow(field, role)
+    d.extElement("space")?.let { p = p.with("$ext.space", it) }
+    for (k in listOf("background", "text", "pressed")) follow["$ext.space.$k"]?.let { p = p.withFollow("$ext.space.$k", it) }
+    d.extElement("pillMaterial")?.let { p = p.with("$ext.pillMaterial", it) }
+    if (which == ThemePill.SEARCH) {
+        d.color("$ext.space.searchBackground")?.let { tint ->
+            p = p.withColor("$ext.space.background", tint).withFollow("$ext.space.background", follow["$ext.space.searchBackground"])
+        }
+    }
+    p = p.without("$ext.space.searchBackground")
+    return p
+}
+
 /** What the lab is editing, its history, and its link to Settings. */
 private class LabState(private val store: SettingsStore, initial: ThemeDoc, private val scope: kotlinx.coroutines.CoroutineScope) {
     var doc by mutableStateOf(initial)
@@ -118,11 +139,7 @@ private class LabState(private val store: SettingsStore, initial: ThemeDoc, priv
     private var saveJob: Job? = null
 
     /** The document the rows show: the whole theme, or the target pill's own. */
-    val editing: ThemeDoc get() = target?.let { doc.pill(it) ?: seed(doc) } ?: doc
-
-    /** A pill's theme starts as the whole theme (without pills of its own). */
-    private fun seed(d: ThemeDoc): ThemeDoc = ThemeDoc(JsonObject(d.json - ThemeDoc.EXT + (ThemeDoc.EXT to JsonObject(emptyMap()))))
-        .let { p -> d.extElement("space")?.let { p.with("${ThemeDoc.EXT}.space", it) } ?: p }
+    val editing: ThemeDoc get() = target?.let { doc.pill(it) ?: pillSeed(doc, it) } ?: doc
 
     /** Applies [change] to what is edited; [continuous] while a slider moves (one undo step for the whole drag). */
     fun edit(continuous: Boolean = false, change: (ThemeDoc) -> ThemeDoc) {
@@ -134,7 +151,7 @@ private class LabState(private val store: SettingsStore, initial: ThemeDoc, priv
             if (before != doc || !continuous) push(before)
         }
         val t = target
-        doc = if (t == null) change(doc) else doc.withPill(t, change(doc.pill(t) ?: seed(doc)))
+        doc = if (t == null) change(doc) else doc.withPill(t, change(doc.pill(t) ?: pillSeed(doc, t)))
         save(immediately = !continuous)
     }
 
@@ -258,12 +275,17 @@ fun ThemeLab(onBack: () -> Unit) {
                                 if (backup != null) state.replace(backup) else message = "Your backup is not in this build."
                             }
                         })
-                        DropdownMenuItem(text = { Text("Preset: current look") }, onClick = {
+                        DropdownMenuItem(text = { Text("Preset: before 0.10.2") }, onClick = {
+                            menu = false
+                            val before = ThemeStore.before0102(store)
+                            if (before != null) state.replace(before) else message = "No earlier look: this phone started with 0.10.2's default."
+                        })
+                        DropdownMenuItem(text = { Text("Preset: before 0.10.1") }, onClick = {
                             menu = false
                             val previous = ThemeStore.previous(store)
                             if (previous != null) state.replace(previous) else message = "No earlier look: this is a new install."
                         })
-                        DropdownMenuItem(text = { Text("Preset: the default") }, onClick = { menu = false; state.replace(ThemeDocs.Default) })
+                        DropdownMenuItem(text = { Text("Preset: the default (your keyboard theme, wallpaper colours)") }, onClick = { menu = false; state.replace(ThemeDocs.Default) })
                         DropdownMenuItem(text = { Text("Import a theme…") }, onClick = { menu = false; importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) })
                         DropdownMenuItem(text = { Text("Export (.wmtheme.json)…") }, onClick = {
                             menu = false
@@ -458,12 +480,13 @@ private fun GroupRows(group: ThemeGroup, state: LabState, palette: WallpaperPale
 
 private fun isDefault(doc: ThemeDoc, path: String): Boolean {
     fun norm(e: JsonElement?) = if (e is JsonNull) null else e
-    return norm(doc.element(path)) == norm(ThemeDocs.Default.element(path)) && doc.follow(path) == null
+    return norm(doc.element(path)) == norm(ThemeDocs.Default.element(path)) && doc.follow(path) == ThemeDocs.Default.follow(path)
 }
 
+/** [f] back to the default theme's value, and to the wallpaper role it follows there (0.10.2: most colours do). */
 private fun resetField(doc: ThemeDoc, f: ThemeField): ThemeDoc {
     val d = ThemeDocs.Default.element(f.path)
-    return (if (d == null) doc.without(f.path) else doc.with(f.path, d)).withFollow(f.path, null)
+    return (if (d == null) doc.without(f.path) else doc.with(f.path, d)).withFollow(f.path, ThemeDocs.Default.follow(f.path))
 }
 
 /** One option: title, value on the right, a dot when it differs from the default; long press for Reset, Explain, Copy id. */
@@ -647,6 +670,23 @@ private fun ColourDialog(field: ThemeField, doc: ThemeDoc, state: LabState, pale
                                 palette?.let { Box(Modifier.size(12.dp).clip(CircleShape).background(Color(it.of(role)))) }
                                 Spacer(Modifier.width(4.dp))
                                 Text(WallpaperRole.labels.getValue(role))
+                            }
+                        })
+                    }
+                }
+                if (field.path == "accent") {
+                    // 0.10.2: the accent follows the wallpaper by default; the fixed blue of 0.10.1 stays one tap away.
+                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(selected = follow == null && current() == ThemeDocs.BLUE, onClick = {
+                            follow = null
+                            val c = FloatArray(3).also { android.graphics.Color.colorToHSV(ThemeDocs.BLUE.toInt(), it) }
+                            h = c[0]; s = c[1]; v = c[2]; a = 1f
+                            push(false)
+                        }, label = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(12.dp).clip(CircleShape).background(Color(ThemeDocs.BLUE)))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Blueberry (fixed blue)")
                             }
                         })
                     }
@@ -967,8 +1007,7 @@ private fun PillsGroup(state: LabState) {
             Text("Copy to the ${ThemePill.labels.getValue(to).lowercase()} from…", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp))
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 FilterChip(selected = false, onClick = {
-                    state.replace(doc.withPill(to, ThemeDoc(JsonObject(doc.json - ThemeDoc.EXT + (ThemeDoc.EXT to JsonObject(emptyMap()))))
-                        .let { p -> doc.extElement("space")?.let { p.with("${ThemeDoc.EXT}.space", it) } ?: p }))
+                    state.replace(doc.withPill(to, pillSeed(doc, to)))
                 }, label = { Text("Whole launcher") })
                 for (from in ThemePill.all.filter { it != to }) {
                     FilterChip(selected = false, onClick = {

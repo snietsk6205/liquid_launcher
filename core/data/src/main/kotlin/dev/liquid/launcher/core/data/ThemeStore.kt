@@ -33,6 +33,10 @@ object ThemeStore {
     fun previous(settings: SettingsStore): ThemeDoc? =
         settings.get(LauncherSettings.ThemePrevious).takeIf { it.isNotBlank() }?.let { ThemeDoc.parse(it) }
 
+    /** "Before 0.10.2" in the lab: the look you had when 0.10.2 made your keyboard theme the default; null on a new install. */
+    fun before0102(settings: SettingsStore): ThemeDoc? =
+        settings.get(LauncherSettings.ThemeBefore0102).takeIf { it.isNotBlank() }?.let { ThemeDoc.parse(it) }
+
     /** "My backup" in the lab: your WM Keyboard theme, shipped in the app, with its picture as a file. */
     fun backup(context: Context): ThemeDoc? = runCatching {
         context.assets.open("themes/nice_liquid.wmtheme.json").bufferedReader().use { it.readText() }
@@ -46,11 +50,18 @@ object ThemeStore {
     fun migrate010(settings: SettingsStore) {
         if (settings.get(LauncherSettings.ThemeMigrated010)) return
         settings.set(LauncherSettings.ThemeMigrated010, true)
-        var doc = doc(settings)
         val accent = settings.get(LauncherSettings.ThemeAccent).trim()
         val chosen = accent.isNotEmpty() && !accent.equals(V013_ACCENT, ignoreCase = true)
-        doc = doc.withColor("accent", if (chosen) ThemeDoc.parseColor(accent) ?: ThemeDocs.BLUE else ThemeDocs.BLUE)
-        doc = doc.withString("${ThemeDoc.EXT}.mainColor", settings.get(LauncherSettings.ButtonMain))
+        // 0.10.2: with no theme saved (a new install), the default is used as it is (its accent follows the wallpaper),
+        // unless an accent or a main button colour you chose has to be kept in it.
+        val blank = settings.get(LauncherSettings.ThemeJson).isBlank()
+        val mainChosen = settings.isChanged(LauncherSettings.ButtonMain)
+        if (blank && !chosen && !mainChosen) return
+        var doc = doc(settings)
+        if (chosen || !blank) {
+            doc = doc.withColor("accent", if (chosen) ThemeDoc.parseColor(accent) ?: ThemeDocs.BLUE else ThemeDocs.BLUE).withFollow("accent", null)
+        }
+        if (!blank || mainChosen) doc = doc.withString("${ThemeDoc.EXT}.mainColor", settings.get(LauncherSettings.ButtonMain))
         doc = withLauncherDefaults(doc)
         settings.set(LauncherSettings.ThemeJson, doc.encode())
         settings.set(LauncherSettings.ThemePrevious, doc.encode())
@@ -58,14 +69,63 @@ object ThemeStore {
     }
 
     /**
-     * What a keyboard theme cannot say, from the launcher's default where the document has nothing: the search bar and
-     * the other pills dark (W3), cards, and the pills' shared look. Anything already there is kept.
+     * Once, on the first start of 0.10.2 (your feedback on 0.10.1):
+     * - the dark fill 0.10.1 gave the pills (and its text) goes, wherever it is still exactly that value: in the theme,
+     *   in each pill's own theme, and in the look kept from before 0.10; the search bar keeps a tint a third as strong.
+     *   A colour you set yourself is kept;
+     * - the theme in use (so cleaned) is kept as the lab's preset "Before 0.10.2", and the default becomes your keyboard
+     *   theme in the wallpaper's colours ([ThemeDocs.Default]); the other looks of your theme (its variants) come along.
+     * A new install has nothing to keep and already uses the default.
+     */
+    fun migrate0102(settings: SettingsStore) {
+        if (settings.get(LauncherSettings.ThemeMigrated0102)) return
+        settings.set(LauncherSettings.ThemeMigrated0102, true)
+        previous(settings)?.let { settings.set(LauncherSettings.ThemePrevious, withoutDarkPills(it).encode()) }
+        val stored = settings.get(LauncherSettings.ThemeJson)
+        if (stored.isBlank()) return
+        val mine = ThemeDoc.parse(stored)?.let { withoutDarkPills(it) } ?: return
+        settings.set(LauncherSettings.ThemeBefore0102, mine.encode())
+        var next = ThemeDocs.Default
+        mine.element("variants")?.let { if (it is JsonArray && it.isNotEmpty()) next = next.with("variants", it) }
+        settings.set(LauncherSettings.ThemeJson, next.encode())
+        settings.set(LauncherSettings.ThemeControls, "theme")
+        DebugLog.event("Theme", "0.10.2: your keyboard theme in the wallpaper's colours is the default; the look before is the preset \"Before 0.10.2\"")
+    }
+
+    /**
+     * [doc] without the dark pills of 0.10.1: their fill and text where they are still exactly what 0.10.1 wrote; the
+     * search bar keeps a tint a third as strong. Each pill's own theme (individual pills) likewise.
+     */
+    fun withoutDarkPills(doc: ThemeDoc): ThemeDoc {
+        val ext = ThemeDoc.EXT
+        var d = doc
+        if (d.color("$ext.space.background") == ThemeDocs.DARK_PILL && d.follow("$ext.space.background") == null) {
+            d = d.without("$ext.space.background")
+            if (d.color("$ext.space.searchBackground") == null) d = d.withColor("$ext.space.searchBackground", ThemeDocs.SEARCH_TINT)
+            if (d.color("$ext.space.text") == ThemeDocs.DARK_PILL_TEXT && d.follow("$ext.space.text") == null) d = d.without("$ext.space.text")
+        }
+        for (which in ThemePill.all) {
+            var pill = d.pill(which) ?: continue
+            if (pill.color("$ext.space.background") == ThemeDocs.DARK_PILL && pill.follow("$ext.space.background") == null) {
+                pill = if (which == ThemePill.SEARCH) pill.withColor("$ext.space.background", ThemeDocs.SEARCH_TINT) else pill.without("$ext.space.background")
+                if (pill.color("$ext.space.text") == ThemeDocs.DARK_PILL_TEXT && pill.follow("$ext.space.text") == null) pill = pill.without("$ext.space.text")
+                d = d.withPill(which, pill)
+            }
+        }
+        return d
+    }
+
+    /**
+     * What a keyboard theme cannot say, from the launcher's defaults where the document has nothing: cards and the
+     * pills' shared look. Anything already there is kept. (0.10.0 and 0.10.1 also made the pills dark here; 0.10.2 no
+     * longer does: a theme's pills are its own glass.)
      */
     fun withLauncherDefaults(doc: ThemeDoc): ThemeDoc {
+        val ext = ThemeDoc.EXT
         var out = doc
-        for (path in listOf("space.background", "space.text", "card.background", "card.cornerDp", "pillLook")) {
-            if (out.extElement(path) == null) ThemeDocs.Default.extElement(path)?.let { out = out.with("${ThemeDoc.EXT}.$path", it) }
-        }
+        if (out.extElement("card.background") == null) out = out.withColor("$ext.card.background", 0x59141218L)
+        if (out.extElement("card.cornerDp") == null) out = out.withInt("$ext.card.cornerDp", 22)
+        if (out.extElement("pillLook") == null) out = out.withPillLook("shared")
         return out
     }
 

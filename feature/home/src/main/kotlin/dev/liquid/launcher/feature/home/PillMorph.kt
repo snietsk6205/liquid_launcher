@@ -89,7 +89,7 @@ fun MorphingPill(
     val gestures = remember(config, controller) { Modifier.morphGestures(config, controller) }
     // W3: the home pill's and the drawer pill's text in the theme's pill looks, else light or dark from the glass.
     val homeColor = pillContentColor(dev.liquid.launcher.core.data.ThemePill.HOME, if (glass.lightGlass(Surfaces.Pill, lightBackground)) Color(0xFF16181C) else Color.White)
-    val searchColor = pillContentColor(dev.liquid.launcher.core.data.ThemePill.DRAWER, if (glass.lightGlass(Surfaces.Drawer, drawerLight)) Color(0xFF16181C) else Color.White)
+    val searchColor = pillContentColor(dev.liquid.launcher.core.data.ThemePill.DRAWER, if (glass.lightGlass(Surfaces.Drawer, drawerLight)) Color(0xFF16181C) else Color.White, lightBehind = drawerLight)
     val surface = if (open && !searchMode) Surfaces.Drawer else Surfaces.Pill
     val homeWidth = with(density) { (controller.screenWidth * config.widthFraction).toDp() }
     val searchWidth = with(density) { controller.screenWidth.toDp() } - SearchSideMargin * 2

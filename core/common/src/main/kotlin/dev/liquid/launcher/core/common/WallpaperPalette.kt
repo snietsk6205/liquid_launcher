@@ -8,8 +8,11 @@ import kotlin.math.sqrt
 /**
  * The wallpaper's colours by role (W3, 0.10.0), for theme colours set to follow the wallpaper: the one that covers
  * most of it (dominant), the most vivid, a quiet one (muted), a dark and a light one. ARGB, opaque.
+ *
+ * [average] (0.10.2) is the mean of the whole picture: what a see-through control shows behind it, so its text can
+ * be checked for contrast. Palettes saved before 0.10.2 have none and use the dominant colour.
  */
-data class WallpaperPalette(val dominant: Int, val vibrant: Int, val muted: Int, val dark: Int, val light: Int) {
+data class WallpaperPalette(val dominant: Int, val vibrant: Int, val muted: Int, val dark: Int, val light: Int, val average: Int = dominant) {
 
     fun of(role: String): Int = when (role) {
         "vibrant" -> vibrant
@@ -19,13 +22,13 @@ data class WallpaperPalette(val dominant: Int, val vibrant: Int, val muted: Int,
         else -> dominant
     }
 
-    fun encode(): String = listOf(dominant, vibrant, muted, dark, light).joinToString(",") { Integer.toHexString(it) }
+    fun encode(): String = listOf(dominant, vibrant, muted, dark, light, average).joinToString(",") { Integer.toHexString(it) }
 
     companion object {
         fun decode(text: String?): WallpaperPalette? {
             val parts = text?.split(',')?.mapNotNull { it.trim().toLongOrNull(16)?.toInt() } ?: return null
-            if (parts.size != 5) return null
-            return WallpaperPalette(parts[0], parts[1], parts[2], parts[3], parts[4])
+            if (parts.size != 5 && parts.size != 6) return null
+            return WallpaperPalette(parts[0], parts[1], parts[2], parts[3], parts[4], parts.getOrElse(5) { parts[0] })
         }
 
         /**
@@ -34,11 +37,16 @@ data class WallpaperPalette(val dominant: Int, val vibrant: Int, val muted: Int,
          */
         fun extract(pixels: IntArray): WallpaperPalette? {
             val counts = HashMap<Int, IntArray>()
+            var sumR = 0L
+            var sumG = 0L
+            var sumB = 0L
+            var n = 0L
             for (p in pixels) {
                 if ((p ushr 24) < 0x80) continue
                 val r = (p shr 16) and 0xFF
                 val g = (p shr 8) and 0xFF
                 val b = p and 0xFF
+                sumR += r; sumG += g; sumB += b; n++
                 val bin = ((r shr 4) shl 8) or ((g shr 4) shl 4) or (b shr 4)
                 val acc = counts.getOrPut(bin) { IntArray(4) }
                 acc[0]++
@@ -65,7 +73,8 @@ data class WallpaperPalette(val dominant: Int, val vibrant: Int, val muted: Int,
             } ?: withHsl(dominant, s = 0.22f, l = 0.5f)
             val dark = pick { b -> if (b.hsl[2] > 0.28f) 0f else (0.3f - b.hsl[2] + 0.05f) * sqrt(b.share) } ?: withHsl(dominant, l = 0.16f)
             val light = pick { b -> if (b.hsl[2] < 0.72f) 0f else (b.hsl[2] - 0.65f) * sqrt(b.share) } ?: withHsl(dominant, l = 0.86f)
-            return WallpaperPalette(dominant, vibrant, muted, dark, light)
+            val average = (0xFF shl 24) or ((sumR / n).toInt() shl 16) or ((sumG / n).toInt() shl 8) or (sumB / n).toInt()
+            return WallpaperPalette(dominant, vibrant, muted, dark, light, average)
         }
 
         /** Without the picture (another app's wallpaper): the system's main colour spread into roles. */
@@ -75,6 +84,7 @@ data class WallpaperPalette(val dominant: Int, val vibrant: Int, val muted: Int,
             muted = withHsl(primary, s = 0.22f, l = 0.5f),
             dark = withHsl(primary, l = 0.16f),
             light = withHsl(primary, l = 0.86f),
+            average = primary or (0xFF shl 24),
         )
 
         /** Hue 0..360, saturation and lightness 0..1. */

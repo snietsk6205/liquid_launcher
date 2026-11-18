@@ -91,6 +91,11 @@ class WallpaperStore private constructor(private val context: Context) {
         WallpaperTones.load(context)
         if (bitmap != null && WallpaperTones.tone.value == null) {
             WallpaperTones.fromBitmap(bitmap, WallpaperTones.systemId(context))?.let { WallpaperTones.set(context, it) }
+        } else if (bitmap != null && WallpaperTones.paletteOutdated) {
+            // 0.10.2: the palette gains the picture's average colour (for readable text on see-through controls).
+            val tone = WallpaperTones.tone.value
+            val palette = WallpaperTones.paletteOf(bitmap)
+            if (tone != null && palette != null) WallpaperTones.set(context, tone.copy(palette = palette))
         }
         // A write that was still waiting when the process ended.
         if (prefs.getBoolean(KEY_PENDING, false) && prefs.getString(KEY_MODE, "") == SystemWrite.Soon.name) scheduleSystemWrite(SOON_MS)

@@ -189,7 +189,7 @@ fun SearchOverlay(
 
     val fieldShape = RoundedCornerShape(50)
     // W3: the search bar in the theme's pill look: dark by default (it read washed out over a bright page).
-    val fieldColor = pillContentColor(dev.liquid.launcher.core.data.ThemePill.SEARCH, if (glass.lightGlass(Surfaces.Pill, lightBackground)) Color(0xFF16181C) else Color.White)
+    val fieldColor = pillContentColor(dev.liquid.launcher.core.data.ThemePill.SEARCH, if (glass.lightGlass(Surfaces.Pill, lightBackground)) Color(0xFF16181C) else Color.White, lightBehind = lightBackground)
 
     Box(
         Modifier

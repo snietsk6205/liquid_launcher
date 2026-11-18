@@ -250,6 +250,17 @@ data class LiquidTheme(
     val windowBlurDp: Int = 0,
     /** Each pill's own theme when the pills are individual (home, drawer, search), resolved. */
     val pills: Map<String, LiquidTheme> = emptyMap(),
+    // 0.10.2
+    /** The search page's field: the pills' look with its own tint ("Search bar tint"); null: as [space]. */
+    val search: ControlTheme? = null,
+    /**
+     * True when colours follow the wallpaper: texts that follow it or are left on Auto were checked against what they
+     * sit on (their fill over the wallpaper) and turned to [inkDark] or [inkLight] where they would not read.
+     */
+    val adaptive: Boolean = false,
+    /** A dark and a light text colour that read on this wallpaper (its own dark and light tones when they are deep enough). */
+    val inkDark: Long = 0xFF16181C,
+    val inkLight: Long = 0xFFF2F2F5,
 )
 
 object LiquidThemes {
@@ -370,6 +381,17 @@ object ThemeColors {
     fun legibleOn(background: Long, candidates: List<Long>, minRatio: Float = 3f): Long =
         candidates.firstOrNull { contrast(it, background) >= minRatio }
             ?: if (luminance(background) > 0.5f) 0xFF000000 else 0xFFFFFFFF
+
+    /**
+     * 0.10.2: [text] when it reads (≥ [minRatio]) on [fill] laid over [behind] (what shows through a see-through fill),
+     * else whichever of [text], [darkInk] and [lightInk] reads best there, keeping [text]'s opacity.
+     */
+    fun readable(text: Long, fill: Long, behind: Long, darkInk: Long, lightInk: Long, minRatio: Float = 3f): Long {
+        val bg = blendOver(opaque(fill), opaque(behind), alpha(fill))
+        if (contrast(text, bg) >= minRatio) return text
+        val best = listOf(opaque(text), darkInk, lightInk).maxByOrNull { contrast(it, bg) } ?: text
+        return if (best == opaque(text)) text else withAlpha(best, alpha(text))
+    }
 
     /** [top] at [alpha] flattened over [base]. */
     fun blendOver(top: Long, base: Long, alpha: Float): Long {

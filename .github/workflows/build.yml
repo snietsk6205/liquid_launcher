@@ -5,6 +5,8 @@ on:
     branches:
       - main
       - 'claude/**'
+      # Cloud sessions may be given a ccr-… branch to push to (0.10.2's session was).
+      - 'ccr-*'
   workflow_dispatch:
     inputs:
       release:
