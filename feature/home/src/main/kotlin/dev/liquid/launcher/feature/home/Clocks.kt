@@ -548,12 +548,11 @@ private fun LayeredDigits(text: String, style: TextStyle, bevel: Dp, shade: Colo
     Box {
         if (bevel > 0.dp) {
             val e = with(density) { bevel.toPx() }
-            val base = style.brush
             val dark = lerpColor(shade, Color.Black, 0.45f).copy(alpha = shade.alpha * 0.7f)
             val light = lerpColor(shade, Color.White, 0.6f).copy(alpha = shade.alpha * 0.7f)
             Text(text, style = style.copy(color = dark, shadow = null), maxLines = 1, softWrap = false, modifier = Modifier.graphicsLayerOffset(e, e))
             Text(text, style = style.copy(color = light, shadow = null), maxLines = 1, softWrap = false, modifier = Modifier.graphicsLayerOffset(-e * 0.7f, -e * 0.7f))
-            Text(text, style = style.copy(brush = base), maxLines = 1, softWrap = false)
+            Text(text, style = style, maxLines = 1, softWrap = false)
         } else {
             Text(text, style = style, maxLines = 1, softWrap = false)
             Text(
