@@ -481,28 +481,34 @@ internal fun WidgetContent(item: HomeItem, env: PageEnv, controller: HomeControl
         ) {
             ClockFace(style, env.contentColor, env.shadow, env.glass, env.lightBackground, env.wallpaperBackdrop, Modifier.weight(1f))
             if (glance != null) {
-                // W7: the line reads over any wallpaper: dark over a light one, light over a dark one (or as chosen),
-                // with a soft halo in the opposite tone.
+                // 0.10.2: by default the line, its ring and its ✓ are in the clock design's own colour (from the
+                // wallpaper when the clock takes it from there) with the clock's own shadow; or, as chosen, dark over a
+                // light wallpaper and light over a dark one, white, or black, with a soft halo in the opposite tone.
                 val lineInk by controller.data.settings.derive { get(LauncherSettings.StudyLineInk) }
                 val lineHalo by controller.data.settings.derive { get(LauncherSettings.StudyLineShadow) }
+                val clock = clockColours(style, env.contentColor, env.shadow, env.glass, env.lightBackground)
+                val followsClock = lineInk == "clock"
                 val lineColor = when (lineInk) {
                     "white" -> Color.White
                     "black" -> Color(0xFF111316)
-                    "clock" -> env.contentColor
+                    "clock" -> clock.primary
                     else -> if (env.lightBackground) Color(0xFF111316) else Color.White
                 }
-                val lineShadow = if (lineHalo) {
-                    val dark = lineColor.luminance() > 0.5f
-                    androidx.compose.ui.graphics.Shadow(
-                        if (dark) Color.Black.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.7f),
-                        androidx.compose.ui.geometry.Offset(0f, 1.5f), 12f,
-                    )
-                } else {
-                    env.shadow
+                val lineShadow = when {
+                    !lineHalo -> null
+                    followsClock -> clock.shadow
+                    else -> {
+                        val dark = lineColor.luminance() > 0.5f
+                        androidx.compose.ui.graphics.Shadow(
+                            if (dark) Color.Black.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.55f),
+                            androidx.compose.ui.geometry.Offset(0f, 1.5f), 10f,
+                        )
+                    }
                 }
                 StudyLine(
                     glance, controller, lineColor, lineShadow, env.interactive && !env.editMode,
                     Modifier.padding(horizontal = if (style.plate == "none") 0.dp else 10.dp).padding(bottom = 2.dp),
+                    ownColours = followsClock,
                 )
             }
         }

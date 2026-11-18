@@ -255,6 +255,31 @@ private fun rememberFrameTime(): Long {
     return now
 }
 
+/** A clock design's own colours as it draws them: its main and second colour and its shadow (0.10.2: the line under it uses them too). */
+internal class ClockColours(val primary: Color, val secondary: Color, val shadow: Shadow?)
+
+/**
+ * The colours [style] draws in over this wallpaper: its colour (automatic, the accent, the icons' tone from the
+ * wallpaper, or a fixed one), its second colour and its shadow.
+ */
+internal fun clockColours(style: ClockStyle, contentColor: Color, contentShadow: Shadow?, glass: GlassConfig, lightBackground: Boolean): ClockColours {
+    val onGlass = style.plate == "glass" || style.plate == "frosted"
+    val auto = when {
+        onGlass -> if (glass.lightGlass(Surfaces.Clock, lightBackground)) Color(0xFF16181C) else Color.White
+        else -> contentColor
+    }
+    // The icons' colours are read only by a clock that uses them ("tone"). They ease over 260 ms on every
+    // wallpaper change; reading them here made every clock recompose and re-measure on each frame of that
+    // easing, competing with the icons' own redraw (0.6.3, D90).
+    val usesTone = style.color == "tone" || style.color2 == "tone"
+    val tone = if (usesTone && IconPaint.ready) Color(if (lightBackground) minOfLuminance(IconPaint.background, IconPaint.foreground) else maxOfLuminance(IconPaint.background, IconPaint.foreground)) else HomeTheme.accent
+    return ClockColours(
+        primary = parseColor(style.color, auto, tone),
+        secondary = parseColor(style.color2, HomeTheme.accent, tone),
+        shadow = if (style.shadow && !onGlass && style.fill != "glass") contentShadow else null,
+    )
+}
+
 private fun parseColor(value: String, auto: Color, tone: Color): Color = when (value) {
     "" -> auto
     "accent" -> HomeTheme.accent
@@ -321,21 +346,13 @@ fun ClockFace(
     val context = androidx.compose.ui.platform.LocalContext.current
     val plateShape = RoundedCornerShape(style.corner.dp)
     val onGlass = style.plate == "glass" || style.plate == "frosted"
-    val auto = when {
-        onGlass -> if (glass.lightGlass(Surfaces.Clock, lightBackground)) Color(0xFF16181C) else Color.White
-        else -> contentColor
-    }
-    // The icons' colours are read only by a clock that uses them ("tone"). They ease over 260 ms on every
-    // wallpaper change; reading them here made every clock recompose and re-measure on each frame of that
-    // easing, competing with the icons' own redraw (0.6.3, D90).
-    val usesTone = style.color == "tone" || style.color2 == "tone"
-    val tone = if (usesTone && IconPaint.ready) Color(if (lightBackground) minOfLuminance(IconPaint.background, IconPaint.foreground) else maxOfLuminance(IconPaint.background, IconPaint.foreground)) else HomeTheme.accent
+    val colours = clockColours(style, contentColor, contentShadow, glass, lightBackground)
     val ink = ClockInk(
         family = ClockFonts.family(context, style.font),
         weight = if (style.weight in 100..900) FontWeight(style.weight) else HomeTheme.clockWeight,
-        primary = parseColor(style.color, auto, tone),
-        secondary = parseColor(style.color2, HomeTheme.accent, tone),
-        shadow = if (style.shadow && !onGlass && style.fill != "glass") contentShadow else null,
+        primary = colours.primary,
+        secondary = colours.secondary,
+        shadow = colours.shadow,
         spacing = style.spacing / 100f,
         fill = style.fill,
     )

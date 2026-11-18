@@ -850,8 +850,9 @@ internal fun rememberStudyGlance(controller: HomeController): StudyGlance? {
  * next block; a full ring for a block that ended unmarked; a faint dot for tomorrow; a ring for tasks.
  */
 @Composable
-internal fun StudyRing(glance: StudyGlance, color: Color, size: Dp) {
-    val accent = when (glance) {
+internal fun StudyRing(glance: StudyGlance, color: Color, size: Dp, tint: Color? = null) {
+    // 0.10.2: [tint] (the clock's colour on the line under it) replaces the block's colour; the warning red stays.
+    val accent = if (tint != null && !(glance is StudyGlance.LeaveBy && glance.minutesLeft <= 10)) tint else when (glance) {
         is StudyGlance.Running -> eventColor(glance.block)
         is StudyGlance.Next -> eventColor(glance.block)
         is StudyGlance.Unmarked -> eventColor(glance.block)
@@ -937,6 +938,8 @@ internal fun StudyLine(
     shadow: androidx.compose.ui.graphics.Shadow?,
     interactive: Boolean,
     modifier: Modifier = Modifier,
+    /** 0.10.2: the ring and the round buttons in [color] too (the clock's colour) instead of the block's and the theme's. */
+    ownColours: Boolean = false,
 ) {
     val focus by controller.data.study.focus.collectAsState()
     val focusing = glance is StudyGlance.Running && focus?.eventKey == glance.block.key
@@ -952,7 +955,7 @@ internal fun StudyLine(
         },
         modifier = modifier,
         label = "clockLine",
-    ) { shown -> StudyLineRow(shown, controller, color, shadow, interactive, focusing && shown is StudyGlance.Running) }
+    ) { shown -> StudyLineRow(shown, controller, color, shadow, interactive, focusing && shown is StudyGlance.Running, ownColours) }
 }
 
 /** What makes two glances "the same line" for the animation: their kind and block. */
@@ -986,6 +989,7 @@ private fun StudyLineRow(
     shadow: androidx.compose.ui.graphics.Shadow?,
     interactive: Boolean,
     focusing: Boolean,
+    ownColours: Boolean,
 ) {
     val bounds = remember { arrayOfNulls<androidx.compose.ui.geometry.Rect>(1) }
     Row(
@@ -1004,7 +1008,7 @@ private fun StudyLineRow(
             .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        StudyRing(glance, color, 15.dp)
+        StudyRing(glance, color, 15.dp, tint = if (ownColours) color else null)
         Spacer(Modifier.width(8.dp))
         Text(
             glanceText(glance) + if (focusing) " · focus" else "",
@@ -1032,28 +1036,31 @@ private fun StudyLineRow(
         }
         if (glance is StudyGlance.WindDown && interactive) {
             Spacer(Modifier.width(8.dp))
-            LineButton(LauncherIcons.Chat, "Send the evening check-in", color, strong = false) { controller.eveningCheckin() }
+            LineButton(LauncherIcons.Chat, "Send the evening check-in", color, strong = false, own = ownColours) { controller.eveningCheckin() }
         }
         if (glance is StudyGlance.Attendance && interactive) {
             // B3: ✓ present, ✗ absent (a "Note: absent …" for tonight's check-in).
             Spacer(Modifier.width(8.dp))
             for ((present, icon) in listOf(true to LauncherIcons.Check, false to LauncherIcons.Close)) {
                 Box(Modifier.padding(start = 4.dp)) {
-                    LineButton(icon, if (present) "I was there" else "I was absent", color, strong = false) { controller.answerAttendance(glance.cls, present) }
+                    LineButton(icon, if (present) "I was there" else "I was absent", color, strong = false, own = ownColours) { controller.answerAttendance(glance.cls, present) }
                 }
             }
         }
         if (action != null) {
             Spacer(Modifier.width(8.dp))
-            LineButton(action.first, action.second, color, strong = focusing, onClick = action.third)
+            LineButton(action.first, action.second, color, strong = focusing, own = ownColours, onClick = action.third)
         }
     }
 }
 
-/** A round button on the line under the clock: the theme's round button (W3), else a faint circle. */
+/**
+ * A round button on the line under the clock: the theme's round button (W3), else a faint circle; with [own] (the line
+ * in the clock's colour, 0.10.2) a faint circle in the line's colour, so the ✓ belongs to the clock.
+ */
 @Composable
-private fun LineButton(icon: Int, description: String, color: Color, strong: Boolean, onClick: () -> Unit) {
-    if (currentTheme != null) {
+private fun LineButton(icon: Int, description: String, color: Color, strong: Boolean, own: Boolean = false, onClick: () -> Unit) {
+    if (currentTheme != null && !own) {
         GlassButton(null, color, Modifier.size(30.dp), icon = icon, contentDescription = description, onClick = onClick)
         return
     }

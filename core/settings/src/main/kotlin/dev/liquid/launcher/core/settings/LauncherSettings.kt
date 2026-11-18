@@ -2265,21 +2265,23 @@ object LauncherSettings {
         title = "Text in the hub",
         section = "study", keywords = "study hub text colour color contrast readability",
     )
+    // 0.10.2: the clock's own colour by default (its ring and ✓ too), as the clock takes it from the wallpaper.
     val StudyLineInk = ChoiceSetting(
-        key = "study.lineInk", default = "auto",
+        key = "study.lineInk", default = "clock",
         options = listOf(
-            "auto" to "Automatic: dark over a light wallpaper, light over a dark one",
-            "clock" to "Like the clock",
+            "clock" to "Like the clock: its colour (from the wallpaper when the clock takes it there), its ring and ✓ too",
+            "auto" to "Automatic contrast: dark over a light wallpaper, light over a dark one",
             "white" to "White",
             "black" to "Black",
         ),
         title = "Colour of the line under the clock",
-        section = "study", keywords = "study clock line colour color contrast readability white black",
+        summary = "The study line under the clock, its ring and its ✓ button",
+        section = "study", keywords = "study clock line colour color ring tick check button wallpaper contrast readability white black under",
     )
     val StudyLineShadow = BoolSetting(
         key = "study.lineShadow", default = true,
         title = "Soft shadow under the line",
-        summary = "A soft halo behind the line under the clock, so it reads over any picture",
+        summary = "Like the clock: the clock's own shadow. Otherwise a soft halo behind the line, so it reads over any picture",
         section = "study", keywords = "study clock line shadow halo readability",
     )
     val StudyHubBounce = IntSetting(
