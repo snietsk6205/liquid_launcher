@@ -49,6 +49,8 @@ internal fun ActionPickerDialog(
     title: String,
     current: LauncherAction?,
     includeNone: Boolean = true,
+    /** 0.10.2: also the pill's own actions (for the pill's gestures). */
+    pillActions: Boolean = false,
     onDismiss: () -> Unit,
     onPick: (LauncherAction) -> Unit,
 ) {
@@ -84,6 +86,11 @@ internal fun ActionPickerDialog(
             LazyColumn(Modifier.heightIn(max = 420.dp)) {
                 items(LauncherAction.builtIns.filter { includeNone || it.first != LauncherAction.None }) { (action, label) ->
                     ChoiceLine(label, selected = action == current) { onPick(action) }
+                }
+                if (pillActions) {
+                    items(LauncherAction.pillOnly) { (action, label) ->
+                        ChoiceLine(label, selected = action == current) { onPick(action) }
+                    }
                 }
                 items(LauncherAction.sections) { (id, label) ->
                     val action = LauncherAction.Section(id)

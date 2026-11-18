@@ -811,19 +811,21 @@ object LauncherSettings {
     )
     val PillTap = ActionSetting(
         key = "pill.tap", default = "search",
-        title = "Tap on empty pill space", section = "pill", keywords = "gesture tap",
+        title = "Tap on empty pill space", section = "pill", keywords = "gesture tap", pillActions = true,
     )
     val PillLongPress = ActionSetting(
         key = "pill.longPress", default = "settings",
-        title = "Long press on the pill", section = "pill", keywords = "gesture long press",
+        title = "Long press on the pill",
+        summary = "What holding the pill does (Settings by default). \"Customise the pill\" shows a chip to the pill's own settings page instead",
+        section = "pill", keywords = "gesture long press hold customise customize chip gear settings", pillActions = true,
     )
     val PillSwipeUp = ActionSetting(
         key = "pill.swipeUp", default = "drawer",
-        title = "Swipe up on the pill", section = "pill", keywords = "gesture swipe",
+        title = "Swipe up on the pill", section = "pill", keywords = "gesture swipe", pillActions = true,
     )
     val PillSwipeDown = ActionSetting(
         key = "pill.swipeDown", default = "notifications",
-        title = "Swipe down on the pill", section = "pill", keywords = "gesture swipe",
+        title = "Swipe down on the pill", section = "pill", keywords = "gesture swipe", pillActions = true,
     )
 
     /** Ids of the search page's cards, top to bottom (see SearchCards in core/data). Edited with its own editor. */

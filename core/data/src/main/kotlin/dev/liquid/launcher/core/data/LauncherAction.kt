@@ -51,6 +51,9 @@ sealed interface LauncherAction {
 
     /** The list of built-in widgets to add to the current page. */
     data object Widgets : LauncherAction
+
+    /** 0.10.2: the glass chip "Customise the pill" (a tap opens the pill's settings page), where the finger is. */
+    data object CustomisePill : LauncherAction
     data class SwitchLayout(val id: String) : LauncherAction
     data class Section(val id: String) : LauncherAction
     data class LaunchApp(val ref: AppRef) : LauncherAction
@@ -88,6 +91,7 @@ sealed interface LauncherAction {
         StudyNote -> "study_note"
         BoardPhoto -> "board_photo"
         Widgets -> "widgets"
+        CustomisePill -> "customise_pill"
         is SwitchLayout -> "layout:$id"
         is Section -> "section:$id"
         is LaunchApp -> "app:${ref.key}"
@@ -95,8 +99,12 @@ sealed interface LauncherAction {
     }
 
     companion object {
-        /** Built-in actions with the name shown in pickers, in picker order. */
-        val builtIns: List<Pair<LauncherAction, String>> = listOf(
+        /**
+         * Built-in actions with the name shown in pickers, in picker order. Lazy (0.10.2): the interface has default
+         * methods, so the first use of one of its objects initialises this companion while that object is still being
+         * initialised; a list built then would hold null for it.
+         */
+        val builtIns: List<Pair<LauncherAction, String>> by lazy { listOf(
             None to "Nothing",
             OpenDrawer to "Open the app drawer",
             OpenSearch to "Search",
@@ -126,7 +134,14 @@ sealed interface LauncherAction {
             Widgets to "Add a widget",
             OpenSettings to "Launcher settings",
             SystemLauncher to "Open the system launcher",
-        )
+        ) }
+
+        /** Actions offered only for the pill's own gestures (0.10.2), after [builtIns]. */
+        val pillOnly: List<Pair<LauncherAction, String>> by lazy { listOf(
+            CustomisePill to "Customise the pill (a chip to its settings page)",
+        ) }
+
+        private val named: List<Pair<LauncherAction, String>> get() = builtIns + pillOnly
 
         /** Settings sections that make sense as one-tap actions (home menu, gestures). */
         val sections: List<Pair<String, String>> = listOf(
@@ -153,7 +168,7 @@ sealed interface LauncherAction {
             }
             if (text.startsWith("layout:")) return text.removePrefix("layout:").takeIf { it.isNotBlank() }?.let { SwitchLayout(it) } ?: None
             if (text.startsWith("section:")) return text.removePrefix("section:").takeIf { it.isNotBlank() }?.let { Section(it) } ?: None
-            return builtIns.firstOrNull { it.first.encode() == text }?.first ?: None
+            return named.firstOrNull { it.first.encode() == text }?.first ?: None
         }
 
         fun label(action: LauncherAction, layoutName: (String) -> String? = { null }, appLabel: (AppRef) -> String?): String = when (action) {
@@ -161,7 +176,7 @@ sealed interface LauncherAction {
             is LaunchActivity -> "Open: ${action.label}"
             is SwitchLayout -> "Layout: " + (layoutName(action.id) ?: "deleted")
             is Section -> sections.firstOrNull { it.first == action.id }?.second ?: "Settings"
-            else -> builtIns.firstOrNull { it.first == action }?.second ?: "Nothing"
+            else -> named.firstOrNull { it.first == action }?.second ?: "Nothing"
         }
     }
 }

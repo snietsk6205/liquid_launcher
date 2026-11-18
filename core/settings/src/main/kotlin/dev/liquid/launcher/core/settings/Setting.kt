@@ -76,6 +76,8 @@ class ActionSetting(
     section: String,
     keywords: String = "",
     hidden: Boolean = false,
+    /** 0.10.2: the pill's own gestures also offer the pill's own actions ("Customise the pill"). */
+    val pillActions: Boolean = false,
 ) : Setting<String>(key, default, title, summary, section, keywords, hidden)
 
 /** A colour as "#RRGGBB" text; an empty value means "automatic" (chosen by the launcher). */

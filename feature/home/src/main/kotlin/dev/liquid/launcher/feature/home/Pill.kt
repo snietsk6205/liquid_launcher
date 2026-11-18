@@ -52,7 +52,7 @@ import java.util.Locale
 fun actionIcon(action: LauncherAction): Int = when (action) {
     LauncherAction.OpenDrawer -> LauncherIcons.Apps
     LauncherAction.OpenSearch -> LauncherIcons.Search
-    LauncherAction.OpenSettings -> LauncherIcons.Settings
+    LauncherAction.OpenSettings, LauncherAction.CustomisePill -> LauncherIcons.Settings
     LauncherAction.EditHome -> LauncherIcons.Edit
     LauncherAction.Notifications -> LauncherIcons.Notifications
     LauncherAction.QuickSettings -> LauncherIcons.Tune
@@ -126,7 +126,7 @@ private fun Modifier.pillGestures(config: PillConfig, controller: HomeController
     .pointerInput(config.tap, config.longPress) {
         detectTapGestures(
             onTap = { controller.run(config.tap) },
-            // W4: left on its default (Settings), a long press offers "Customise the pill" first.
+            // 0.10.2: a long press runs the pill's own action ("Customise the pill" is one of them).
             onLongPress = { at -> controller.longPressPill(config.longPress, at) },
         )
     }

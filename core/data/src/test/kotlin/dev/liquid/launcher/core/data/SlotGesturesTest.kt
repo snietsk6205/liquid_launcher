@@ -33,4 +33,12 @@ class SlotGesturesTest {
         assertEquals("study_note", LauncherAction.StudyNote.encode())
         assertEquals(LauncherAction.StudyNote, LauncherAction.decode("study_note"))
     }
+
+    @Test
+    fun customiseThePillIsAnActionOfThePillOnly() {
+        assertEquals(LauncherAction.CustomisePill, LauncherAction.decode(LauncherAction.CustomisePill.encode()))
+        assertTrue(LauncherAction.builtIns.none { it.first == LauncherAction.CustomisePill })
+        assertTrue(LauncherAction.pillOnly.any { it.first == LauncherAction.CustomisePill })
+        assertEquals("Customise the pill (a chip to its settings page)", LauncherAction.label(LauncherAction.CustomisePill) { null })
+    }
 }

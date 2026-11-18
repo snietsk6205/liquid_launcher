@@ -149,7 +149,7 @@ private fun ActionRow(setting: ActionSetting, store: SettingsStore) {
     var open by remember { mutableStateOf(false) }
     RowFrame(setting, store, valueText = actionLabel(action), onClick = { open = true })
     if (open) {
-        ActionPickerDialog(setting.title, current = action, onDismiss = { open = false }) {
+        ActionPickerDialog(setting.title, current = action, pillActions = setting.pillActions, onDismiss = { open = false }) {
             store.set(setting, it.encode())
             open = false
         }

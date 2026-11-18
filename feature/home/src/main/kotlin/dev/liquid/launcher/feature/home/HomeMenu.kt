@@ -63,6 +63,7 @@ fun dev.liquid.launcher.core.settings.SettingsStore.homeMenuConfig() = HomeMenuC
 /** Short name of an action as a home menu item. */
 internal fun menuLabel(action: LauncherAction, apps: Map<AppRef, AppEntry>, layoutName: (String) -> String?): String = when (action) {
     LauncherAction.OpenSettings -> "Settings"
+    LauncherAction.CustomisePill -> "Customise"
     LauncherAction.EditHome -> "Edit"
     LauncherAction.HomeMenu -> "Menu"
     LauncherAction.Wallpaper -> "Wallpaper"

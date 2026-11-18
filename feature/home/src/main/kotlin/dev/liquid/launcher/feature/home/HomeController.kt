@@ -240,11 +240,14 @@ class HomeController(
     /** W4: the "Customise" chip a long press on a surface shows: its settings page (a 0.9 section id), name, place. */
     var customise by mutableStateOf<CustomiseOffer?>(null)
 
-    /** A long press on the pill: its action, or, left on the default (Settings), "Customise the pill". */
+    /**
+     * A long press on the pill runs its own action (Settings by default; 0.10.1 showed "Customise the pill" instead,
+     * which 0.10.2 undid). "Customise the pill" is one of the actions it can have: the chip then shows where the finger is.
+     */
     fun longPressPill(action: LauncherAction, at: androidx.compose.ui.geometry.Offset?) {
         val bounds = pillBounds
-        if (action == LauncherAction.OpenSettings && bounds != null) {
-            offerCustomise("pill", "the pill", if (at != null) bounds.topLeft + at else bounds.topCenter)
+        if (action == LauncherAction.CustomisePill && bounds != null && at != null) {
+            offerCustomise("pill", "the pill", bounds.topLeft + at)
         } else {
             run(action)
         }
@@ -1921,6 +1924,7 @@ class HomeController(
                 openSearch()
             }
             LauncherAction.OpenSettings -> callbacks.openSettings()
+            LauncherAction.CustomisePill -> pillBounds?.let { offerCustomise("pill", "the pill", it.topCenter) } ?: callbacks.openSettings()
             LauncherAction.EditHome -> {
                 closeAll()
                 editMode = true
