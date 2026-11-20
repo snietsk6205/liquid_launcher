@@ -6,6 +6,51 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
+## 0.11.0 — 2026-11-20
+
+### Added
+- The letter circle: a ring of arcs in three shades of your wallpaper's colour floats over the drawer's apps,
+  by default on the right, a little above the middle, in reach of one thumb. Slide round it and the
+  letters come out at the edge with the bubble, exactly as when you pull them, and the list follows. It turns
+  like a knob (clockwise goes on through the alphabet, one turn for A to Z) or, if you choose, like a clock
+  face (A at twelve; touching a spot jumps to its letter). It fades while you scroll the apps and comes back
+  when the list stops. Hold it still to lift it, then drag it where you want it. Settings → Drawer and search →
+  Letter index: on or off, how it turns, size, place, colour (wallpaper, accent or yours), opacity, opacity
+  while scrolling, and how far to turn for A to Z, with a live preview.
+- The wallpaper screen has a handle at the top of the sheet: pull it up for about three and a half rows of
+  pictures, down for two; it stays where you leave it.
+- The debug log's "Frames:" lines name the screen that was open (home, drawer, search, study hub, wallpaper
+  screen…), and the system's own icon colours are logged next to the launcher's guess when they arrive.
+
+### Changed
+- The letters at the edge hide until you use them (the new default for "Show the letters"); with the circle
+  on, the edge is left to Back. If you had "Always", it becomes "Hidden until you use them" once; "The edge
+  pulls the letters too" gives the edge back. "Show the letters" moved to the Letter index's first tab, and
+  settings search finds it by "fade" or "hide".
+- Opening search: the field goes to the height your keyboard opens at, not the height it grew to while you
+  typed (a suggestion strip, emoji); if it still lands elsewhere, the field eases there. A keyboard request
+  the phone dropped is made again after 200 ms (it was 350).
+- Picking a picture in the wallpaper screen plays your wallpaper transition (the ripple starts from the
+  picture you tapped), as in the wallpaper strip; Apply then only closes the sheet. The pictures show two
+  rows and a bit (one and a half before).
+- Icons in "System colours": right after a new wallpaper or layout they take the colours Android will work
+  out (Material You's tonal spot, computed the same way), so they no longer change a second time when MagicOS
+  reports its colours seconds later; if MagicOS still differs, the icons fade over in 0.6 s instead of jumping.
+  The launcher waits up to 45 s for the system's colours (20 s before).
+- Faster redirects: MagicOS draws its home screen smaller while going home, and the launcher now sees that
+  against the screen (it compared it with its window, which MagicOS shrinks too), so most redirects skip the
+  quarter-second wait that keeps a recents swipe from being taken for going home.
+- Study hub: the buttons and chips that scroll with the day are drawn without sampling the glass behind them,
+  and the ones that stay put no longer redraw their glass on every frame of a scroll, so scrolling the day is
+  lighter. Dragging the letters: a long way is jumped and only its last rows glide.
+- The Letter index page's preview runs through the letters twice and then rests (it ran for as long as the
+  page was open); changing an option plays it again.
+
+### Fixed
+- Drawer: "Side margins" works on both sides again (0.10.3's room for the letters overruled it on their side).
+- The wallpaper screen's "Blur and dim" tab was cut to "Blur and".
+- The drawer motion preview in Settings no longer writes "drawer: open/close" to the debug log every 1.7 s.
+
 ## 0.10.3 — 2026-11-18
 
 ### Added

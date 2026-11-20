@@ -977,7 +977,9 @@ sleep 1
 clear_anr
 adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen page:index >/dev/null
 wait_top "SettingsActivity" 8 || true
-sleep 2
+# The page's preview runs its demo twice (about 9 s for the rail) and then rests: a screen that keeps moving
+# cannot be read by uiautomator ("could not get idle state"), which is why run 92 found no row here.
+sleep 12
 dump 14c-settings
 if tap_text 14c-settings "Rail: short"; then
   sleep 1.2

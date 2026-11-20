@@ -498,21 +498,28 @@ internal fun ScrollIndex(
         }
 
         if (controller.indexDemo && drive == null) {
-            // Settings preview: a pretend finger runs along the letters and pulls the string in and out.
-            LaunchedEffect(index, height, width, config.side) {
+            // Settings preview: a pretend finger runs along the letters and pulls the string in and out, twice, then
+            // lets go (0.11.0: it ran for as long as the page was open); a change to any of the index's options plays it again.
+            LaunchedEffect(index, height, width, config) {
                 touch.fromRight = config.side != "left"
                 touch.touching = true
                 touch.active = -1
                 pop.snapTo(1f)
                 var t = 0f
-                while (isActive) {
-                    withFrameNanos { }
-                    t += 0.006f
-                    val swing = (1f - cos(t * 2f * PI.toFloat())) / 2f
-                    val inward = width * 0.4f * (1f - cos(t * 3f * PI.toFloat())) / 2f
-                    val y = top + spacing * (0.5f + swing * (n - 1))
-                    follow(if (touch.fromRight) restX(true) - inward else restX(false) + inward, y)
+                val start = withFrameNanos { it }
+                try {
+                    while (isActive && t < DEMO_SWEEPS) {
+                        // By the clock, not by frames: the same pace at 60 and 120 Hz, and on a slow emulator.
+                        t = (withFrameNanos { it } - start) / 1e9f / 2.8f
+                        val swing = (1f - cos(t * 2f * PI.toFloat())) / 2f
+                        val inward = width * 0.4f * (1f - cos(t * 3f * PI.toFloat())) / 2f
+                        val y = top + spacing * (0.5f + swing * (n - 1))
+                        follow(if (touch.fromRight) restX(true) - inward else restX(false) + inward, y)
+                    }
+                } finally {
+                    touch.touching = false
                 }
+                pop.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = MotionScale.stiffness(500f)))
             }
         }
 
@@ -744,6 +751,9 @@ private fun GlideList(state: LazyGridState, index: GridIndex, touch: IndexTouch,
     }
 }
 
+/** How many times the settings preview runs through the letters before it rests (0.11.0). */
+private const val DEMO_SWEEPS = 2f
+
 /** Further than this many rows from the letter, the list jumps to [GLIDE_ROWS] before it and glides from there (0.10.4). */
 private const val JUMP_ROWS = 3f
 private const val GLIDE_ROWS = 1.5f
@@ -862,18 +872,23 @@ private fun RailIndex(
         }
 
         if (controller.indexDemo) {
-            // Settings preview: a pretend thumb runs up and down the rail.
-            LaunchedEffect(index, railTop, railH) {
+            // Settings preview: a pretend thumb runs up and down the rail, twice, then lets go (0.11.0).
+            LaunchedEffect(index, railTop, railH, config) {
                 touch.touching = true
                 touch.active = -1
                 pop.snapTo(1f)
                 var t = 0f
-                while (isActive) {
-                    withFrameNanos { }
-                    t += 0.004f
-                    val swing = (1f - cos(t * 2f * PI.toFloat())) / 2f
-                    follow(railTop + pad + swing * (railH - 2f * pad))
+                val start = withFrameNanos { it }
+                try {
+                    while (isActive && t < DEMO_SWEEPS) {
+                        t = (withFrameNanos { it } - start) / 1e9f / 4.2f
+                        val swing = (1f - cos(t * 2f * PI.toFloat())) / 2f
+                        follow(railTop + pad + swing * (railH - 2f * pad))
+                    }
+                } finally {
+                    touch.touching = false
                 }
+                pop.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = MotionScale.stiffness(500f)))
             }
         }
 

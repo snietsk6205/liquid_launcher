@@ -48,7 +48,6 @@ import dev.liquid.launcher.core.common.WallpaperTones
 import dev.liquid.launcher.core.data.GridIndex
 import dev.liquid.launcher.core.settings.LauncherSettings
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.cos
@@ -168,17 +167,18 @@ internal fun LetterDial(
 
     if (controller.indexDemo) {
         // Settings preview: a pretend thumb turns it through the alphabet and back, lets go (its opacity at rest
-        // shows), then the apps scroll a little (it fades as set), and again.
-        LaunchedEffect(n) {
+        // shows), then the apps scroll a little (it fades as set); twice, then it rests until an option changes.
+        LaunchedEffect(n, config) {
             var last = 0f
             var down = true
             try {
-                while (isActive) {
+                repeat(2) {
                     drive.active = true
                     var t = 0f
+                    val start = androidx.compose.runtime.withFrameNanos { it }
                     while (t < 1f) {
-                        androidx.compose.runtime.withFrameNanos { }
-                        t += 0.004f
+                        // By the clock (4.2 s through the alphabet and back), whatever the frame rate.
+                        t = ((androidx.compose.runtime.withFrameNanos { it } - start) / 1e9f / 4.2f).coerceAtMost(1f)
                         val p = (1f - cos(t * 2f * PI.toFloat())) / 2f * (n - 1)
                         drive.spin += (p - last) * 360f * config.dialTurns / n
                         last = p
