@@ -6,6 +6,37 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
+## 0.11.2 — 2026-11-20
+
+### Added
+- Settings → Study companion → More → "Camera for board photos": choose the camera app the "Board" chip of a class
+  uses (any camera on the phone, or the phone's default), and "Take a test photo" to try the whole way outside a
+  class (the photo is saved in Pictures/ESSAI/Test).
+- Settings → Diagnostics → "Speed check": plays the drawer, search, the home menu and the study hub on your home
+  screen, with the glass as you set it and then without its blur, frosted, liquid, without shadows, without the
+  theme's material and as a flat tint. Each step's cost goes to the debug log; it takes about a minute.
+- The debug log's "Frames:" lines say at what refresh rate the screen ran, and each search opening says at what
+  height the keyboard opened and where the field waited for it.
+
+### Changed
+- Search: the field waits at the lowest height your keyboard opened at lately, and only the keyboard pushes it up
+  from there, so it no longer goes above the keyboard and comes back down. A keyboard already sliding in is no
+  longer asked for a second time (that could restart it).
+- Liquid glass is the default ("Kind of glass: Liquid" in the theme): the edge bends the light. A theme you saved
+  keeps its own glass.
+- Closing a sheet, a folder, the wallpaper screen, the speed bump card, the bulk tag sheet or the bar while picking
+  apps is a quick fade (0.1 s) again: in 0.11.1 they sank back, which drew their glass anew on every frame.
+- The shapes of themed buttons, pills and materials (Letterpress, wood, metal…) are worked out once per size instead
+  of on every frame; the study hub spent most of each frame on them.
+- The halo on the pill for a block left unmarked breathes every 5 minutes instead of every 14 seconds (each breath
+  redrew the pill's glass: 600 frames a minute with nothing moving).
+
+### Fixed
+- Board photos: the camera now writes into a private file and the launcher saves it in Pictures/ESSAI/<class>.
+  The photo being taken is written down, so it is still saved if the launcher is restarted while the camera is
+  open, and it is kept whenever the camera wrote it, whatever the camera answers. Before, the folder appeared but
+  the photo could be lost. Every step goes to the debug log.
+
 ## 0.11.1 — 2026-11-20
 
 ### Added
