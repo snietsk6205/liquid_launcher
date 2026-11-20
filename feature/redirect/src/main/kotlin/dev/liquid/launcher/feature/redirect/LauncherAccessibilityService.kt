@@ -503,13 +503,21 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         engineHandler.postDelayed(runnable, delayMs)
     }
 
+    /** The display's full size (0.10.4): the going-home animation is told by the home screen being smaller than it. */
+    private fun screenBounds(): android.graphics.Rect? = try {
+        getSystemService(android.view.WindowManager::class.java)?.maximumWindowMetrics?.bounds
+    } catch (e: Exception) {
+        null
+    }
+
     override fun cancel(timer: EngineTimer) {
         timers[timer]?.let { engineHandler.removeCallbacks(it) }
     }
 
     override fun probe(): Probe {
         val start = SystemClock.uptimeMillis()
-        var result = RecentsDetector.probe(activeRoot(), detectConfig)
+        val screen = screenBounds()
+        var result = RecentsDetector.probe(activeRoot(), detectConfig, screen)
         val watching = RedirectStatus.engineState.value != EngineState.IDLE ||
             start - lastHomeWindowEventAt <= FLOATING_LOOK_MS
         if (!result.isSystemLauncher && result.activePackage != packageName && watching) {
@@ -519,7 +527,7 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
             // full-screen app window on top instead.
             val behind = systemLauncherUnderFloatingWindow(result.activePackage)
             if (behind != null) {
-                val seen = RecentsDetector.probe(behind, detectConfig)
+                val seen = RecentsDetector.probe(behind, detectConfig, screen)
                 if (seen.isSystemLauncher) {
                     val now = SystemClock.uptimeMillis()
                     if (now - lastFloatingLogAt >= 5000) {

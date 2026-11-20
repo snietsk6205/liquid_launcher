@@ -495,7 +495,8 @@ private fun SearchKeyboard(controller: HomeController, focus: FocusRequester, wa
         runCatching { focus.requestFocus() }
         keyboard?.show()
         fun coming(): Boolean = view.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true
-        for ((i, wait) in listOf(350L, 600L, 900L).withIndex()) {
+        // 0.10.4: the first look comes sooner (it was 350 ms): a request the system dropped is made again sooner.
+        for ((i, wait) in listOf(200L, 500L, 900L).withIndex()) {
             kotlinx.coroutines.delay(wait)
             if (!controller.searchOpen || coming()) return@LaunchedEffect
             DebugLog.event("Home", "search: no keyboard yet, asking again (${i + 1}; window focused: ${if (window.isWindowFocused) "yes" else "no"})")
@@ -535,10 +536,18 @@ private fun KeyboardWatch(controller: HomeController) {
         }
     }
     LaunchedEffect(insets) {
-        // The final height, once an animation has ended (a keyboard can change height while up);
-        // remembered only then, so the line never jumps at the start of an animation.
-        snapshotFlow { insets.ime() }.collect { now ->
-            if (now > insets.nav() + 1f && kotlin.math.abs(now - insets.imeTarget()) < 1f) controller.rememberKeyboard(now)
+        // 0.10.4: only the height the keyboard OPENS at is remembered, once its opening animation has ended, never
+        // what it grows to while you type (a suggestion strip, an emoji panel). On the phone 1041 px was remembered
+        // after typing, the keyboard then opened at 933 px, and the field flew too high and came back down.
+        var opening = false
+        snapshotFlow { Triple(insets.ime(), insets.imeTarget(), insets.nav()) }.collect { (now, target, nav) ->
+            if (target <= nav + 1f) {
+                // Away (or on its way out): the next time it comes up is an opening.
+                opening = true
+            } else if (opening && now > nav + 1f && kotlin.math.abs(now - target) < 1f) {
+                opening = false
+                controller.rememberKeyboard(now)
+            }
         }
     }
     LaunchedEffect(controller.searchOpen) {

@@ -13,6 +13,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -62,6 +63,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -101,6 +106,9 @@ internal class StudioState(store: SettingsStore) {
 
     /** The wallpaper as it will be applied (placed and rendered), once ready. */
     var rendered by mutableStateOf<Bitmap?>(null)
+
+    /** The picture, placement and parallax [rendered] was made from (0.10.4): a picture picked with the transition arrives rendered. */
+    var renderedKey: Any? = null
 
     /** Its colours, worked out as soon as it is rendered (before Apply), and the themed icon palette from them. */
     var tone: dev.liquid.launcher.core.common.WallpaperTone? = null
@@ -183,6 +191,14 @@ internal fun WallpaperStudio(
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
     val shown = toggled * appear.value.coerceIn(0f, 1.05f)
+    // 0.10.4: the pictures take more room (two rows and a bit), and the handle on top pulls the sheet up to about
+    // three and a half rows; it stays where you left it.
+    val tall = remember { Animatable(if (data.settings.get(LauncherSettings.WallpaperSheetTall)) 1f else 0f) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val compactGrid = 300.dp
+    val screenDp = with(density) { controller.screenHeight.toDp() }
+    val expandedGrid = (screenDp * 0.56f).coerceIn(compactGrid, 560.dp)
+    val gridHeight = compactGrid + (expandedGrid - compactGrid) * tall.value
     val currentLayout = layouts.layouts.firstOrNull { it.id == layouts.current }
     LaunchedEffect(currentLayout?.id) { state.forLayout = currentLayout?.wallpaper != null }
 
@@ -201,7 +217,10 @@ internal fun WallpaperStudio(
     LaunchedEffect(state.source, state.crop, state.parallax, state.adjusting) {
         val source = state.source ?: return@LaunchedEffect
         if (state.adjusting) return@LaunchedEffect
+        val key = Triple(source, state.crop, state.parallax)
+        if (state.rendered != null && state.renderedKey == key) return@LaunchedEffect
         val bitmap = store.render(source, state.crop, state.parallax)
+        state.renderedKey = key
         dev.liquid.launcher.core.common.ColourTiming.mark("picture placed")
         // Colours now, before Apply: the preview's icons already show them, and Apply has nothing left to wait for.
         val tone = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { dev.liquid.launcher.core.common.WallpaperTones.fromBitmap(bitmap) }
@@ -213,19 +232,48 @@ internal fun WallpaperStudio(
         dev.liquid.launcher.core.common.ColourTiming.mark("palette ready, shown in the preview")
     }
 
-    fun choose(pick: WallpaperPick) {
+    /**
+     * 0.10.4: a picture you pick changes the screen behind the sheet with your wallpaper transition, rippling out from
+     * the thumbnail you tapped ([origin]), as in the wallpaper strip. It is placed and rendered first, so the transition
+     * runs over the finished picture; Apply then only closes the sheet, as the screen already shows it.
+     */
+    fun choose(pick: WallpaperPick, origin: Offset? = null) {
         dev.liquid.launcher.core.common.ColourTiming.begin("wallpaper screen")
-        scope.launch {
-            state.busy = true
-            val source = Wallpapers.source(context, data, pick)
-            if (source == null) {
-                controller.toast("Could not read that picture")
-            } else {
-                val item = (pick as? WallpaperPick.Library)?.item
-                state.select(pick, source, item?.crop ?: CropSpec.Centre, item?.parallax?.takeIf { it >= 0f } ?: Wallpapers.defaultParallax(data))
-            }
-            state.busy = false
-        }
+        controller.transitionOrigin = origin
+        controller.changeScreen(
+            prepare = {
+                state.busy = true
+                try {
+                    val source = Wallpapers.source(context, data, pick)
+                    if (source == null) {
+                        controller.toast("Could not read that picture")
+                        null
+                    } else {
+                        val item = (pick as? WallpaperPick.Library)?.item
+                        val crop = item?.crop ?: CropSpec.Centre
+                        val parallax = item?.parallax?.takeIf { it >= 0f } ?: Wallpapers.defaultParallax(data)
+                        val bitmap = store.render(source, crop, parallax)
+                        dev.liquid.launcher.core.common.ColourTiming.mark("picture placed")
+                        val tone = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                            dev.liquid.launcher.core.common.WallpaperTones.fromBitmap(bitmap)
+                        }
+                        PickedPicture(pick, source, crop, parallax, bitmap, tone)
+                    }
+                } finally {
+                    state.busy = false
+                }
+            },
+            commit = { picked ->
+                state.select(picked.pick, picked.source, picked.crop, picked.parallax)
+                state.tone = picked.tone
+                state.palette = picked.tone?.let { data.paletteFor(it.primary) }
+                state.rendered = picked.bitmap
+                state.renderedKey = Triple(picked.source, picked.crop, picked.parallax)
+                state.candidateImage = picked.bitmap.asImageBitmap()
+                IconPaint.preview(state.palette)
+                dev.liquid.launcher.core.common.ColourTiming.mark("palette ready, shown in the preview")
+            },
+        )
     }
 
     fun placeCurrent() {
@@ -335,15 +383,20 @@ internal fun WallpaperStudio(
                     .clip(sheetShape)
                     .boardPicture(sheetShape)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(start = 16.dp, end = 16.dp, top = if (state.page == "pictures") 2.dp else 14.dp, bottom = 14.dp),
             ) {
+                if (state.page == "pictures") {
+                    SheetHandle(color, tall, with(density) { (expandedGrid - compactGrid).toPx() }) { up ->
+                        data.settings.set(LauncherSettings.WallpaperSheetTall, up)
+                    }
+                }
                 Segmented(
                     listOf("pictures" to "Pictures", "look" to "Blur and dim", "auto" to "Automatic"),
                     state.page, color,
                 ) { state.page = it }
                 Spacer(Modifier.height(12.dp))
                 when (state.page) {
-                    "pictures" -> PicturesPage(state, library, color, controller, ::choose, ::addPhotos, ::linkFolder)
+                    "pictures" -> PicturesPage(state, library, color, controller, ::choose, ::addPhotos, ::linkFolder, gridHeight)
                     "look" -> LookPage(state, glass, color)
                     else -> AutoPage(data.settings, color)
                 }
@@ -421,9 +474,10 @@ private fun PicturesPage(
     library: dev.liquid.launcher.core.data.WallpaperLibraryState,
     color: Color,
     controller: HomeController,
-    choose: (WallpaperPick) -> Unit,
+    choose: (WallpaperPick, Offset?) -> Unit,
     addPhotos: () -> Unit,
     linkFolder: () -> Unit,
+    gridHeight: androidx.compose.ui.unit.Dp,
 ) {
     val data = controller.data
     // Where to look: recent (each picture once), favourites, everything, then each linked folder.
@@ -455,7 +509,8 @@ private fun PicturesPage(
     Spacer(Modifier.height(10.dp))
     val pickedId = (state.pick as? WallpaperPick.Library)?.item?.id ?: library.current.takeIf { state.pick == null }
     val pickedUri = (state.pick as? WallpaperPick.External)?.uri
-    Box(Modifier.fillMaxWidth().height(if (folder != null) 188.dp else 232.dp)) {
+    // 0.10.4: taller (two rows and a bit; it was one and a half), and the sheet's handle pulls it up further.
+    Box(Modifier.fillMaxWidth().height(if (folder != null) gridHeight - 44.dp else gridHeight)) {
         if (folder != null) {
             FolderGrid(folder, pickedUri, color, controller, choose)
         } else {
@@ -473,7 +528,7 @@ private fun PicturesPage(
             ) {
                 item(key = "add") { AddThumb(color, addPhotos) }
                 items(items, key = { it.id }) { item ->
-                    LibraryThumb(item, item.id == pickedId, color, controller, onHold = { state.holding = item }) { choose(WallpaperPick.Library(item)) }
+                    LibraryThumb(item, item.id == pickedId, color, controller, onHold = { state.holding = item }) { origin -> choose(WallpaperPick.Library(item), origin) }
                 }
             }
             if (items.isEmpty() && state.tab != "recent") {
@@ -488,7 +543,7 @@ private fun PicturesPage(
 }
 
 @Composable
-private fun FolderGrid(folder: LinkedFolder, picked: android.net.Uri?, color: Color, controller: HomeController, choose: (WallpaperPick) -> Unit) {
+private fun FolderGrid(folder: LinkedFolder, picked: android.net.Uri?, color: Color, controller: HomeController, choose: (WallpaperPick, Offset?) -> Unit) {
     val images by produceState<List<FolderImage>?>(null, folder.uri, folder.deep) {
         value = null
         value = controller.data.wallpapers.folderImages(folder)
@@ -509,13 +564,13 @@ private fun FolderGrid(folder: LinkedFolder, picked: android.net.Uri?, color: Co
     ) {
         items(list, key = { it.uri.toString() }) { image ->
             val thumb by produceState<ImageBitmap?>(null, image.uri) { value = controller.data.wallpapers.thumbnail(image.uri) }
-            Thumb(thumb, image.uri == picked, color, onHold = null) { choose(WallpaperPick.External(image.uri, folder.name)) }
+            Thumb(thumb, image.uri == picked, color, onHold = null) { origin -> choose(WallpaperPick.External(image.uri, folder.name), origin) }
         }
     }
 }
 
 @Composable
-private fun LibraryThumb(item: WallpaperItem, selected: Boolean, color: Color, controller: HomeController, onHold: () -> Unit, onClick: () -> Unit) {
+private fun LibraryThumb(item: WallpaperItem, selected: Boolean, color: Color, controller: HomeController, onHold: () -> Unit, onClick: (Offset?) -> Unit) {
     val thumb by produceState<ImageBitmap?>(null, item.id) { value = controller.data.wallpapers.thumbnail(item) }
     Box {
         Thumb(thumb, selected, color, onHold, onClick)
@@ -527,16 +582,19 @@ private fun LibraryThumb(item: WallpaperItem, selected: Boolean, color: Color, c
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Thumb(image: ImageBitmap?, selected: Boolean, color: Color, onHold: (() -> Unit)?, onClick: () -> Unit) {
+private fun Thumb(image: ImageBitmap?, selected: Boolean, color: Color, onHold: (() -> Unit)?, onClick: (Offset?) -> Unit) {
     val shape = RoundedCornerShape(12.dp)
+    // 0.10.4: the transition ripples out from the picture you tapped, as in the wallpaper strip.
+    var centre by remember { mutableStateOf<Offset?>(null) }
     Box(
         Modifier
             .fillMaxWidth()
             .aspectRatio(0.56f)
+            .onGloballyPositioned { centre = it.boundsInRoot().center }
             .clip(shape)
             .background(color.copy(alpha = 0.1f))
             .border(if (selected) 2.dp else 0.5.dp, color.copy(alpha = if (selected) 0.95f else 0.25f), shape)
-            .combinedClickable(onClick = onClick, onLongClick = onHold),
+            .combinedClickable(onClick = { onClick(centre) }, onLongClick = onHold),
     ) {
         if (image != null) Image(image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
     }
@@ -703,7 +761,8 @@ internal fun Segmented(options: List<Pair<String, String>>, selected: String, co
     // W3: in the theme, the choices are its chips (selected: its selected chip).
     if (LocalControls.current?.theme != null) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp)) {
-            for ((id, label) in options) ThemeChip(label, selected == id, Modifier.weight(1f), height = 34.dp) { onSelect(id) }
+            // 0.10.4: each choice gets room by its label's length, so "Blur and dim" is not cut.
+            for ((id, label) in options) ThemeChip(label, selected == id, Modifier.weight(label.length.coerceAtLeast(5).toFloat()), height = 34.dp) { onSelect(id) }
         }
         return
     }
@@ -712,7 +771,7 @@ internal fun Segmented(options: List<Pair<String, String>>, selected: String, co
             val on = selected == id
             Box(
                 Modifier
-                    .weight(1f)
+                    .weight(label.length.coerceAtLeast(5).toFloat())
                     .height(34.dp)
                     .clip(RoundedCornerShape(50))
                     .background(color.copy(alpha = if (on) 0.22f else 0.06f))
@@ -820,4 +879,60 @@ private fun SheetButton(label: String, color: Color, filled: Boolean, modifier: 
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = if (filled) inverse else color, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) }
+}
+
+/** A picture picked in the wallpaper screen, placed and rendered before the transition shows it (0.10.4). */
+private class PickedPicture(
+    val pick: WallpaperPick,
+    val source: Bitmap,
+    val crop: CropSpec,
+    val parallax: Float,
+    val bitmap: Bitmap,
+    val tone: dev.liquid.launcher.core.common.WallpaperTone?,
+)
+
+/**
+ * The wallpaper sheet's handle (0.10.4): drag it up for more rows of pictures, down for fewer; a tap switches between
+ * the two. [rangePx] is how much taller the pictures get at the top.
+ */
+@Composable
+private fun SheetHandle(color: Color, tall: Animatable<Float, androidx.compose.animation.core.AnimationVector1D>, rangePx: Float, onSettle: (Boolean) -> Unit) {
+    val scope = rememberCoroutineScope()
+    fun settle(up: Boolean) {
+        scope.launch { tall.animateTo(if (up) 1f else 0f, androidx.compose.animation.core.spring(dampingRatio = 0.85f, stiffness = 500f)) }
+        onSettle(up)
+    }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(22.dp)
+            .pointerInput(rangePx) {
+                if (rangePx <= 1f) return@pointerInput
+                val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
+                var total = 0f
+                detectVerticalDragGestures(
+                    onDragStart = {
+                        tracker.resetTracking()
+                        total = 0f
+                    },
+                    onVerticalDrag = { change, dy ->
+                        change.consume()
+                        // The handle moves with the sheet, so the speed is taken from the finger's own travel.
+                        total += dy
+                        tracker.addPosition(change.uptimeMillis, Offset(0f, total))
+                        scope.launch { tall.snapTo((tall.value - dy / rangePx).coerceIn(0f, 1f)) }
+                    },
+                    onDragEnd = {
+                        val v = tracker.calculateVelocity().y
+                        settle(if (kotlin.math.abs(v) > 600f) v < 0f else tall.value > 0.5f)
+                    },
+                    onDragCancel = { settle(tall.value > 0.5f) },
+                )
+            }
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { settle(tall.value < 0.5f) }
+            .semantics { contentDescription = "Wallpaper sheet handle" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size(width = 36.dp, height = 4.dp).clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.45f)))
+    }
 }

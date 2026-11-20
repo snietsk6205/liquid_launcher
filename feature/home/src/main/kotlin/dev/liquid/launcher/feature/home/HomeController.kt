@@ -92,6 +92,12 @@ class HomeController(
 ) {
     /** 0 = closed, 1 = open. Follows the finger while dragging. */
     val drawer = Animatable(0f)
+
+    /**
+     * Whether the drawer's moves go to the debug log (0.10.4): not for the settings previews, whose loop opened and
+     * closed the drawer every 1.7 s in Med's log. Set by the home screen.
+     */
+    var logMoves = true
     var searchOpen by mutableStateOf(false)
     var editMode by mutableStateOf(false)
     var menu by mutableStateOf<MenuTarget?>(null)
@@ -939,9 +945,10 @@ class HomeController(
     var searchKeyboard by mutableStateOf(true)
 
     /**
-     * The keyboard's height the last time it was up (px from the bottom of the screen, navigation
+     * The keyboard's height the last time it opened (px from the bottom of the screen, navigation
      * bar included), so the field can go straight to where the keyboard will be instead of to the
-     * bottom and up again with it. Remembered across starts.
+     * bottom and up again with it. Remembered across starts. Only the opening height counts (0.10.4):
+     * a keyboard that grows while you type would send the field too high the next time.
      */
     var keyboardHeight by mutableFloatStateOf(data.settings.get(LauncherSettings.SearchKeyboardHeight).toFloat())
 
@@ -971,7 +978,9 @@ class HomeController(
         val remembered = if (keyboardHeight > 0f) keyboardHeight else screenHeight * 0.4f
         val known = if (target > nav + 1f) {
             val risen = ((ime - nav) / (target - nav)).coerceIn(0f, 1f)
-            remembered + (target - remembered) * risen
+            // 0.10.4: eased, so a guess that was off glides softly to the keyboard's real height, slow at both ends.
+            val eased = risen * risen * (3f - 2f * risen)
+            remembered + (target - remembered) * eased
         } else {
             remembered
         }
@@ -1143,7 +1152,7 @@ class HomeController(
         dragPosition = null
         menu = null
         if (searchOpen || search.value > 0f) closeSearch(immediately = true)
-        DebugLog.event("Home", "drawer: open from " + "%.2f".format(drawer.value))
+        if (logMoves) DebugLog.event("Home", "drawer: open from " + "%.2f".format(drawer.value))
         // Without a finger's speed, the spring keeps the speed it has: an interrupted close turns round without stopping (0.9.3).
         val v = if (velocity.isNaN()) drawer.velocity else velocity
         scope.launch { drawer.animateTo(1f, drawerSpring(), initialVelocity = v) }
@@ -1151,7 +1160,7 @@ class HomeController(
 
     fun closeDrawer(immediately: Boolean = false, velocity: Float = Float.NaN) {
         dragPosition = null
-        DebugLog.event("Home", "drawer: close from " + "%.2f".format(drawer.value))
+        if (logMoves) DebugLog.event("Home", "drawer: close from " + "%.2f".format(drawer.value))
         drawerFocusReset++
         drawerQuery = ""
         tagSheet = false

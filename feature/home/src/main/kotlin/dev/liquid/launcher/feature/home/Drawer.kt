@@ -428,16 +428,17 @@ fun AppDrawer(
     }
     val bottomExtra = SearchZone + belowStrip + if (stripAbove) tagConfig.stripHeight() else 0.dp
     val statusInsets = WindowInsets.statusBars
-    // 0.10.2: while the string's letters show at rest ("Always", or "While scrolling"), the list keeps a lane clear of
-    // them on their edge(s): the letters rest 16 dp in, so the lane is that plus half a letter and a small gap.
-    val lane = if (useIndex && indexConfig.style == "string" && indexConfig.visibility != "touch") (16f + indexConfig.letterSp * 0.36f + 6f).dp else 0.dp
+    // 0.10.2: letters that stay on screen keep the apps clear of them. 0.10.4: only with "Always" (letters that come and
+    // go float over the apps), and your side margin always counts: on the letters' side it is measured from the letters
+    // (they rest 16 dp in, half a letter wide), instead of being overruled by a fixed lane as in 0.10.2 and 0.10.3.
+    val lane = if (useIndex && indexConfig.style == "string" && indexConfig.visibility == "always") (16f + indexConfig.letterSp * 0.36f).dp else 0.dp
     val laneRight = if (indexConfig.side != "left") lane else 0.dp
     val laneLeft = if (indexConfig.side != "right") lane else 0.dp
     val padding = remember(keyboardOrNav, statusInsets, density, bottomExtra, headerHeight, config.sideMarginDp, laneLeft, laneRight) {
         DrawerPadding(
             keyboardOrNav, statusInsets, density, headerHeight + 4.dp, bottomExtra,
-            left = maxOf(config.sideMarginDp.dp, laneLeft),
-            right = maxOf(config.sideMarginDp.dp, laneRight),
+            left = config.sideMarginDp.dp + laneLeft,
+            right = config.sideMarginDp.dp + laneRight,
         )
     }
 

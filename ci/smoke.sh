@@ -124,6 +124,21 @@ look() {
 
 focus() { adb shell dumpsys window 2>/dev/null | grep -E 'mCurrentFocus' | head -1 | sed 's/^ *//'; }
 
+# 0.10.4: frames drawn while a screen sits still, from dumpsys gfxinfo's running total. A still screen draws next to
+# nothing; one that keeps drawing has an animation that never ends (Med's log: the study hub area drew 600 frames in
+# 30 s at 85-100 ms each). Printed for every screen measured, and once more at the end.
+IDLE_REPORT=""
+gfx_frames() { adb shell dumpsys gfxinfo "$PKG" 2>/dev/null | tr -d '\r' | grep -m1 'Total frames rendered' | grep -oE '[0-9]+' | head -1; }
+idle_frames() {
+  local label=$1 limit=${2:-20} a b n
+  a=$(gfx_frames); sleep 3; b=$(gfx_frames)
+  if [ -z "$a" ] || [ -z "$b" ]; then note "idle frames on the $label: gfxinfo unreadable"; return; fi
+  n=$((b - a))
+  IDLE_REPORT="$IDLE_REPORT
+      $label: $n frames in 3 s"
+  if [ "$n" -le "$limit" ]; then pass "the $label sits still when idle ($n frames in 3 s)"; else note "the $label keeps drawing while idle: $n frames in 3 s"; fi
+}
+
 echo "== Default launcher"
 adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME | tail -1
 adb shell wm dismiss-keyguard || true
@@ -147,6 +162,7 @@ adb shell am start -n "$HOME_ACTIVITY" >/dev/null
 if wait_top "$HOME_ACTIVITY" 15; then pass "launcher activity starts"; else fail "launcher activity starts"; fi
 sleep 4
 look 01-home 30
+idle_frames "home screen"
 
 # Warm-up (0.10.2): run 85 failed checks 2 and 3 twice right after the first start, when the redirect engine had not yet
 # handled a window of the system launcher (its first event after start can come late). Press Home once here and wait
@@ -383,6 +399,7 @@ python3 -W ignore ci/ascii_shot.py "$OUT/06-drawer.png" 0.85
 python3 ci/describe_ui.py "$OUT/06-drawer.xml" 8 bottom
 if on_screen 06-drawer "Search apps"; then pass "swipe up opens the drawer"; else fail "swipe up opens the drawer"; fi
 show_drawer_log
+idle_frames "drawer"
 if on_screen 06-drawer "Settings" exact || on_screen 06-drawer "Chrome" exact; then pass "drawer lists apps"; else fail "drawer lists apps"; fi
 
 # Long-press an app in the drawer: the glass menu, then add it to the home screen.
@@ -554,6 +571,8 @@ sleep 1.5
 peek 10-search
 dump 10-search
 if on_screen 10-search "= 42"; then pass "swipe down opens search and the calculator answers"; else fail "swipe down opens search and the calculator answers"; fi
+# The field's cursor blinks (two frames a second), hence the higher limit.
+idle_frames "search screen" 30
 # 0.7.1: with nothing typed, the search screen (the pill turned into its field at the bottom) offers widgets.
 for i in 1 2 3 4 5; do adb shell input keyevent KEYCODE_DEL; done
 sleep 1
@@ -618,6 +637,8 @@ if tap_text 11-menu "Wallpaper" exact; then
     peek 11-wallpaper
     dump 11-wallpaper
     if on_screen 11-wallpaper "Apply" exact && on_screen 11-wallpaper "Recent" exact; then pass "the strip opens the wallpaper screen"; else fail "the strip opens the wallpaper screen"; fi
+    idle_frames "wallpaper screen"
+    if on_screen 11-wallpaper "Wallpaper sheet handle"; then pass "the wallpaper sheet has a handle to pull it up"; else fail "the wallpaper sheet has a handle to pull it up"; fi
     if tap_text 11-wallpaper "Blur and dim" exact; then
       sleep 1
       dump 11-look
@@ -791,6 +812,7 @@ else
     else
       pass "the hub opens with the whole day"
     fi
+    idle_frames "study hub"
     dump 14b-panel
     # "Done" first: once a task is ticked, its tick icon is also labelled "Done" (for accessibility) and comes earlier on screen.
     tap_text 14b-panel "Done" exact || true
@@ -1057,6 +1079,8 @@ kill "$LOGCAT_PID" 2>/dev/null
 echo "== Launcher log"
 sed -E 's/^([0-9-]+ )?([0-9:.]+) .*LiquidLauncher[^:]*: /\2 /' "$LOG" | tail -220
 
+echo
+echo "IDLE FRAMES (a still screen draws next to nothing):$IDLE_REPORT"
 echo
 if [ "$FAILS" -eq 0 ]; then
   echo "SMOKE RESULT: all checks passed"

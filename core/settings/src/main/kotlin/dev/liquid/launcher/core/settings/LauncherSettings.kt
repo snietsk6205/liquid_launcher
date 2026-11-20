@@ -953,8 +953,8 @@ object LauncherSettings {
     val DrawerSideMargin = IntSetting(
         key = "drawer.sideMargin", default = 8, min = 0, max = 32, step = 2, unit = "dp",
         title = "Side margins",
-        summary = "The same space on the left and the right of the apps",
-        section = "drawer", keywords = "margin padding edge side space symmetric",
+        summary = "The same space on the left and the right of the apps. With the letters always shown, it is measured from the letters on their side",
+        section = "drawer", keywords = "margin padding edge side space symmetric gap screen border",
     )
     val DrawerDim = IntSetting(
         key = "drawer.dim", default = 45, min = 0, max = 90, step = 5, unit = "%",
@@ -1229,8 +1229,8 @@ object LauncherSettings {
             "touch" to "Only while touching the edge",
         ),
         title = "Show the letters",
-        summary = "The letters float over the list; they never push the apps aside",
-        section = "drawerIndex", keywords = "index letters visible always touch hide",
+        summary = "The letters float over the list. \"While scrolling\" and \"Only while touching\" fade them out when you are done (\"Hide after\" sets when); with \"Always\" the apps keep clear of them",
+        section = "drawerIndex", keywords = "index letters visible always touch hide hidden fade fading auto-hide disappear show scroll",
     )
     val IndexSide = ChoiceSetting(
         key = "index.side", default = "right",
@@ -1816,6 +1816,10 @@ object LauncherSettings {
     val SearchKeyboardHeight = IntSetting(
         key = "state.keyboardHeight", default = 0, min = 0, max = 10000,
         title = "Height of the keyboard last time, px", section = "state", hidden = true,
+    )
+    val WallpaperSheetTall = BoolSetting(
+        key = "state.wallpaperSheetTall", default = false,
+        title = "Wallpaper screen pulled up", section = "state", hidden = true,
     )
 
     val SearchDim = IntSetting(
@@ -2553,7 +2557,7 @@ object LauncherSettings {
         TagStripPosition, TagButtonPosition, TagButtonSize, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
         MenuEntries,
         SearchTransition, SearchBounce, SearchSpeed, SearchStretch, SearchField, SearchOpenKeyboard, SearchBlur, SearchDim, SearchHomeScale,
-        SearchClaude, SearchClaudeTarget, SearchClipboard, SearchEngine, SearchKeyboardHeight,
+        SearchClaude, SearchClaudeTarget, SearchClipboard, SearchEngine, SearchKeyboardHeight, WallpaperSheetTall,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,

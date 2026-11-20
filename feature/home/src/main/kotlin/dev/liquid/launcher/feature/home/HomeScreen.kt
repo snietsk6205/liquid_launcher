@@ -473,7 +473,10 @@ private fun HomeScreenBody(
             if (dragging) controller.edgeScrollWhileDragging(with(density0) { 28.dp.toPx() })
         }
     }
-    SideEffect { controller.motion = motion }
+    SideEffect {
+        controller.motion = motion
+        controller.logMoves = live
+    }
     if (mode == HomeMode.PreviewDrawer || mode == HomeMode.PreviewDrawerIndex) {
         LaunchedEffect(Unit) { controller.drawer.snapTo(1f) }
     }
@@ -562,6 +565,12 @@ private fun HomeScreenBody(
     // W3: what is on screen, written next to the frame times in the debug log (FrameMeter), so their cost is known.
     val costTheme = LocalControls.current?.theme
     SideEffect { FrameCost.describe(wallpaperFx, costTheme) }
+    if (live) {
+        // 0.10.4: the frame meter names the screen that is open; read in a flow, so the home screen never recomposes for it.
+        LaunchedEffect(controller) {
+            androidx.compose.runtime.snapshotFlow { openScreenName(controller) }.collect { FrameCost.screen = it }
+        }
+    }
     val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
 
     Box(
@@ -1192,3 +1201,20 @@ private fun StatusBarIcons(lightBackground: Boolean) {
  * image when it set the wallpaper, else from the system. Needs no permission.
  */
 fun wallpaperIsLight(context: Context): Boolean = dev.liquid.launcher.core.data.ThemedColors.isLight(context)
+
+/**
+ * The screen that is open, for the frame meter's lines (0.10.4): the one in front wins. Read in a snapshot flow, so
+ * the drawer's and search's springs never recompose anything for it.
+ */
+internal fun openScreenName(c: HomeController): String = when {
+    c.wallpaperStudio -> "wallpaper screen"
+    c.clockStudio != null -> "clock gallery"
+    c.hub.value > 0.5f -> "study hub"
+    c.tagSheet -> "tag list"
+    c.openFolder != null -> "folder"
+    c.searchOpen || c.search.value > 0.5f -> "search"
+    c.drawer.value > 0.5f -> "drawer"
+    c.editMode -> "editing"
+    c.homeMenu -> "home menu"
+    else -> "home"
+}

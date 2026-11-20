@@ -20,7 +20,8 @@ internal object RecentsDetector {
 
     private const val SUBSTRING_WALK_LIMIT = 600
 
-    fun probe(root: AccessibilityNodeInfo?, config: DetectConfig): Probe {
+    /** [screen] is the display's full size, for [shrunkInScreen] (0.10.4); without it only the window is compared. */
+    fun probe(root: AccessibilityNodeInfo?, config: DetectConfig, screen: android.graphics.Rect? = null): Probe {
         if (root == null) return Probe(null, isSystemLauncher = false, recents = false, detail = "no window")
         val pkg = root.packageName?.toString()
         if (pkg != config.systemLauncher) return Probe(pkg, isSystemLauncher = false, recents = false)
@@ -54,7 +55,7 @@ internal object RecentsDetector {
                 break
             }
             // The first home id is the home screen itself: is it drawn smaller than its window?
-            if (index == 0) animating = isShrunk(root, node)
+            if (index == 0) animating = isShrunk(root, node, screen)
         }
         val drawer = !home && config.drawerIds.any { has(root, it) }
         return Probe(
@@ -74,14 +75,38 @@ internal object RecentsDetector {
      * draws its home screen at 0.9 scale and lets it grow while its "going home" animation
      * runs. At rest, during a recents gesture and in recents it fills the window.
      */
-    private fun isShrunk(root: AccessibilityNodeInfo, node: AccessibilityNodeInfo): Boolean {
+    private fun isShrunk(root: AccessibilityNodeInfo, node: AccessibilityNodeInfo, screen: android.graphics.Rect?): Boolean {
         val window = android.graphics.Rect()
         val view = android.graphics.Rect()
         root.getBoundsInScreen(window)
         node.getBoundsInScreen(view)
-        if (window.width() <= 0 || view.width() <= 0) return false
-        return view.width() < window.width() * (1f - SHRINK) && view.height() < window.height() * (1f - SHRINK)
+        if (view.width() <= 0 || view.height() <= 0) return false
+        if (window.width() > 0 && view.width() < window.width() * (1f - SHRINK) && view.height() < window.height() * (1f - SHRINK)) return true
+        return screen != null && shrunkInScreen(view.left, view.top, view.right, view.bottom, screen.width(), screen.height())
     }
+
+    /**
+     * 0.10.4: the home screen at ([left], [top], [right], [bottom]) is drawn smaller than the screen in both directions
+     * and centred on it. MagicOS shrinks the system launcher's whole window with its home screen while going home, so
+     * against the window it never looked smaller: in Med's log the home screen was at [54,119][1026,2269] on a
+     * 1080 × 2388 screen in about 40 redirects, and the window check caught 6 of them. At rest, during a recents
+     * gesture and in recents it fills the screen. Centred, so a window that only leaves room for the system bars
+     * (smaller in one direction, and not centred) never counts.
+     */
+    internal fun shrunkInScreen(left: Int, top: Int, right: Int, bottom: Int, screenWidth: Int, screenHeight: Int): Boolean {
+        if (screenWidth <= 0 || screenHeight <= 0) return false
+        val width = right - left
+        val height = bottom - top
+        if (width <= 0 || height <= 0) return false
+        if (width >= screenWidth * (1f - SHRINK) || height >= screenHeight * (1f - SHRINK)) return false
+        // Scaled about the middle: the gaps on opposite sides match (within 2 % of the screen).
+        val sideGap = kotlin.math.abs(left - (screenWidth - right))
+        val endGap = kotlin.math.abs(top - (screenHeight - bottom))
+        return sideGap <= screenWidth * CENTRED && endGap <= screenHeight * CENTRED
+    }
+
+    /** How far off the middle a shrunk home screen may sit, as a share of the screen (0.10.4). */
+    private const val CENTRED = 0.02f
 
     /** Fraction of the window the home screen must be smaller by to count as animating. */
     private const val SHRINK = 0.012f

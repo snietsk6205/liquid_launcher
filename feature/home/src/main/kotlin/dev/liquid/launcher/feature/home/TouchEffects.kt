@@ -612,8 +612,14 @@ object FrameCost {
      */
     @Volatile var activity: String? = null
 
-    /** What is on screen, for the frame meter's line: the activity first, then what keeps drawing. */
-    val label: String get() = activity?.let { a -> if (base.isEmpty()) a else "$a; $base" } ?: base
+    /**
+     * 0.10.4: the screen that is open (home, drawer, search, study hub, wallpaper screen…), so a slow screen shows by
+     * name in the debug log. Empty in previews and before the home screen is set up.
+     */
+    @Volatile var screen: String = ""
+
+    /** What is on screen, for the frame meter's line: the screen, the activity, then what keeps drawing. */
+    val label: String get() = listOfNotNull(screen.ifEmpty { null }, activity, base.ifEmpty { null }).joinToString("; ")
 
     /** An activity's frames are worth a line from 30 (a drag lasts a second or two); a still screen's from 120. */
     val minFrames: Int get() = if (activity != null) 30 else 120
