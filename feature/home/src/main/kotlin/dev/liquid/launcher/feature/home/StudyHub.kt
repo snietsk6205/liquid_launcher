@@ -237,7 +237,6 @@ internal fun StudyHub(glass: GlassConfig, lightBackground: Boolean, backdrop: Ba
     val shape = remember(geometry) { RoundedCornerShape(HubCorner(geometry) { controller.hub.value }) }
     val layer = rememberLayerBackdrop()
     val scroll = rememberScrollState()
-    val redraw = remember(scroll) { { scroll.value } }
     val connection = remember(controller) { HubScroll(controller) }
     val drag = rememberDraggableState { delta -> controller.dragHubBy(delta) }
     Box(Modifier.fillMaxSize()) {
@@ -261,7 +260,9 @@ internal fun StudyHub(glass: GlassConfig, lightBackground: Boolean, backdrop: Ba
                 .draggable(drag, Orientation.Vertical, onDragStopped = { velocity -> controller.settleHub(velocity) })
                 .nestedScroll(connection),
         ) {
-            ProvideControls(controller, glass, layer, redraw) {
+            // 0.11.0: no redraw on scroll: what scrolls draws without sampling (below), and the header and the bar keep
+            // their place on the hub's glass, so their sample does not change while the day scrolls.
+            ProvideControls(controller, glass, layer) {
                 HubContent(
                     controller, color, scroll,
                     Modifier

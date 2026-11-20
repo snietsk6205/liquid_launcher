@@ -1230,7 +1230,7 @@ object LauncherSettings {
             "touch" to "Hidden until you use them (the circle, or the edge)",
         ),
         title = "Show the letters",
-        summary = "The letters float over the list. \"While scrolling\" and \"Only while touching\" fade them out when you are done (\"Hide after\" sets when); with \"Always\" the apps keep clear of them",
+        summary = "The letters float over the list. \"While scrolling\" and \"Hidden until you use them\" fade them out when you are done (\"Hide after\" sets when); with \"Always\" the apps keep clear of them",
         section = "drawerIndex", keywords = "index letters visible always touch hide hidden fade fading auto-hide disappear show scroll",
     )
     val IndexSide = ChoiceSetting(
