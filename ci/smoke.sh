@@ -39,6 +39,30 @@ wait_top() {
   return 1
 }
 
+# wait_until <seconds> <command…> : succeeds as soon as the command does (checked every 0.25 s); fails after <seconds>.
+# 0.11.2: the fixed sleeps that waited for something to happen wait for it instead, up to a timeout at least as long.
+wait_until() {
+  local seconds=$1 i
+  shift
+  for i in $(seq 1 $((seconds * 4))); do
+    if "$@" >/dev/null 2>&1; then return 0; fi
+    sleep 0.25
+  done
+  return 1
+}
+
+# wait_screen <name> <text> <seconds> [exact] : dumps the screen until the text is on it; the last dump stays as <name>.
+# A screen that is still moving cannot be dumped (uiautomator: "could not get idle state"): it is tried again.
+wait_screen() {
+  local name=$1 text=$2 end=$((SECONDS + $3)) mode=${4:-}
+  while :; do
+    dump "$name"
+    if on_screen "$name" "$text" $mode; then return 0; fi
+    if [ "$SECONDS" -ge "$end" ]; then return 1; fi
+    sleep 0.4
+  done
+}
+
 # wait_log <pattern> <seconds> : succeeds once the launcher log contains the pattern.
 wait_log() {
   local pattern=$1 seconds=$2 i
@@ -338,7 +362,7 @@ for screen in "" setup diagnostics log updates; do
     adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen "$screen" >/dev/null
   fi
   if wait_top "SettingsActivity" 8; then pass "settings screen '${screen:-main}'"; else fail "settings screen '${screen:-main}'"; fi
-  sleep 3
+  sleep 1.5
   clear_anr
   adb exec-out screencap -p > "$OUT/04-settings-${screen:-main}.png" 2>/dev/null || true
   case "$screen" in
@@ -353,7 +377,7 @@ adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen gla
 wait_top "SettingsActivity" 8 || fail "glass benchmark opens"
 sleep 6
 peek 05-glass-running
-sleep 12
+wait_screen 05-glass-finished "Tune the glass" 30 || true
 texts 05-glass-finished 12
 if top_activity | grep -q "SettingsActivity"; then pass "glass benchmark finished without leaving the screen"; else fail "glass benchmark finished without leaving the screen"; fi
 # 0.9.12 (P4): once measured, the same screen tunes the real glass live, with its presets.
@@ -384,8 +408,8 @@ tap_text() {
 # 0.10.0 (W1): a fresh install of a version with a changelog entry shows "What's new" once, above the pill.
 echo "== 8b. What's new card"
 adb shell am start -n "$HOME_ACTIVITY" >/dev/null
-sleep 3
-dump 08-whatsnew
+wait_top "$HOME_ACTIVITY" 8 || true
+wait_screen 08-whatsnew "What's new in" 10 || true
 if on_screen 08-whatsnew "What's new in"; then
   pass "the What's new card shows after an update"
   tap_text 08-whatsnew "Got it" exact || true
@@ -806,6 +830,7 @@ adb shell su 0 sh /data/local/tmp/cal.sh > "$OUT/cal.txt" 2>&1 || adb shell sh /
 cat "$OUT/cal.txt" | tail -3
 EVENT_ID=$(grep 'title=Proba 2 smoke block' "$OUT/cal.txt" | sed -E 's/.*_id=([0-9]+).*/\1/' | head -1)
 event_text() { adb shell su 0 content query --uri content://com.android.calendar/events --projection title:description --where "_id=$EVENT_ID" 2>/dev/null | tr -d '\r'; }
+event_has() { event_text | grep -q "$1"; }
 if [ -z "$EVENT_ID" ]; then
   echo "SKIP: could not create a test calendar on this emulator (no root); study calendar checks not run"
 else
@@ -842,12 +867,12 @@ else
     dump 14b-panel
     # "Done" first: once a task is ticked, its tick icon is also labelled "Done" (for accessibility) and comes earlier on screen.
     tap_text 14b-panel "Done" exact || true
-    sleep 3
+    wait_until 10 event_has 'title=✓ Proba 2 smoke block' || true
     if event_text | grep -q 'title=✓ Proba 2 smoke block'; then pass "Done puts ✓ in front of the event's title"; else fail "Done puts ✓ in front of the event's title"; event_text | head -8; fi
     if event_text | grep -q '— launcher: done'; then pass "the launcher's status line is written"; else fail "the launcher's status line is written"; fi
     dump 14b-panel2
     tap_text 14b-panel2 "Recall the theorems" exact || true
-    sleep 3
+    wait_until 10 event_has '\[x\] Recall the theorems' || true
     if event_text | grep -q '\[x\] Recall the theorems'; then pass "a tick is written into the event's description"; else fail "a tick is written into the event's description"; event_text | head -8; fi
     if event_text | grep -q '— launcher: done .* · 1/2 tasks'; then pass "the status line counts the ticked task"; else fail "the status line counts the ticked task"; event_text | tail -2; fi
     # 0.6.4: tomorrow opens from Today, and each of its blocks opens to its steps.
@@ -938,10 +963,10 @@ CAL2EOF
   sleep 1
   adb shell am start -n "$HOME_ACTIVITY" >/dev/null
   wait_top "$HOME_ACTIVITY" 8 || true
-  sleep 5
+  [ "$QUIET_ON" = 1 ] && wait_log "Quiet: notification access on" 10
   if [ "$QUIET_ON" = 1 ] && grep -q "Quiet: notification access on" "$LOG"; then
     adb shell cmd notification post -t "Quiet smoke" quietsmoke "This should wait until the block ends" >/dev/null 2>&1
-    sleep 3
+    wait_log "Quiet: held a notification" 10 || true
     if grep -q "Quiet: held a notification" "$LOG"; then
       pass "a notification posted during a block waits until it ends"
     else
@@ -990,8 +1015,7 @@ adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen pag
 wait_top "SettingsActivity" 8 || true
 # The page's preview runs its demo twice (about 9 s for the rail) and then rests: a screen that keeps moving
 # cannot be read by uiautomator ("could not get idle state"), which is why run 92 found no row here.
-sleep 12
-dump 14c-settings
+wait_screen 14c-settings "Rail: short" 25 || true
 if tap_text 14c-settings "Rail: short"; then
   sleep 1.2
   dump 14c-style
@@ -1117,8 +1141,8 @@ sleep 1
 clear_anr
 # The updates screen (in-app updater) opens and offers a check; no network is used here.
 adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen updates >/dev/null
-sleep 3
-dump 13-updates
+wait_top "SettingsActivity" 8 || true
+wait_screen 13-updates "Check for updates" 10 exact || true
 if on_screen 13-updates "Check for updates" exact; then pass "updates screen shows the check button"; else fail "updates screen shows the check button"; fi
 adb shell input keyevent KEYCODE_BACK
 sleep 1
@@ -1156,10 +1180,8 @@ adb shell input keyevent KEYCODE_HOME
 sleep 1.5
 SPEED_DONE=$(grep -c "speed check: done" "$LOG" || true)
 adb shell am start -n "$HOME_ACTIVITY" --es dev.liquid.launcher.OPEN speedCheck >/dev/null
-for i in $(seq 1 60); do
-  sleep 3
-  [ "$(grep -c "speed check: done" "$LOG" || true)" -gt "$SPEED_DONE" ] && break
-done
+speed_done() { [ "$(grep -c "speed check: done" "$LOG" || true)" -gt "$SPEED_DONE" ]; }
+wait_until 180 speed_done || true
 if [ "$(grep -c "speed check: done" "$LOG" || true)" -gt "$SPEED_DONE" ]; then
   pass "the speed check runs to its end"
   echo "      $(grep -c "Frames:.*speed check:" "$LOG" || true) measured steps; the first and the last:"

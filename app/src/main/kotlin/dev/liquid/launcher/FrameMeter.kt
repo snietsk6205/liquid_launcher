@@ -25,8 +25,10 @@ internal class FrameMeter : Window.OnFrameMetricsAvailableListener {
     private var drawNs = 0L
     private var syncNs = 0L
 
-    // 0.11.2: the frames' deadlines, to say at what refresh rate the screen ran (60, 90, 120 Hz).
-    private var deadlineNs = 0L
+    // 0.11.2: the screen's refresh rate while the frames were drawn (60, 90, 120 Hz), lowest and highest, since a
+    // phone may lower it when the screen is still. (The frames' deadlines are not the rate: they read "8 Hz" on CI.)
+    private var hzLow = 0f
+    private var hzHigh = 0f
     private var label = ""
     private var minFrames = 120
 
@@ -46,7 +48,11 @@ internal class FrameMeter : Window.OnFrameMetricsAvailableListener {
         layoutNs += metrics.getMetric(FrameMetrics.LAYOUT_MEASURE_DURATION)
         drawNs += metrics.getMetric(FrameMetrics.DRAW_DURATION)
         syncNs += metrics.getMetric(FrameMetrics.SYNC_DURATION) + metrics.getMetric(FrameMetrics.COMMAND_ISSUE_DURATION)
-        deadlineNs += deadline
+        val hz = window.decorView.display?.refreshRate ?: 0f
+        if (hz > 0f) {
+            if (hzLow == 0f || hz < hzLow) hzLow = hz
+            if (hz > hzHigh) hzHigh = hz
+        }
         if (total > worstNs) worstNs = total
         if (total > deadline) late++
         late += dropCount
@@ -59,11 +65,15 @@ internal class FrameMeter : Window.OnFrameMetricsAvailableListener {
             val avg = totalNs / frames / 1e6
             val gpu = gpuNs / frames / 1e6
             fun ms(ns: Long) = ns / frames / 1e6
-            val hz = if (deadlineNs > 0) 1e9 * frames / deadlineNs else 0.0
+            val rate = when {
+                hzHigh <= 0f -> "at an unknown rate"
+                hzHigh - hzLow < 1f -> "at %.0f Hz".format(hzHigh)
+                else -> "at %.0f to %.0f Hz".format(hzLow, hzHigh)
+            }
             DebugLog.event(
                 "Frames",
-                "%d drawn, %d late (%.1f %%), %.1f ms on average (GPU %.1f ms; input and composing %.1f, layout %.1f, draw %.1f, sync %.1f), worst %.1f ms, at %.0f Hz; %s".format(
-                    frames, late, late * 100f / frames, avg, gpu, ms(animNs), ms(layoutNs), ms(drawNs), ms(syncNs), worstNs / 1e6, hz,
+                "%d drawn, %d late (%.1f %%), %.1f ms on average (GPU %.1f ms; input and composing %.1f, layout %.1f, draw %.1f, sync %.1f), worst %.1f ms, %s; %s".format(
+                    frames, late, late * 100f / frames, avg, gpu, ms(animNs), ms(layoutNs), ms(drawNs), ms(syncNs), worstNs / 1e6, rate,
                     label.ifEmpty { "no moving background" },
                 ),
             )
@@ -77,6 +87,7 @@ internal class FrameMeter : Window.OnFrameMetricsAvailableListener {
         layoutNs = 0
         drawNs = 0
         syncNs = 0
-        deadlineNs = 0
+        hzLow = 0f
+        hzHigh = 0f
     }
 }
