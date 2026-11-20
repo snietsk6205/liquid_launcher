@@ -48,6 +48,8 @@ internal fun SpeedBumpOverlay(bump: SpeedBump, glass: GlassConfig, lightBackgrou
     val appear = remember { Animatable(0f) }
     var wait by remember(bump) { mutableIntStateOf(5) }
     LaunchedEffect(bump) { appear.animateTo(1f, Motion.enter()) }
+    // 0.11.1: on leaving it shrinks back towards the icon it grew from.
+    val presence = LocalPresence.current
     LaunchedEffect(bump) {
         while (wait > 0) {
             delay(1000)
@@ -73,7 +75,7 @@ internal fun SpeedBumpOverlay(bump: SpeedBump, glass: GlassConfig, lightBackgrou
                 .padding(horizontal = 28.dp)
                 .fillMaxWidth()
                 .graphicsLayer {
-                    val p = appear.value
+                    val p = appear.value * presence.value
                     val s = 0.86f + 0.14f * p
                     scaleX = s
                     scaleY = s

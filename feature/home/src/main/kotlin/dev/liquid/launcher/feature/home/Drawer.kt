@@ -640,8 +640,10 @@ fun AppDrawer(
             sheetProgress.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = MotionScale.stiffness(520f)))
         }
     }
-    if (interactive && (controller.tagSheet || sheetProgress.value > 0.001f)) {
-        TagSheet(org, counts, usage, tagConfig, controller, glass, light, glassBackdrop, sheetProgress.value)
+    // 0.11.1: its progress is read while laying out and drawing; read here, it rebuilt the whole drawer every frame.
+    val tagSheetShown by remember { derivedStateOf { controller.tagSheet || sheetProgress.value > 0.001f } }
+    if (interactive && tagSheetShown) {
+        TagSheet(org, counts, usage, tagConfig, controller, glass, light, glassBackdrop) { sheetProgress.value }
     }
 }
 

@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -48,6 +49,10 @@ import dev.liquid.launcher.core.designsystem.LauncherIcons
 internal fun SelectionBar(controller: HomeController, picked: Set<AppRef>, glass: GlassConfig, lightBackground: Boolean, backdrop: Backdrop) {
     val color = sheetContentColor(glass, lightBackground)
     val shape = RoundedCornerShape(26.dp)
+    // 0.11.1: it drops in from the top and goes back up when picking ends (it appeared and vanished in one frame).
+    val appear = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
+    val presence = LocalPresence.current
     Box(Modifier.fillMaxSize()) {
         Column(
             Modifier
@@ -55,6 +60,11 @@ internal fun SelectionBar(controller: HomeController, picked: Set<AppRef>, glass
                 .statusBarsPadding()
                 .padding(12.dp)
                 .fillMaxWidth()
+                .graphicsLayer {
+                    val p = appear.value * presence.value
+                    alpha = p.coerceIn(0f, 1f)
+                    translationY = -(1f - p) * 32.dp.toPx()
+                }
                 .sheetSurface(backdrop, shape, glass, lightBackground)
                 .clip(shape)
                 .clickable(interactionSource = null, indication = null) { }

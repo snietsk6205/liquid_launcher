@@ -96,6 +96,7 @@ internal fun ClockStudio(
     val color = sheetContentColor(glass, lightBackground)
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
+    val presence = LocalPresence.current
     val style = state.style
     fun set(change: ClockStyle.() -> ClockStyle) {
         state.style = state.style.change()
@@ -109,7 +110,8 @@ internal fun ClockStudio(
                 .navigationBarsPadding()
                 .padding(12.dp)
                 .graphicsLayer {
-                    val p = appear.value
+                    // 0.11.1: and sinks back when it closes.
+                    val p = appear.value * presence.value
                     alpha = p.coerceIn(0f, 1f)
                     translationY = (1f - p) * 60.dp.toPx()
                 }

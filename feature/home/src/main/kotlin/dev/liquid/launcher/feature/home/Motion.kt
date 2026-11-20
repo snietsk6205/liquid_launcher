@@ -59,10 +59,12 @@ internal val LocalPresence = compositionLocalOf<State<Float>> { mutableFloatStat
 /**
  * Shows [content] while [value] is not null and keeps it on screen, with the last value, for
  * the moment it takes to fade and sink away after [value] became null. The overlays keep their
- * own entrance; this gives all of them the same exit.
+ * own entrance; this gives all of them the same exit, and [LocalPresence] lets each one leave the
+ * way it came (0.11.1: sheets sink back, a folder shrinks into its icon). [instantExit], asked when
+ * [value] goes, skips the exit (a sheet that leaves inside a picture of the old screen).
  */
 @Composable
-internal fun <T : Any> Presence(value: T?, content: @Composable (T) -> Unit) {
+internal fun <T : Any> Presence(value: T?, instantExit: () -> Boolean = { false }, content: @Composable (T) -> Unit) {
     val holder = remember { arrayOfNulls<Any>(1) }
     if (value != null) holder[0] = value
     val out = remember { Animatable(if (value != null) 1f else 0f) }
@@ -72,7 +74,7 @@ internal fun <T : Any> Presence(value: T?, content: @Composable (T) -> Unit) {
             present = true
             out.snapTo(1f)
         } else if (present) {
-            out.animateTo(0f, Motion.exit())
+            if (instantExit()) out.snapTo(0f) else out.animateTo(0f, Motion.exit())
             present = false
             holder[0] = null
         }

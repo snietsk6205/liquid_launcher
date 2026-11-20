@@ -486,7 +486,8 @@ internal fun TagSheet(
     glass: GlassConfig,
     lightBackground: Boolean,
     backdrop: Backdrop,
-    progress: Float,
+    /** 0 at the button, 1 open; read while laying out and drawing only (0.11.1). */
+    progress: () -> Float,
 ) {
     val settings = controller.data.settings
     val color = sheetContentColor(glass, lightBackground)
@@ -520,24 +521,25 @@ internal fun TagSheet(
     val density = LocalDensity.current
     val insets = WindowInsets.navigationBars.union(WindowInsets.ime)
     var origin by remember { mutableStateOf(Offset.Zero) }
-    val p = progress
     val from = controller.tagSheetOrigin
     // The glass grows from the button's rounded shape into the sheet's.
     val startRadius = with(density) { (from?.height ?: 56.dp.toPx()) / 2f }
     val endRadius = with(density) { 30.dp.toPx() }
-    val radiusDp = with(density) { (startRadius + (endRadius - startRadius) * p.coerceIn(0f, 1f)).toDp() }
+    val latestProgress = androidx.compose.runtime.rememberUpdatedState(progress)
+    fun radius() = startRadius + (endRadius - startRadius) * latestProgress.value().coerceIn(0f, 1f)
+    val corners = remember(startRadius, endRadius) { RoundedCornerShape(GrowingCorner { radius() }) }
 
     Box(
         Modifier
             .fillMaxSize()
             .onPlaced { origin = it.positionInRoot() }
-            .background(Color.Black.copy(alpha = 0.25f * p.coerceIn(0f, 1f)))
+            .drawBehind { drawRect(Color.Black.copy(alpha = 0.25f * progress().coerceIn(0f, 1f))) }
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { controller.tagSheet = false },
     ) {
       Layout(
         modifier = Modifier.fillMaxSize(),
         content = {
-          Box(Modifier.sheetSurface(backdrop, RoundedCornerShape(radiusDp), glass, lightBackground).bloomLight().boardPicture(RoundedCornerShape(radiusDp)))
+          Box(Modifier.sheetSurface(backdrop, corners, glass, lightBackground).bloomLight().boardPicture(corners))
           Column(
             Modifier
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
@@ -649,6 +651,7 @@ internal fun TagSheet(
         val start = from?.translate(-origin) ?: androidx.compose.ui.geometry.Rect(
             end.center.x - 28.dp.toPx(), end.bottom - 56.dp.toPx(), end.center.x + 28.dp.toPx(), end.bottom,
         )
+        val p = progress()
         val rect = lerpRect(start, end, p)
         val glassPlaceable = measurables[0].measure(
             Constraints.fixed(rect.width.roundToInt().coerceAtLeast(1), rect.height.roundToInt().coerceAtLeast(1))
@@ -659,7 +662,7 @@ internal fun TagSheet(
                 // The list appears once the glass has mostly grown, and never outside it.
                 alpha = ((p - 0.45f) / 0.55f).coerceIn(0f, 1f)
                 clip = true
-                shape = LocalRect(rect.translate(-end.topLeft), radiusDp.toPx())
+                shape = LocalRect(rect.translate(-end.topLeft), radius())
             }
         }
       }
@@ -672,6 +675,15 @@ private fun lerpRect(a: androidx.compose.ui.geometry.Rect, b: androidx.compose.u
     maxOf(a.left + (b.left - a.left) * t + 1f, a.right + (b.right - a.right) * t),
     maxOf(a.top + (b.top - a.top) * t + 1f, a.bottom + (b.bottom - a.bottom) * t),
 )
+
+/**
+ * The tag sheet's glass corners (0.11.1): from the button's round ends to the sheet's, as it grows. Its size changes
+ * every frame while it grows, so its corners are worked out again each frame, with the radius of that moment; until
+ * then a new shape was made each frame by composing the sheet (and the drawer around it) again.
+ */
+private class GrowingCorner(private val radius: () -> Float) : androidx.compose.foundation.shape.CornerSize {
+    override fun toPx(shapeSize: androidx.compose.ui.geometry.Size, density: androidx.compose.ui.unit.Density): Float = radius()
+}
 
 /** Clips a layer to [rect] (in the layer's own coordinates) with rounded corners. */
 private class LocalRect(private val rect: androidx.compose.ui.geometry.Rect, private val radius: Float) : androidx.compose.ui.graphics.Shape {

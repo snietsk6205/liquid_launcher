@@ -157,6 +157,7 @@ internal fun WallpaperStrip(
     val color = sheetContentColor(glass, lightBackground)
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
+    val presence = LocalPresence.current
     val shape = RoundedCornerShape(30.dp)
 
     Box(
@@ -170,7 +171,8 @@ internal fun WallpaperStrip(
                 .navigationBarsPadding()
                 .padding(start = 12.dp, end = 12.dp, bottom = 24.dp)
                 .graphicsLayer {
-                    val p = appear.value
+                    // 0.11.1: and sinks back when it closes.
+                    val p = appear.value * presence.value
                     alpha = p.coerceIn(0f, 1f)
                     translationY = (1f - p) * 40.dp.toPx()
                 }

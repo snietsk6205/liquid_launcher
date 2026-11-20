@@ -6,6 +6,45 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
+## 0.11.1 — 2026-11-20
+
+### Added
+- Letter areas, in place of 0.11.0's letter circle: plain circles over the drawer's apps. Start a swipe inside
+  one and the letters come out at its edge with the bubble, as if your finger were on them there, and follow
+  your finger wherever it goes; the list follows. A tap or a long press inside an area still opens the app under
+  it (or its menu): only a swipe starts the letters. Add as many areas as you like in Settings → Drawer and
+  search → Letter index ("Letter areas", on the first tab): for each one the edge the letters come out of (left
+  or right), where it is (across and down the apps) and its size, with Remove and Reset; colour, opacity (0 %:
+  invisible, still working) and opacity while the apps scroll as before, with a live preview.
+- "Letters only from the areas" (on by default): the screen's edge is left to Back; switch it off for the edge
+  to pull the letters too.
+- The debug log's "Frames:" lines split each frame into input and composing, layout, drawing and sync, next to
+  the GPU, so a slow screen shows where its time goes.
+
+### Changed
+- Wallpaper screen: tapping a picture only picks it. It is ringed, with a check, in the sheet; your screen keeps
+  its wallpaper (you see the picture full screen while you place it, and it fades back after). Apply plays your
+  wallpaper transition from the Apply button, from the old wallpaper to the new one, with its icon colours and
+  looks; the files and the system wallpaper are written once the transition is over.
+- Smoother letter scrolling: the list glides to the letter at up to about 100 rows a second instead of jumping a
+  long way at once, which built a whole screen of apps in one frame (the letters froze, bent); short moves are
+  scrolled by pixels, so the list builds the next row ahead, between frames.
+- Sheets, folders, the speed bump card, the "Customise" chip, the bar while picking apps, the bulk tag sheet,
+  the wallpaper screen's sheet, its placing bar and "Show controls" now leave the way they came: sheets sink
+  back, a folder shrinks into its icon, the chip back to your finger. Several of them vanished in one frame.
+- The drawer's tag list no longer rebuilds the whole drawer on every frame while it grows, and the wallpaper
+  screen no longer rebuilds itself on every frame while its sheet rises; thumbnails fade in as they load.
+
+### Removed
+- The letter circle (turned like a knob or a clock face, held to move): the letter areas replace it. A circle
+  you had moved becomes the first area, where it was; "The edge pulls the letters too" becomes "Letters only
+  from the areas" off.
+
+### Fixed
+- Wallpaper screen: Apply without a new picture no longer wipes the current picture's own look (blur, dim,
+  saturation and vignette from "This picture"), and opening the screen shows that look rather than the one for
+  all pictures.
+
 ## 0.11.0 — 2026-11-20
 
 ### Added

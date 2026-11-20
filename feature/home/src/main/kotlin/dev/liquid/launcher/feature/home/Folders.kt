@@ -154,6 +154,8 @@ internal fun FolderOverlay(
     val shape = RoundedCornerShape(32.dp)
     val appear = remember(folder.id) { Animatable(0f) }
     LaunchedEffect(folder.id) { appear.animateTo(1f, Motion.enter()) }
+    // 0.11.1: closing, it shrinks back into the folder it grew out of, instead of only fading.
+    val presence = LocalPresence.current
     var name by remember(folder.id) { mutableStateOf(folder.name ?: "Folder") }
     // However the folder closes (back, outside tap, opening an app), keep the typed name.
     val latestName by androidx.compose.runtime.rememberUpdatedState(name)
@@ -184,7 +186,7 @@ internal fun FolderOverlay(
                 .fillMaxWidth(0.86f)
                 .onPlaced { if (it.isAttached) card = it.boundsInRoot() }
                 .graphicsLayer {
-                    val p = appear.value
+                    val p = appear.value * presence.value
                     alpha = p.coerceIn(0f, 1f)
                     // Grows out of the folder that was tapped.
                     val bounds = card

@@ -49,6 +49,8 @@ internal fun Modifier.customiseOnLongPress(controller: HomeController, section: 
 internal fun CustomiseChip(controller: HomeController, offer: CustomiseOffer, ink: Color) {
     val appear = remember(offer) { Animatable(0f) }
     LaunchedEffect(offer) { appear.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = MotionScale.stiffness(520f))) }
+    // 0.11.1: shown through Presence, so it shrinks back down to the finger when it goes (it vanished in one frame).
+    val presence = LocalPresence.current
     Box(
         Modifier
             .fillMaxSize()
@@ -66,7 +68,7 @@ internal fun CustomiseChip(controller: HomeController, offer: CustomiseOffer, in
                     layout(constraints.maxWidth, constraints.maxHeight) { chip.place(x, y) }
                 }
                 .graphicsLayer {
-                    val p = appear.value
+                    val p = appear.value * presence.value
                     alpha = p.coerceIn(0f, 1f)
                     scaleX = 0.6f + 0.4f * p
                     scaleY = 0.6f + 0.4f * p

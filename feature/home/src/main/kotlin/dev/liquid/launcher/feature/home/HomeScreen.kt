@@ -313,12 +313,20 @@ private fun HomeScreenBody(
     val menuEntries by store.derive { MenuEntry.fromIds(get(LauncherSettings.MenuEntries)) }
     val handover by store.derive { get(LauncherSettings.SettleStyle) to get(LauncherSettings.SettleDuration) }
     val savedImage by wallpaper.image.collectAsState()
-    // The wallpaper screen tries values out on the real home screen before they are applied.
-    val studio = remember(controller.wallpaperStudio) { if (controller.wallpaperStudio && live) StudioState(store) else null }
-    val image = studio?.candidateImage ?: savedImage
+    // The wallpaper screen tries looks out on the real home screen before they are applied. 0.11.1: not pictures; the
+    // screen keeps the current wallpaper until Apply (it shows a picked one full screen only while placing it).
+    val studio = remember(controller.wallpaperStudio) {
+        if (controller.wallpaperStudio && live) {
+            val library = data.wallpapers.get()
+            StudioState(store, library.current?.let { id -> library.items.firstOrNull { it.id == id }?.look })
+        } else {
+            null
+        }
+    }
+    val image = savedImage
     // W8 (P8): the picture's own look, when it has one, over the one set for all.
     val libraryState by data.wallpapers.state.collectAsState()
-    val pictureLook = if (studio != null) studio.pictureLook else libraryState.current?.let { id -> libraryState.items.firstOrNull { it.id == id }?.look }
+    val pictureLook = if (studio != null) studio.shownLook else libraryState.current?.let { id -> libraryState.items.firstOrNull { it.id == id }?.look }
     val homeBlurDp = pictureLook?.blur?.takeIf { it >= 0 } ?: studio?.homeBlur ?: look.homeBlurDp
     val homeDim = pictureLook?.dim?.takeIf { it >= 0 }?.div(100f) ?: (studio?.homeDim?.div(100f)) ?: look.homeDim
     val saturation = (pictureLook?.saturation ?: 100) / 100f
@@ -365,10 +373,9 @@ private fun HomeScreenBody(
         label = "menuSink",
     )
 
-    val lightBackground = remember(savedImage, colourTick, studio?.candidateImage) {
-        // A wallpaper being tried out decides the text colour of the preview too.
-        studio?.rendered?.let { dev.liquid.launcher.core.common.WallpaperTones.fromBitmap(it)?.light } ?: wallpaperIsLight(context)
-    }
+    // The wallpaper on screen decides the text colour (0.11.1: a picture picked in the wallpaper screen is only shown
+    // after Apply, so it no longer does; that also took a colour analysis off the main thread's composing).
+    val lightBackground = remember(savedImage, colourTick) { wallpaperIsLight(context) }
     SideEffect { IconPaint.lightWallpaper = lightBackground }
     val contentColor = theme.textColor ?: if (lightBackground) Color(0xFF16181C) else Color.White
     val shadow = if (lightBackground) null else Shadow(Color.Black.copy(alpha = 0.45f), Offset(0f, 1f), 4f)
@@ -654,6 +661,23 @@ private fun HomeScreenBody(
                     modifier = Modifier.layerBackdrop(wallpaperBackdrop),
                     filter = { controller.wallpaperFilter(saturation) },
                 )
+                // 0.11.1: after placing, the placed picture fades back into the wallpaper (Apply then ripples to it).
+                val leaving = studio?.takeIf { it.placeLeaving && !it.adjusting }
+                val leavingImage = leaving?.sourceImage
+                if (leaving != null && leavingImage != null) {
+                    WallpaperImage(
+                        image = leavingImage,
+                        frame = { leaving.frame(controller.screenWidth, controller.screenHeight) },
+                        offset = {
+                            leaving.sweep ?: run {
+                                val pages = controller.pager.pageCount
+                                if (pages <= 1) 0.5f else (controller.pager.currentPage + controller.pager.currentPageOffsetFraction) / (pages - 1)
+                            }
+                        },
+                        modifier = Modifier,
+                        alpha = { leaving.placeShown.value },
+                    )
+                }
                 val deep = deepWallpaper
                 if (deep != null && placing == null) {
                     WallpaperImage(
@@ -941,8 +965,10 @@ private fun HomeScreenBody(
         Presence(if (live && controller.wallpaperStrip) Unit else null) {
             WallpaperStrip(glass, lightBackground, overlayBackdrop, controller)
         }
-        if (studio != null) {
-            WallpaperStudio(studio, glass, lightBackground, overlayBackdrop, controller)
+        // 0.11.1: the sheet sinks away when the screen closes (it vanished in one frame); after Apply with a new picture it
+        // goes at once, as it leaves inside the picture of the old screen that ripples away.
+        Presence(studio, instantExit = { controller.transitionShot != null }) { shownStudio ->
+            WallpaperStudio(shownStudio, glass, lightBackground, overlayBackdrop, controller)
         }
         if (mode == HomeMode.PreviewToday) {
             // Settings → Buttons and Study companion: the study hub, open, with the real day.
@@ -1000,15 +1026,18 @@ private fun HomeScreenBody(
         controller.swipeEditing?.let { id -> layout.find(id)?.let { (_, item) -> SwipeActionsDialog(item, apps, controller) } }
         // W6: picking apps in the drawer, tagging them together, and a tag's own list of apps.
         val picking by remember { derivedStateOf { controller.selection != null && controller.drawerOpen } }
-        if (picking) controller.selection?.let { picked -> SelectionBar(controller, picked, glass, lightBackground, overlayBackdrop) }
+        // 0.11.1: the bar, the bulk tag sheet and the "Customise" chip leave through Presence too (they vanished in one frame).
+        Presence(if (picking) controller.selection else null) { picked -> SelectionBar(controller, picked, glass, lightBackground, overlayBackdrop) }
         if (controller.selection != null && !picking) SideEffect { controller.endSelecting() }
         val bulk = controller.bulkTag
         val picked = controller.selection
-        if (bulk != null && picked != null) ProvideControls(controller, glass, null) { BulkTagSheet(controller, bulk, picked, glass, lightBackground, overlayBackdrop) }
+        Presence(if (bulk != null && picked != null) bulk to picked else null) { (shownBulk, shownPicked) ->
+            ProvideControls(controller, glass, null) { BulkTagSheet(controller, shownBulk, shownPicked, glass, lightBackground, overlayBackdrop) }
+        }
         Presence(controller.tagApps) { tag -> ProvideControls(controller, glass, null) { TagAppsSheet(controller, tag, glass, lightBackground, overlayBackdrop) } }
         Presence(controller.layoutWallpaperPick) { id -> ProvideControls(controller, glass, null) { LayoutWallpaperSheet(controller, id, glass, lightBackground, overlayBackdrop) } }
         // W4: "Customise …" after a long press on a surface.
-        controller.customise?.let { offer -> CustomiseChip(controller, offer, if (lightBackground) Color(0xFF16181C) else Color.White) }
+        Presence(controller.customise) { offer -> CustomiseChip(controller, offer, if (lightBackground) Color(0xFF16181C) else Color.White) }
         if (live) TransitionOverlay(controller, transitionStyle)
         if (mode == HomeMode.PreviewEffects && touchFx != null) EffectsDemo(touchFx, glass, lightBackground, overlayBackdrop)
         // What a press throws over the screen (0.8.0, D111), above everything it was pressed on.

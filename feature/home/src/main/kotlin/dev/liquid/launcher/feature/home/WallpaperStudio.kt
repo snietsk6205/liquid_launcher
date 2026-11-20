@@ -64,7 +64,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
@@ -90,13 +90,17 @@ import dev.liquid.launcher.core.settings.SettingsStore
 import kotlinx.coroutines.launch
 
 /**
- * What the wallpaper screen is trying out. The home screen draws these values instead of the
- * saved ones while the screen is open, so every change is seen on the real thing.
+ * What the wallpaper screen is trying out. The home screen draws its looks (blur, dim) instead of the saved ones while
+ * the screen is open, so they are seen on the real thing. A picture picked here is not: since 0.11.1 the screen keeps
+ * the current wallpaper until Apply, which ripples to the new one (full screen before that only while placing it).
  */
 @Stable
-internal class StudioState(store: SettingsStore) {
-    /** The picture being tried, or null for the current wallpaper. */
+internal class StudioState(store: SettingsStore, currentLook: dev.liquid.launcher.core.data.WallpaperLook?) {
+    /** The picture picked, or null for the current wallpaper. */
     var pick by mutableStateOf<WallpaperPick?>(null)
+
+    /** 0.11.1: the picture tapped last, ringed at once while it loads (then it is [pick]). */
+    var choosing by mutableStateOf<WallpaperPick?>(null)
 
     /** That picture, decoded for placing. */
     var source by mutableStateOf<Bitmap?>(null)
@@ -113,10 +117,13 @@ internal class StudioState(store: SettingsStore) {
     /** Its colours, worked out as soon as it is rendered (before Apply), and the themed icon palette from them. */
     var tone: dev.liquid.launcher.core.common.WallpaperTone? = null
     var palette: Pair<Int, Int>? = null
-    var candidateImage by mutableStateOf<ImageBitmap?>(null)
 
     /** Placing mode: pinch and drag on the screen. */
     var adjusting by mutableStateOf(false)
+
+    /** 0.11.1: 1 while placing, then down to 0: the placed picture fades back into the wallpaper on screen. */
+    val placeShown = Animatable(0f)
+    var placeLeaving by mutableStateOf(false)
 
     /** A short slide across the pages to show the parallax, or null to follow the pages. */
     var sweep by mutableStateOf<Float?>(null)
@@ -137,8 +144,25 @@ internal class StudioState(store: SettingsStore) {
     var searchDim by mutableIntStateOf(store.get(LauncherSettings.SearchDim))
     var lockToo by mutableStateOf(store.get(LauncherSettings.WallpaperLockToo))
 
-    /** W8 (P8): the look of the picture shown, when it has its own (blur, dim, saturation, vignette); null: as for all. */
-    var pictureLook by mutableStateOf<dev.liquid.launcher.core.data.WallpaperLook?>(null)
+    /** The look kept with the wallpaper on screen when the screen opened (0.11.1; null: none of its own). */
+    val currentLook = currentLook
+
+    /**
+     * W8 (P8): the look of the picture that Apply sets, when it has its own (blur, dim, saturation, vignette); null: as
+     * for all. 0.11.1: starts as the current wallpaper's own look; until then it started empty, and Apply wiped the look.
+     */
+    var pictureLook by mutableStateOf(currentLook)
+
+    /** "This picture" was changed here, so Apply keeps the look edited (0.11.1). */
+    var lookTouched by mutableStateOf(false)
+
+    fun editLook(look: dev.liquid.launcher.core.data.WallpaperLook?) {
+        pictureLook = look
+        lookTouched = true
+    }
+
+    /** The picture's own look on the screen: the current wallpaper's until a look is edited here (0.11.1). */
+    val shownLook: dev.liquid.launcher.core.data.WallpaperLook? get() = if (pick == null || lookTouched) pictureLook else currentLook
     var forLayout by mutableStateOf(false)
     var busy by mutableStateOf(false)
 
@@ -148,14 +172,16 @@ internal class StudioState(store: SettingsStore) {
 
     fun select(pick: WallpaperPick, source: Bitmap, crop: CropSpec, parallax: Float) {
         // A library picture brings its own look with it.
-        if (pick != this.pick) pictureLook = (pick as? WallpaperPick.Library)?.item?.look
+        if (pick != this.pick) {
+            pictureLook = (pick as? WallpaperPick.Library)?.item?.look
+            lookTouched = false
+        }
         this.pick = pick
         this.source = source
         sourceImage = source.asImageBitmap()
         this.crop = crop
         this.parallax = parallax
         rendered = null
-        candidateImage = null
         tone = null
         palette = null
     }
@@ -166,8 +192,8 @@ internal class StudioState(store: SettingsStore) {
         return crop.frame(src.width, src.height, w * (1f + parallax), h)
     }
 
-    /** True while the home screen should draw the picture itself (placing, or before the render is ready). */
-    val drawsSource: Boolean get() = sourceImage != null && (adjusting || candidateImage == null)
+    /** True while the home screen draws the picked picture instead of the wallpaper: only while placing it (0.11.1). */
+    val drawsSource: Boolean get() = sourceImage != null && adjusting
 }
 
 /** The wallpaper screen: a glass sheet over the live home screen. */
@@ -186,11 +212,15 @@ internal fun WallpaperStudio(
     val layouts by data.layouts.state.collectAsState()
     val scope = rememberCoroutineScope()
     val color = sheetContentColor(glass, lightBackground)
-    val toggled by animateFloatAsState(if (state.peek || state.adjusting) 0f else 1f, label = "sheet")
+    val toggled = animateFloatAsState(if (state.peek || state.adjusting) 0f else 1f, label = "sheet")
     // Rises in like the other glass sheets when the screen opens.
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
-    val shown = toggled * appear.value.coerceIn(0f, 1.05f)
+    // 0.11.1: read while drawing, not composing: the whole screen recomposed on every frame of its entrance before.
+    // It sinks away again when the screen closes (Presence).
+    val presence = LocalPresence.current
+    fun shown(): Float = toggled.value * appear.value.coerceIn(0f, 1.05f) * presence.value
+    val sheetVisible by remember { androidx.compose.runtime.derivedStateOf { shown() > 0.01f } }
     // 0.10.4: the pictures take more room (two rows and a bit), and the handle on top pulls the sheet up to about
     // three and a half rows; it stays where you left it.
     val tall = remember { Animatable(if (data.settings.get(LauncherSettings.WallpaperSheetTall)) 1f else 0f) }
@@ -213,67 +243,64 @@ internal fun WallpaperStudio(
             IconPaint.endPreview(controller.scope)
         }
     }
-    // The placed picture is rendered once it stops moving, so blur and dim can be judged on it.
+    // The placed picture is rendered once it stops moving, with its colours, so Apply has nothing left to wait for.
     LaunchedEffect(state.source, state.crop, state.parallax, state.adjusting) {
         val source = state.source ?: return@LaunchedEffect
         if (state.adjusting) return@LaunchedEffect
         val key = Triple(source, state.crop, state.parallax)
         if (state.rendered != null && state.renderedKey == key) return@LaunchedEffect
         val bitmap = store.render(source, state.crop, state.parallax)
-        state.renderedKey = key
         dev.liquid.launcher.core.common.ColourTiming.mark("picture placed")
-        // Colours now, before Apply: the preview's icons already show them, and Apply has nothing left to wait for.
+        // Colours now, before Apply (0.11.1: kept for Apply; the icons on screen keep the current wallpaper's).
         val tone = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { dev.liquid.launcher.core.common.WallpaperTones.fromBitmap(bitmap) }
+        // All four together (0.11.1): Apply takes the render only when its key matches, so the key may not run ahead of it.
         state.tone = tone
         state.palette = tone?.let { data.paletteFor(it.primary) }
         state.rendered = bitmap
-        state.candidateImage = bitmap.asImageBitmap()
-        IconPaint.preview(state.palette)
-        dev.liquid.launcher.core.common.ColourTiming.mark("palette ready, shown in the preview")
+        state.renderedKey = key
+        dev.liquid.launcher.core.common.ColourTiming.mark("palette ready for Apply")
+    }
+    // After placing, the placed picture fades back into the wallpaper on screen instead of vanishing (0.11.1).
+    LaunchedEffect(state.adjusting) {
+        if (state.adjusting) {
+            state.placeLeaving = false
+            state.placeShown.snapTo(1f)
+        } else if (state.placeShown.value > 0f) {
+            state.placeLeaving = true
+            try {
+                state.placeShown.animateTo(0f, androidx.compose.animation.core.tween(MotionScale.ms(420)))
+            } finally {
+                state.placeLeaving = false
+            }
+        }
     }
 
     /**
-     * 0.10.4: a picture you pick changes the screen behind the sheet with your wallpaper transition, rippling out from
-     * the thumbnail you tapped ([origin]), as in the wallpaper strip. It is placed and rendered first, so the transition
-     * runs over the finished picture; Apply then only closes the sheet, as the screen already shows it.
+     * 0.11.1 (Med): a picture you tap is only picked. It is ringed in the sheet at once and loaded for placing and Apply;
+     * the screen keeps the current wallpaper until Apply, which ripples to the new one from the Apply button. (0.10.4
+     * to 0.11.0 changed the screen as soon as a picture was tapped.)
      */
-    fun choose(pick: WallpaperPick, origin: Offset? = null) {
-        dev.liquid.launcher.core.common.ColourTiming.begin("wallpaper screen")
-        controller.transitionOrigin = origin
-        controller.changeScreen(
-            prepare = {
-                state.busy = true
-                try {
-                    val source = Wallpapers.source(context, data, pick)
-                    if (source == null) {
-                        controller.toast("Could not read that picture")
-                        null
-                    } else {
-                        val item = (pick as? WallpaperPick.Library)?.item
-                        val crop = item?.crop ?: CropSpec.Centre
-                        val parallax = item?.parallax?.takeIf { it >= 0f } ?: Wallpapers.defaultParallax(data)
-                        val bitmap = store.render(source, crop, parallax)
-                        dev.liquid.launcher.core.common.ColourTiming.mark("picture placed")
-                        val tone = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                            dev.liquid.launcher.core.common.WallpaperTones.fromBitmap(bitmap)
-                        }
-                        PickedPicture(pick, source, crop, parallax, bitmap, tone)
-                    }
-                } finally {
-                    state.busy = false
+    var chooseJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    fun choose(pick: WallpaperPick) {
+        state.choosing = pick
+        chooseJob?.cancel()
+        chooseJob = scope.launch {
+            state.busy = true
+            try {
+                val source = Wallpapers.source(context, data, pick)
+                if (source == null) {
+                    controller.toast("Could not read that picture")
+                    state.choosing = state.pick
+                } else {
+                    val item = (pick as? WallpaperPick.Library)?.item
+                    val crop = item?.crop ?: CropSpec.Centre
+                    val parallax = item?.parallax?.takeIf { it >= 0f } ?: Wallpapers.defaultParallax(data)
+                    state.select(pick, source, crop, parallax)
                 }
-            },
-            commit = { picked ->
-                state.select(picked.pick, picked.source, picked.crop, picked.parallax)
-                state.tone = picked.tone
-                state.palette = picked.tone?.let { data.paletteFor(it.primary) }
-                state.rendered = picked.bitmap
-                state.renderedKey = Triple(picked.source, picked.crop, picked.parallax)
-                state.candidateImage = picked.bitmap.asImageBitmap()
-                IconPaint.preview(state.palette)
-                dev.liquid.launcher.core.common.ColourTiming.mark("palette ready, shown in the preview")
-            },
-        )
+            } finally {
+                state.busy = false
+            }
+        }
     }
 
     fun placeCurrent() {
@@ -289,6 +316,7 @@ internal fun WallpaperStudio(
         scope.launch {
             state.busy = true
             Wallpapers.source(context, data, WallpaperPick.Library(item))?.let { source ->
+                state.choosing = WallpaperPick.Library(item)
                 state.select(WallpaperPick.Library(item), source, item.crop, item.parallax.takeIf { it >= 0f } ?: Wallpapers.defaultParallax(data))
                 state.adjusting = true
             }
@@ -318,47 +346,98 @@ internal fun WallpaperStudio(
         }
     }
 
-    fun apply() {
+    /** The looks set here, kept (at once: the screen reads them as soon as the sheet goes). */
+    fun saveLooks() {
         val settings = data.settings
-        scope.launch {
-            state.busy = true
-            settings.set(LauncherSettings.WallpaperLockToo, state.lockToo)
-            var error: String? = null
-            val pick = state.pick
-            val source = state.source
-            if (pick != null && source != null) {
-                val bitmap = state.rendered ?: store.render(source, state.crop, state.parallax)
-                store.show(bitmap, state.tone)
-                IconPaint.now(state.palette ?: state.tone?.let { data.paletteFor(it.primary) })
-                HomeTheme.refreshAccent(context)
-                dev.liquid.launcher.core.common.ColourTiming.mark("applied: wallpaper and colours on screen")
-                error = Wallpapers.persist(context, data, PreparedWallpaper(bitmap, pick, state.crop, state.parallax, state.tone, state.palette))
-                val layoutId = layouts.current
-                if (error == null && state.forLayout && layoutId != null) {
-                    data.layouts.setWallpaper(layoutId, store.currentFile, data.wallpapers.get().current)
-                }
-            } else if (state.forLayout && currentLayout != null && currentLayout.wallpaper == null) {
+        settings.set(LauncherSettings.WallpaperLockToo, state.lockToo)
+        settings.set(LauncherSettings.WallpaperHomeBlur, state.homeBlur)
+        settings.set(LauncherSettings.WallpaperHomeDim, state.homeDim)
+        settings.set(LauncherSettings.DrawerHomeBlur, state.drawerBlur)
+        settings.set(LauncherSettings.DrawerDim, state.drawerDim)
+        settings.set(LauncherSettings.SearchBlur, state.searchBlur)
+        settings.set(LauncherSettings.SearchDim, state.searchDim)
+    }
+
+    /** Where the Apply button is: a new wallpaper ripples out from there (0.11.1). */
+    val applyButton = remember { CoordinatesHolder() }
+
+    fun apply() {
+        // Still loading the picture last tapped: Apply waits for it (the button says "Working…").
+        if (state.busy || (state.choosing != null && state.choosing != state.pick)) return
+        val pick = state.pick
+        val source = state.source
+        if (pick == null || source == null) {
+            // No new picture: the looks and the layout choice are kept, and the sheet goes; the screen already shows them.
+            saveLooks()
+            // W8 (P8): the picture on screen keeps its own look (or goes back to the one for all) when it was edited.
+            if (state.lookTouched) data.wallpapers.get().current?.let { data.wallpapers.setLook(it, state.pictureLook) }
+            if (state.forLayout && currentLayout != null && currentLayout.wallpaper == null) {
                 data.layouts.setWallpaper(currentLayout.id, store.currentFile, library.current)
             } else if (!state.forLayout && currentLayout?.wallpaper != null) {
                 data.layouts.setWallpaper(currentLayout.id, null)
             }
-            settings.set(LauncherSettings.WallpaperHomeBlur, state.homeBlur)
-            settings.set(LauncherSettings.WallpaperHomeDim, state.homeDim)
-            // W8 (P8): the picture now on screen keeps its own look (or goes back to the one for all).
-            data.wallpapers.get().current?.let { data.wallpapers.setLook(it, state.pictureLook) }
-            settings.set(LauncherSettings.DrawerHomeBlur, state.drawerBlur)
-            settings.set(LauncherSettings.DrawerDim, state.drawerDim)
-            settings.set(LauncherSettings.SearchBlur, state.searchBlur)
-            settings.set(LauncherSettings.SearchDim, state.searchDim)
-            state.busy = false
-            if (error != null) controller.toast("Could not set the wallpaper: $error") else close()
+            close()
+            return
         }
+        // 0.11.1 (Med): the screen kept the current wallpaper until now. The new one is ready (rendered with its colours
+        // when it was picked or placed), so the transition starts at once: a picture of the screen as it is, sheet and
+        // all, ripples away from the Apply button over the new wallpaper, its icon colours and looks.
+        val crop = state.crop
+        val parallax = state.parallax
+        val look = state.pictureLook
+        val lookTouched = state.lookTouched
+        val forLayout = state.forLayout
+        val layoutId = layouts.current
+        dev.liquid.launcher.core.common.ColourTiming.begin("wallpaper screen")
+        controller.transitionOrigin = applyButton.value?.takeIf { it.isAttached }?.boundsInRoot()?.center
+        controller.changeScreen(
+            prepare = {
+                state.busy = true
+                try {
+                    val ready = state.rendered?.takeIf { state.renderedKey == Triple(source, crop, parallax) }
+                    val bitmap = ready ?: store.render(source, crop, parallax)
+                    val tone = (if (ready != null) state.tone else null)
+                        ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { dev.liquid.launcher.core.common.WallpaperTones.fromBitmap(bitmap) }
+                    val palette = (if (ready != null) state.palette else null) ?: tone?.let { data.paletteFor(it.primary) }
+                    // Closed meanwhile (Cancel, Back, Home): nothing changes.
+                    if (!controller.wallpaperStudio) return@changeScreen null
+                    // A folder's picture joins the library now, so it is the current picture as soon as it shows.
+                    val item = when (pick) {
+                        is WallpaperPick.Library -> pick.item
+                        is WallpaperPick.External -> data.wallpapers.importUri(pick.uri, pick.folder)
+                    }
+                    PreparedWallpaper(bitmap, item?.let { WallpaperPick.Library(it) } ?: pick, crop, parallax, tone, palette)
+                } finally {
+                    state.busy = false
+                }
+            },
+            commit = { prepared ->
+                saveLooks()
+                (prepared.pick as? WallpaperPick.Library)?.item?.let { item ->
+                    data.wallpapers.markUsed(item.id, crop, parallax)
+                    if (lookTouched) data.wallpapers.setLook(item.id, look)
+                }
+                store.show(prepared.bitmap, prepared.tone)
+                IconPaint.now(prepared.palette)
+                HomeTheme.refreshAccent(context)
+                dev.liquid.launcher.core.common.ColourTiming.mark("applied: wallpaper and colours on screen")
+                close()
+            },
+            after = { prepared ->
+                // The files and the system wallpaper once the transition is over, so it never stutters.
+                val error = Wallpapers.persist(context, data, prepared)
+                if (error != null) {
+                    controller.toast("Could not set the wallpaper: $error")
+                } else if (forLayout && layoutId != null) {
+                    data.layouts.setWallpaper(layoutId, store.currentFile, data.wallpapers.get().current)
+                }
+            },
+        )
     }
 
     Box(Modifier.fillMaxSize()) {
         if (state.adjusting) {
             PlaceLayer(state, controller)
-            PlaceBar(state, glass, lightBackground, backdrop, color, Modifier.align(Alignment.BottomCenter))
         } else {
             // Tapping the preview hides or shows the controls.
             Box(
@@ -367,16 +446,24 @@ internal fun WallpaperStudio(
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { state.peek = !state.peek }
             )
         }
+        // 0.11.1: the placing bar rises in and sinks away (it appeared and vanished in one frame);
+        // above the placing layer, which takes the pinches everywhere else.
+        Presence(if (state.adjusting) Unit else null) {
+            Box(Modifier.fillMaxSize()) {
+                PlaceBar(state, glass, lightBackground, backdrop, color, Modifier.align(Alignment.BottomCenter))
+            }
+        }
         val sheetShape = RoundedCornerShape(32.dp)
-        if (shown > 0.01f) {
+        if (sheetVisible) {
             Column(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(12.dp)
                     .graphicsLayer {
-                        translationY = (1f - shown) * (size.height + 40.dp.toPx())
-                        alpha = shown
+                        val s = shown()
+                        translationY = (1f - s) * (size.height + 40.dp.toPx())
+                        alpha = s.coerceIn(0f, 1f)
                     }
                     .sheetSurface(backdrop, sheetShape, glass, lightBackground)
                     .bloomLight()
@@ -396,7 +483,7 @@ internal fun WallpaperStudio(
                 ) { state.page = it }
                 Spacer(Modifier.height(12.dp))
                 when (state.page) {
-                    "pictures" -> PicturesPage(state, library, color, controller, ::choose, ::addPhotos, ::linkFolder, gridHeight)
+                    "pictures" -> PicturesPage(state, library, color, controller, { choose(it) }, ::addPhotos, ::linkFolder, gridHeight)
                     "look" -> LookPage(state, glass, color)
                     else -> AutoPage(data.settings, color)
                 }
@@ -421,21 +508,36 @@ internal fun WallpaperStudio(
                 Spacer(Modifier.height(6.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy((10 * themeGap).dp)) {
                     SheetButton("Cancel", color, filled = false, modifier = Modifier.weight(1f)) { close() }
-                    SheetButton(if (state.busy) "Working…" else "Apply", color, filled = true, modifier = Modifier.weight(1f)) { if (!state.busy) apply() }
+                    SheetButton(
+                        if (state.busy) "Working…" else "Apply", color, filled = true,
+                        modifier = Modifier.weight(1f).onPlaced { applyButton.value = it },
+                    ) { apply() }
                 }
             }
         }
-        if (state.peek && !state.adjusting) {
-            Box(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 20.dp)
-                    .liquidGlass(backdrop, RoundedCornerShape(50), glass.style(Surfaces.Menu, lightBackground))
-                    .clip(RoundedCornerShape(50))
-                    .clickable { state.peek = false }
-                    .padding(horizontal = 20.dp, vertical = 10.dp),
-            ) { Text("Show controls", style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 14.sp, fontWeight = FontWeight.Medium)) }
+        // 0.11.1: it pops in and out like the other small glass parts (it appeared and vanished in one frame).
+        Presence(if (state.peek && !state.adjusting) Unit else null) {
+            val pop = remember { Animatable(0f) }
+            LaunchedEffect(Unit) { pop.animateTo(1f, Motion.pop()) }
+            Box(Modifier.fillMaxSize()) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = 20.dp)
+                        .graphicsLayer {
+                            val p = pop.value
+                            alpha = p.coerceIn(0f, 1f)
+                            scaleX = 0.8f + 0.2f * p
+                            scaleY = 0.8f + 0.2f * p
+                            translationY = (1f - p) * 12.dp.toPx()
+                        }
+                        .liquidGlass(backdrop, RoundedCornerShape(50), glass.style(Surfaces.Menu, lightBackground))
+                        .clip(RoundedCornerShape(50))
+                        .clickable { state.peek = false }
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                ) { Text("Show controls", style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 14.sp, fontWeight = FontWeight.Medium)) }
+            }
         }
     }
 
@@ -474,7 +576,7 @@ private fun PicturesPage(
     library: dev.liquid.launcher.core.data.WallpaperLibraryState,
     color: Color,
     controller: HomeController,
-    choose: (WallpaperPick, Offset?) -> Unit,
+    choose: (WallpaperPick) -> Unit,
     addPhotos: () -> Unit,
     linkFolder: () -> Unit,
     gridHeight: androidx.compose.ui.unit.Dp,
@@ -507,8 +609,10 @@ private fun PicturesPage(
         }
     }
     Spacer(Modifier.height(10.dp))
-    val pickedId = (state.pick as? WallpaperPick.Library)?.item?.id ?: library.current.takeIf { state.pick == null }
-    val pickedUri = (state.pick as? WallpaperPick.External)?.uri
+    // 0.11.1: the picture tapped is ringed at once, while it loads; with none tapped, the current wallpaper.
+    val shownPick = state.choosing ?: state.pick
+    val pickedId = (shownPick as? WallpaperPick.Library)?.item?.id ?: library.current.takeIf { shownPick == null }
+    val pickedUri = (shownPick as? WallpaperPick.External)?.uri
     // 0.10.4: taller (two rows and a bit; it was one and a half), and the sheet's handle pulls it up further.
     Box(Modifier.fillMaxWidth().height(if (folder != null) gridHeight - 44.dp else gridHeight)) {
         if (folder != null) {
@@ -528,7 +632,7 @@ private fun PicturesPage(
             ) {
                 item(key = "add") { AddThumb(color, addPhotos) }
                 items(items, key = { it.id }) { item ->
-                    LibraryThumb(item, item.id == pickedId, color, controller, onHold = { state.holding = item }) { origin -> choose(WallpaperPick.Library(item), origin) }
+                    LibraryThumb(item, item.id == pickedId, color, controller, onHold = { state.holding = item }) { choose(WallpaperPick.Library(item)) }
                 }
             }
             if (items.isEmpty() && state.tab != "recent") {
@@ -543,7 +647,7 @@ private fun PicturesPage(
 }
 
 @Composable
-private fun FolderGrid(folder: LinkedFolder, picked: android.net.Uri?, color: Color, controller: HomeController, choose: (WallpaperPick, Offset?) -> Unit) {
+private fun FolderGrid(folder: LinkedFolder, picked: android.net.Uri?, color: Color, controller: HomeController, choose: (WallpaperPick) -> Unit) {
     val images by produceState<List<FolderImage>?>(null, folder.uri, folder.deep) {
         value = null
         value = controller.data.wallpapers.folderImages(folder)
@@ -564,13 +668,13 @@ private fun FolderGrid(folder: LinkedFolder, picked: android.net.Uri?, color: Co
     ) {
         items(list, key = { it.uri.toString() }) { image ->
             val thumb by produceState<ImageBitmap?>(null, image.uri) { value = controller.data.wallpapers.thumbnail(image.uri) }
-            Thumb(thumb, image.uri == picked, color, onHold = null) { origin -> choose(WallpaperPick.External(image.uri, folder.name), origin) }
+            Thumb(thumb, image.uri == picked, color, onHold = null) { choose(WallpaperPick.External(image.uri, folder.name)) }
         }
     }
 }
 
 @Composable
-private fun LibraryThumb(item: WallpaperItem, selected: Boolean, color: Color, controller: HomeController, onHold: () -> Unit, onClick: (Offset?) -> Unit) {
+private fun LibraryThumb(item: WallpaperItem, selected: Boolean, color: Color, controller: HomeController, onHold: () -> Unit, onClick: () -> Unit) {
     val thumb by produceState<ImageBitmap?>(null, item.id) { value = controller.data.wallpapers.thumbnail(item) }
     Box {
         Thumb(thumb, selected, color, onHold, onClick)
@@ -582,21 +686,57 @@ private fun LibraryThumb(item: WallpaperItem, selected: Boolean, color: Color, c
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Thumb(image: ImageBitmap?, selected: Boolean, color: Color, onHold: (() -> Unit)?, onClick: (Offset?) -> Unit) {
+private fun Thumb(image: ImageBitmap?, selected: Boolean, color: Color, onHold: (() -> Unit)?, onClick: () -> Unit) {
     val shape = RoundedCornerShape(12.dp)
-    // 0.10.4: the transition ripples out from the picture you tapped, as in the wallpaper strip.
-    var centre by remember { mutableStateOf<Offset?>(null) }
+    // 0.11.1: picking is the change you see here: the ring thickens, the picture settles in a little and a check pops in.
+    val picked by androidx.compose.animation.core.animateFloatAsState(
+        if (selected) 1f else 0f,
+        androidx.compose.animation.core.spring(dampingRatio = 0.68f, stiffness = MotionScale.stiffness(520f)),
+        label = "picked",
+    )
+    // Thumbnails load after the grid shows: they fade in rather than pop.
+    val loaded by androidx.compose.animation.core.animateFloatAsState(
+        if (image != null) 1f else 0f, androidx.compose.animation.core.tween(MotionScale.ms(220)), label = "thumb",
+    )
     Box(
         Modifier
             .fillMaxWidth()
             .aspectRatio(0.56f)
-            .onGloballyPositioned { centre = it.boundsInRoot().center }
             .clip(shape)
             .background(color.copy(alpha = 0.1f))
-            .border(if (selected) 2.dp else 0.5.dp, color.copy(alpha = if (selected) 0.95f else 0.25f), shape)
-            .combinedClickable(onClick = { onClick(centre) }, onLongClick = onHold),
+            .combinedClickable(onClick = onClick, onLongClick = onHold),
     ) {
-        if (image != null) Image(image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        if (image != null) {
+            Image(
+                image, contentDescription = null, contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().graphicsLayer {
+                    val s = 1f - 0.07f * picked.coerceIn(0f, 1.2f)
+                    scaleX = s
+                    scaleY = s
+                    alpha = loaded
+                    this.shape = shape
+                    clip = true
+                },
+            )
+        }
+        Box(
+            Modifier
+                .matchParentSize()
+                .border((0.5f + 1.7f * picked.coerceIn(0f, 1f)).dp, color.copy(alpha = 0.25f + 0.7f * picked.coerceIn(0f, 1f)), shape),
+        )
+        if (picked > 0.01f) {
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp)
+                    .graphicsLayer {
+                        val p = picked.coerceIn(0f, 1.15f)
+                        alpha = p.coerceAtMost(1f)
+                        scaleX = 0.5f + 0.5f * p
+                        scaleY = 0.5f + 0.5f * p
+                    },
+            ) { ThemeCheck(true, color, 18.dp) }
+        }
     }
 }
 
@@ -654,10 +794,18 @@ private fun PlaceBar(state: StudioState, glass: GlassConfig, lightBackground: Bo
             state.sweep = null
         }
     }
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
+    val presence = LocalPresence.current
     Column(
         modifier
             .navigationBarsPadding()
             .padding(12.dp)
+            .graphicsLayer {
+                val p = appear.value * presence.value
+                alpha = p.coerceIn(0f, 1f)
+                translationY = (1f - p) * 40.dp.toPx()
+            }
             .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground))
             .clip(shape)
             .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -698,13 +846,13 @@ private fun LookPage(state: StudioState, glass: GlassConfig, color: Color) {
             // W8 (P8): a look kept with this picture, used whenever it is the wallpaper.
             val own = state.pictureLook
             ToggleRow("Its own look", own != null, color) { on ->
-                state.pictureLook = if (on) dev.liquid.launcher.core.data.WallpaperLook(blur = state.homeBlur, dim = state.homeDim) else null
+                state.editLook(if (on) dev.liquid.launcher.core.data.WallpaperLook(blur = state.homeBlur, dim = state.homeDim) else null)
             }
             if (own != null) {
-                ValueSlider("Blur", own.blur.coerceAtLeast(0), 0, 40, "dp", color) { state.pictureLook = own.copy(blur = it) }
-                ValueSlider("Dim", own.dim.coerceAtLeast(0), 0, 80, "%", color) { state.pictureLook = own.copy(dim = it) }
-                ValueSlider("Saturation", own.saturation, 0, 200, "%", color) { state.pictureLook = own.copy(saturation = it) }
-                ValueSlider("Vignette", own.vignette, 0, 100, "%", color) { state.pictureLook = own.copy(vignette = it) }
+                ValueSlider("Blur", own.blur.coerceAtLeast(0), 0, 40, "dp", color) { state.editLook(own.copy(blur = it)) }
+                ValueSlider("Dim", own.dim.coerceAtLeast(0), 0, 80, "%", color) { state.editLook(own.copy(dim = it)) }
+                ValueSlider("Saturation", own.saturation, 0, 200, "%", color) { state.editLook(own.copy(saturation = it)) }
+                ValueSlider("Vignette", own.vignette, 0, 100, "%", color) { state.editLook(own.copy(vignette = it)) }
             }
         }
         "drawer" -> {
@@ -880,16 +1028,6 @@ private fun SheetButton(label: String, color: Color, filled: Boolean, modifier: 
         contentAlignment = Alignment.Center,
     ) { Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = if (filled) inverse else color, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) }
 }
-
-/** A picture picked in the wallpaper screen, placed and rendered before the transition shows it (0.10.4). */
-private class PickedPicture(
-    val pick: WallpaperPick,
-    val source: Bitmap,
-    val crop: CropSpec,
-    val parallax: Float,
-    val bitmap: Bitmap,
-    val tone: dev.liquid.launcher.core.common.WallpaperTone?,
-)
 
 /**
  * The wallpaper sheet's handle (0.10.4): drag it up for more rows of pictures, down for fewer; a tap switches between
