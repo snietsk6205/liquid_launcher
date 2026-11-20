@@ -329,6 +329,7 @@ internal fun LetterDial(
                         if (!turning) return@awaitEachGesture
                         drive.position = pos
                         drive.active = true
+                        val from = pos
                         try {
                             while (true) {
                                 val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
@@ -346,6 +347,11 @@ internal fun LetterDial(
                             }
                         } finally {
                             drive.active = false
+                            fun letter(p: Float) = entries.getOrNull(p.roundToInt().coerceIn(0, n - 1))?.label.orEmpty()
+                            dev.liquid.launcher.core.common.DebugLog.event(
+                                "Home",
+                                "letter circle: turned from ${letter(from)} to ${letter(pos)} (${if (clockFace) "clock face" else "knob"})",
+                            )
                         }
                     }
                 },

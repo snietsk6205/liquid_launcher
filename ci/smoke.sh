@@ -999,17 +999,21 @@ if CIRCLE=$(python3 ci/find_text.py "$OUT/14c-circle.xml" "Letter circle" exact)
   pass "the drawer shows the letter circle"
   CX=${CIRCLE% *}
   CY=${CIRCLE#* }
-  CIRCLE_LINES=$(grep -c "letter circle" "$LOG" || true)
+  CIRCLE_LINES=$(grep -c "letter circle: turned" "$LOG" || true)
   adb shell input swipe $((CX - 100)) $((CY - 60)) $((CX + 100)) $((CY - 60)) 2600 &
   SWIPE_PID=$!
   sleep 1.5
   peek 14c-circle-turning
   wait "$SWIPE_PID" 2>/dev/null
   sleep 1.5
-  # The frame meter's line for the frames the circle drove comes when the next screen's frames begin.
+  if [ "$(grep -c "letter circle: turned" "$LOG" || true)" -gt "$CIRCLE_LINES" ]; then
+    pass "turning the letter circle drives the letters"
+    grep "letter circle: turned" "$LOG" | tail -1 | sed 's/^/        /'
+  else
+    fail "turning the letter circle drives the letters"
+  fi
   adb shell input keyevent KEYCODE_BACK
-  sleep 1.5
-  if [ "$(grep -c "letter circle" "$LOG" || true)" -gt "$CIRCLE_LINES" ]; then pass "turning the letter circle drives the letters"; else fail "turning the letter circle drives the letters"; grep -E "Frames:" "$LOG" | tail -3 | sed 's/^/        /'; fi
+  sleep 1
 else
   fail "the drawer shows the letter circle"
 fi
