@@ -43,48 +43,61 @@ top_activity() {
   adb shell dumpsys activity activities 2>/dev/null | grep -E 'topResumedActivity|mResumedActivity' | head -1
 }
 
+# 0.11.2: every wait that took 5 s or more, or gave up, is listed at the end ("SLOW WAITS"), next to each section's
+# time. Listing them changes no wait: each succeeds and gives up exactly as before.
+WAIT_NOTES=""
+note_wait() { # <started at> <status> <what> : returns <status>
+  local took=$((SECONDS - $1)) how=""
+  [ "$2" -ne 0 ] && how=", gave up"
+  if [ "$2" -ne 0 ] || [ "$took" -ge 5 ]; then
+    WAIT_NOTES="$WAIT_NOTES
+$(printf '%5d s  %s%s  (%s)' "$took" "$3" "$how" "${SECTION_NAME:-start}")"
+  fi
+  return "$2"
+}
+
 # wait_top <pattern> <seconds> : succeeds once the resumed activity matches.
 wait_top() {
-  local pattern=$1 seconds=$2 i
+  local pattern=$1 seconds=$2 i start=$SECONDS
   for i in $(seq 1 $((seconds * 4))); do
-    if top_activity | grep -q "$pattern"; then return 0; fi
+    if top_activity | grep -q "$pattern"; then note_wait "$start" 0 "top: $pattern"; return; fi
     sleep 0.25
   done
-  return 1
+  note_wait "$start" 1 "top: $pattern"
 }
 
 # wait_until <seconds> <command…> : succeeds as soon as the command does (checked every 0.25 s); fails after <seconds>.
 # 0.11.2: the fixed sleeps that waited for something to happen wait for it instead, up to a timeout at least as long.
 wait_until() {
-  local seconds=$1 i
+  local seconds=$1 i start=$SECONDS
   shift
   for i in $(seq 1 $((seconds * 4))); do
-    if "$@" >/dev/null 2>&1; then return 0; fi
+    if "$@" >/dev/null 2>&1; then note_wait "$start" 0 "until: $*"; return; fi
     sleep 0.25
   done
-  return 1
+  note_wait "$start" 1 "until: $*"
 }
 
 # wait_screen <name> <text> <seconds> [exact] : dumps the screen until the text is on it; the last dump stays as <name>.
 # A screen that is still moving cannot be dumped (uiautomator: "could not get idle state"): it is tried again.
 wait_screen() {
-  local name=$1 text=$2 end=$((SECONDS + $3)) mode=${4:-}
+  local name=$1 text=$2 end=$((SECONDS + $3)) mode=${4:-} start=$SECONDS
   while :; do
     dump "$name"
-    if on_screen "$name" "$text" $mode; then return 0; fi
-    if [ "$SECONDS" -ge "$end" ]; then return 1; fi
+    if on_screen "$name" "$text" $mode; then note_wait "$start" 0 "screen: $text"; return; fi
+    if [ "$SECONDS" -ge "$end" ]; then note_wait "$start" 1 "screen: $text"; return; fi
     sleep 0.4
   done
 }
 
 # wait_log <pattern> <seconds> : succeeds once the launcher log contains the pattern.
 wait_log() {
-  local pattern=$1 seconds=$2 i
+  local pattern=$1 seconds=$2 i start=$SECONDS
   for i in $(seq 1 $((seconds * 2))); do
-    if grep -q "$pattern" "$LOG"; then return 0; fi
+    if grep -q "$pattern" "$LOG"; then note_wait "$start" 0 "log: $pattern"; return; fi
     sleep 0.5
   done
-  return 1
+  note_wait "$start" 1 "log: $pattern"
 }
 
 ANR_DIALOGS=0
@@ -1226,6 +1239,9 @@ echo "IDLE FRAMES (a still screen draws next to nothing):$IDLE_REPORT"
 echo
 section "-"
 echo "TIME PER SECTION ($SECONDS s in all):$SECTION_TIMES"
+echo
+echo "SLOW WAITS (5 s or more, or gave up):${WAIT_NOTES:-
+  none}"
 echo
 if [ "$FAILS" -eq 0 ]; then
   echo "SMOKE RESULT: all checks passed"
