@@ -55,7 +55,7 @@ class LauncherData private constructor(private val context: Context) {
      * With the "system" colour source, after the launcher set a wallpaper: the system palette
      * it had before ([stale]); until it changes (or [until]), the new wallpaper's own tones are used.
      */
-    private class SystemHold(val stale: Pair<Int, Int>, val until: Long)
+    private class SystemHold(val stale: Pair<Int, Int>, val until: Long, val since: Long = android.os.SystemClock.uptimeMillis())
 
     @Volatile
     private var systemHold: SystemHold? = null
@@ -163,7 +163,9 @@ class LauncherData private constructor(private val context: Context) {
     fun afterOwnWallpaper() {
         if (settings.get(LauncherSettings.ThemedIconsColors) == "system") {
             val stale = ThemedColors.palette(context, "system", settings.get(LauncherSettings.ThemedIconsStyle))
-            systemHold = SystemHold(stale, android.os.SystemClock.uptimeMillis() + 20_000)
+            // 0.11.0: 45 s (it was 20): on the phone the system's colours came up to 17 s after a change, and a hold that
+            // ends first shows the old wallpaper's colours until they come.
+            systemHold = SystemHold(stale, android.os.SystemClock.uptimeMillis() + 45_000)
         }
         checkWallpaperColours(force = true)
     }
@@ -183,6 +185,18 @@ class LauncherData private constructor(private val context: Context) {
             val system = ThemedColors.palette(context, "system", style)
             if (tone != null && system == hold.stale && android.os.SystemClock.uptimeMillis() < hold.until) {
                 return ThemedColors.palette(context, source, style, tone.primary)
+            }
+            // 0.11.0: the phone's own colours came; how close the launcher's guess was, so it can be checked on the phone.
+            if (tone != null && system != hold.stale) {
+                val guess = ThemedColors.palette(context, source, style, tone.primary)
+                fun hex(c: Int) = "#%06X".format(c and 0xFFFFFF)
+                fun off(a: Int, b: Int) = "%.1f".format(Cam16.fromArgb(a).distance(Cam16.fromArgb(b)))
+                DebugLog.event(
+                    "Icons",
+                    "the system's colours came ${(android.os.SystemClock.uptimeMillis() - hold.since) / 1000} s after the change: " +
+                        "${hex(system.first)} / ${hex(system.second)}; the launcher's guess was ${hex(guess.first)} / ${hex(guess.second)} " +
+                        "(off by ${off(system.first, guess.first)} / ${off(system.second, guess.second)}; under 2 looks the same)",
+                )
             }
             systemHold = null
             return system

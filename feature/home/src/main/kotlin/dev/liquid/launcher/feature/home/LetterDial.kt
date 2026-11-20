@@ -275,27 +275,31 @@ internal fun LetterDial(
                         var pos = currentEntry(state, index).toFloat().coerceIn(0f, (n - 1).toFloat())
                         var turning = false
                         if (clockFace) {
+                            // A clock face answers the touch at once: the letter at that spot.
                             pos = DialMath.clock(lastAngle, n)
-                            turning = true
-                        } else {
-                            // A slide turns it; holding it still lifts it to be moved; a tap does nothing.
-                            val decided = withTimeoutOrNull(holdMs) {
-                                var result = "up"
-                                while (true) {
-                                    val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                                    if (!change.pressed) break
-                                    change.consume()
-                                    if ((change.position - down.position).getDistance() > slop) {
-                                        result = "turn"
-                                        break
-                                    }
+                            drive.position = pos
+                            drive.active = true
+                        }
+                        // A slide turns it; holding it still lifts it to be moved (on a clock face too); a tap does
+                        // nothing on a knob and leaves a clock face's letter where it took the list.
+                        val decided = withTimeoutOrNull(holdMs) {
+                            var result = "up"
+                            while (true) {
+                                val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                                if (!change.pressed) break
+                                change.consume()
+                                if ((change.position - down.position).getDistance() > slop) {
+                                    result = "turn"
+                                    break
                                 }
-                                result
                             }
-                            when (decided) {
+                            result
+                        }
+                        when (decided) {
                                 "turn" -> turning = true
                                 null -> {
                                     // Held still: lift it and let the finger carry it.
+                                    drive.active = false
                                     moving = true
                                     Haptics.confirm(view)
                                     scope.launch { lift.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 700f)) }
@@ -317,9 +321,11 @@ internal fun LetterDial(
                                     }
                                     return@awaitEachGesture
                                 }
-                                else -> return@awaitEachGesture
+                                else -> {
+                                    drive.active = false
+                                    return@awaitEachGesture
+                                }
                             }
-                        }
                         if (!turning) return@awaitEachGesture
                         drive.position = pos
                         drive.active = true

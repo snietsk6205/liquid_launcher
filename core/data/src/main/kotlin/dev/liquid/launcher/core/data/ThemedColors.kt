@@ -39,7 +39,9 @@ object ThemedColors {
             else -> (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         }
         // A known seed (a wallpaper about to be shown) gives its tones now; the system palette follows later.
-        if (seed != null) return fromSeed(seed, dark)
+        // 0.11.0: for the system's colours the guess is worked out as Android does (Material You's tonal spot), so the
+        // icons do not change a second time when the phone's own colours arrive.
+        if (seed != null) return if (source == "system") MonetTones.iconColours(seed, dark) else fromSeed(seed, dark)
         if (source == "system" && Build.VERSION.SDK_INT >= 31) {
             return try {
                 if (dark) {

@@ -138,7 +138,8 @@ object IconPaint {
         val from = background to foreground
         if (from == target) return
         job = scope.launch {
-            animate(0f, 1f, animationSpec = tween(260)) { v, _ ->
+            // 0.11.0: a soft fade (it was 260 ms): the system's own colours can come seconds after a wallpaper change.
+            animate(0f, 1f, animationSpec = tween(600)) { v, _ ->
                 show(ColorUtils.blendARGB(from.first, target.first, v) to ColorUtils.blendARGB(from.second, target.second, v))
             }
             settled++
