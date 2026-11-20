@@ -464,6 +464,7 @@ internal fun ScrollIndex(
         if (drive != null) {
             LaunchedEffect(drive, n, top, spacing, width, reverse) {
                 var driving = false
+                try {
                 androidx.compose.runtime.snapshotFlow { if (drive.active) drive.position else Float.NaN }.collect { pos ->
                     if (!pos.isNaN()) {
                         if (!driving) {
@@ -484,6 +485,13 @@ internal fun ScrollIndex(
                         touch.touching = false
                         FrameCost.activity = null
                         launch { pop.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = MotionScale.stiffness(500f))) }
+                    }
+                }
+                } finally {
+                    // Restarted or gone mid-turn: let go; a circle still held takes the string again at once.
+                    if (driving) {
+                        touch.touching = false
+                        FrameCost.activity = null
                     }
                 }
             }
