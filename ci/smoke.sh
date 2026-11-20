@@ -30,9 +30,9 @@ $(printf '%5d s  %s' $((SECONDS - SECTION_START)) "$SECTION_NAME")"
 APK=$(ls out/*.apk | head -1)
 
 # 0.11.2: a phone still busy with its first-boot work starves the launcher into "not responding" (run 101); wait until
-# it is calm (at most 2 minutes, never a failure). From the cached snapshot it is calm within seconds.
+# it is calm (at most 3 minutes, never a failure).
 section "Waiting for a calm phone"
-bash ci/settle.sh 120
+bash ci/settle.sh 180
 section "Installing $APK"
 # Android 15 refuses accessibility for apps with no installer ("restricted settings"), so
 # install as if from a store and allow restricted settings, like the user does by hand.
@@ -409,7 +409,10 @@ adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen gla
 wait_top "SettingsActivity" 8 || fail "glass benchmark opens"
 sleep 6
 peek 05-glass-running
-wait_screen 05-glass-finished "Tune the glass" 30 || true
+# The benchmark runs a fixed ~15 s (three tiers of 0.7 s warm-up and 4 s measuring), and a moving screen cannot be read:
+# each dump while it runs waits ~10 s and fails (run 102 gave up after 30 s). Wait out its run, then look.
+sleep 10
+wait_screen 05-glass-finished "Tune the glass" 20 || true
 texts 05-glass-finished 12
 if top_activity | grep -q "SettingsActivity"; then pass "glass benchmark finished without leaving the screen"; else fail "glass benchmark finished without leaving the screen"; fi
 # 0.9.12 (P4): once measured, the same screen tunes the real glass live, with its presets.

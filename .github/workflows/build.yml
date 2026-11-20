@@ -158,8 +158,8 @@ jobs:
 
       # 0.11.2: the system image and a booted emulator's snapshot are kept between runs, so the test boots from the
       # snapshot instead of downloading the image and cold-booting Android each time. The snapshot is saved once the
-      # phone is calm (ci/settle.sh): v1 was saved mid first-boot work, and run 101 started inside it. Bump the
-      # version to start anew.
+      # phone is calm (ci/settle.sh): v1 was saved mid first-boot work and v2 after a blind 30 s. Bump the version to
+      # start anew.
       - name: System image cache
         uses: actions/cache@v4
         with:
@@ -173,7 +173,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-34-google_apis-x86_64-v2
+          key: avd-34-google_apis-x86_64-v3
 
       - name: Boot once and save the snapshot (cache miss only)
         if: steps.avd-cache.outputs.cache-hit != 'true'

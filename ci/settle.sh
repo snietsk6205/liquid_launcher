@@ -5,8 +5,9 @@
 # was away for checks 2 and 3). Used before the emulator's snapshot is saved, so every run starts from a calm phone, and
 # at the start of smoke.sh, for a phone that is not calm yet (a cold boot). Never fails: past the limit it goes on.
 #
-# Calm: the CPU pressure ("some avg10" of /proc/pressure/cpu, the share of time something waited for a CPU over the
-# last 10 s) under 20 % four readings in a row, 3 s apart. Where that file cannot be read, a fixed 30 s instead.
+# Calm: the CPU busy under 40 % (from /proc/stat, over about 2 s) three readings in a row. After a snapshot is restored
+# the emulator loads its memory as it is touched, so the first minute or two is slow even with nothing left to boot
+# (run 102: 92 % busy, 42 % of it in the kernel, before its first "not responding").
 set -u
 limit=${1:-180}
 end=$((SECONDS + limit))
@@ -15,20 +16,23 @@ until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1"
   [ "$SECONDS" -ge "$end" ] && { echo "settle: not booted after $limit s; going on"; exit 0; }
   sleep 2
 done
-pressure() { adb shell cat /proc/pressure/cpu 2>/dev/null | tr -d '\r' | sed -n 's/^some avg10=\([0-9]*\).*/\1/p'; }
-p=$(pressure)
-if [ -z "$p" ]; then
-  echo "settle: the CPU pressure cannot be read here; waiting 30 s"
-  sleep 30
-  exit 0
-fi
-echo "settle: CPU pressure $p % at the start"
+cpu() { adb shell head -1 /proc/stat 2>/dev/null | tr -d '\r'; }
+# The share of CPU time spent busy between two readings of /proc/stat's "cpu" line, in %; empty when unreadable.
+busy() {
+  local a b
+  a=$(cpu); sleep 2; b=$(cpu)
+  printf '%s\n%s\n' "$a" "$b" | awk '$1 == "cpu" { idle = $5 + $6; total = 0; for (i = 2; i <= 9 && i <= NF; i++) total += $i
+    if (n++ == 0) { i0 = idle; t0 = total } else { i1 = idle; t1 = total } }
+    END { if (n == 2 && t1 > t0) printf "%d", 100 * (1 - (i1 - i0) / (t1 - t0)) }'
+}
 calm=0
+seen=""
 while [ "$SECONDS" -lt "$end" ]; do
-  p=$(pressure)
-  if [ -n "$p" ] && [ "$p" -lt 20 ]; then calm=$((calm + 1)); else calm=0; fi
-  if [ "$calm" -ge 4 ]; then echo "settle: calm after $SECONDS s (CPU pressure $p %)"; exit 0; fi
-  sleep 3
+  b=$(busy)
+  if [ -z "$b" ]; then echo "settle: /proc/stat cannot be read here; waiting 30 s"; sleep 30; exit 0; fi
+  seen="$seen $b"
+  if [ "$b" -lt 40 ]; then calm=$((calm + 1)); else calm=0; fi
+  if [ "$calm" -ge 3 ]; then echo "settle: calm after $SECONDS s (CPU busy, %:$seen)"; exit 0; fi
 done
-echo "settle: still busy after $limit s (CPU pressure ${p:-unknown} %); going on"
+echo "settle: still busy after $limit s (CPU busy, %:$seen); going on"
 exit 0
