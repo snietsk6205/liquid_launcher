@@ -1098,3 +1098,61 @@ for the phone (software drawing).
 whether redirects now mostly say "its going-home animation is running, redirect in 0 ms". If the hub or the letter
 drag is still late on more than 5 % of frames, get a trace from the phone (a debug build with method tracing, or a
 Perfetto trace from Med) instead of guessing; then the first frame on return.
+
+## Session of 2026-11-20, evening: 0.11.1, Med's corrections to 0.11.0
+
+Brief: Med's message on 0.11.0 in the chat (a debug log, and a picture of the drawer with the letters frozen, bent,
+while he scrolled with them). Two things I had misunderstood: the circle is not a knob to turn but an area, where any
+swipe that starts acts as if he had started the letter scroll with his finger there, following it; a tap on an app
+inside still opens it; its opacity, size and place are set in Settings, not by holding and dragging; as many areas as
+he wants, each with left or right and where it begins; and an option for the letters to come only from the areas.
+And in the wallpaper library the transition should happen on Apply, not when a picture is tapped. Also: lag when
+scrolling with the letters, and every popup and appearing transition smoother and more fluid. His answers to my two
+questions: areas "edge + place" (left or right is the edge the letters come out of; where it begins is the area's
+place across and down, and its size, all by sliders in Settings); wallpaper "change on Apply" (a tap only picks the
+picture, seen in the sheet and full screen only while placing; the screen keeps its wallpaper; Apply ripples from the
+old wallpaper to the new one, from the Apply button). Branch `ccr-f4d083cc-vpyudk`.
+
+**Released:** 0.11.1, by the CI run of the commit "0.11.1 [release]: …" that carries this entry. CI before it:
+run 95 (the letter areas, the glide and the frame split) passed every check, the new one
+included: a slow swipe from the default area drove the letters ("letter area: swiped from S to Y"), and the
+"Frames:" lines carried their split (on the emulator, which draws in software, the numbers mean little). Run 96
+(the wallpaper on Apply and the transitions) passed every check; a still screen drew 2 frames in 3 s at home, 0 in
+the drawer, 6 in search (the field's cursor), 0 in the wallpaper screen and 0 in the study hub.
+
+**His 0.11.0 log:** the launcher's icon colour guess was off by 0.0 to 1.8 from MagicOS's colours (the tonal spot
+matches); redirects mostly said "redirect in 0 ms" (the going-home check against the screen works); frames: the
+letter circle 13–45 % late, the string 5–37 %, the wallpaper screen 39–61 % with the GPU at 25–35 ms.
+
+**Items**
+
+| # | Med's point | State | What |
+|---|---|---|---|
+| 1 | The circle is an area: a swipe from it is the finger on the letters; a tap on an app in it still opens the app | Done | `LetterAreaViews.kt`: the drawer's outer box reads every touch first (Initial pass); one that starts inside an area and moves past the touch slop before the long-press timeout is consumed and drives the string through `IndexDrive.window` (the finger in window coordinates, turned into the string's own by `ScrollIndex`), so the bend, bubble, highlight, haptics and glide are the finger's. A tap or a hold stays with the app (the icons' own gesture uses the same timeout and slop, and reads after). The log says "letter area: swiped from C to M". D156. |
+| 2 | Size, place and opacity from Settings; as many areas as he wants, left or right, where each begins | Done | Letter index › Layout › "Letter areas": per area the edge (Left edge / Right edge), Across, Down the apps (%), Size (48–240 dp), Remove; "Add an area" puts the next one on the other side, lower; Reset. Colour, opacity (0 %: invisible, still working) and opacity while the apps scroll on the Look tab. The settings preview's pretend thumb swipes from the first area, twice, then rests. Stored as "right,84,45,120" per area; a circle he had moved in 0.11.0 becomes the first area where it was. |
+| 3 | An option for the letters to work only from the areas | Done | "Letters only from the areas", on by default: the edge strips are off, so Back works along the whole edge; off, the edge pulls the letters too (0.11.0's "The edge pulls the letters too" carries over). |
+| 4 | Lag: the letters freeze while scrolling with them | Done, to check on the phone | 0.10.4's jump (more than 3 rows away: jump, then glide) built a whole screen of rows in one frame; each letter change could do it again. The glide now moves the list at most 100 rows a second (A to Z in about half a second), and up to 6 rows away it scrolls by pixels, so the grid builds the next row ahead between frames. "Frames:" lines now split the time into input and composing, layout, draw and sync, next to the GPU. D157, D161. |
+| 5 | Wallpaper library: the transition on Apply, not on tap | Done | A tap rings the picture (a check pops in, the picture settles in a little); the screen keeps its wallpaper, colours and look; the picture shows full screen only while placed, then fades back. Apply: a picture of the screen, sheet and all, ripples away from the Apply button over the new wallpaper, its icon colours and looks; the files and the system wallpaper are written after. While fixing it: "This picture" started empty, so Apply without a new picture wiped the picture's own look; it now starts as that look and is written only when edited. D158, D159. |
+| 6 | Every popup and appearing transition smoother | Done | Overlays leave the way they came: sheets sink back, a folder and the speed bump card shrink to where they grew from, the "Customise" chip to the finger. The wallpaper screen, its placing bar and "Show controls", the bar while picking apps, the bulk tag sheet and the chip went in or out in one frame; they now go through `Presence`. The drawer's tag list and the wallpaper sheet no longer recompose on every frame of their motion (the tag list rebuilt the whole drawer). D160. |
+
+**Known bugs and limits**
+- Not measured on the phone yet: the glide's cap and pixel scrolling, and the areas themselves. The next log's
+  "Frames:" lines say whether late drawer frames are composing and layout (building rows) or drawing and the GPU.
+- The areas work with the String letters only; with the Rail, the rail is used as before.
+- The wallpaper screen's GPU time (25–35 ms in his log) is its glass sheet over the live home screen; only its
+  recomposition was cut here.
+- Still open from before: the 300–430 ms first frame when the launcher comes back to the front; SINK does not dip the
+  neighbouring buttons; picking apps only from the drawer.
+
+**Questions for Med**
+1. The first area: right edge, 84 % across, 45 % down the apps, 120 dp, 60 % opaque (25 % while the apps scroll).
+   Right on your phone, or another place or size?
+2. "Add an area" puts the next one on the other edge, 20 % lower. Is that a useful start?
+3. After you place a picture, it fades back to your current wallpaper until Apply. Would you rather it stayed on
+   screen (still without the transition) until Apply or Cancel?
+4. Scroll with the letters for a while and send the debug log: the "Frames:" lines now say where the time goes.
+
+**Exact next step:** read Med's next debug log: "letter area: swiped from … to …" lines, and the "Frames:" lines for
+"drawer; letter area" with their split (input and composing, layout, draw, sync, GPU). If the drawer is still late on
+more than 5 % of frames while the letters move, look at what the split points to (composing: lighter app cells;
+draw or GPU: the glass over the list) before changing anything else.

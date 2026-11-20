@@ -700,9 +700,6 @@ internal fun glyph(label: String, section: Boolean): String = when {
 /** The index fades with the rest of the drawer's glass parts. */
 private fun overlayFade(controller: HomeController): Float = controller.drawer.value.coerceIn(0f, 1f)
 
-/** The letter the list is at now (0.11.0: where the letter circle starts turning from). */
-internal fun currentEntry(state: LazyGridState, index: GridIndex): Int = index.entryForRow(currentRow(state, index))
-
 /** The list's position as a continuous row. */
 private fun currentRow(state: LazyGridState, index: GridIndex): Float {
     val first = state.firstVisibleItemIndex
