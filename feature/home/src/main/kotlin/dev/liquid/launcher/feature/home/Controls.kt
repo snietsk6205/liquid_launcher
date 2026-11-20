@@ -204,7 +204,7 @@ internal fun themedSurface(
     // W3: the press as a number, for a material's face sinking into its skirt and a key without a face showing one.
     val press by animateFloatAsState(if (pressed) 1f else 0f, spring(dampingRatio = 0.85f, stiffness = MotionScale.stiffness(1300f)), label = "themePress")
     val faceless = kind.shape == "NONE" && !selected && main == null
-    val material = theme.material?.takeIf { kind.material }
+    val material = theme.material?.takeIf { kind.material && dev.liquid.launcher.core.designsystem.GlassTest.variant != dev.liquid.launcher.core.designsystem.GlassTest.Variant.NoMaterial }
     val image = rememberThemeImage(kind.texture)
     val pressedImage = rememberThemeImage(kind.pressedTexture)
     val accentColour = HomeTheme.accent

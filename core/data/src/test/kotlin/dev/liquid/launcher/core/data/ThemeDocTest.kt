@@ -186,8 +186,10 @@ class ThemeDocTest {
     @Test
     fun conditionsOfFields() {
         val liquidOnly = ThemeFields.field("frost.refraction")!!
-        assertFalse(ThemeFields.applies(liquidOnly, ThemeDocs.Default))
+        assertFalse(ThemeFields.applies(liquidOnly, ThemeDocs.Default.withString("frost.style", "FROSTED")))
         assertTrue(ThemeFields.applies(liquidOnly, ThemeDocs.Default.withString("frost.style", "LIQUID")))
+        // 0.11.2: the default theme's glass is liquid.
+        assertTrue(ThemeFields.applies(liquidOnly, ThemeDocs.Default))
         val needsMaterial = ThemeFields.field("keyMaterial.gloss")!!
         assertFalse(ThemeFields.applies(needsMaterial, ThemeDocs.Legacy010))
         assertTrue(ThemeFields.applies(needsMaterial, ThemeDocs.Legacy010.withString("keyMaterial.kind", "METAL")))

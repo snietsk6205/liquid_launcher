@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="updates" path="updates/" />
+    <!-- 0.11.2: board photos, written by the camera app before the launcher saves them in Pictures/ESSAI. -->
+    <cache-path name="photos" path="photos/" />
 </paths>

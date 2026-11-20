@@ -505,41 +505,21 @@ class HomeController(
         data.study.day.value.classes.lastOrNull { now >= it.begin - 10 * 60_000L && now <= it.end + 30 * 60_000L }
 
     /**
-     * E1: the camera, writing straight into Pictures/ESSAI/<module>/<date>_<module>.jpg (the module of the class
-     * now, else of the block now or next, else "Notes"). The entry is kept pending until the photo is taken and
-     * removed when it is not.
+     * E1: the camera (the app chosen in Settings → Study companion, else the phone's default) for a photo saved in
+     * Pictures/ESSAI/<module>/<date>_<module>.jpg: the module of the class now, else of the block now or next, else
+     * "Notes". 0.11.2: the camera writes into a private file and the launcher saves it once it answers ([BoardPhotos]).
      */
     fun boardPhoto() {
         val now = System.currentTimeMillis()
-        val module = (classForPhoto(now)?.title?.subject ?: data.study.day.value.current(now)?.title?.subject ?: "Notes")
-            .replace(Regex("[^\\p{L}\\p{N} _-]"), "").trim().ifEmpty { "Notes" }
-        val date = java.time.LocalDate.now().toString()
-        val resolver = context.contentResolver
-        val values = android.content.ContentValues().apply {
-            put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "${date}_$module.jpg")
-            put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-            put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/ESSAI/$module")
-            put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
-        }
-        val uri = try {
-            resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+        val module = classForPhoto(now)?.title?.subject ?: data.study.day.value.current(now)?.title?.subject ?: "Notes"
+        val intent = try {
+            dev.liquid.launcher.core.data.BoardPhotos.start(context, data.settings, module, now)
         } catch (e: Exception) {
-            DebugLog.error("Home", "board photo: could not create the file: $e")
+            DebugLog.error("Home", "board photo: could not prepare the camera: $e")
             null
-        } ?: return toast("Could not create the photo file")
+        } ?: return toast("No camera app to take the photo")
         Haptics.tick(view)
-        callbacks.takePicture(uri) { taken ->
-            try {
-                if (taken) {
-                    resolver.update(uri, android.content.ContentValues().apply { put(android.provider.MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
-                    notice(dev.liquid.launcher.core.common.NoticeKind.Study, "Board photo: $module", "Pictures/ESSAI/$module")
-                } else {
-                    resolver.delete(uri, null, null)
-                }
-            } catch (e: Exception) {
-                DebugLog.error("Home", "board photo: $e")
-            }
-        }
+        callbacks.takePhoto(intent)
     }
 
     /**
@@ -945,12 +925,18 @@ class HomeController(
     var searchKeyboard by mutableStateOf(true)
 
     /**
-     * The keyboard's height the last time it opened (px from the bottom of the screen, navigation
-     * bar included), so the field can go straight to where the keyboard will be instead of to the
-     * bottom and up again with it. Remembered across starts. Only the opening height counts (0.10.4):
-     * a keyboard that grows while you type would send the field too high the next time.
+     * The heights the keyboard opened at lately (px from the bottom of the screen, navigation bar included), newest
+     * last, remembered across starts. 0.11.2 (Med: "never above"): the field waits at the lowest of them before the
+     * keyboard is there, and the keyboard pushes it up from there ([KeyboardLine]); up to 0.11.1 it went to the last
+     * height, and came back down whenever the keyboard opened lower. Starts from 0.11.1's one height.
      */
-    var keyboardHeight by mutableFloatStateOf(data.settings.get(LauncherSettings.SearchKeyboardHeight).toFloat())
+    private var keyboardOpenings by mutableStateOf(
+        data.settings.get(LauncherSettings.SearchKeyboardOpenings).mapNotNull { it.toIntOrNull() }
+            .ifEmpty { listOfNotNull(data.settings.get(LauncherSettings.SearchKeyboardHeight).takeIf { it > 0 }) },
+    )
+
+    /** Where the field waits for the keyboard: the lowest recent opening (or a low first guess). */
+    val keyboardGuess: Float get() = dev.liquid.launcher.core.common.KeyboardLine.guess(keyboardOpenings, screenHeight)
 
     /**
      * Search is counting on the keyboard: from the moment it starts opening until the keyboard is
@@ -958,37 +944,97 @@ class HomeController(
      */
     var expectKeyboard by mutableStateOf(false)
 
-    /** Remembers the keyboard's height when it changes by more than a few pixels. */
-    fun rememberKeyboard(px: Float) {
-        if (px < screenHeight * 0.12f || kotlin.math.abs(px - keyboardHeight) < 3f) return
-        keyboardHeight = px
+    /**
+     * The keyboard settled at [px]: an [opening] is added to the recent openings; a later settle while it stays open
+     * only lowers the newest (a strip that went away), never raises it (0.11.2, [KeyboardLine.record]).
+     */
+    fun rememberKeyboard(px: Float, opening: Boolean) {
+        val next = dev.liquid.launcher.core.common.KeyboardLine.record(keyboardOpenings, px.roundToInt(), opening, screenHeight)
+        if (next == keyboardOpenings) return
+        keyboardOpenings = next
+        data.settings.set(LauncherSettings.SearchKeyboardOpenings, next.map { it.toString() })
         data.settings.set(LauncherSettings.SearchKeyboardHeight, px.roundToInt())
-        DebugLog.event("Home", "keyboard height " + px.roundToInt() + " px remembered")
     }
 
     /**
-     * Where the bottom of the open search field sits, in px from the bottom of the screen, before
-     * its margin: above the keyboard that is coming (the height remembered, or a guess the first
-     * time), above the keyboard that is there, or above the navigation bar. While the keyboard
-     * rises towards a [target] that differs from the height remembered, the line moves from one to
-     * the other in step with it, so a wrong guess never shows as a jump.
+     * Where the bottom of the open search field sits, in px from the bottom of the screen, before its margin: while
+     * search counts on the keyboard, at the lowest height it opened at lately until the keyboard gets there, then on
+     * the keyboard; otherwise above the keyboard or the navigation bar. It never goes above the keyboard to come back
+     * down, unless the keyboard opens lower than ever seen lately (then in step with it). See [KeyboardLine].
      */
     fun searchFieldLine(nav: Float, ime: Float, target: Float): Float {
         if (!expectKeyboard) return maxOf(nav, ime)
-        val remembered = if (keyboardHeight > 0f) keyboardHeight else screenHeight * 0.4f
-        val known = if (target > nav + 1f) {
-            val risen = ((ime - nav) / (target - nav)).coerceIn(0f, 1f)
-            // 0.10.4: eased, so a guess that was off glides softly to the keyboard's real height, slow at both ends.
-            val eased = risen * risen * (3f - 2f * risen)
-            remembered + (target - remembered) * eased
-        } else {
-            remembered
-        }
-        return maxOf(nav, ime, known)
+        return dev.liquid.launcher.core.common.KeyboardLine.line(nav, ime, target, keyboardGuess)
     }
 
     private fun startExpectingKeyboard() {
-        expectKeyboard = searchKeyboard && searchField == "keyboard" && searchInPill
+        expectKeyboard = searchKeyboard && searchField == "keyboard" && searchInPill && !speedChecking
+    }
+
+    /** 0.11.2: the speed check is playing (Settings → Diagnostics): search opens without the keyboard. */
+    var speedChecking by mutableStateOf(false)
+        private set
+
+    /**
+     * 0.11.2, Settings → Diagnostics → Speed check: the drawer, search, the home menu and the study hub opened and closed
+     * with each way of drawing the glass ([dev.liquid.launcher.core.designsystem.GlassTest]), each step a line of its
+     * own in the debug log from the frame meter: what each part of the glass costs on this phone, measured.
+     */
+    fun runSpeedCheck() {
+        if (speedChecking) return
+        speedChecking = true
+        scope.launch {
+            val glassTest = dev.liquid.launcher.core.designsystem.GlassTest
+            notice(dev.liquid.launcher.core.common.NoticeKind.Info, "Speed check: about a minute", "Leave the screen alone; the numbers go to the debug log")
+            DebugLog.event("Frames", "speed check: started")
+            try {
+                kotlinx.coroutines.delay(2500)
+                if (drawer.value > 0f) closeDrawer(immediately = true)
+                if (searchOpen) closeSearch(immediately = true)
+                suspend fun step(what: String, variant: dev.liquid.launcher.core.designsystem.GlassTest.Variant, block: suspend () -> Unit) {
+                    FrameCost.check = "speed check: $what, ${variant.label}"
+                    block()
+                    FrameCost.check = null
+                    kotlinx.coroutines.delay(200)
+                }
+                for (variant in dev.liquid.launcher.core.designsystem.GlassTest.Variant.entries) {
+                    glassTest.variant = variant
+                    kotlinx.coroutines.delay(600)
+                    step("drawer", variant) {
+                        openDrawer()
+                        kotlinx.coroutines.delay(900)
+                        closeDrawer()
+                        kotlinx.coroutines.delay(900)
+                    }
+                    step("search", variant) {
+                        openSearch()
+                        kotlinx.coroutines.delay(900)
+                        closeSearch()
+                        kotlinx.coroutines.delay(900)
+                    }
+                    step("home menu", variant) {
+                        homeMenu = true
+                        kotlinx.coroutines.delay(800)
+                        homeMenu = false
+                        kotlinx.coroutines.delay(700)
+                    }
+                    if (data.study.enabled) {
+                        step("study hub", variant) {
+                            openHub()
+                            kotlinx.coroutines.delay(1100)
+                            closeHub()
+                            kotlinx.coroutines.delay(900)
+                        }
+                    }
+                }
+                DebugLog.event("Frames", "speed check: done")
+                notice(dev.liquid.launcher.core.common.NoticeKind.Info, "Speed check done", "Send the debug log (Settings → Diagnostics → Debug log)")
+            } finally {
+                FrameCost.check = null
+                glassTest.variant = dev.liquid.launcher.core.designsystem.GlassTest.Variant.AsSet
+                speedChecking = false
+            }
+        }
     }
 
     /** Where the finger has put search, ahead of [search] (see [dragPosition]). */
@@ -2094,7 +2140,8 @@ class HomeCallbacks(
     /** Asks for calendar access (read and write); the callback gets whether reading was granted. */
     val requestCalendar: ((Boolean) -> Unit) -> Unit = { it(false) },
     /** Opens the camera to take a picture into [Uri]; the callback gets whether one was taken (E1). */
-    val takePicture: (android.net.Uri, (Boolean) -> Unit) -> Unit = { _, done -> done(false) },
+    /** 0.11.2: starts the camera with [BoardPhotos]' intent; the answer is handled by the activity. */
+    val takePhoto: (android.content.Intent) -> Unit = {},
     /** Asks for location access (Android's condition for reading the Wi-Fi name); the callback gets whether it was given. */
     val requestLocation: ((Boolean) -> Unit) -> Unit = { it(false) },
     /** Shows the system file picker for a font file; the callback gets it or null. */

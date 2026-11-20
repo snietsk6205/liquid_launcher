@@ -585,6 +585,9 @@ object ThemeDocs {
         var d = ThemeDoc.parse(KEYBOARD.trim()) ?: error("the default theme does not parse")
         d = d.withString("id", "liquid_default")
             .withString("frost.backdrop", "AUTO")
+            // 0.11.2 (Med): liquid glass by default, the edge bending the light ("Kind of glass: Liquid"); his keyboard's
+            // own frost is frosted. Its other values (blur 9, colour 125 %, rim 0.86, bend 0.6, split 0.25) stay.
+            .withString("frost.style", "LIQUID")
             .with("boardEffect", null)
             .withInt("$ext.format", 1)
             .withString("$ext.source", "Liquid Launcher: default, your WM Keyboard theme \"wallpaper stoped\" in the wallpaper's colours")

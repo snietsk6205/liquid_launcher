@@ -108,7 +108,6 @@ internal fun WidgetPicker(glass: GlassConfig, lightBackground: Boolean, backdrop
     val color = sheetContentColor(glass, lightBackground)
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
-    val presence = LocalPresence.current
     val shape = RoundedCornerShape(32.dp)
     val layer = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
     var query by remember { mutableStateOf("") }
@@ -151,8 +150,7 @@ internal fun WidgetPicker(glass: GlassConfig, lightBackground: Boolean, backdrop
                 .imePadding()
                 .padding(12.dp)
                 .graphicsLayer {
-                    // 0.11.1: and sinks back when it closes.
-                    val p = appear.value * presence.value
+                    val p = appear.value
                     alpha = p.coerceIn(0f, 1f)
                     translationY = (1f - p) * 60.dp.toPx()
                 }

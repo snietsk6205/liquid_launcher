@@ -49,8 +49,11 @@ object Motion {
     /** Something small popping in: a notice, a bubble, a chip. Quicker, a touch more bounce. */
     fun pop(): SpringSpec<Float> = spring(dampingRatio = (damping() - 0.08f).coerceAtLeast(0.5f), stiffness = MotionScale.stiffness(stiffness() * 1.35f))
 
-    /** Leaving: quick and without bounce, so it never delays what comes next. */
-    fun exit(): FiniteAnimationSpec<Float> = tween(MotionScale.ms(150))
+    /**
+     * Leaving: quick and without bounce, so it never delays what comes next. 0.11.2: 110 ms and a fade only (Med: "now
+     * almost all the animations lag"): 0.11.1's sheets sank back as they faded, which drew their glass anew every frame.
+     */
+    fun exit(): FiniteAnimationSpec<Float> = tween(MotionScale.ms(110))
 }
 
 /** 1 while an overlay is shown, falling to 0 while it leaves (see [Presence]). */
@@ -86,11 +89,9 @@ internal fun <T : Any> Presence(value: T?, instantExit: () -> Boolean = { false 
             Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    val p = out.value.coerceIn(0f, 1f)
-                    alpha = p
-                    val scale = 0.97f + 0.03f * p
-                    scaleX = scale
-                    scaleY = scale
+                    // 0.11.2: a fade only, each part taking the alpha itself (no extra full-screen layer per frame).
+                    alpha = out.value.coerceIn(0f, 1f)
+                    compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
                 }
         ) {
             content(shown)

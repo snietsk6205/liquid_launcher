@@ -18,6 +18,7 @@ import dev.liquid.launcher.feature.home.HomeReturnState
 import dev.liquid.launcher.feature.home.HomeScreen
 import dev.liquid.launcher.feature.redirect.RedirectStatus
 import dev.liquid.launcher.feature.settings.SettingsActivity
+import kotlinx.coroutines.launch
 
 /**
  * The home screen. It is an ordinary activity, not the default launcher: the accessibility
@@ -51,10 +52,15 @@ class MainActivity : ComponentActivity() {
         calendarCallback?.invoke(result[android.Manifest.permission.READ_CALENDAR] == true)
         calendarCallback = null
     }
-    private var pictureCallback: ((Boolean) -> Unit)? = null
-    private val takePictureLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.TakePicture()) { taken ->
-        pictureCallback?.invoke(taken)
-        pictureCallback = null
+    // 0.11.2: the camera's answer is handled here, by whichever window is up when it comes (a launcher restarted while
+    // the camera was open used to lose it); what is being taken is written down in the settings (BoardPhotos).
+    private val takePhotoLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
+        val app = application as LauncherApp
+        app.appScope.launch {
+            dev.liquid.launcher.core.data.BoardPhotos.finish(app, app.settings, result.resultCode == RESULT_OK)?.let { module ->
+                dev.liquid.launcher.core.common.Notices.post(dev.liquid.launcher.core.common.NoticeKind.Study, "Board photo: $module", "Pictures/ESSAI/$module")
+            }
+        }
     }
     private var locationCallback: ((Boolean) -> Unit)? = null
     private val askLocation = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -147,14 +153,12 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             },
-            takePicture = { uri, callback ->
-                pictureCallback = callback
+            takePhoto = { intent ->
                 try {
-                    takePictureLauncher.launch(uri)
+                    takePhotoLauncher.launch(intent)
                 } catch (e: Exception) {
                     DebugLog.error("App", "camera failed: $e")
-                    pictureCallback = null
-                    callback(false)
+                    android.widget.Toast.makeText(this, "Could not open the camera", android.widget.Toast.LENGTH_SHORT).show()
                 }
             },
             requestLocation = { callback ->

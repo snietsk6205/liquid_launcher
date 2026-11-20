@@ -49,6 +49,18 @@ internal fun DiagnosticsScreen(store: SettingsStore, open: (Screen) -> Unit, onB
                 }) { Text("Share report") }
             }
         }
+        // 0.11.2: the real animations on the real home screen, measured with each way of drawing the glass.
+        InfoCard {
+            Text("Speed check", style = MaterialTheme.typography.titleMedium)
+            BodyText(
+                "Plays the drawer, search, the home menu and the study hub on your home screen, with the glass as you set " +
+                    "it and then without its blur, frosted, liquid, without shadows, without the theme's material and as a flat " +
+                    "tint. Each step's cost goes to the debug log. It takes about a minute: leave the screen alone, then send " +
+                    "the debug log.",
+                Modifier.padding(top = 4.dp),
+            )
+            Button(onClick = { openOnHome(context, "speedCheck") }, modifier = Modifier.padding(top = 10.dp)) { Text("Run the speed check") }
+        }
 
         items.forEach { item ->
             Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {

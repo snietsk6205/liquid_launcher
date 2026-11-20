@@ -29,7 +29,8 @@ class LauncherApp : Application() {
     lateinit var data: LauncherData
         private set
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    /** For work that outlives a screen (the home screen's camera answer saves the photo here, 0.11.2). */
+    internal val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     override fun onCreate() {
         super.onCreate()
@@ -69,6 +70,12 @@ class LauncherApp : Application() {
 
         wallpaper = WallpaperStore.get(this)
         data = LauncherData.get(this)
+        // 0.11.2: a board photo whose camera answer never came (the launcher was restarted meanwhile) is saved now.
+        appScope.launch {
+            dev.liquid.launcher.core.data.BoardPhotos.sweep(this@LauncherApp, settings)?.let { module ->
+                dev.liquid.launcher.core.common.Notices.post(dev.liquid.launcher.core.common.NoticeKind.Study, "Board photo: $module", "Pictures/ESSAI/$module")
+            }
+        }
         appScope.launch {
             wallpaper.load()
             // Wallpapers of earlier versions (history, current) join the library once.

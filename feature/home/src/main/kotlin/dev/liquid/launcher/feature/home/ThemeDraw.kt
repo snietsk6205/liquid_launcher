@@ -199,16 +199,35 @@ private class TicketShape(private val cornerDp: Float) : Shape {
     }
 }
 
-/** The outline of [shape] at [size] as a path. */
-internal fun DrawScope.outlinePath(shape: Shape, size: Size = this.size): Path {
-    val path = Path()
-    when (val o = shape.createOutline(size, layoutDirection, this)) {
-        is Outline.Rectangle -> path.addRect(o.rect)
-        is Outline.Rounded -> path.addRoundRect(o.roundRect)
-        is Outline.Generic -> path.addPath(o.path)
+/**
+ * Outlines kept between frames (0.11.2): the same shape at the same size is the same Path, so the GPU keeps what it
+ * worked out for it. A new Path every frame, for every themed button, pill and material face (its clip, its edge),
+ * was rasterised and uploaded again each time: on Med's phone the study hub spent 48 ms a frame there ("sync").
+ * The paths are never changed after they are made. Used on the main thread only (drawing).
+ */
+private object OutlineCache {
+    private val paths = object : LinkedHashMap<Any, Path>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Any, Path>?): Boolean = size > 160
     }
-    return path
+
+    fun get(key: Any, make: () -> Path): Path = paths[key] ?: make().also { paths[key] = it }
 }
+
+private data class OutlineKey(val shape: Shape, val width: Float, val height: Float, val direction: LayoutDirection, val density: Float)
+private data class InsetKey(val path: Path, val width: Float, val height: Float, val inset: Float)
+private data class HalfKey(val width: Float, val height: Float, val top: Boolean)
+
+/** The outline of [shape] at [size] as a path (the same Path object for the same shape and size; do not change it). */
+internal fun DrawScope.outlinePath(shape: Shape, size: Size = this.size): Path =
+    OutlineCache.get(OutlineKey(shape, size.width, size.height, layoutDirection, density)) {
+        val path = Path()
+        when (val o = shape.createOutline(size, layoutDirection, this)) {
+            is Outline.Rectangle -> path.addRect(o.rect)
+            is Outline.Rounded -> path.addRoundRect(o.roundRect)
+            is Outline.Generic -> path.addPath(o.path)
+        }
+        path
+    }
 
 // ---- pictures (textures, sheet backgrounds) ----
 
@@ -529,16 +548,24 @@ private fun DrawScope.drawEdge(m: ThemeMaterial, face: Path, faceSize: Size, tex
         }
         "DOTTED" -> drawPath(face, colour ?: text.copy(alpha = 0.7f), style = Stroke(w, pathEffect = PathEffect.dashPathEffect(floatArrayOf(0.1f, w * 2.6f)), cap = StrokeCap.Round))
         "BEVEL" -> {
-            val half = Path().apply { addRect(Rect(0f, 0f, faceSize.width, faceSize.height / 2f)) }
+            val half = OutlineCache.get(HalfKey(faceSize.width, faceSize.height, top = true)) {
+                Path().apply { addRect(Rect(0f, 0f, faceSize.width, faceSize.height / 2f)) }
+            }
             clipPath(half) { drawPath(face, Color.White.copy(alpha = 0.55f), style = Stroke(w)) }
-            val low = Path().apply { addRect(Rect(0f, faceSize.height / 2f, faceSize.width, faceSize.height)) }
+            val low = OutlineCache.get(HalfKey(faceSize.width, faceSize.height, top = false)) {
+                Path().apply { addRect(Rect(0f, faceSize.height / 2f, faceSize.width, faceSize.height)) }
+            }
             clipPath(low) { drawPath(face, Color.Black.copy(alpha = 0.5f), style = Stroke(w)) }
         }
     }
 }
 
 /** [path] (of [size]) shrunk towards its centre by [insetPx] on every side. */
-private fun outlinePathInset(path: Path, size: Size, insetPx: Float): Path {
+private fun outlinePathInset(path: Path, size: Size, insetPx: Float): Path = OutlineCache.get(InsetKey(path, size.width, size.height, insetPx)) {
+    insetOf(path, size, insetPx)
+}
+
+private fun insetOf(path: Path, size: Size, insetPx: Float): Path {
     val sx = ((size.width - 2 * insetPx) / size.width.coerceAtLeast(1f)).coerceAtLeast(0.1f)
     val sy = ((size.height - 2 * insetPx) / size.height.coerceAtLeast(1f)).coerceAtLeast(0.1f)
     val m = androidx.compose.ui.graphics.Matrix()

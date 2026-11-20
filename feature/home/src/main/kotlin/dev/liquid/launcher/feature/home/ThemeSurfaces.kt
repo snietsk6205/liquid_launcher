@@ -363,7 +363,7 @@ internal fun Modifier.pillSurface(which: String, backdrop: Backdrop, shape: Corn
     val env = LocalControls.current ?: return liquidGlass(backdrop, shape, fallback)
     // W3: the theme's material (wood, metal, stitched leather…) on the pills as on the buttons: the face is drawn over
     // clear glass instead of the glass being tinted.
-    val material = currentTheme?.material?.takeIf { space.material && !it.plain }
+    val material = currentTheme?.material?.takeIf { space.material && !it.plain && dev.liquid.launcher.core.designsystem.GlassTest.variant != dev.liquid.launcher.core.designsystem.GlassTest.Variant.NoMaterial }
     var m = controlPanel(space, frost, "SPACE_BAR", backdrop, shape, env.glass, large = false, face = material != null)
     if (material != null) {
         val glassOn = frost.on("SPACE_BAR") && env.glass.quality != GlassQuality.Tint
@@ -422,7 +422,7 @@ internal fun Modifier.morphPillSurface(progress: () -> Float, backdrop: Backdrop
         drawerGlass == homeGlass -> liquidGlass(backdrop, shape, homeGlass)
         else -> liquidGlass(backdrop, shape, homeGlass.quality) { dev.liquid.launcher.core.designsystem.lerpGlass(homeGlass, drawerGlass, progress().coerceIn(0f, 1f)) }
     }
-    val material = currentTheme?.material?.takeIf { home.material && !it.plain }
+    val material = currentTheme?.material?.takeIf { home.material && !it.plain && dev.liquid.launcher.core.designsystem.GlassTest.variant != dev.liquid.launcher.core.designsystem.GlassTest.Variant.NoMaterial }
     val text = Color(home.text)
     val accent = HomeTheme.accent
     return base.drawBehind {

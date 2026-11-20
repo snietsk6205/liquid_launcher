@@ -99,8 +99,6 @@ internal fun LiquidSheet(
     val (shape, outline) = sheetOutline(RoundedCornerShape(cornerRadius))
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
-    // 0.11.1: it sinks back the way it rose when it closes, instead of only fading.
-    val presence = LocalPresence.current
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
@@ -117,7 +115,8 @@ internal fun LiquidSheet(
                     .fillMaxWidth()
                     .heightIn(max = limit)
                     .graphicsLayer {
-                        val p = appear.value * presence.value
+                        // 0.11.2: rises in; closing is Presence's quick fade (sinking drew the glass anew every frame).
+                        val p = appear.value
                         alpha = p.coerceIn(0f, 1f)
                         translationY = (1f - p) * 40.dp.toPx()
                     }

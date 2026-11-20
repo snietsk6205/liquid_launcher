@@ -482,21 +482,24 @@ private fun SearchKeyboard(controller: HomeController, focus: FocusRequester, wa
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val view = androidx.compose.ui.platform.LocalView.current
+    val insets = rememberFieldInsets()
     LaunchedEffect(controller.searchOpen) {
         if (!controller.searchOpen) {
             focusManager.clearFocus(force = true)
             return@LaunchedEffect
         }
-        if (!wanted) return@LaunchedEffect
+        if (!wanted || controller.speedChecking) return@LaunchedEffect
         if (!window.isWindowFocused) {
             DebugLog.event("Home", "search: waiting for the window's focus before asking for the keyboard")
             kotlinx.coroutines.withTimeoutOrNull(1500) { snapshotFlow { window.isWindowFocused }.first { it } }
         }
         runCatching { focus.requestFocus() }
         keyboard?.show()
-        fun coming(): Boolean = view.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true
-        // 0.10.4: the first look comes sooner (it was 350 ms): a request the system dropped is made again sooner.
-        for ((i, wait) in listOf(200L, 500L, 900L).withIndex()) {
+        // 0.11.2: a keyboard already sliding in counts as coming (its animation has a target): asking again then could
+        // restart it. On Med's phone about half the openings had no keyboard yet at 200 ms and were asked again.
+        fun coming(): Boolean = view.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true ||
+            insets.imeTarget() > insets.nav() + 1f || insets.ime() > insets.nav() + 1f
+        for ((i, wait) in listOf(300L, 450L, 900L).withIndex()) {
             kotlinx.coroutines.delay(wait)
             if (!controller.searchOpen || coming()) return@LaunchedEffect
             DebugLog.event("Home", "search: no keyboard yet, asking again (${i + 1}; window focused: ${if (window.isWindowFocused) "yes" else "no"})")
@@ -507,7 +510,7 @@ private fun SearchKeyboard(controller: HomeController, focus: FocusRequester, wa
                 runCatching { focus.requestFocus() }
             }
             keyboard?.show()
-            view.windowInsetsController?.show(android.view.WindowInsets.Type.ime())
+            if (i > 0) view.windowInsetsController?.show(android.view.WindowInsets.Type.ime())
         }
     }
 }
@@ -535,19 +538,39 @@ private fun KeyboardWatch(controller: HomeController) {
             }
         }
     }
+    // When search last opened, for the log's "started … ms after search opened".
+    val openedAt = remember { longArrayOf(0L) }
+    LaunchedEffect(controller.searchOpen) { if (controller.searchOpen) openedAt[0] = android.os.SystemClock.uptimeMillis() }
     LaunchedEffect(insets) {
-        // 0.10.4: only the height the keyboard OPENS at is remembered, once its opening animation has ended, never
-        // what it grows to while you type (a suggestion strip, an emoji panel). On the phone 1041 px was remembered
-        // after typing, the keyboard then opened at 933 px, and the field flew too high and came back down.
+        // 0.11.2: every opening is remembered with the last few (the field waits at the lowest of them, KeyboardLine)
+        // and logged with where the field waited, so a field that went too high shows in the log with its numbers. A
+        // later settle while the keyboard stays open only lowers the newest height (a strip that went away), never
+        // raises it (one that came while typing: 0.10.4 remembered 1041 px after typing, then it opened at 933 px).
         var opening = false
+        var startedAt = 0L
+        var lastSettled = -1f
         snapshotFlow { Triple(insets.ime(), insets.imeTarget(), insets.nav()) }.collect { (now, target, nav) ->
             if (target <= nav + 1f) {
                 // Away (or on its way out): the next time it comes up is an opening.
                 opening = true
-            } else if (opening && now > nav + 1f && kotlin.math.abs(now - target) < 1f) {
-                opening = false
-                controller.rememberKeyboard(now)
+                startedAt = 0L
+                lastSettled = -1f
+                return@collect
             }
+            if (opening && startedAt == 0L) startedAt = android.os.SystemClock.uptimeMillis()
+            if (now <= nav + 1f || kotlin.math.abs(now - target) >= 1f || kotlin.math.abs(now - lastSettled) < 1f) return@collect
+            if (opening) {
+                val guess = controller.keyboardGuess
+                val lower = if (now < guess - 1f) ": lower than the field waited, it came down" else ""
+                val after = if (openedAt[0] > 0L && startedAt >= openedAt[0]) "; it started ${startedAt - openedAt[0]} ms after search opened" else ""
+                DebugLog.event("Home", "search: keyboard opened at ${now.roundToInt()} px (the field waited at ${guess.roundToInt()} px$lower)$after")
+                controller.rememberKeyboard(now, opening = true)
+                opening = false
+            } else if (controller.searchOpen) {
+                if (now < lastSettled - 1f) DebugLog.event("Home", "search: keyboard went down to ${now.roundToInt()} px while open")
+                controller.rememberKeyboard(now, opening = false)
+            }
+            lastSettled = now
         }
     }
     LaunchedEffect(controller.searchOpen) {

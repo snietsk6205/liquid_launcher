@@ -24,6 +24,9 @@ internal class FrameMeter : Window.OnFrameMetricsAvailableListener {
     private var layoutNs = 0L
     private var drawNs = 0L
     private var syncNs = 0L
+
+    // 0.11.2: the frames' deadlines, to say at what refresh rate the screen ran (60, 90, 120 Hz).
+    private var deadlineNs = 0L
     private var label = ""
     private var minFrames = 120
 
@@ -43,6 +46,7 @@ internal class FrameMeter : Window.OnFrameMetricsAvailableListener {
         layoutNs += metrics.getMetric(FrameMetrics.LAYOUT_MEASURE_DURATION)
         drawNs += metrics.getMetric(FrameMetrics.DRAW_DURATION)
         syncNs += metrics.getMetric(FrameMetrics.SYNC_DURATION) + metrics.getMetric(FrameMetrics.COMMAND_ISSUE_DURATION)
+        deadlineNs += deadline
         if (total > worstNs) worstNs = total
         if (total > deadline) late++
         late += dropCount
@@ -55,10 +59,11 @@ internal class FrameMeter : Window.OnFrameMetricsAvailableListener {
             val avg = totalNs / frames / 1e6
             val gpu = gpuNs / frames / 1e6
             fun ms(ns: Long) = ns / frames / 1e6
+            val hz = if (deadlineNs > 0) 1e9 * frames / deadlineNs else 0.0
             DebugLog.event(
                 "Frames",
-                "%d drawn, %d late (%.1f %%), %.1f ms on average (GPU %.1f ms; input and composing %.1f, layout %.1f, draw %.1f, sync %.1f), worst %.1f ms; %s".format(
-                    frames, late, late * 100f / frames, avg, gpu, ms(animNs), ms(layoutNs), ms(drawNs), ms(syncNs), worstNs / 1e6,
+                "%d drawn, %d late (%.1f %%), %.1f ms on average (GPU %.1f ms; input and composing %.1f, layout %.1f, draw %.1f, sync %.1f), worst %.1f ms, at %.0f Hz; %s".format(
+                    frames, late, late * 100f / frames, avg, gpu, ms(animNs), ms(layoutNs), ms(drawNs), ms(syncNs), worstNs / 1e6, hz,
                     label.ifEmpty { "no moving background" },
                 ),
             )
@@ -72,5 +77,6 @@ internal class FrameMeter : Window.OnFrameMetricsAvailableListener {
         layoutNs = 0
         drawNs = 0
         syncNs = 0
+        deadlineNs = 0
     }
 }

@@ -217,9 +217,7 @@ internal fun WallpaperStudio(
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
     // 0.11.1: read while drawing, not composing: the whole screen recomposed on every frame of its entrance before.
-    // It sinks away again when the screen closes (Presence).
-    val presence = LocalPresence.current
-    fun shown(): Float = toggled.value * appear.value.coerceIn(0f, 1.05f) * presence.value
+    fun shown(): Float = toggled.value * appear.value.coerceIn(0f, 1.05f)
     val sheetVisible by remember { androidx.compose.runtime.derivedStateOf { shown() > 0.01f } }
     // 0.10.4: the pictures take more room (two rows and a bit), and the handle on top pulls the sheet up to about
     // three and a half rows; it stays where you left it.
@@ -796,13 +794,12 @@ private fun PlaceBar(state: StudioState, glass: GlassConfig, lightBackground: Bo
     }
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
-    val presence = LocalPresence.current
     Column(
         modifier
             .navigationBarsPadding()
             .padding(12.dp)
             .graphicsLayer {
-                val p = appear.value * presence.value
+                val p = appear.value
                 alpha = p.coerceIn(0f, 1f)
                 translationY = (1f - p) * 40.dp.toPx()
             }

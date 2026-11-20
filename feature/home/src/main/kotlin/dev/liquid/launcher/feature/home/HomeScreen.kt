@@ -437,6 +437,8 @@ private fun HomeScreenBody(
                     controller.setupStudy()
                     controller.run(LauncherAction.Today)
                 }
+                // 0.11.2: Settings → Diagnostics → Speed check.
+                "speedCheck" -> controller.runSpeedCheck()
             }
             returnState.request = null
         }

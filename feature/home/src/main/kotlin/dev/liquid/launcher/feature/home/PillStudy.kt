@@ -131,7 +131,9 @@ internal fun StudyPillItem(controller: HomeController, look: StudyItemLook, colo
     val showRing = loaded && look.ring != "none" && look.look != "circle"
     val stroke = 2.5.dp
     val outer = if (showRing) item + 10.dp else item
-    // C3: a block ended without a mark: the item breathes twice, then rests for a while, until it is marked.
+    // C3: a block ended without a mark: the item breathes twice, then rests, until it is marked. 0.11.2: it rests five
+    // minutes (14 s before): each breath redraws the pill's glass, and on Med's phone the home screen at rest drew 600
+    // frames a minute for it.
     val missed = (glance as? StudyGlance.Unmarked)?.block?.key
     val pulse = remember { androidx.compose.animation.core.Animatable(0f) }
     androidx.compose.runtime.LaunchedEffect(missed) {
@@ -144,7 +146,7 @@ internal fun StudyPillItem(controller: HomeController, look: StudyItemLook, colo
                 pulse.animateTo(1f, androidx.compose.animation.core.tween(520, easing = androidx.compose.animation.core.FastOutSlowInEasing))
                 pulse.animateTo(0f, androidx.compose.animation.core.tween(760, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
             }
-            kotlinx.coroutines.delay(14_000)
+            kotlinx.coroutines.delay(5 * 60_000L)
         }
     }
     Row(verticalAlignment = Alignment.CenterVertically) {

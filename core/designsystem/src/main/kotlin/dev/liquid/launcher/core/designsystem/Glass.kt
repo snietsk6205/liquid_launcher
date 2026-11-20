@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -110,6 +112,35 @@ data class GlassStyle(
     }
 }
 
+/**
+ * 0.11.2: the speed check (Settings → Diagnostics) draws every glass surface one way after another while it plays the
+ * main animations, so the frame meter measures on the phone itself what each part of the glass costs: its blur, the
+ * bending, its shadows, the theme's material, or no glass at all. [Variant.AsSet] outside the check.
+ */
+object GlassTest {
+    enum class Variant(val label: String) {
+        AsSet("glass as set"),
+        NoBlur("glass without its blur"),
+        KindFrosted("frosted glass, no bending"),
+        KindLiquid("liquid glass, bending"),
+        NoShadow("glass without shadows"),
+        NoMaterial("without the theme's material"),
+        Tint("a flat tint, no glass"),
+    }
+
+    var variant by androidx.compose.runtime.mutableStateOf(Variant.AsSet)
+
+    /** [style] as the variant draws it. */
+    fun apply(style: GlassStyle): GlassStyle = when (variant) {
+        Variant.AsSet, Variant.NoMaterial -> style
+        Variant.NoBlur -> style.copy(blur = 0.dp)
+        Variant.KindFrosted -> style.copy(refraction = 0f, dispersion = false, bevel = 3.dp)
+        Variant.KindLiquid -> style.copy(refraction = 0.6f, dispersion = true, dispersionAmount = 0.25f, bevel = 12.dp)
+        Variant.NoShadow -> style.copy(shadow = 0f, glow = 0f)
+        Variant.Tint -> style.copy(quality = GlassQuality.Tint)
+    }
+}
+
 /** The rim for [style], or null for none. */
 private fun rimOf(style: GlassStyle): (() -> Highlight?)? =
     if (style.rim <= 0.01f) null else ({
@@ -147,6 +178,9 @@ private fun BackdropEffectScope.look(style: GlassStyle) {
  * would sample itself. Use it on a few surfaces at a time, never per item in a scrolling list.
  */
 fun Modifier.liquidGlass(backdrop: Backdrop, shape: CornerBasedShape, style: GlassStyle, exported: LayerBackdrop? = null): Modifier =
+    liquidGlassAsGiven(backdrop, shape, GlassTest.apply(style), exported)
+
+private fun Modifier.liquidGlassAsGiven(backdrop: Backdrop, shape: CornerBasedShape, style: GlassStyle, exported: LayerBackdrop?): Modifier =
     when (style.quality) {
         GlassQuality.Full -> drawBackdrop(
             backdrop = backdrop,
@@ -197,8 +231,11 @@ fun Modifier.liquidGlass(backdrop: Backdrop, shape: CornerBasedShape, style: Gla
  * recomposing. [quality] decides how it is drawn and must not change while it is used.
  */
 fun Modifier.liquidGlass(backdrop: Backdrop, shape: CornerBasedShape, quality: GlassQuality, style: () -> GlassStyle): Modifier =
+    liquidGlassLive(backdrop, shape, if (GlassTest.variant == GlassTest.Variant.Tint) GlassQuality.Tint else quality) { GlassTest.apply(style()) }
+
+private fun Modifier.liquidGlassLive(backdrop: Backdrop, shape: CornerBasedShape, quality: GlassQuality, style: () -> GlassStyle): Modifier =
     when (quality) {
-        GlassQuality.Tint -> liquidGlass(backdrop, shape, style())
+        GlassQuality.Tint -> liquidGlassAsGiven(backdrop, shape, style(), null)
         else -> drawBackdrop(
             backdrop = backdrop,
             shape = { shape },

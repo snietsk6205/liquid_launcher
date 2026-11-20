@@ -109,7 +109,7 @@ private val editorTabs: Map<String, Set<SettingsTab>> = mapOf(
     "effects" to setOf(SettingsTab.LOOK),
     "buttons" to setOf(SettingsTab.LOOK),
     "wallpaper" to setOf(SettingsTab.LOOK),
-    "study" to setOf(SettingsTab.LAYOUT),
+    "study" to setOf(SettingsTab.LAYOUT, SettingsTab.MORE),
     "layouts" to setOf(SettingsTab.LAYOUT),
     "backup" to setOf(SettingsTab.BEHAVIOUR, SettingsTab.MORE),
 )
@@ -145,6 +145,7 @@ private fun PageEditors(surface: String, tab: SettingsTab, store: SettingsStore,
         ) { open(Screen.ThemeLab) }
         "wallpaper" to SettingsTab.LOOK -> WallpaperEditor()
         "study" to SettingsTab.LAYOUT -> StudyEditor(store)
+        "study" to SettingsTab.MORE -> CameraAppEditor(store)
         "layouts" to SettingsTab.LAYOUT -> LayoutsAndBackupEditor()
         "backup" to SettingsTab.BEHAVIOUR -> BackupEditor(store)
         "backup" to SettingsTab.MORE -> ClaudeEditor(store)

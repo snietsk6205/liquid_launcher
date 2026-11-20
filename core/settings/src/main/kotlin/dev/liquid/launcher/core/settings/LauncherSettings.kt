@@ -663,7 +663,7 @@ object LauncherSettings {
         ),
         title = "Search field",
         summary = "Above the keyboard and at the bottom, the pill itself becomes the field (with \"The pill becomes the search field\" " +
-            "in Drawer motion and the pill at the bottom). The launcher remembers your keyboard's height, so the field never goes down and up again",
+            "in Drawer motion and the pill at the bottom). The field waits at the lowest height your keyboard opened at lately and the keyboard pushes it up from there, so it never goes above the keyboard",
         section = "search", keywords = "search field position keyboard bottom top pill morph",
     )
     val SearchHomeScale = IntSetting(
@@ -1883,6 +1883,11 @@ object LauncherSettings {
         key = "state.keyboardHeight", default = 0, min = 0, max = 10000,
         title = "Height of the keyboard last time, px", section = "state", hidden = true,
     )
+    /** 0.11.2: the heights the keyboard opened at lately (px, newest last); search's field waits at the lowest. */
+    val SearchKeyboardOpenings = StringListSetting(
+        key = "state.keyboardOpenings", default = emptyList(),
+        title = "Heights the keyboard opened at lately, px", section = "state", hidden = true,
+    )
     val WallpaperSheetTall = BoolSetting(
         key = "state.wallpaperSheetTall", default = false,
         title = "Wallpaper screen pulled up", section = "state", hidden = true,
@@ -2114,6 +2119,16 @@ object LauncherSettings {
         summary = "0: only when it starts. Which notices show at all is in Glass notices",
         section = "study", keywords = "study notice block start end minutes",
     )
+    /** 0.11.2 (Med): the camera app for board photos, a package name; empty: the phone's default. Chosen on the page. */
+    val StudyCameraApp = TextSetting(
+        key = "study.cameraApp", default = "",
+        title = "Camera for board photos",
+        summary = "The app that takes the board photos; empty: the phone's default camera",
+        section = "study", keywords = "camera photo board picture app essai class",
+        hidden = true,
+    )
+    /** 0.11.2: the board photo being taken (BoardPhotos), so a launcher restarted while the camera is open still saves it. */
+    val StudyPendingPhoto = TextSetting(key = "state.pendingPhoto", default = "", title = "Board photo being taken", section = "state", hidden = true)
     val StudyClaudeApp = TextSetting(
         key = "study.claudeApp", default = "com.anthropic.claude",
         placeholder = "com.anthropic.claude",
@@ -2625,13 +2640,13 @@ object LauncherSettings {
         TagStripPosition, TagButtonPosition, TagButtonSize, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
         MenuEntries,
         SearchTransition, SearchBounce, SearchSpeed, SearchStretch, SearchField, SearchOpenKeyboard, SearchBlur, SearchDim, SearchHomeScale,
-        SearchClaude, SearchClaudeTarget, SearchClipboard, SearchEngine, SearchKeyboardHeight, WallpaperSheetTall,
+        SearchClaude, SearchClaudeTarget, SearchClipboard, SearchEngine, SearchKeyboardHeight, SearchKeyboardOpenings, WallpaperSheetTall,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
         BackupAuto, BackupKeep, BackupWallpapers, BackupFolder, BackupLast,
         LayoutWindowLayout, LayoutWindowFrom, LayoutWindowTo, LayoutWindowDays,
-        StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyPlanLink, StudyLinkOpener,
+        StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyCameraApp, StudyPendingPhoto, StudyPlanLink, StudyLinkOpener,
         StudyAttendance, StudyLeaveBy, StudyCommute, StudyRest, StudyWindDown, StudySpeedBump, StudySpeedBumpTags, StudyFeedCalendar, StudyFeedLocal, StudyGlassTint,
         StudyCommuteLayout, StudyExamLayout, ContextActive, ContextApplied, ContextBase, LayoutTimerUntil, LayoutTimerLayout, LayoutTimerBack,
         StudyQuiet, StudyQuietPeople, StudyQuietEmail, StudyQuietTags, StudyAnnales,

@@ -293,6 +293,10 @@ object SettingsMap {
         Editor("Search page cards", "Which cards the search page shows and in what order: the Today line (calendar and exams), the study card, Ask Claude, your apps, and every other card",
             "search page cards order today line calendar month exam countdown timeline widgets claude prompts commands next block apps calm", "search", SettingsTab.LAYOUT),
         Editor("Pill items", "What the pill holds and in what order", "pill items slots icons order search apps claude study", "pill", SettingsTab.LAYOUT),
+        Editor(
+            "Camera for board photos", "The camera app that takes the board photos, and a test photo",
+            "camera photo board picture app essai class test", "study", SettingsTab.MORE,
+        ),
         Editor("Pill study item", "How the pill's study item looks: icon, circle, picture, block name", "pill study item circle pebble ring look", "pill", SettingsTab.LOOK),
         Editor("Home menu items", "The glass pills of the home menu (long press on empty space)", "home menu items pills long press order", "menus", SettingsTab.LAYOUT),
         Editor("Long-press menu of apps", "The entries of an app's long-press menu", "app long press menu entries order", "menus", SettingsTab.LAYOUT),

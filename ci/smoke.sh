@@ -622,7 +622,8 @@ sleep 1.5
 peek 10c-search-claude
 dump 10c-search-claude
 if on_screen 10c-search-claude "Ask Claude" exact; then pass "a question offers Ask Claude"; else fail "a question offers Ask Claude"; fi
-KB=$(grep -o "keyboard height [0-9]* px" "$LOG" | tail -1 | grep -o "[0-9][0-9]*")
+# 0.11.2: each opening is logged as "search: keyboard opened at N px (the field waited at M px…)".
+KB=$(grep -o "keyboard opened at [0-9]* px" "$LOG" | tail -1 | grep -o "[0-9][0-9]*")
 SCREEN_H=$(adb shell wm size | grep -o "[0-9]*x[0-9]*" | tail -1 | cut -dx -f2)
 FIELD=$(python3 ci/find_text.py "$OUT/10c-search-claude.xml" "Search" exact | cut -d' ' -f2)
 if [ -n "$KB" ] && [ -n "$FIELD" ] && [ -n "$SCREEN_H" ]; then
@@ -631,6 +632,14 @@ if [ -n "$KB" ] && [ -n "$FIELD" ] && [ -n "$SCREEN_H" ]; then
   if [ "$FIELD" -lt "$KB_TOP" ] && [ "$FIELD" -gt $((KB_TOP - 260)) ]; then pass "the search field sits above the keyboard"; else fail "the search field sits above the keyboard"; fi
 else
   echo "NOTE: no keyboard height in the log or no field found (keyboard '$KB', field '$FIELD'); field position not checked"
+fi
+# 0.11.2 (Med: "never above"): the field waits at the lowest height the keyboard opened at, so after the first opening
+# it never goes above the keyboard to come back down; the log says so when it had to.
+grep "search: keyboard opened at" "$LOG" | tail -4 | sed 's/^/        /'
+if grep -q "lower than the field waited" "$LOG"; then
+  note "the keyboard once opened lower than the field waited (a first opening with no height known, or a keyboard that changed)"
+else
+  pass "the search field never waited above the keyboard"
 fi
 adb shell input keyevent KEYCODE_BACK
 sleep 0.5
@@ -1137,6 +1146,31 @@ else
   fail "the real glass shader compiles"
   grep -E "liquid glass shader" "$LOG" | tail -4
 fi
+
+clear_anr
+# 0.11.2: the speed check (Settings → Diagnostics → Speed check) plays the drawer, search, the home menu and the study
+# hub with each way of drawing the glass, each step a "Frames:" line of its own. It must run to its end: every way of
+# drawing the glass (no blur, frosted, liquid, no shadows, no material, a flat tint) is drawn on the way.
+echo "== 17. Speed check"
+adb shell input keyevent KEYCODE_HOME
+sleep 1.5
+SPEED_DONE=$(grep -c "speed check: done" "$LOG" || true)
+adb shell am start -n "$HOME_ACTIVITY" --es dev.liquid.launcher.OPEN speedCheck >/dev/null
+for i in $(seq 1 60); do
+  sleep 3
+  [ "$(grep -c "speed check: done" "$LOG" || true)" -gt "$SPEED_DONE" ] && break
+done
+if [ "$(grep -c "speed check: done" "$LOG" || true)" -gt "$SPEED_DONE" ]; then
+  pass "the speed check runs to its end"
+  echo "      $(grep -c "Frames:.*speed check:" "$LOG" || true) measured steps; the first and the last:"
+  grep "Frames:.*speed check:" "$LOG" | head -1 | sed 's/^/        /'
+  grep "Frames:.*speed check:" "$LOG" | tail -1 | sed 's/^/        /'
+else
+  fail "the speed check runs to its end"
+  grep "speed check" "$LOG" | tail -6 | sed 's/^/        /'
+fi
+adb shell input keyevent KEYCODE_HOME
+sleep 1
 
 echo "== 8. No crashes"
 adb logcat -d > "$OUT/logcat.txt" 2>/dev/null

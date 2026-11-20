@@ -618,11 +618,18 @@ object FrameCost {
      */
     @Volatile var screen: String = ""
 
-    /** What is on screen, for the frame meter's line: the screen, the activity, then what keeps drawing. */
-    val label: String get() = listOfNotNull(screen.ifEmpty { null }, activity, base.ifEmpty { null }).joinToString("; ")
+    /**
+     * 0.11.2: the step of the speed check under way ("speed check: drawer, glass without its blur"), or null. While it
+     * is set it is the whole label, so each step is one line however the screens change during it.
+     */
+    @Volatile var check: String? = null
 
-    /** An activity's frames are worth a line from 30 (a drag lasts a second or two); a still screen's from 120. */
-    val minFrames: Int get() = if (activity != null) 30 else 120
+    /** What is on screen, for the frame meter's line: the screen, the activity, then what keeps drawing. */
+    val label: String get() = check?.let { "$it; ${base.ifEmpty { "no moving background" }}" }
+        ?: listOfNotNull(screen.ifEmpty { null }, activity, base.ifEmpty { null }).joinToString("; ")
+
+    /** An activity's frames are worth a line from 30 (a drag lasts a second or two); a still screen's from 120; a step of the speed check from 10. */
+    val minFrames: Int get() = if (check != null) 10 else if (activity != null) 30 else 120
 
     internal fun describe(fx: WallpaperFxConfig, theme: dev.liquid.launcher.core.data.LiquidTheme?) {
         val parts = mutableListOf<String>()
