@@ -971,9 +971,11 @@ sleep 1
 adb shell input keyevent KEYCODE_HOME
 sleep 1
 
-# 0.11.0: the letter circle (on by default, with the String letters). Settings → Letter index → String; then, in the
-# drawer, a slide across the top of the circle turns it about a third of a turn while held: the string's letters
-# come out (the frame meter writes "letter circle" for the frames it drives), and its picture is taken mid-turn.
+# 0.11.1: the letter areas (on by default with the String letters: one area on the right, 84 % across and 45 % down
+# the apps, 120 dp). Settings → Letter index → String; then, in the drawer, a slow swipe that starts inside the area
+# is the finger on the letters: they come out at the right edge and follow it (the frame meter writes "letter area"),
+# its picture is taken mid-swipe, and the log says which letters it went from and to. A tap there still opens the app
+# (the apps' own checks above cover taps; here only the swipe).
 clear_anr
 adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen page:index >/dev/null
 wait_top "SettingsActivity" 8 || true
@@ -987,7 +989,7 @@ if tap_text 14c-settings "Rail: short"; then
   tap_text 14c-style "String: letters" || note "the String choice was not found in the style dialog"
   sleep 1
 else
-  note "the Letter index style row was not found; the circle check may not see a circle"
+  note "the Letter index style row was not found; the areas check may not see the areas"
 fi
 adb shell input keyevent KEYCODE_BACK
 sleep 0.5
@@ -996,28 +998,30 @@ wait_top "$HOME_ACTIVITY" 6 || true
 sleep 1.5
 adb shell input swipe 540 1500 540 400 450
 sleep 2
-dump 14c-circle
-if CIRCLE=$(python3 ci/find_text.py "$OUT/14c-circle.xml" "Letter circle" exact); then
-  pass "the drawer shows the letter circle"
-  CX=${CIRCLE% *}
-  CY=${CIRCLE#* }
-  CIRCLE_LINES=$(grep -c "letter circle: turned" "$LOG" || true)
-  adb shell input swipe $((CX - 100)) $((CY - 60)) $((CX + 100)) $((CY - 60)) 2600 &
+dump 14c-areas
+if AREAS=$(python3 ci/find_text.py "$OUT/14c-areas.xml" "Letter areas" exact bounds); then
+  pass "the drawer shows the letter areas"
+  read -r AL AT AR AB <<< "$AREAS"
+  # The default area's middle, where LetterAreaViews puts it: 84 % across and 45 % down the box the areas live in.
+  AX=$((AL + (AR - AL) * 84 / 100))
+  AY=$((AT + (AB - AT) * 45 / 100))
+  AREA_LINES=$(grep -c "letter area: swiped from" "$LOG" || true)
+  adb shell input swipe "$AX" "$AY" "$AX" $((AY - 420)) 2600 &
   SWIPE_PID=$!
   sleep 1.5
-  peek 14c-circle-turning
+  peek 14c-area-swiping
   wait "$SWIPE_PID" 2>/dev/null
   sleep 1.5
-  if [ "$(grep -c "letter circle: turned" "$LOG" || true)" -gt "$CIRCLE_LINES" ]; then
-    pass "turning the letter circle drives the letters"
-    grep "letter circle: turned" "$LOG" | tail -1 | sed 's/^/        /'
+  if [ "$(grep -c "letter area: swiped from" "$LOG" || true)" -gt "$AREA_LINES" ]; then
+    pass "a swipe from a letter area drives the letters"
+    grep "letter area: swiped from" "$LOG" | tail -1 | sed 's/^/        /'
   else
-    fail "turning the letter circle drives the letters"
+    fail "a swipe from a letter area drives the letters"
   fi
   adb shell input keyevent KEYCODE_BACK
   sleep 1
 else
-  fail "the drawer shows the letter circle"
+  fail "the drawer shows the letter areas"
 fi
 adb shell input keyevent KEYCODE_HOME
 sleep 1

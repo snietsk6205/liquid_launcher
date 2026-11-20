@@ -17,4 +17,29 @@ object SettingsMigrations {
         }
         settings.set(LauncherSettings.IndexMigrated0110, true)
     }
+
+    /**
+     * 0.11.1: the letter circle became letter areas. If the circle had been moved or resized (by holding and dragging it,
+     * in 0.11.0), the first area takes its place and size, on the right; "The edge pulls the letters too" becomes the
+     * opposite of "Letters only from the areas". Once.
+     */
+    fun migrate0111(settings: SettingsStore) {
+        if (settings.get(LauncherSettings.IndexMigrated0111)) return
+        val moved = settings.isChanged(LauncherSettings.IndexDialX) || settings.isChanged(LauncherSettings.IndexDialY) ||
+            settings.isChanged(LauncherSettings.IndexDialSize)
+        if (moved && !settings.isChanged(LauncherSettings.IndexAreas)) {
+            val area = LetterArea(
+                right = true,
+                across = settings.get(LauncherSettings.IndexDialX),
+                down = settings.get(LauncherSettings.IndexDialY),
+                sizeDp = settings.get(LauncherSettings.IndexDialSize).coerceIn(LetterArea.MIN_SIZE, LetterArea.MAX_SIZE),
+            )
+            settings.set(LauncherSettings.IndexAreas, listOf(LetterAreas.format(area)))
+            DebugLog.event("Settings", "0.11.1: the letter circle is now a letter area, where it was (${area.across} % across, ${area.down} % down)")
+        }
+        if (settings.isChanged(LauncherSettings.IndexDialEdge)) {
+            settings.set(LauncherSettings.IndexAreasOnly, !settings.get(LauncherSettings.IndexDialEdge))
+        }
+        settings.set(LauncherSettings.IndexMigrated0111, true)
+    }
 }

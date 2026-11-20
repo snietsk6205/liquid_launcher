@@ -1226,8 +1226,8 @@ object LauncherSettings {
         options = listOf(
             "always" to "Always",
             "scroll" to "While scrolling or touching",
-            // 0.11.0: the default; with the letter circle on, the circle brings them out (the edge is left to Back).
-            "touch" to "Hidden until you use them (the circle, or the edge)",
+            // 0.11.0: the default; with the letter areas on (0.11.1), a swipe from an area brings them out (the edge is left to Back).
+            "touch" to "Hidden until you use them (from a letter area, or the edge)",
         ),
         title = "Show the letters",
         summary = "The letters float over the list. \"While scrolling\" and \"Hidden until you use them\" fade them out when you are done (\"Hide after\" sets when); with \"Always\" the apps keep clear of them",
@@ -1364,75 +1364,69 @@ object LauncherSettings {
         section = "drawerIndex", keywords = "index focus highlight dim fade letter",
     )
 
-    // ---- 0.11.0: the letter circle (Med's sketch): a ring over the apps that turns through the letters ----
+    // ---- 0.11.1: letter areas (0.11.0's "letter circle", redone as Med meant it): circles over the apps where a swipe
+    // starts the letters as if the finger were on them there; taps and long presses still reach the apps underneath ----
     val IndexDial = BoolSetting(
         key = "index.dial", default = true,
-        title = "Letter circle",
-        summary = "A circle floating over the apps: slide your thumb round it and the letters come out at the edge as if you pulled them, " +
-            "the list following. The edge itself is left to Back. Hold the circle to move it",
-        section = "drawerIndex", keywords = "circle dial wheel ring knob letters scroll thumb one hand back gesture",
+        title = "Letter areas",
+        summary = "Circles over the apps: start a swipe inside one and the letters come out at its edge, as if your finger were on them " +
+            "there, and follow it. A tap or a long press still reaches the app under the circle. Add, place and size them below",
+        section = "drawerIndex", keywords = "letter areas circle area zone swipe start letters scroll thumb one hand back gesture",
     )
-    val IndexDialStyle = ChoiceSetting(
-        key = "index.dialStyle", default = "knob",
-        options = listOf(
-            "knob" to "Like a knob: slide round from wherever you touch; clockwise goes on through the alphabet",
-            "clock" to "Like a clock face: A at the top, round to Z; touching a spot jumps to its letter",
-        ),
-        title = "Circle: how it turns",
-        section = "drawerIndex", keywords = "circle dial knob clock turn rotate",
+    /** The areas, one per entry, as [LetterAreas] writes them ("right,84,45,120": edge, across %, down %, size dp); edited on the page. */
+    val IndexAreas = StringListSetting(
+        key = "index.areas", default = listOf(LetterAreas.format(LetterArea.Default)),
+        title = "Letter areas: where they are", section = "drawerIndex", hidden = true,
     )
-    val IndexDialTurn = IntSetting(
-        key = "index.dialTurn", default = 100, min = 50, max = 300, step = 25, unit = "% of a turn",
-        title = "Circle: turn for A to Z",
-        summary = "How far you turn the circle to go through the whole alphabet: 100 % is one full turn, more is slower and finer",
-        section = "drawerIndex", keywords = "circle dial speed turn sensitivity",
+    val IndexAreasOnly = BoolSetting(
+        key = "index.areasOnly", default = true,
+        title = "Letters only from the areas",
+        summary = "The screen's edge no longer brings the letters out, so Back works along the whole edge. Off: the edge pulls them too " +
+            "(Back can miss there)",
+        section = "drawerIndex", keywords = "letter areas only edge back gesture strip start",
     )
+    // Before 0.11.1: the one circle's place and size (read once to place the first area), and the edge switch.
     val IndexDialSize = IntSetting(
         key = "index.dialSize", default = 120, min = 72, max = 200, step = 4, unit = "dp",
-        title = "Circle: size",
-        section = "drawerIndex", keywords = "circle dial size big small",
+        title = "Letter circle's size (before 0.11.1)", section = "state", hidden = true,
     )
     val IndexDialX = IntSetting(
-        key = "index.dialX", default = 84, min = 0, max = 100, unit = "% across",
-        title = "Circle: across",
-        summary = "Where its middle sits, from the left edge of the screen. Holding the circle and dragging it sets this too",
-        section = "drawerIndex", keywords = "circle dial position place move left right",
+        key = "index.dialX", default = 84, min = 0, max = 100, unit = "%",
+        title = "Letter circle across (before 0.11.1)", section = "state", hidden = true,
     )
     val IndexDialY = IntSetting(
-        key = "index.dialY", default = 45, min = 0, max = 100, unit = "% down",
-        title = "Circle: down",
-        summary = "Where its middle sits, down the list of apps: 0 % at its top, 100 % just above the search field",
-        section = "drawerIndex", keywords = "circle dial position place move up down",
+        key = "index.dialY", default = 45, min = 0, max = 100, unit = "%",
+        title = "Letter circle down (before 0.11.1)", section = "state", hidden = true,
+    )
+    val IndexDialEdge = BoolSetting(
+        key = "index.dialEdge", default = false,
+        title = "The edge pulls the letters too (before 0.11.1)", section = "state", hidden = true,
     )
     val IndexDialColour = ChoiceSetting(
         key = "index.dialColour", default = "wallpaper",
         options = listOf("wallpaper" to "From the wallpaper", "accent" to "The accent", "custom" to "My colour"),
-        title = "Circle: colour",
-        summary = "Its rings are a dark, a middle and a light shade of this colour",
-        section = "drawerIndex", keywords = "circle dial colour color wallpaper accent",
+        title = "Letter areas: colour",
+        summary = "The colour of the circles",
+        section = "drawerIndex", keywords = "letter areas circle colour color wallpaper accent",
     )
     val IndexDialCustom = ColorSetting(
         key = "index.dialCustom", default = "#3F9B6E", autoLabel = "Green",
-        title = "Circle: my colour",
-        section = "drawerIndex", keywords = "circle dial colour color custom",
+        title = "Letter areas: my colour",
+        section = "drawerIndex", keywords = "letter areas circle colour color custom",
     )
     val IndexDialOpacity = IntSetting(
-        key = "index.dialOpacity", default = 85, min = 20, max = 100, step = 5, unit = "%",
-        title = "Circle: opacity",
-        section = "drawerIndex", keywords = "circle dial opacity transparent see-through",
+        key = "index.dialOpacity", default = 60, min = 0, max = 100, step = 5, unit = "%",
+        title = "Letter areas: opacity",
+        summary = "How clearly the circles show. 0 %: invisible; the areas still work",
+        section = "drawerIndex", keywords = "letter areas circle opacity transparent see-through invisible",
     )
     val IndexDialScrollOpacity = IntSetting(
         key = "index.dialScrollOpacity", default = 25, min = 0, max = 100, step = 5, unit = "%",
-        title = "Circle: opacity while the apps scroll",
-        summary = "It fades while you scroll the apps, so it hides less of them, and comes back once the list stops",
-        section = "drawerIndex", keywords = "circle dial opacity fade scroll transparent",
+        title = "Letter areas: opacity while the apps scroll",
+        summary = "They fade while you scroll the apps, so they hide less of them, and come back once the list stops",
+        section = "drawerIndex", keywords = "letter areas circle opacity fade scroll transparent",
     )
-    val IndexDialEdge = BoolSetting(
-        key = "index.dialEdge", default = false,
-        title = "The edge pulls the letters too",
-        summary = "With the circle on, the screen's edge is left to Back. Switch on to pull the letters from the edge as well; Back can miss there",
-        section = "drawerIndex", keywords = "circle dial edge back gesture strip",
-    )
+    val IndexMigrated0111 = BoolSetting(key = "state.index0111", default = false, title = "Letter circle turned into areas", section = "state", hidden = true)
     val IndexMigrated0110 = BoolSetting(key = "state.index0110", default = false, title = "Letters hidden for the circle", section = "state", hidden = true)
 
     /** Tag ids shown as sections at the top of the main drawer list, in order. Edited in the tabs and tags editor. */
@@ -2625,8 +2619,8 @@ object LauncherSettings {
         DrawerTransition, DrawerTravel, DrawerPillMorph, DrawerSpeed, DrawerBounce, DrawerRise, DrawerHomeScale, DrawerHomeBlur, DrawerBlurLive,
         DrawerScrollbar, DrawerScrollBubble, DrawerScrollEffect, DrawerScrollStrength, DrawerOverscroll,
         IndexStyle, IndexRailHeight, IndexRailLift, IndexRailInset, IndexVisibility, IndexSide, IndexTrack, IndexReach, IndexEnds, IndexLetterSize, IndexSpacing, IndexBubble, IndexBubblePlace, IndexLetterGap, IndexBubbleGap, IndexHaptics, IndexFollow, IndexSpring, IndexHideDelay, IndexFocus, IndexStringTop, IndexStringBottom, IndexLetterColour, IndexLetterCustom,
-        IndexDial, IndexDialStyle, IndexDialTurn, IndexDialSize, IndexDialX, IndexDialY, IndexDialColour, IndexDialCustom, IndexDialOpacity,
-        IndexDialScrollOpacity, IndexDialEdge, IndexMigrated0110, DrawerTopSections,
+        IndexDial, IndexAreas, IndexAreasOnly, IndexDialSize, IndexDialX, IndexDialY, IndexDialEdge, IndexDialColour, IndexDialCustom,
+        IndexDialOpacity, IndexDialScrollOpacity, IndexMigrated0110, IndexMigrated0111, DrawerTopSections,
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
         TagStripPosition, TagButtonPosition, TagButtonSize, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
         MenuEntries,

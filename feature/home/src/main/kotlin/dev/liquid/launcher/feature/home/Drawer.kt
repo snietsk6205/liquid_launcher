@@ -412,8 +412,10 @@ fun AppDrawer(
     val useIndex = motion.scrollbar == "index" && !searching && currentTab.sort == "az"
     // The index floats over the list; letters that show at rest get a lane of their own (0.10.2, below).
     val highlight = remember { IndexHighlight() }
-    // 0.11.0: the letter circle drives the string through this.
+    // 0.11.1: a swipe from a letter area drives the string through this.
     val dialDrive = remember { IndexDrive() }
+    val areasOn = useIndex && indexConfig.style == "string" && indexConfig.dial && indexConfig.areas.isNotEmpty()
+    val areasLive = androidx.compose.runtime.rememberUpdatedState(interactive && areasOn)
     val density = LocalDensity.current
     val keyboardOrNav = WindowInsets.ime.union(WindowInsets.navigationBars)
     val tabsTop = showTabs && config.tabsTop
@@ -459,6 +461,10 @@ fun AppDrawer(
             // Closed: placed below the screen, so the invisible list cannot take the home screen's touches.
             .offset { if (controller.drawer.value <= 0f) IntOffset(0, controller.screenHeight.roundToInt() * 2) else IntOffset.Zero }
             .graphicsLayer { alpha = if (controller.drawer.value <= 0f) 0f else 1f }
+            // 0.11.1: a swipe that starts in a letter area is the finger on the letters; taps still reach the apps.
+            .letterAreaSwipes(dialDrive) {
+                areasLive.value && controller.drawer.value >= 0.95f && controller.selection == null && controller.drag == null
+            }
     ) {
         // ---- Recorded for the glass: dim and apps ----
         Box(Modifier.fillMaxSize().layerBackdrop(drawerLayer)) {
@@ -534,10 +540,10 @@ fun AppDrawer(
                     interactive = interactive,
                     highlight = highlight,
                     modifier = sideArea,
-                    drive = if (indexConfig.dial) dialDrive else null,
+                    drive = if (areasOn) dialDrive else null,
                 )
-                if (indexConfig.dial) {
-                    LetterDial(active, currentTab.index, indexConfig, dialDrive, controller, interactive, sideArea)
+                if (areasOn) {
+                    LetterAreaCircles(active, currentTab.index, indexConfig, dialDrive, controller, sideArea)
                 }
             } else if (motion.scrollbar != "off") {
                 DrawerScrollbar(

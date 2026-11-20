@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.stopScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -49,6 +50,7 @@ import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -376,7 +378,10 @@ internal fun ScrollIndex(
         }
     }
 
-    BoxWithConstraints(modifier.fillMaxSize()) {
+    // 0.11.1: where this box is on the screen, to turn a letter area's finger (in window coordinates) into its own.
+    // A plain holder, not state: it is read by the area's collector, never while composing.
+    val boxHolder = remember { CoordinatesHolder() }
+    BoxWithConstraints(modifier.fillMaxSize().then(Modifier.onGloballyPositioned { boxHolder.value = it })) {
         val height = constraints.maxHeight.toFloat()
         val width = constraints.maxWidth.toFloat()
         val n = entries.size
@@ -460,35 +465,37 @@ internal fun ScrollIndex(
             entries.map { measurer.measure(glyph(it.label, it.section), style) }
         }
 
-        // ---- 0.11.0: the letter circle turns the string as a finger at the edge would ----
+        // ---- 0.11.1: a swipe that started in a letter area is the finger on the string, wherever it goes ----
         if (drive != null) {
             LaunchedEffect(drive, n, top, spacing, width, reverse) {
                 var driving = false
+                var startLetter: String? = null
                 try {
-                androidx.compose.runtime.snapshotFlow { if (drive.active) drive.position else Float.NaN }.collect { pos ->
-                    if (!pos.isNaN()) {
-                        if (!driving) {
-                            driving = true
-                            touch.fromRight = config.side != "left"
-                            touch.active = -1
-                            touch.touching = true
-                            FrameCost.activity = "letter circle"
-                            launch { pop.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = MotionScale.stiffness(700f))) }
+                    androidx.compose.runtime.snapshotFlow { if (drive.active) drive.window else null }.collect { window ->
+                        val box = boxHolder.value?.takeIf { it.isAttached }
+                        if (window != null && box != null) {
+                            if (!driving) {
+                                driving = true
+                                touch.fromRight = drive.fromRight
+                                touch.active = -1
+                                touch.touching = true
+                                FrameCost.activity = "letter area"
+                                launch { pop.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = MotionScale.stiffness(700f))) }
+                            }
+                            val local = box.windowToLocal(window)
+                            follow(local.x, local.y)
+                            if (startLetter == null) startLetter = entries.getOrNull(touch.active)?.label
+                        } else if (window == null && driving) {
+                            driving = false
+                            touch.touching = false
+                            FrameCost.activity = null
+                            dev.liquid.launcher.core.common.DebugLog.event("Home", "letter area: swiped from ${startLetter.orEmpty()} to ${entries.getOrNull(touch.active)?.label.orEmpty()}")
+                            startLetter = null
+                            launch { pop.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = MotionScale.stiffness(500f))) }
                         }
-                        val p = pos.coerceIn(0f, (n - 1).toFloat())
-                        val y = top + ((if (reverse) (n - 1) - p else p) + 0.5f) * spacing
-                        // As if a finger held that letter a little in from the edge: the string bends out as it does then.
-                        val inward = with(density) { 28.dp.toPx() }
-                        follow(if (touch.fromRight) restX(true) - inward else restX(false) + inward, y)
-                    } else if (driving) {
-                        driving = false
-                        touch.touching = false
-                        FrameCost.activity = null
-                        launch { pop.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = MotionScale.stiffness(500f))) }
                     }
-                }
                 } finally {
-                    // Restarted or gone mid-turn: let go; a circle still held takes the string again at once.
+                    // Restarted or gone mid-swipe: let go; a finger still in the area takes the string again at once.
                     if (driving) {
                         touch.touching = false
                         FrameCost.activity = null
@@ -635,8 +642,8 @@ internal fun ScrollIndex(
         }
 
         // ---- touch strips: one per edge in use ----
-        // 0.11.0: with the letter circle on, the edge is left to Back unless "The edge pulls the letters too" is on.
-        if (interactive && (!config.dial || config.dialEdge)) {
+        // 0.11.1: with letter areas, the edge is left to Back unless "Letters only from the areas" is off.
+        if (interactive && (!config.dial || config.areas.isEmpty() || !config.areasOnly)) {
             val stripPx = with(density) { IndexStrip.toPx() }
             // 0.10.2: only the string's stretch (and a little beyond) takes the finger; the rest of the edge keeps Back.
             val reachPad = with(density) { 24.dp.toPx() }
@@ -713,12 +720,39 @@ private fun rowHeight(state: LazyGridState, index: GridIndex, row: Int): Float {
     return ((sample?.size?.height ?: 1) + info.mainAxisItemSpacing).toFloat().coerceAtLeast(1f)
 }
 
-private suspend fun scrollToRow(state: LazyGridState, index: GridIndex, row: Float) {
+private fun scrollToRow(state: LazyGridState, index: GridIndex, row: Float) {
     if (index.rowCount == 0) return
+    // 0.11.1: a short way is scrolled by its pixels, as a finger would scroll it: rows already built just move, and
+    // the list builds the next row ahead, between frames, instead of inside the frame that shows it. Neither way
+    // takes the scroll lock each frame or counts as "scrolling" (which would fade the letter areas).
+    if (state.layoutInfo.visibleItemsInfo.isNotEmpty()) {
+        val now = currentRow(state, index)
+        if (abs(row - now) <= NEAR_ROWS) {
+            val px = pixelsBetween(state, index, now, row)
+            if (abs(px) >= 0.5f) state.dispatchRawDelta(px)
+            return
+        }
+    }
+    // A long way (the first frame, or the list changed under the finger) is set at the next layout.
     val whole = floor(row).toInt().coerceIn(0, index.rowCount - 1)
     val fraction = (row - whole).coerceIn(0f, 1f)
     val offset = (fraction * rowHeight(state, index, whole)).roundToInt()
-    state.scrollToItem(index.firstItemOfRow(whole), offset)
+    state.requestScrollToItem(index.firstItemOfRow(whole), offset)
+}
+
+/** The list's pixels from continuous row [from] to [to] (negative back up the list), from the rows as laid out. */
+private fun pixelsBetween(state: LazyGridState, index: GridIndex, from: Float, to: Float): Float {
+    var px = 0f
+    var r = from
+    var steps = 0
+    while (abs(to - r) > 0.0001f && steps++ < 64) {
+        val forward = to > r
+        val row = if (forward) floor(r).toInt() else ceil(r).toInt() - 1
+        val next = if (forward) minOf(row + 1f, to) else maxOf(row.toFloat(), to)
+        px += (next - r) * rowHeight(state, index, row.coerceIn(0, index.rowCount - 1))
+        r = next
+    }
+    return px
 }
 
 /** The list glides to [IndexTouch.target] while the finger moves, with the "Follow" delay (shared by the string and the rail). */
@@ -729,18 +763,19 @@ private fun GlideList(state: LazyGridState, index: GridIndex, touch: IndexTouch,
         var last = 0L
         var applied = Float.NaN
         if (touch.position.isNaN()) touch.position = currentRow(state, index)
+        // A fling still running would fight the glide (scrolled by pixels since 0.11.1): stop it first.
+        if (touch.touching) state.stopScroll()
         while (isActive) {
             val now = withFrameNanos { it }
             val dt = if (last == 0L) 16f else ((now - last) / 1_000_000f).coerceIn(1f, 50f)
             last = now
             val tau = followMs.toFloat()
             val k = if (tau <= 0f) 1f else 1f - exp(-dt / tau)
-            // 0.10.4: a long way is jumped and only its last stretch glides. Each frame of a long glide showed rows
-            // that were built for that one frame and gone in the next (on the phone, dragging the letters ran at
-            // 35-55 ms a frame); next to the letter, the glide looks the same.
-            val gap = touch.target - touch.position
-            if (abs(gap) > JUMP_ROWS) touch.position = touch.target - kotlin.math.sign(gap) * GLIDE_ROWS
-            touch.position += (touch.target - touch.position) * k
+            // 0.11.1: the list moves at most ROWS_PER_SECOND, so each frame builds about one new row of apps at most.
+            // 0.10.4 jumped long ways at once instead, which built a whole screen of rows in one frame: the freeze Med
+            // saw (the letters stopped); before that, the first frames of a long glide built several rows each.
+            val cap = ROWS_PER_SECOND * dt / 1000f
+            touch.position += ((touch.target - touch.position) * k).coerceIn(-cap, cap)
             if (applied.isNaN() || abs(touch.position - applied) > 0.0005f) {
                 scrollToRow(state, index, touch.position)
                 applied = touch.position
@@ -754,9 +789,11 @@ private fun GlideList(state: LazyGridState, index: GridIndex, touch: IndexTouch,
 /** How many times the settings preview runs through the letters before it rests (0.11.0). */
 private const val DEMO_SWEEPS = 2f
 
-/** Further than this many rows from the letter, the list jumps to [GLIDE_ROWS] before it and glides from there (0.10.4). */
-private const val JUMP_ROWS = 3f
-private const val GLIDE_ROWS = 1.5f
+/** The fastest the list glides to the letter, in rows a second (0.11.1): A to Z (about 50 rows) in half a second. */
+private const val ROWS_PER_SECOND = 100f
+
+/** Up to this many rows away, the list is scrolled by pixels; further, it is set at the row (0.11.1). */
+private const val NEAR_ROWS = 6f
 
 private val RailWidth = 30.dp
 private val LensWidth = 66.dp

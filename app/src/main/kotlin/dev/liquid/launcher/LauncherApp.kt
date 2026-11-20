@@ -49,6 +49,8 @@ class LauncherApp : Application() {
         dev.liquid.launcher.core.data.ThemeStore.migrate0102(settings)
         // 0.11.0: the letters hide until used (the letter circle brings them out), once.
         dev.liquid.launcher.core.settings.SettingsMigrations.migrate0110(settings)
+        // 0.11.1: the letter circle becomes the first letter area, where it was, once.
+        dev.liquid.launcher.core.settings.SettingsMigrations.migrate0111(settings)
         // W5: the daily backup job, if it is on.
         runCatching { dev.liquid.launcher.core.data.AutoBackup.schedule(this) }
         DebugLog.enabled = settings.get(LauncherSettings.LogEnabled)

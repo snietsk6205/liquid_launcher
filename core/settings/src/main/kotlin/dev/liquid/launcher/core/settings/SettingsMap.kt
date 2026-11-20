@@ -138,7 +138,7 @@ object SettingsMap {
             "index", "Letter index", "The letters at the drawer's edge: the short rail or the full strip", SettingsEntry.DRAWER, listOf("drawerIndex"),
             mapOf(
                 L to listOf(
-                    "index.style", "index.visibility", "index.dial", "index.dialStyle", "index.dialSize", "index.dialX", "index.dialY",
+                    "index.style", "index.visibility", "index.dial", "index.areasOnly",
                     "index.stringTop", "index.stringBottom", "index.railHeight", "index.railLift", "index.railInset", "index.side",
                     "index.reach", "index.ends", "index.letterSize", "index.spacing", "index.letterGap", "index.bubblePlace", "index.bubbleGap",
                 ),
@@ -146,7 +146,7 @@ object SettingsMap {
                     "index.dialColour", "index.dialCustom", "index.dialOpacity", "index.dialScrollOpacity",
                     "index.letterColour", "index.letterCustom", "index.bubble", "index.focus",
                 ),
-                B to listOf("index.dialTurn", "index.dialEdge", "index.haptics", "index.follow", "index.track", "index.spring", "index.hideDelay"),
+                B to listOf("index.haptics", "index.follow", "index.track", "index.spring", "index.hideDelay"),
             ),
         ),
         SettingsSurface(
@@ -297,6 +297,10 @@ object SettingsMap {
         Editor("Home menu items", "The glass pills of the home menu (long press on empty space)", "home menu items pills long press order", "menus", SettingsTab.LAYOUT),
         Editor("Long-press menu of apps", "The entries of an app's long-press menu", "app long press menu entries order", "menus", SettingsTab.LAYOUT),
         Editor("Drawer tabs and tags", "Your drawer tabs, tags and their order", "drawer tabs tags order pinned", "tags", SettingsTab.LAYOUT),
+        Editor(
+            "Letter areas", "Circles over the apps where a swipe starts the letters: add as many as you want, each with its edge, place and size",
+            "letter areas circle zone add position place size left right edge swipe letters", "index", SettingsTab.LAYOUT,
+        ),
         Editor("Theme lab", "Every option of your WM Keyboard theme on every button, chip, pill, sheet and menu, with presets (Before 0.10.2)",
             "theme lab keyboard wm colours colors pills search bar tint material accent blueberry preset before", "buttons", SettingsTab.LOOK),
     )

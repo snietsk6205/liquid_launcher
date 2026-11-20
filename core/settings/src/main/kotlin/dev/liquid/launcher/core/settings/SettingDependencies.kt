@@ -23,9 +23,8 @@ object SettingDependencies {
         map[LauncherSettings.ReopenWindow.key] = LauncherSettings.ReopenRecents
         map[LauncherSettings.ReopenOnHint.key] = LauncherSettings.ReopenRecents
         for (s in listOf(
-            LauncherSettings.IndexDialStyle, LauncherSettings.IndexDialTurn, LauncherSettings.IndexDialSize, LauncherSettings.IndexDialX,
-            LauncherSettings.IndexDialY, LauncherSettings.IndexDialColour, LauncherSettings.IndexDialCustom, LauncherSettings.IndexDialOpacity,
-            LauncherSettings.IndexDialScrollOpacity, LauncherSettings.IndexDialEdge,
+            LauncherSettings.IndexAreasOnly, LauncherSettings.IndexDialColour, LauncherSettings.IndexDialCustom, LauncherSettings.IndexDialOpacity,
+            LauncherSettings.IndexDialScrollOpacity,
         )) {
             map[s.key] = LauncherSettings.IndexDial
         }
@@ -50,10 +49,9 @@ object SettingDependencies {
             LauncherSettings.IndexSpacing, LauncherSettings.IndexBubble, LauncherSettings.IndexBubblePlace, LauncherSettings.IndexLetterGap,
             LauncherSettings.IndexBubbleGap, LauncherSettings.IndexTrack, LauncherSettings.IndexSpring, LauncherSettings.IndexHideDelay,
             LauncherSettings.IndexStringTop, LauncherSettings.IndexStringBottom,
-            // 0.11.0: the letter circle drives the string.
-            LauncherSettings.IndexDial, LauncherSettings.IndexDialStyle, LauncherSettings.IndexDialSize, LauncherSettings.IndexDialX,
-            LauncherSettings.IndexDialY, LauncherSettings.IndexDialColour, LauncherSettings.IndexDialOpacity,
-            LauncherSettings.IndexDialScrollOpacity, LauncherSettings.IndexDialEdge,
+            // 0.11.1: the letter areas drive the string.
+            LauncherSettings.IndexDial, LauncherSettings.IndexAreasOnly, LauncherSettings.IndexDialColour, LauncherSettings.IndexDialOpacity,
+            LauncherSettings.IndexDialScrollOpacity,
         )
         val railOnly = listOf(LauncherSettings.IndexRailHeight, LauncherSettings.IndexRailLift, LauncherSettings.IndexRailInset)
         val launcherButtonsOnly = listOf(
@@ -70,7 +68,6 @@ object SettingDependencies {
             LauncherSettings.PillStudyRing.key to (look to setOf("glyph", "app", "picture")),
             LauncherSettings.PillStudyTint.key to (look to setOf("glyph", "app", "picture", "circle")),
             LauncherSettings.IndexLetterCustom.key to (LauncherSettings.IndexLetterColour to setOf("custom")),
-            LauncherSettings.IndexDialTurn.key to (LauncherSettings.IndexDialStyle to setOf("knob")),
             LauncherSettings.IndexDialCustom.key to (LauncherSettings.IndexDialColour to setOf("custom")),
         ) + stringOnly.associate { it.key to (index to setOf("string")) } + railOnly.associate { it.key to (index to setOf("rail")) } +
             realGlassOnly.associate { it.key to (LauncherSettings.GlassEngine to setOf("real")) } +

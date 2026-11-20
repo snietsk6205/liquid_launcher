@@ -102,6 +102,7 @@ private val editorTabs: Map<String, Set<SettingsTab>> = mapOf(
     "menus" to setOf(SettingsTab.LAYOUT),
     "search" to setOf(SettingsTab.LAYOUT),
     "tags" to setOf(SettingsTab.LAYOUT),
+    "index" to setOf(SettingsTab.LAYOUT),
     "icons" to setOf(SettingsTab.LOOK),
     "theme" to setOf(SettingsTab.LOOK),
     "glass" to setOf(SettingsTab.LOOK),
@@ -123,6 +124,7 @@ private fun PageEditors(surface: String, tab: SettingsTab, store: SettingsStore,
             MenuEntriesEditor(store)
         }
         "search" to SettingsTab.LAYOUT -> SearchCardsEditor(store)
+        "index" to SettingsTab.LAYOUT -> LetterAreasEditor(store)
         "tags" to SettingsTab.LAYOUT -> TabsAndTagsEditor()
         "icons" to SettingsTab.LOOK -> IconPacksEditor(store)
         "theme" to SettingsTab.LOOK -> {
