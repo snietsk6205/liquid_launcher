@@ -28,6 +28,11 @@ $(printf '%5d s  %s' $((SECONDS - SECTION_START)) "$SECTION_NAME")"
 }
 
 APK=$(ls out/*.apk | head -1)
+
+# 0.11.2: a phone still busy with its first-boot work starves the launcher into "not responding" (run 101); wait until
+# it is calm (at most 2 minutes, never a failure). From the cached snapshot it is calm within seconds.
+section "Waiting for a calm phone"
+bash ci/settle.sh 120
 section "Installing $APK"
 # Android 15 refuses accessibility for apps with no installer ("restricted settings"), so
 # install as if from a store and allow restricted settings, like the user does by hand.

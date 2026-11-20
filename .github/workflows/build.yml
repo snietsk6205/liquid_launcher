@@ -157,7 +157,9 @@ jobs:
         run: python3 -m pip install --quiet --user pillow || true
 
       # 0.11.2: the system image and a booted emulator's snapshot are kept between runs, so the test boots from the
-      # snapshot instead of downloading the image and cold-booting Android each time. Bump the "-v1" to start anew.
+      # snapshot instead of downloading the image and cold-booting Android each time. The snapshot is saved once the
+      # phone is calm (ci/settle.sh): v1 was saved mid first-boot work, and run 101 started inside it. Bump the
+      # version to start anew.
       - name: System image cache
         uses: actions/cache@v4
         with:
@@ -171,7 +173,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-34-google_apis-x86_64-v1
+          key: avd-34-google_apis-x86_64-v2
 
       - name: Boot once and save the snapshot (cache miss only)
         if: steps.avd-cache.outputs.cache-hit != 'true'
@@ -184,7 +186,7 @@ jobs:
           force-avd-creation: false
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: echo "Emulator booted; its snapshot is saved for the next runs."
+          script: bash ci/settle.sh 300
 
       - name: Run on emulator (Android 14)
         uses: reactivecircus/android-emulator-runner@v2
