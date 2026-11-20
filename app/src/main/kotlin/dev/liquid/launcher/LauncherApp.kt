@@ -47,6 +47,8 @@ class LauncherApp : Application() {
         // 0.10.2: the pills lose 0.10.1's dark fill, and your keyboard theme in the wallpaper's colours becomes the
         // default, once (the look before stays as the lab's preset "Before 0.10.2").
         dev.liquid.launcher.core.data.ThemeStore.migrate0102(settings)
+        // 0.11.0: the letters hide until used (the letter circle brings them out), once.
+        dev.liquid.launcher.core.settings.SettingsMigrations.migrate0110(settings)
         // W5: the daily backup job, if it is on.
         runCatching { dev.liquid.launcher.core.data.AutoBackup.schedule(this) }
         DebugLog.enabled = settings.get(LauncherSettings.LogEnabled)

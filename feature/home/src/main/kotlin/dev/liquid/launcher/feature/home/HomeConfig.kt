@@ -209,6 +209,24 @@ data class IndexConfig(
     /** 0.10.2: "wallpaper", "theme", "accent", "custom" or "plain". */
     val letterColour: String = "wallpaper",
     val letterCustom: Color? = null,
+    /** 0.11.0: the letter circle over the apps, which drives the string (only with the string). */
+    val dial: Boolean = false,
+    /** "knob" (turn from anywhere) or "clock" (A at twelve, touching a spot jumps there). */
+    val dialStyle: String = "knob",
+    /** Full turns of the knob for the whole alphabet. */
+    val dialTurns: Float = 1f,
+    val dialSizeDp: Int = 120,
+    /** Where the circle's middle sits: a fraction of the screen across, and of the list of apps down. */
+    val dialX: Float = 0.84f,
+    val dialY: Float = 0.45f,
+    /** "wallpaper", "accent" or "custom". */
+    val dialColour: String = "wallpaper",
+    val dialCustom: Color? = null,
+    val dialOpacity: Float = 0.85f,
+    /** Its opacity while the apps scroll. */
+    val dialScrollOpacity: Float = 0.25f,
+    /** With the circle on, the edge also pulls the letters (off: the edge is left to Back). */
+    val dialEdge: Boolean = false,
 )
 
 /** How the drawer opens and scrolls. */
@@ -444,6 +462,17 @@ fun SettingsStore.indexConfig() = IndexConfig(
     stringBottom = maxOf(get(S.IndexStringBottom), get(S.IndexStringTop) + 30) / 100f,
     letterColour = get(S.IndexLetterColour),
     letterCustom = dev.liquid.launcher.core.settings.ColorSetting.parse(get(S.IndexLetterCustom))?.let { Color(it) },
+    dial = get(S.IndexDial) && get(S.IndexStyle) == "string",
+    dialStyle = get(S.IndexDialStyle),
+    dialTurns = get(S.IndexDialTurn) / 100f,
+    dialSizeDp = get(S.IndexDialSize),
+    dialX = get(S.IndexDialX) / 100f,
+    dialY = get(S.IndexDialY) / 100f,
+    dialColour = get(S.IndexDialColour),
+    dialCustom = dev.liquid.launcher.core.settings.ColorSetting.parse(get(S.IndexDialCustom))?.let { Color(it) },
+    dialOpacity = get(S.IndexDialOpacity) / 100f,
+    dialScrollOpacity = get(S.IndexDialScrollOpacity) / 100f,
+    dialEdge = get(S.IndexDialEdge),
 )
 
 fun SettingsStore.drawerMotion(): DrawerMotion {

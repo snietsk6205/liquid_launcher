@@ -22,6 +22,13 @@ object SettingDependencies {
         map[LauncherSettings.HomeScreenFallback.key] = LauncherSettings.RequireHomeScreen
         map[LauncherSettings.ReopenWindow.key] = LauncherSettings.ReopenRecents
         map[LauncherSettings.ReopenOnHint.key] = LauncherSettings.ReopenRecents
+        for (s in listOf(
+            LauncherSettings.IndexDialStyle, LauncherSettings.IndexDialTurn, LauncherSettings.IndexDialSize, LauncherSettings.IndexDialX,
+            LauncherSettings.IndexDialY, LauncherSettings.IndexDialColour, LauncherSettings.IndexDialCustom, LauncherSettings.IndexDialOpacity,
+            LauncherSettings.IndexDialScrollOpacity, LauncherSettings.IndexDialEdge,
+        )) {
+            map[s.key] = LauncherSettings.IndexDial
+        }
         for (s in listOf(LauncherSettings.ThemedIconsWhere, LauncherSettings.ThemedIconsUncovered, LauncherSettings.ThemedIconsPacks, LauncherSettings.ThemedIconsColors, LauncherSettings.ThemedIconsStyle)) {
             map[s.key] = LauncherSettings.ThemedIcons
         }
@@ -43,6 +50,10 @@ object SettingDependencies {
             LauncherSettings.IndexSpacing, LauncherSettings.IndexBubble, LauncherSettings.IndexBubblePlace, LauncherSettings.IndexLetterGap,
             LauncherSettings.IndexBubbleGap, LauncherSettings.IndexTrack, LauncherSettings.IndexSpring, LauncherSettings.IndexHideDelay,
             LauncherSettings.IndexStringTop, LauncherSettings.IndexStringBottom,
+            // 0.11.0: the letter circle drives the string.
+            LauncherSettings.IndexDial, LauncherSettings.IndexDialStyle, LauncherSettings.IndexDialSize, LauncherSettings.IndexDialX,
+            LauncherSettings.IndexDialY, LauncherSettings.IndexDialColour, LauncherSettings.IndexDialOpacity,
+            LauncherSettings.IndexDialScrollOpacity, LauncherSettings.IndexDialEdge,
         )
         val railOnly = listOf(LauncherSettings.IndexRailHeight, LauncherSettings.IndexRailLift, LauncherSettings.IndexRailInset)
         val launcherButtonsOnly = listOf(
@@ -59,6 +70,8 @@ object SettingDependencies {
             LauncherSettings.PillStudyRing.key to (look to setOf("glyph", "app", "picture")),
             LauncherSettings.PillStudyTint.key to (look to setOf("glyph", "app", "picture", "circle")),
             LauncherSettings.IndexLetterCustom.key to (LauncherSettings.IndexLetterColour to setOf("custom")),
+            LauncherSettings.IndexDialTurn.key to (LauncherSettings.IndexDialStyle to setOf("knob")),
+            LauncherSettings.IndexDialCustom.key to (LauncherSettings.IndexDialColour to setOf("custom")),
         ) + stringOnly.associate { it.key to (index to setOf("string")) } + railOnly.associate { it.key to (index to setOf("rail")) } +
             realGlassOnly.associate { it.key to (LauncherSettings.GlassEngine to setOf("real")) } +
             launcherButtonsOnly.associate { it.key to (LauncherSettings.ThemeControls to setOf("launcher")) }

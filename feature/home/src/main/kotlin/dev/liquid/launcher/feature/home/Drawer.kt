@@ -412,6 +412,8 @@ fun AppDrawer(
     val useIndex = motion.scrollbar == "index" && !searching && currentTab.sort == "az"
     // The index floats over the list; letters that show at rest get a lane of their own (0.10.2, below).
     val highlight = remember { IndexHighlight() }
+    // 0.11.0: the letter circle drives the string through this.
+    val dialDrive = remember { IndexDrive() }
     val density = LocalDensity.current
     val keyboardOrNav = WindowInsets.ime.union(WindowInsets.navigationBars)
     val tabsTop = showTabs && config.tabsTop
@@ -532,7 +534,11 @@ fun AppDrawer(
                     interactive = interactive,
                     highlight = highlight,
                     modifier = sideArea,
+                    drive = if (indexConfig.dial) dialDrive else null,
                 )
+                if (indexConfig.dial) {
+                    LetterDial(active, currentTab.index, indexConfig, dialDrive, controller, interactive, sideArea)
+                }
             } else if (motion.scrollbar != "off") {
                 DrawerScrollbar(
                     state = active,

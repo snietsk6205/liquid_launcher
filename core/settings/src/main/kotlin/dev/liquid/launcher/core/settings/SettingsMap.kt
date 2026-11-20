@@ -138,11 +138,15 @@ object SettingsMap {
             "index", "Letter index", "The letters at the drawer's edge: the short rail or the full strip", SettingsEntry.DRAWER, listOf("drawerIndex"),
             mapOf(
                 L to listOf(
-                    "index.style", "index.visibility", "index.stringTop", "index.stringBottom", "index.railHeight", "index.railLift", "index.railInset", "index.side",
+                    "index.style", "index.visibility", "index.dial", "index.dialStyle", "index.dialSize", "index.dialX", "index.dialY",
+                    "index.stringTop", "index.stringBottom", "index.railHeight", "index.railLift", "index.railInset", "index.side",
                     "index.reach", "index.ends", "index.letterSize", "index.spacing", "index.letterGap", "index.bubblePlace", "index.bubbleGap",
                 ),
-                K to listOf("index.letterColour", "index.letterCustom", "index.bubble", "index.focus"),
-                B to listOf("index.haptics", "index.follow", "index.track", "index.spring", "index.hideDelay"),
+                K to listOf(
+                    "index.dialColour", "index.dialCustom", "index.dialOpacity", "index.dialScrollOpacity",
+                    "index.letterColour", "index.letterCustom", "index.bubble", "index.focus",
+                ),
+                B to listOf("index.dialTurn", "index.dialEdge", "index.haptics", "index.follow", "index.track", "index.spring", "index.hideDelay"),
             ),
         ),
         SettingsSurface(

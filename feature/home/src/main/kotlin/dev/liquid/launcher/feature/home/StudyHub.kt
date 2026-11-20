@@ -324,7 +324,12 @@ private fun HubContent(controller: HomeController, color: Color, scroll: ScrollS
                     }
                 }
             }
-            Column(Modifier.weight(1f).verticalScroll(scroll)) {
+            // 0.10.4: the buttons and chips that scroll with the day are drawn without sampling the glass behind them
+            // ("crystal", as long rows of chips are elsewhere). Each one that sampled it drew its own blurred copy of
+            // the hub again on every frame of a scroll: on the phone the hub ran at 55-103 ms a frame.
+            val fill = Modifier.weight(1f)
+            WithoutBackdrop {
+            Column(fill.verticalScroll(scroll)) {
                 AttendanceCallout(controller, day, now, color)
                 ArrivalCallout(controller, day, now, homeAt, color)
                 if (day.isEmpty && day.classes.isEmpty()) {
@@ -384,6 +389,7 @@ private fun HubContent(controller: HomeController, color: Color, scroll: ScrollS
                     )
                 }
                 Spacer(Modifier.height(8.dp))
+            }
             }
         }
         HubBar(controller, day, now, hero, homeAt, focus?.eventKey, color, loaded)

@@ -51,6 +51,21 @@ wait_log() {
 
 ANR_DIALOGS=0
 
+# The reason the system gave for the last "not responding", and the launcher's main thread at that moment (from the
+# newest trace in /data/anr, which needs root: the emulator image has it).
+anr_trace() {
+  echo "      -- why: the system's ANR report"
+  adb logcat -d -b system,main 2>/dev/null | grep -A6 "ANR in dev.liquid.launcher" | tail -14 | sed 's/^/        /'
+  local f
+  f=$(adb shell su 0 sh -c 'ls -t /data/anr/ 2>/dev/null | head -1' 2>/dev/null | tr -d '\r')
+  if [ -n "$f" ]; then
+    echo "      -- the launcher's main thread in /data/anr/$f"
+    adb shell su 0 cat "/data/anr/$f" 2>/dev/null | tr -d '\r' | awk '/^"main"/{p=1} p{print; n++} p&&/^$/{exit} n>45{exit}' | sed 's/^/        /'
+  else
+    echo "      (no trace file readable)"
+  fi
+}
+
 # A slow emulator (software GPU on a busy runner) can miss the system's 5-second input
 # timeout, and the "isn't responding" dialog then covers the screen for every later step.
 # Dismiss it with "Wait", as a user would, and count it; crashes are still checked strictly.
@@ -64,6 +79,8 @@ clear_anr() {
       pos=$(python3 ci/find_text.py "$OUT/anr-check.xml" "Wait" exact) || return 0
       echo "      (dismissed a 'not responding' dialog: the emulator is running slowly)"
       ANR_DIALOGS=$((ANR_DIALOGS + 1))
+      # 0.10.4: the first time, show why: the system's reason and where the launcher's main thread was stuck.
+      if [ "$ANR_DIALOGS" = 1 ]; then anr_trace; fi
       adb shell input tap $pos
       sleep 2
     else
@@ -951,6 +968,51 @@ sleep 1.6
 peek 14c-index
 wait "$SWIPE_PID" 2>/dev/null
 sleep 1
+adb shell input keyevent KEYCODE_HOME
+sleep 1
+
+# 0.11.0: the letter circle (on by default, with the String letters). Settings → Letter index → String; then, in the
+# drawer, a slide across the top of the circle turns it about a third of a turn while held: the string's letters
+# come out (the frame meter writes "letter circle" for the frames it drives), and its picture is taken mid-turn.
+clear_anr
+adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen page:index >/dev/null
+wait_top "SettingsActivity" 8 || true
+sleep 2
+dump 14c-settings
+if tap_text 14c-settings "Rail: short"; then
+  sleep 1.2
+  dump 14c-style
+  tap_text 14c-style "String: letters" || note "the String choice was not found in the style dialog"
+  sleep 1
+else
+  note "the Letter index style row was not found; the circle check may not see a circle"
+fi
+adb shell input keyevent KEYCODE_BACK
+sleep 0.5
+adb shell am start -n "$HOME_ACTIVITY" >/dev/null
+wait_top "$HOME_ACTIVITY" 6 || true
+sleep 1.5
+adb shell input swipe 540 1500 540 400 450
+sleep 2
+dump 14c-circle
+if CIRCLE=$(python3 ci/find_text.py "$OUT/14c-circle.xml" "Letter circle" exact); then
+  pass "the drawer shows the letter circle"
+  CX=${CIRCLE% *}
+  CY=${CIRCLE#* }
+  CIRCLE_LINES=$(grep -c "letter circle" "$LOG" || true)
+  adb shell input swipe $((CX - 100)) $((CY - 60)) $((CX + 100)) $((CY - 60)) 2600 &
+  SWIPE_PID=$!
+  sleep 1.5
+  peek 14c-circle-turning
+  wait "$SWIPE_PID" 2>/dev/null
+  sleep 1.5
+  # The frame meter's line for the frames the circle drove comes when the next screen's frames begin.
+  adb shell input keyevent KEYCODE_BACK
+  sleep 1.5
+  if [ "$(grep -c "letter circle" "$LOG" || true)" -gt "$CIRCLE_LINES" ]; then pass "turning the letter circle drives the letters"; else fail "turning the letter circle drives the letters"; grep -E "Frames:" "$LOG" | tail -3 | sed 's/^/        /'; fi
+else
+  fail "the drawer shows the letter circle"
+fi
 adb shell input keyevent KEYCODE_HOME
 sleep 1
 
