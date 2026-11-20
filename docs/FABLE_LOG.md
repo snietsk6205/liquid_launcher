@@ -1038,7 +1038,10 @@ CI before it: run 91 (the first batch) failed 18 checks with 11 "not responding"
 was too slow that day (run 92, the same code and more, had no dialog and passed every one of those checks). Run 92
 failed only the new circle check: it could not switch the index to String, because the Letter index page's preview
 never stopped moving and uiautomator cannot read a screen that never goes still. The preview now runs twice and rests
-(by the clock, not by frames), and CI waits for it.
+(by the clock, not by frames), and CI waits for it. Run 93 (the code released) passed every check, the circle's
+included: it found the circle, turned it ("letter circle: turned from C to G (knob)") and the frame meter's line named
+the screen ("drawer; letter circle"). Frames drawn in 3 s by a screen at rest: home 1, drawer 0, search 6 (the
+field's cursor), wallpaper screen 10, study hub 0.
 
 **Frames on the phone** (Med's debug log; "late" against the frame's own deadline)
 
