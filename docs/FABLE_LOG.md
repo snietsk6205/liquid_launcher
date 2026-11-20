@@ -1023,3 +1023,75 @@ a moving background, texture or the letter index is late on more than 1 % of fra
 limits: (1) SINK: a shared touch field read by each themed button's `graphicsLayer`, dipping by distance (the
 dynamic glass of `Glass.kt` shows how to read per-frame values while drawing); (2) picking from search results: a long
 press on an app result starts the drawer's picking with that app.
+
+## Session of 2026-11-20 (Opus 5.5): 0.11.0, Med's review of 0.10.3
+
+Brief: Med's review of 0.10.3 in the chat (two debug logs, 2026-11-19 19:23 to 2026-11-20 16:35; his settings export;
+three pictures: his sketch of a circle of arcs, his drawer, the wallpaper screen). Before any code he asked for my
+understanding, recommendations and questions; his answers: the circle sits where the Calculator is in his drawer (in
+reach of one hand), turns like a knob (the clock face stays a choice), the edge is left to Back, "fade" meant hidden
+when not in use, and for icon colours the better guess (not a switch to wallpaper colours). Branch `ccr-f4d083cc-vpyudk`.
+
+**Released:** 0.11.0, by the CI run of the commit "0.11.0 [release]: …" that carries this entry. It holds everything
+below: the 0.10.4 planned in the chat (fixes first, circle after) was folded into it, because both were ready at once.
+CI before it: run 91 (the first batch) failed 18 checks with 11 "not responding" dialogs and no crash: the emulator
+was too slow that day (run 92, the same code and more, had no dialog and passed every one of those checks). Run 92
+failed only the new circle check: it could not switch the index to String, because the Letter index page's preview
+never stopped moving and uiautomator cannot read a screen that never goes still. The preview now runs twice and rests
+(by the clock, not by frames), and CI waits for it.
+
+**Frames on the phone** (Med's debug log; "late" against the frame's own deadline)
+
+| While… | Late frames | Time per frame | GPU |
+|---|---|---|---|
+| Home at rest | 3–10 % | 22–30 ms | 9–13 ms |
+| Drawer open | 7–17 % | 27–38 ms | 9–13 ms |
+| Dragging the letters (string) | 20–50 % (a few windows 0.5–4 %) | 35–55 ms | 5–9 ms |
+| Around the study hub (I'm home, shifting blocks, ticking tasks, a study link, Ask Claude) | 30–81 % | 55–103 ms | 10–14 ms |
+| Wallpaper screen | 16–39 % | 34–60 ms | 15–27 ms |
+
+Worst single frames: 300–430 ms right after the launcher comes back to the front, 100–200 ms on the first drawer
+opening after that. Dragging the letters is CPU-bound (GPU 5–9 ms). On the emulator every screen at rest draws 0 to 6
+frames in 3 s (CI's new idle count), the study hub included: no endless animation there; the hub's 600 frames in 30 s
+on the phone came from use, at 55–103 ms each, so the cost is per frame. The emulator's own frame times mean nothing
+for the phone (software drawing).
+
+**Items**
+
+| # | Med's point | State | What |
+|---|---|---|---|
+| 1 | Search: the field goes above the keyboard, then down | Done | Only the keyboard's opening height is remembered (his log: 1041 px saved after typing, 933 px at the next opening); a guess that is off eases with the keyboard's rise (smoothstep); a dropped keyboard request is made again after 200 ms (13 opens needed one). D151. |
+| 2a | Drawer: no option to make the letters fade | Done | It existed (Letter index › Look › "Show the letters"; his was "Always") but settings search found nothing for "fade". Now on the Layout tab, found by fade/hide/hidden; the default is "Hidden until you use them", and "Always" became that once. |
+| 2b | Drawer: sometimes lags | Partly | A long letter jump skips the rows in between (jump past 3 rows, glide the last 1.5); the hub's scrolling buttons draw without sampling the glass and its fixed ones stop redrawing on scroll; "Frames:" lines name the screen. Not measured on the phone yet. D155. |
+| 2c | Drawer: the side margins no longer work | Done | 0.10.3's lane for the letters (27 dp at letter size 14) overruled the margin on their side; the margin counts again, the lane is only added with "Always". |
+| 3 | The circle | Done | `LetterDial.kt`: three rings of arcs in a dark, middle and light shade of the wallpaper's vibrant colour (or the accent, or his own), a soft shadow, the rings turning with the thumb; the current letter shows in its middle. It drives the string through `IndexDrive`, so the letters, bubble, highlight and glide are the same as under a finger. Knob by default (`DialMath.knob`, one turn for A to Z, adjustable), clock face as a choice; 85 % opaque, 25 % while the list scrolls; a still hold lifts it to be moved (saved as % across the screen and down the app list; default 84 % and 45 %, where the Calculator was); size, colour, opacity; the edge is left to Back unless "The edge pulls the letters too"; each turn is logged ("letter circle: turned from A to M"). Settings in Letter index with a live preview. D150. |
+| 4a | Lags and problems in the logs | Partly | Numbers above. Redirect: MagicOS draws its home screen at 90 % while going home ([54,119][1026,2269] on 1080 × 2388 in about 40 redirects; recents always full size) and shrinks the window with it, so the window comparison caught 6. The probe now compares with the screen (`RecentsDetector.shrunkInScreen`, tested with his numbers), so those redirects skip the 260 ms wait. D152. Not done: the 300–430 ms first frame on return. |
+| 4b | Icon colours lag, or are wrong for a while (wallpaper and layout changes) | Done, to check on the phone | His icons use "System colours"; MagicOS reported its colours 7–12 s after each change and the old HSL guess looked different. The guess is now Material You's tonal spot (accent 1 at chroma 36, neutral 1 at chroma 6; tones 90, 30, 20) with CAM16/HCT ported from material-color-utilities (`MonetTones`, checked against its reference values); the hold waits 45 s; a late change fades over 0.6 s; the log compares the guess with what came. D153. |
+| 5 | Wallpaper library: no animation after placing | Done | Picking a picture plays the wallpaper transition from the tapped thumbnail (the screen previews the picture behind the sheet, so that is when it changes); Apply only closes the sheet. D154. |
+| 6 | Wallpaper sheet too small | Done | Two rows and a bit by default; a handle pulls it to about three and a half rows, remembered; "Blur and dim" is no longer cut. |
+
+**Known bugs and limits**
+- The lag work is not measured on the phone: the hub, the letter drag and the circle want a new debug log.
+- The 300–430 ms frames when the launcher comes back to the front, and the 100–200 ms ones on the first drawer
+  opening: cause not found (the drawer is already kept composed while closed); the screen-named lines will show it.
+- The going-home check by the screen cannot be tried on the emulator (its launcher does not shrink the window); a
+  recents swipe taken for going home would be undone by "Reopen recents".
+- MagicOS may mix its colours differently from Android's tonal spot; the log line says how far off.
+- With "Both edges", the circle always brings the letters out on the right edge.
+- Still open from before: SINK does not dip the neighbouring buttons; picking apps only from the drawer.
+
+**Questions for Med**
+1. The circle: 120 dp, 85 % opaque at rest, 25 % while the apps scroll. Right on your phone, or bigger, fainter?
+2. One full turn for A to Z (Letter index › Behaviour › "Circle: turn for A to Z"): too quick or too slow?
+3. While you turn it, the letters come out at the right edge. With "Both edges", should they come out on the side
+   nearer the circle?
+4. After a wallpaper or layout change your debug log will say "the system's colours came … s after the change: …
+   the launcher's guess was … (off by …)". Over 2 means MagicOS mixes its colours another way; send me that line.
+5. The ripple now plays when you tap a picture in the wallpaper screen. Is that the moment you meant, or after Apply?
+6. If a recents swipe ever lands on the launcher instead of recents, tell me ("Reopen recents" should bring it back).
+
+**Exact next step:** read Med's next debug log: the "Frames:" lines now name the screen ("study hub", "drawer",
+"letter circle", "wallpaper screen"); "letter circle: turned from … to …"; "the system's colours came …"; and
+whether redirects now mostly say "its going-home animation is running, redirect in 0 ms". If the hub or the letter
+drag is still late on more than 5 % of frames, get a trace from the phone (a debug build with method tracing, or a
+Perfetto trace from Med) instead of guessing; then the first frame on return.
