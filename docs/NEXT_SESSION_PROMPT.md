@@ -30,7 +30,11 @@ on my HONOR 90 Lite. This session is my feedback after using it.
   in `docs/FABLE_LOG.md`, and continue.
 - Releases: at most 2. One safety release around the middle (0.10.2) and one final release at the end (0.10.3),
   published only when the head commit message contains `[release]`; never write that marker in any other commit
-  message. Each release has its CHANGELOG.md entry.
+  message, not even in its body when describing CI: the workflow reads the whole message (0.11.2 went out one push
+  early that way). Each release has its CHANGELOG.md entry.
+- CI (0.11.2): every push builds and runs the unit tests; the emulator test runs for `[release]`, for a message
+  with `[smoke]`, for manual runs and when feature/redirect/**, ci/** or .github/workflows/** changed. Run
+  tools/typecheck (tc.sh, ut.sh) before every push.
 - Never leave the branch broken. Work in the order below; unfinished items stay on the branch for the next session.
 - Quality bar: no placeholder settings, no fake effects, nothing that does nothing; every visual option gets a live
   preview. If Android or MagicOS makes something impossible, log why and build the best real alternative.

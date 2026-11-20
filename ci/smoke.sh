@@ -13,8 +13,22 @@ LOG="$OUT/launcher.log"
 FAILS=0
 mkdir -p "$OUT"
 
+# 0.11.2: how long each section took, printed at the end next to the result (where CI's minutes go).
+SECTION_NAME=""
+SECTION_START=$SECONDS
+SECTION_TIMES=""
+section() {
+  if [ -n "$SECTION_NAME" ]; then
+    SECTION_TIMES="$SECTION_TIMES
+$(printf '%5d s  %s' $((SECONDS - SECTION_START)) "$SECTION_NAME")"
+  fi
+  SECTION_NAME=$1
+  SECTION_START=$SECONDS
+  [ "$1" = "-" ] || echo "== $1"
+}
+
 APK=$(ls out/*.apk | head -1)
-echo "== Installing $APK"
+section "Installing $APK"
 # Android 15 refuses accessibility for apps with no installer ("restricted settings"), so
 # install as if from a store and allow restricted settings, like the user does by hand.
 adb install -r -i com.android.vending "$APK" || adb install -r "$APK" || { echo "FAIL: install"; exit 1; }
@@ -180,13 +194,13 @@ idle_frames() {
   if [ "$n" -le "$limit" ]; then pass "the $label sits still when idle ($n frames in 3 s)"; else note "the $label keeps drawing while idle: $n frames in 3 s"; fi
 }
 
-echo "== Default launcher"
+section "Default launcher"
 adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME | tail -1
 adb shell wm dismiss-keyguard || true
 adb shell input keyevent KEYCODE_HOME
 sleep 2
 
-echo "== Enabling the accessibility service"
+section "Enabling the accessibility service"
 adb shell settings put secure enabled_accessibility_services "$SERVICE"
 adb shell settings put secure accessibility_enabled 1
 if wait_log 'service connected' 60; then
@@ -198,7 +212,7 @@ else
 fi
 sleep 2
 
-echo "== 1. App starts"
+section "1. App starts"
 adb shell am start -n "$HOME_ACTIVITY" >/dev/null
 if wait_top "$HOME_ACTIVITY" 15; then pass "launcher activity starts"; else fail "launcher activity starts"; fi
 sleep 4
@@ -208,7 +222,7 @@ idle_frames "home screen"
 # Warm-up (0.10.2): run 85 failed checks 2 and 3 twice right after the first start, when the redirect engine had not yet
 # handled a window of the system launcher (its first event after start can come late). Press Home once here and wait
 # until the engine logs its first window event, then bring the launcher back; the checks below press Home after that.
-echo "== Warm-up: the redirect engine's first window event"
+section "Warm-up: the redirect engine's first window event"
 for i in $(seq 1 30); do service_ready && break; sleep 0.5; done
 adb shell am start -n "$HOME_ACTIVITY" >/dev/null
 wait_top "$HOME_ACTIVITY" 8 || true
@@ -225,7 +239,7 @@ wait_top "$HOME_ACTIVITY" 6 || adb shell am start -n "$HOME_ACTIVITY" >/dev/null
 wait_top "$HOME_ACTIVITY" 6 || true
 sleep 2
 
-echo "== 2. Home button while on the launcher returns to the launcher"
+section "2. Home button while on the launcher returns to the launcher"
 # A freshly booted emulator sometimes shows "Pixel Launcher isn't responding"; that dialog
 # is the emulator's, not ours, so close system dialogs and allow one retry.
 close_dialogs() {
@@ -258,7 +272,7 @@ else
   redirect_trace
 fi
 
-echo "== 3. Going home from another app redirects"
+section "3. Going home from another app redirects"
 adb shell am start -a android.settings.SETTINGS >/dev/null
 wait_top "com.android.settings" 10 || echo "note: system settings did not open"
 sleep 2
@@ -269,7 +283,7 @@ sleep 1
 AFTER=$(redirect_count)
 [ "$AFTER" -gt "$BEFORE" ] || { fail "redirect was logged ($BEFORE -> $AFTER)"; redirect_trace; }
 
-echo "== 4. Recents opened from an app is not interrupted"
+section "4. Recents opened from an app is not interrupted"
 adb shell am start -a android.settings.SETTINGS >/dev/null
 wait_top "com.android.settings" 10 || true
 sleep 1
@@ -288,7 +302,7 @@ else
   pass "recents stayed open"
 fi
 
-echo "== 4b. Scrolling inside recents"
+section "4b. Scrolling inside recents"
 # Scroll to the previous card: the app that was shown live is replaced by a snapshot.
 adb shell input swipe 250 1200 850 1200 400
 sleep 5
@@ -303,12 +317,12 @@ else
   pass "recents stayed open after scrolling"
 fi
 
-echo "== 5. Leaving recents to home redirects"
+section "5. Leaving recents to home redirects"
 adb shell input keyevent KEYCODE_HOME
 if wait_top "$HOME_ACTIVITY" 8; then pass "recents -> home redirected"; else fail "recents -> home redirected"; fi
 sleep 2
 
-echo "== 5b. Recents opened from the launcher's own home screen"
+section "5b. Recents opened from the launcher's own home screen"
 # The everyday case. If recents were not recognised here, the redirect would close it at once.
 BEFORE=$(redirect_count)
 RECENTS_BEFORE=$(grep -c 'recents open' "$LOG" || true)
@@ -333,13 +347,13 @@ fi
 # thumbnail above (a scaled card with margins), not by a view id.
 
 clear_anr
-echo "== 5c. Leaving those recents to home redirects"
+section "5c. Leaving those recents to home redirects"
 adb shell input keyevent KEYCODE_HOME
 if wait_top "$HOME_ACTIVITY" 8; then pass "recents -> home redirected"; else fail "recents -> home redirected"; fi
 sleep 1
 
 clear_anr
-echo "== 6. Screen off places the launcher in front"
+section "6. Screen off places the launcher in front"
 adb shell am start -a android.settings.SETTINGS >/dev/null
 wait_top "com.android.settings" 10 || true
 sleep 1
@@ -353,7 +367,7 @@ if wait_top "$HOME_ACTIVITY" 10; then pass "launcher in front after screen off/o
   grep -E "screen off|REDIRECT \(screen off\)|launcher drawn" "$LOG" | tail -4 | sed 's/^/        /'
 fi
 
-echo "== 7. Settings screens open"
+section "7. Settings screens open"
 for screen in "" setup diagnostics log updates; do
   # --activity-clear-task recreates the activity so the new start screen is used.
   if [ -z "$screen" ]; then
@@ -372,7 +386,7 @@ for screen in "" setup diagnostics log updates; do
 done
 
 clear_anr
-echo "== 7b. Glass benchmark runs through all three quality tiers"
+section "7b. Glass benchmark runs through all three quality tiers"
 adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen glass >/dev/null
 wait_top "SettingsActivity" 8 || fail "glass benchmark opens"
 sleep 6
@@ -388,7 +402,7 @@ else
 fi
 
 clear_anr
-echo "== 9. Launcher UI: drawer, search, long-press menu, edit mode"
+section "9. Launcher UI: drawer, search, long-press menu, edit mode"
 adb shell am start -n "$HOME_ACTIVITY" >/dev/null
 wait_top "$HOME_ACTIVITY" 8 || true
 sleep 2
@@ -406,7 +420,7 @@ tap_text() {
 }
 
 # 0.10.0 (W1): a fresh install of a version with a changelog entry shows "What's new" once, above the pill.
-echo "== 8b. What's new card"
+section "8b. What's new card"
 adb shell am start -n "$HOME_ACTIVITY" >/dev/null
 wait_top "$HOME_ACTIVITY" 8 || true
 wait_screen 08-whatsnew "What's new in" 10 || true
@@ -476,7 +490,7 @@ wait_top "$HOME_ACTIVITY" 3 || fail "launcher still in front after back"
 # 0.10.0 (W2): with 30 tags, the per-app tag sheet still shows its "New tag" field and its button (before, from
 # about nine tags the field fell out of the dialog), and the drawer's tag list keeps its buttons in sight.
 if [ -n "$APP_LABEL" ]; then
-  echo "== 9c. Thirty tags"
+  section "9c. Thirty tags"
   # From the drawer's long-press menu, which check 9 found offering "Tags".
   adb shell input swipe 540 1500 540 400 450
   sleep 2
@@ -558,7 +572,7 @@ fi
 
 # 0.10.1 (W6): picking apps in the drawer. Select in an app's menu shows the bar; Tag puts a tag on every picked app.
 if [ -n "$APP_LABEL" ]; then
-  echo "== 9d. Picking apps in the drawer"
+  section "9d. Picking apps in the drawer"
   adb shell input swipe 540 1500 540 400 450
   sleep 2
   dump 09d-drawer
@@ -810,7 +824,7 @@ clear_anr
 # and a tick and "Done" must be written back into the event. Creating the calendar needs root (userdebug image);
 # without it the checks are skipped, not failed. The device's "content" tool refuses a bound value that contains a
 # colon, so the test block's title has no "Subject: topic" colon and the line shows the whole title.
-echo "== 14b. Study block from a real calendar: clock line, Today, ticks written back"
+section "14b. Study block from a real calendar: clock line, Today, ticks written back"
 NOW_S=$(adb shell date +%s | tr -d '\r')
 cat > "$OUT/cal.sh" <<CALEOF
 content insert --uri 'content://com.android.calendar/calendars?caller_is_syncadapter=true&account_name=smoke&account_type=LOCAL' \
@@ -912,7 +926,7 @@ clear_anr
 # goes into the test calendar, notification access is given with adb, the setting is switched on in Settings →
 # Study companion, and a test notification is posted from the shell. Set-up problems print a NOTE (the emulator's
 # fault, not the launcher's); a notification that was not held fails.
-echo "== 14d. Quiet during blocks holds a notification"
+section "14d. Quiet during blocks holds a notification"
 if [ -n "$EVENT_ID" ]; then
   cat > "$OUT/cal2.sh" <<CAL2EOF
 CAL=\$(content query --uri content://com.android.calendar/calendars --projection _id:calendar_displayName | grep 'calendar_displayName=Study' | sed -E 's/.*_id=([0-9]+).*/\1/' | head -1)
@@ -983,7 +997,7 @@ fi
 clear_anr
 # 0.6.4: the letter index bends out from under the finger and the bubble sits past the letters. A picture only:
 # the screenshot is taken while a slow swipe holds the right edge of the drawer.
-echo "== 14c. Letter index while held"
+section "14c. Letter index while held"
 adb shell input keyevent KEYCODE_HOME
 sleep 2.5
 adb shell input swipe 540 1500 540 400 450
@@ -1063,7 +1077,7 @@ clear_anr
 # 0.7.0: another app's widget (last, so the widget it places cannot be under a later check's long press). The picker lists the apps that offer widgets; searching "clock" opens the Clock app's
 # widgets; the system asks once whether the launcher may add widgets ("Create"); the clock widget then runs on the home
 # screen as the app's own views (a TextClock or an AnalogClock in the screen tree).
-echo "== 12b. Another app's widget"
+section "12b. Another app's widget"
 # The launcher must be in front: on a slow emulator a redirect can be lost while the accessibility service reconnects
 # (run 57: the long press below reached the system launcher and opened its own widget list).
 if ! wait_top "$HOME_ACTIVITY" 2; then
@@ -1151,7 +1165,7 @@ sleep 1
 for i in $(seq 1 40); do service_up && break; sleep 0.5; done
 
 if [ "$ANR_DIALOGS" -gt 0 ]; then echo "NOTE: dismissed $ANR_DIALOGS 'not responding' dialog(s); the emulator was slow (see logcat for ANR reasons)"; fi
-echo "== 15. Wallpaper transition shaders"
+section "15. Wallpaper transition shaders"
 # 0.7.0: ripple, ink, shine and melt are AGSL shaders compiled when the home screen starts; a shader that does not
 # compile falls back to the liquid fade, so it would never show as a crash. The launcher logs which compiled.
 if grep -q "transition shaders ready: ripple, ink, shine, melt" "$LOG" && ! grep -q "transition shader.*unavailable" "$LOG"; then
@@ -1161,7 +1175,7 @@ else
   grep -E "transition shader" "$LOG" | tail -6
 fi
 
-echo "== 16. Real glass shader"
+section "16. Real glass shader"
 # 0.9.12 (P4): the glass's AGSL shader compiles when the home screen starts; if it did not, the glass would quietly
 # fall back to the simple lens, so the launcher logs which it got.
 if grep -q "liquid glass shader ready" "$LOG"; then
@@ -1175,7 +1189,7 @@ clear_anr
 # 0.11.2: the speed check (Settings → Diagnostics → Speed check) plays the drawer, search, the home menu and the study
 # hub with each way of drawing the glass, each step a "Frames:" line of its own. It must run to its end: every way of
 # drawing the glass (no blur, frosted, liquid, no shadows, no material, a flat tint) is drawn on the way.
-echo "== 17. Speed check"
+section "17. Speed check"
 adb shell input keyevent KEYCODE_HOME
 sleep 1.5
 SPEED_DONE=$(grep -c "speed check: done" "$LOG" || true)
@@ -1194,7 +1208,7 @@ fi
 adb shell input keyevent KEYCODE_HOME
 sleep 1
 
-echo "== 8. No crashes"
+section "8. No crashes"
 adb logcat -d > "$OUT/logcat.txt" 2>/dev/null
 if grep -A3 "FATAL EXCEPTION" "$OUT/logcat.txt" | grep -q "$PKG"; then
   fail "no crash in logcat"
@@ -1204,11 +1218,14 @@ else
 fi
 
 kill "$LOGCAT_PID" 2>/dev/null
-echo "== Launcher log"
+section "Launcher log"
 sed -E 's/^([0-9-]+ )?([0-9:.]+) .*LiquidLauncher[^:]*: /\2 /' "$LOG" | tail -220
 
 echo
 echo "IDLE FRAMES (a still screen draws next to nothing):$IDLE_REPORT"
+echo
+section "-"
+echo "TIME PER SECTION ($SECONDS s in all):$SECTION_TIMES"
 echo
 if [ "$FAILS" -eq 0 ]; then
   echo "SMOKE RESULT: all checks passed"
