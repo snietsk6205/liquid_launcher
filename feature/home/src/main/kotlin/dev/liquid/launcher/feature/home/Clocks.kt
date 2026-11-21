@@ -236,10 +236,11 @@ object ClockFonts {
     fun invalidate() = synchronized(cache) { cache.clear() }
 }
 
-/** Current time, updated each second. */
+/** Current time, updated each second; started again whenever the shared clock moves (after sleep, at once). */
 @Composable
 private fun rememberSecondTick(): Long {
-    val now by produceState(System.currentTimeMillis()) {
+    val serial = rememberClockSerial()
+    val now by produceState(System.currentTimeMillis(), serial) {
         while (true) {
             value = System.currentTimeMillis()
             delay(1000 - value % 1000 + 5)

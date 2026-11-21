@@ -427,7 +427,7 @@ internal fun DateWidget(color: Color, shadow: Shadow?, look: WidgetLook = Widget
     val year = look.shows("year", false)
     val pattern = listOfNotNull(if (weekday) "EEEE" else null, "d", if (month) "MMMM" else "MM", if (year) "yyyy" else null)
         .joinToString(" ").let { if (!month) it.replace("d MM", "d/MM") else it }
-    val text = remember(tick / 3_600_000, pattern) { LocalDate.now().format(DateTimeFormatter.ofPattern(pattern, Locale.getDefault())) }
+    val text = remember(tick, pattern) { LocalDate.now().format(DateTimeFormatter.ofPattern(pattern, Locale.getDefault())) }
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         val size = (maxHeight.value * 0.5f * look.scale).coerceIn(12f, 52f)
         Text(

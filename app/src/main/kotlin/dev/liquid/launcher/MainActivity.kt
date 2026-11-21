@@ -28,6 +28,7 @@ class MainActivity : ComponentActivity() {
 
     private val returnState = HomeReturnState()
     private val frameMeter = FrameMeter()
+    private var clock: ClockRefresher? = null
     private var firstStart = true
     private var resumed = false
     private var pausedAt = 0L
@@ -98,6 +99,8 @@ class MainActivity : ComponentActivity() {
         screensCreated++
         DebugLog.event("Home", if (screensCreated == 1) "screen created" else "screen created again (#$screensCreated in this process): everything is drawn anew")
         lastConfiguration = android.content.res.Configuration(resources.configuration)
+        // 0.11.3 (D168): one time source for every clock and timer, read from the wall clock at screen on and unlock.
+        clock = ClockRefresher(applicationContext).also { it.register() }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         @Suppress("DEPRECATION")
         overridePendingTransition(0, 0)
@@ -259,6 +262,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        clock?.onStart()
         (application as LauncherApp).data.widgets.listen(true)
         // Set before the first frame, so the content is never drawn at full size first.
         returnState.onReturn(animate = !firstStart)
@@ -268,6 +272,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        clock?.onResume()
         // The wallpaper may have changed while another app was open (themed icons).
         dev.liquid.launcher.core.data.LauncherData.get(this).checkWallpaperColours()
         // So may the calendar (the study companion's blocks and tasks).
@@ -317,9 +322,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        clock?.onStop()
         // Nothing of the launcher is visible any more: close what an app was started from.
         returnState.onLeft()
         (application as LauncherApp).data.widgets.listen(false)
+    }
+
+    override fun onDestroy() {
+        clock?.unregister()
+        clock = null
+        super.onDestroy()
     }
 
     companion object {

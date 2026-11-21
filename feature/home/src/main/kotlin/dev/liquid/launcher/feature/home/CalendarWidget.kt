@@ -122,7 +122,7 @@ private fun readMonth(context: Context, month: YearMonth, now: Long): CalMonth {
 internal fun CalendarWidget(item: HomeItem, env: PageEnv, controller: HomeController) {
     val context = LocalContext.current
     val tick = rememberMinuteTick()
-    val today = remember(tick / 60_000) { LocalDate.now() }
+    val today = remember(tick) { LocalDate.now() }
     var offset by remember(item.id) { mutableIntStateOf(0) }
     var allowedTick by remember { mutableIntStateOf(0) }
     val month = YearMonth.from(today).plusMonths(offset.toLong())
