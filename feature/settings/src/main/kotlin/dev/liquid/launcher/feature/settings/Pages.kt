@@ -113,6 +113,7 @@ private val editorTabs: Map<String, Set<SettingsTab>> = mapOf(
     "layouts" to setOf(SettingsTab.LAYOUT),
     "backup" to setOf(SettingsTab.BEHAVIOUR, SettingsTab.MORE),
     "redirect" to setOf(SettingsTab.LOOK),
+    "keyboard" to setOf(SettingsTab.LOOK, SettingsTab.BEHAVIOUR, SettingsTab.MORE),
 )
 
 @Composable
@@ -125,6 +126,10 @@ private fun PageEditors(surface: String, tab: SettingsTab, store: SettingsStore,
             MenuEntriesEditor(store)
         }
         "search" to SettingsTab.LAYOUT -> SearchCardsEditor(store)
+        // 0.12.0 (D171, D172): WM Keyboard and the launcher.
+        "keyboard" to SettingsTab.LOOK -> KeyboardThemeEditor(store)
+        "keyboard" to SettingsTab.BEHAVIOUR -> KeyboardLayoutPicker(store)
+        "keyboard" to SettingsTab.MORE -> KeyboardPluginEditor()
         // 0.11.3 (D170): the arrival's live preview is the real thing: the system's home, then the redirect.
         "redirect" to SettingsTab.LOOK -> {
             val context = androidx.compose.ui.platform.LocalContext.current

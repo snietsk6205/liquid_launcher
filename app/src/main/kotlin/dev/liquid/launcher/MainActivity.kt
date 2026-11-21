@@ -233,6 +233,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        intent?.let { takeSearchText(it) }
         intent?.getStringExtra(EXTRA_OPEN)?.let { returnState.request = it }
 
         val lastCrash = java.io.File(filesDir, "last-crash.txt")
@@ -247,6 +248,7 @@ class MainActivity : ComponentActivity() {
         @Suppress("DEPRECATION")
         overridePendingTransition(0, 0)
         // Settings asked to open something here (the wallpaper screen): not a Home press.
+        takeSearchText(intent)
         intent.getStringExtra(EXTRA_OPEN)?.let {
             returnState.request = it
             return
@@ -278,6 +280,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         clock?.onResume()
         dev.liquid.launcher.feature.home.KeyboardLeaving.active = false
+        applySelectionEntry()
         // The wallpaper may have changed while another app was open (themed icons).
         dev.liquid.launcher.core.data.LauncherData.get(this).checkWallpaperColours()
         // So may the calendar (the study companion's blocks and tasks).
@@ -336,6 +339,29 @@ class MainActivity : ComponentActivity() {
         // Nothing of the launcher is visible any more: close what an app was started from.
         returnState.onLeft()
         (application as LauncherApp).data.widgets.listen(false)
+    }
+
+    /** 0.12.0 (D171): text handed over by [LiquidEntryActivity] for search ("search" request). */
+    private fun takeSearchText(intent: Intent) {
+        if (intent.getStringExtra(EXTRA_OPEN) != "search") return
+        returnState.searchText = intent.getStringExtra(LiquidEntryActivity.EXTRA_QUERY)
+        returnState.searchAsk = intent.getBooleanExtra(LiquidEntryActivity.EXTRA_ASK, false)
+    }
+
+    /** 0.12.0: "Liquid" in the text selection menu follows its setting (Settings → Search → More). */
+    private fun applySelectionEntry() {
+        val wanted = (application as LauncherApp).settings.get(LauncherSettings.SearchSelectionEntry)
+        val component = android.content.ComponentName(this, "dev.liquid.launcher.LiquidSelectionEntry")
+        val state = if (wanted) android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT
+        else android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        try {
+            if (packageManager.getComponentEnabledSetting(component) != state) {
+                packageManager.setComponentEnabledSetting(component, state, android.content.pm.PackageManager.DONT_KILL_APP)
+                DebugLog.event("Search", "\"Liquid\" in the text selection menu: ${if (wanted) "on" else "off"}")
+            }
+        } catch (e: Exception) {
+            DebugLog.error("Search", "could not change the text selection entry: $e")
+        }
     }
 
     override fun onDestroy() {

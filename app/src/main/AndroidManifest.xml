@@ -50,6 +50,39 @@
             </intent-filter>
         </activity>
 
+        <!-- 0.12.0 (D171): the way in from other apps and the keyboard: search with text, or ready to ask Claude. -->
+        <activity
+            android:name=".LiquidEntryActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/entry_search"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter android:label="@string/entry_share">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="dev.liquid.launcher.action.SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <!-- "Liquid" in the text selection menu; Settings → Search → More can take it away. -->
+        <activity-alias
+            android:name=".LiquidSelectionEntry"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/entry_selection"
+            android:targetActivity=".LiquidEntryActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- Hands a downloaded update to the system installer. -->
         <provider
             android:name="androidx.core.content.FileProvider"

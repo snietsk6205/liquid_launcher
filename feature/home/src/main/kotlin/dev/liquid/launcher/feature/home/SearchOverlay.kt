@@ -256,8 +256,8 @@ fun SearchOverlay(
                             singleLine = true,
                             textStyle = TextStyle(fontFamily = HomeTheme.font, color = fieldColor, fontSize = 16.sp),
                             cursorBrush = SolidColor(fieldColor),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                            keyboardActions = KeyboardActions(onGo = { results.firstOrNull()?.let { open(it) } }),
+                            keyboardOptions = searchKeyboardOptions(ask = askMode),
+                            keyboardActions = searchKeyboardActions { results.firstOrNull()?.let { open(it) } },
                             modifier = Modifier.fillMaxWidth().focusRequester(focus),
                         )
                     }
@@ -858,8 +858,8 @@ internal fun SearchPillField(controller: HomeController, color: Color, interacti
                 textStyle = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 16.sp),
                 cursorBrush = SolidColor(color),
                 // 0.11.3: focus alone does not bring the keyboard: search asks for it itself, to slide it in with the pill.
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go, showKeyboardOnFocus = false),
-                keyboardActions = KeyboardActions(onGo = { controller.searchSubmit?.invoke() }),
+                keyboardOptions = searchKeyboardOptions(ask = controller.askClaudeMode && claudeOn, showOnFocus = false),
+                keyboardActions = searchKeyboardActions { controller.searchSubmit?.invoke() },
                 enabled = canFocus,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -874,6 +874,21 @@ internal fun SearchPillField(controller: HomeController, color: Color, interacti
         }
     }
 }
+
+/**
+ * 0.12.0 (D172, Med's keyboard answer "search-friendly typing"): app names and calculations are not corrected (no
+ * autocorrection, no automatic capital) and the keyboard's action key is Search; a question for Claude is ordinary text
+ * again (corrected, with a capital) and the key is Send. The keyboard reads these from the field when it opens.
+ */
+internal fun searchKeyboardOptions(ask: Boolean, showOnFocus: Boolean = true) = KeyboardOptions(
+    capitalization = if (ask) androidx.compose.ui.text.input.KeyboardCapitalization.Sentences else androidx.compose.ui.text.input.KeyboardCapitalization.None,
+    autoCorrectEnabled = ask,
+    keyboardType = androidx.compose.ui.text.input.KeyboardType.Text,
+    imeAction = if (ask) ImeAction.Send else ImeAction.Search,
+    showKeyboardOnFocus = showOnFocus,
+)
+
+internal fun searchKeyboardActions(submit: () -> Unit) = KeyboardActions(onSearch = { submit() }, onSend = { submit() }, onGo = { submit() })
 
 /**
  * Lays its content out above the open search field: [reserve] px from the bottom of the screen

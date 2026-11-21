@@ -135,6 +135,10 @@ class HomeReturnState {
     /** Something another screen asked the home screen to open ("wallpaper"), or null. */
     var request by mutableStateOf<String?>(null)
 
+    /** 0.12.0: the text for a "search" request (from another app or the keyboard), and whether to ask Claude with it. */
+    var searchText: String? = null
+    var searchAsk = false
+
     /**
      * Asked by the activity as it is paused: is something showing that will be closed while the
      * launcher is away (drawer, search, a menu)? Set by the home screen.
@@ -455,6 +459,15 @@ private fun HomeScreenBody(
                 }
                 // 0.11.2: Settings → Diagnostics → Speed check.
                 "speedCheck" -> controller.runSpeedCheck()
+                // 0.12.0 (D171): text from another app, the text selection menu or the keyboard.
+                "search" -> returnState.searchText?.let { text ->
+                    returnState.searchText = null
+                    val open = controller.searchOpen
+                    if (!open) controller.closeAll(immediately = true)
+                    controller.searchQuery = text
+                    controller.askClaudeMode = returnState.searchAsk
+                    if (!open) controller.openSearch()
+                }
             }
             returnState.request = null
         }

@@ -158,6 +158,14 @@ object SettingsMap {
                 M to listOf("search.engine", "search.claude", "search.claudeTarget"),
             ),
         ),
+        // 0.12.0 (D171, D172): Med's keyboard, WM Keyboard, and the launcher.
+        SettingsSurface(
+            "keyboard", "Keyboard", "WM Keyboard: a layout for search, a keyboard theme in your colours, Liquid from any app",
+            SettingsEntry.DRAWER, listOf("keyboard"),
+            mapOf(
+                B to listOf("keyboard.searchLayout", "search.selectionEntry"),
+            ),
+        ),
         // ---- Study ----
         SettingsSurface(
             "study", "Study companion", "The line under the clock, the hub, quiet, speed bump, arrival home, calendars and Claude",

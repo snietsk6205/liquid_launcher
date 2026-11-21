@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Liquid Launcher</string>
+    <string name="entry_search">Liquid search</string>
+    <string name="entry_share">Search in Liquid</string>
+    <string name="entry_selection">Liquid</string>
 </resources>

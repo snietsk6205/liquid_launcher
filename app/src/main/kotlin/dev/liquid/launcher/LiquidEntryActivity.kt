@@ -1,0 +1,56 @@
+package dev.liquid.launcher
+
+import android.app.Activity
+import android.content.Intent
+import android.os.Bundle
+import dev.liquid.launcher.core.common.DebugLog
+
+/**
+ * 0.12.0 (D171): the way in from other apps and from the keyboard. No window of its own: it hands the text to the home
+ * screen's search and finishes.
+ *
+ * - "Liquid" in the text selection menu of any app (`ACTION_PROCESS_TEXT`): search with the selected text.
+ * - "Search in Liquid" in the share sheet (`ACTION_SEND`, text): the same. Text that starts with "Ask Claude: " (what the
+ *   WM Keyboard plugin shares for its Ask button) opens search ready to ask Claude with the rest.
+ * - `dev.liquid.launcher.action.SEARCH` with the extras `query` (text) and `ask` (boolean), for Tasker and the like.
+ *
+ * Asking Claude only fills search in Ask mode: the question goes to the Claude app when Go is pressed, never by itself.
+ */
+class LiquidEntryActivity : Activity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val (text, ask, from) = read(intent)
+        if (!text.isNullOrBlank()) {
+            DebugLog.event("Search", "text from $from (${text.length} characters)${if (ask) ", to ask Claude" else ""}")
+            startActivity(
+                Intent(this, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .putExtra(MainActivity.EXTRA_OPEN, "search")
+                    .putExtra(EXTRA_QUERY, text.trim().take(MAX_CHARS))
+                    .putExtra(EXTRA_ASK, ask),
+            )
+        }
+        finish()
+        @Suppress("DEPRECATION")
+        overridePendingTransition(0, 0)
+    }
+
+    private fun read(intent: Intent?): Triple<String?, Boolean, String> = when (intent?.action) {
+        Intent.ACTION_PROCESS_TEXT -> Triple(intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString(), false, "the text selection menu")
+        Intent.ACTION_SEND -> {
+            val shared = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+            if (shared != null && shared.startsWith(ASK_PREFIX)) Triple(shared.removePrefix(ASK_PREFIX), true, "a share")
+            else Triple(shared, false, "a share")
+        }
+        ACTION_SEARCH -> Triple(intent.getStringExtra(EXTRA_QUERY), intent.getBooleanExtra(EXTRA_ASK, false), "another app")
+        else -> Triple(null, false, "")
+    }
+
+    companion object {
+        const val ACTION_SEARCH = "dev.liquid.launcher.action.SEARCH"
+        const val EXTRA_QUERY = "query"
+        const val EXTRA_ASK = "ask"
+        const val ASK_PREFIX = "Ask Claude: "
+        private const val MAX_CHARS = 4000
+    }
+}
