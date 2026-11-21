@@ -409,10 +409,10 @@ adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen gla
 wait_top "SettingsActivity" 8 || fail "glass benchmark opens"
 sleep 6
 peek 05-glass-running
-# The benchmark runs a fixed ~15 s (three tiers of 0.7 s warm-up and 4 s measuring), and a moving screen cannot be read:
-# each dump while it runs waits ~10 s and fails (run 102 gave up after 30 s). Wait out its run, then look.
-sleep 10
-wait_screen 05-glass-finished "Tune the glass" 20 || true
+# A fixed wait on purpose: the benchmark runs a fixed time (three tiers of 0.7 s warm-up and 4 s measuring, longer on
+# the emulator) and a moving screen cannot be read, so polling it only adds failed dumps of ~10 s each (runs 102 and
+# 103: 20 to 30 s more than this wait). The dump below reads the finished screen.
+sleep 12
 texts 05-glass-finished 12
 if top_activity | grep -q "SettingsActivity"; then pass "glass benchmark finished without leaving the screen"; else fail "glass benchmark finished without leaving the screen"; fi
 # 0.9.12 (P4): once measured, the same screen tunes the real glass live, with its presets.
