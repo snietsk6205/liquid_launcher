@@ -38,6 +38,17 @@ class EverythingTest {
     }
 
     @Test
+    fun optionsOpenTheirPageOnTheirTab() {
+        val stretch = Everything.options("liquid stretch")
+        assertTrue(stretch.any { it.title == "Liquid stretch" && it.target == "page:search:behaviour:search.stretch" })
+        val music = Everything.options("live item playing")
+        assertTrue(music.any { it.target == "page:pill:layout:pill.live.music" })
+        // Two letters are not enough, and a name finds no option.
+        assertTrue(Everything.options("li").isEmpty())
+        assertTrue(Everything.options("marie curie").isEmpty())
+    }
+
+    @Test
     fun earlierResultsStayOnlyIfTheyStillFit() {
         val event = Found.Event(1, "Analyse TD", 0, 0, false, 0, "B12")
         val contact = Found.Contact(2, "k", "Marie Curie", null)

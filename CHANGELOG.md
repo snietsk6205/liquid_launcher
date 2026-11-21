@@ -6,6 +6,51 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
+## 0.13.0 — 2026-11-21
+
+### Added
+- The live pill: a new item in the pill shows what is happening now, and changes as it does. The focus timer counts
+  down to the end of its block; a class or block starting soon counts down ("Analyse in 12 min"), the one running
+  shows a small ring and the minutes left; what is playing shows its cover and title with its own play/pause (a tap
+  opens the app playing it); and when nothing else is on, the flashcards due today. When something changes, its
+  capsule takes the new content and the pill swells and settles like a drop. It takes no room while nothing is
+  happening. It is in the pill already (search, live, date); Settings → Pill → Layout sets what it shows, how long
+  before a class it counts down, and the change of shape. What is playing needs notification access (the switch "Quiet
+  during blocks" uses); the Pill page offers it when it is off.
+- Flashcards one tap away: while cards are due, a small count rides on the live item. A tap or a long press on it
+  opens a quick review over the home screen, without search: the cards one after the other, turned over and answered
+  as in search (wrong comes back tomorrow, right waits longer), closing by itself after the last one. Drag it down or
+  go back to close it sooner.
+- Search everything: besides apps, search finds people from your contacts, events of your calendars (a month back to
+  six months ahead), your notes for the evening check-in, your flashcards and options of Settings. A person opens
+  their card, an event opens in your calendar app, a flashcard opens in the quick review, an option opens its page in
+  Settings with the option lit up. Accents do not matter ("revision" finds "Révision"). Contacts are read only after
+  you allow them, from a row search offers once; each kind can be turned off in Settings → Search → More.
+
+### Changed
+- Search opens in one motion: the pill only rises, straight to just above the keyboard, and the keyboard rises with it
+  from the first frame (a picture of it stands in until the real one is ready, which takes a moment on some phones).
+  Closing takes the keyboard down with the pill. The liquid stretch follows the pill's own speed, and settles without
+  a wobble when Bounce is 0; Speed and Bounce stay in Settings → Search → Behaviour. The picture of the keyboard is
+  taken through the redirect service: if it never shows, switch that service off and on once in Android's
+  accessibility settings.
+- Closing is smoother everywhere: folders, menus and sheets leave as a picture of themselves, shrinking back into what
+  opened them (a folder into its icon, a menu into the app it came from) or sinking away, on a spring without bounce.
+  Sheets follow your finger when you drag them down, and Android's back gesture shrinks them as your thumb moves.
+- The keyboard theme (Settings → Drawer and search → Keyboard) is now built on your own WM Keyboard theme file, so its
+  board, toolbar and chips stay yours and only the keys and popups take the launcher's colours. No picture is put
+  inside it any more, so the toolbar is sharp, and "Follow wallpaper colors" is on: after one import, WM Keyboard
+  recolours it by itself at every wallpaper change. "Use another file" takes another theme as the base.
+- Board photos: every camera app on the phone can be chosen, also those that cannot hand a photo back to another app;
+  those open as they are, and when you come back the photo picker opens on your newest photos and saves the one you
+  pick in its class's folder.
+
+### Removed
+- "WM Keyboard layout while searching" and the Liquid plugin for WM Keyboard: the layout switch redrew the keyboard
+  while it slid in, and the plugin could only pass text through the share sheet. Settings → Drawer and search →
+  Keyboard → Behaviour now shows how to bind a WM Keyboard mode to the launcher instead, which applies before the
+  keyboard is drawn.
+
 ## 0.12.0 — 2026-11-21
 
 ### Added

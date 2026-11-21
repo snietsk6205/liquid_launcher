@@ -80,7 +80,7 @@ internal fun WhatsNewHost(controller: HomeController, glass: GlassConfig, lightB
             controller.drawer.value < 0.01f && controller.search.value < 0.01f && !controller.todaySheet && controller.menu == null &&
                 !controller.homeMenu && !controller.layoutsSheet && !controller.wallpaperStudio && !controller.wallpaperStrip &&
                 !controller.widgetPicker && controller.clockStudio == null && !controller.editMode && controller.widgetOptions == null &&
-                controller.tagging == null && controller.speedBump == null
+                controller.tagging == null && controller.speedBump == null && controller.reviewSheet == null
         }
     }
     val v = version

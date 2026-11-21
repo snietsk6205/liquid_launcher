@@ -1,7 +1,8 @@
 # Liquid Launcher: my feedback on 0.11.2 (brief for the next session)
 
-> Status: handled by the session of 2026-11-21 (0.11.3 and 0.12.0, branch `claude/affectionate-sagan-u5it39`); what was
-> done, what was not and why are in `docs/FABLE_LOG.md`, last section.
+> Status: handled by the session of 2026-11-21 (0.11.3 and 0.12.0, branch `claude/affectionate-sagan-u5it39`), and in
+> the same session Med's feedback on 0.12.0 with his three new requests (live pill, flashcards on the pill, search
+> everything) went into 0.13.0; what was done, what was not and why are in `docs/FABLE_LOG.md`, last two sections.
 
 Continue Liquid Launcher (repo `snietsk6205/liquid_launcher`). Start from `main`: it has everything up to 0.11.2
 (PR #1 merged as `8a9f1ac`). Work on the branch this session gives you. 0.11.2 (build 105) is released and on my

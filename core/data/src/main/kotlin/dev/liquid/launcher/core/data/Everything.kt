@@ -167,26 +167,33 @@ object Everything {
         return out
     }
 
+    /** One occurrence read from the calendars, with its words ready for matching. */
+    private class Occurrence(
+        val id: Long,
+        val title: String,
+        val begin: Long,
+        val end: Long,
+        val allDay: Boolean,
+        val color: Int,
+        val place: String,
+        val note: String?,
+        val words: String,
+    )
+
+    private const val DAY = 24 * 60 * 60_000L
+
+    @Volatile private var occurrences: List<Occurrence> = emptyList()
+    @Volatile private var occurrencesAt = 0L
+
     /**
-     * Events from [pastDays] ago to [aheadDays] ahead whose title or place has every word of [query], and the notes
-     * ("Note: …") among them. A repeating event counts once: its next occurrence, else its latest. The launcher's own
-     * "launcher-data" event is never shown.
+     * The occurrences of six months back to six months ahead, read at most once a minute: the calendar's own search
+     * is not accent-blind ("revision" would not find "Révision"), so the launcher reads the range and matches itself.
      */
-    fun calendar(
-        context: Context,
-        query: String,
-        now: Long = System.currentTimeMillis(),
-        pastDays: Int = 180,
-        aheadDays: Int = 180,
-    ): Pair<List<Found.Event>, List<Found.Note>> {
-        if (!allowed(context, Manifest.permission.READ_CALENDAR)) return emptyList<Found.Event>() to emptyList()
-        val w = words(query)
-        if (w.isEmpty()) return emptyList<Found.Event>() to emptyList()
-        val day = 24 * 60 * 60_000L
-        val builder = CalendarContract.Instances.CONTENT_SEARCH_URI.buildUpon()
-        ContentUris.appendId(builder, now - pastDays * day)
-        ContentUris.appendId(builder, now + aheadDays * day)
-        builder.appendPath(query.trim())
+    private fun occurrences(context: Context, now: Long): List<Occurrence> {
+        if (now - occurrencesAt in 0 until 60_000L) return occurrences
+        val builder = CalendarContract.Instances.CONTENT_URI.buildUpon()
+        ContentUris.appendId(builder, now - 180 * DAY)
+        ContentUris.appendId(builder, now + 180 * DAY)
         val projection = arrayOf(
             CalendarContract.Instances.EVENT_ID,
             CalendarContract.Instances.TITLE,
@@ -196,31 +203,49 @@ object Everything {
             CalendarContract.Instances.DISPLAY_COLOR,
             CalendarContract.Instances.EVENT_LOCATION,
         )
-        val events = LinkedHashMap<Long, Found.Event>()
-        val notes = LinkedHashMap<Long, Found.Note>()
+        val out = ArrayList<Occurrence>()
         try {
             context.contentResolver.query(builder.build(), projection, null, null, CalendarContract.Instances.BEGIN + " ASC")?.use { c ->
-                var rows = 0
-                while (c.moveToNext() && rows++ < 400) {
-                    val id = c.getLong(0)
+                while (c.moveToNext() && out.size < 8000) {
                     val title = c.getString(1)?.trim().orEmpty()
                     if (title.isEmpty() || title.equals("launcher-data", ignoreCase = true)) continue
-                    val begin = c.getLong(2)
-                    if (title.startsWith(StudyFormat.NOTE_PREFIX, ignoreCase = true)) {
-                        val text = title.substring(StudyFormat.NOTE_PREFIX.length).trim()
-                        if (text.isNotEmpty() && matches(w, text)) notes[id] = Found.Note(id, text, begin)
-                        continue
-                    }
                     val place = c.getString(6)?.trim().orEmpty()
-                    if (!matches(w, title, place)) continue
-                    val event = Found.Event(id, title, begin, c.getLong(3), c.getInt(4) == 1, c.getInt(5), place)
-                    val known = events[id]
-                    // The next occurrence wins (the rows come in order); a past one only until a coming one is seen.
-                    if (known == null || known.end < now) events[id] = event
+                    val note = if (title.startsWith(StudyFormat.NOTE_PREFIX, ignoreCase = true)) {
+                        title.substring(StudyFormat.NOTE_PREFIX.length).trim()
+                    } else null
+                    val words = if (note != null) normalize(note) else normalize("$title $place")
+                    out += Occurrence(c.getLong(0), title, c.getLong(2), c.getLong(3), c.getInt(4) == 1, c.getInt(5), place, note, words)
                 }
             }
         } catch (e: Exception) {
             DebugLog.error("Search", "calendar failed: $e")
+        }
+        occurrences = out
+        occurrencesAt = now
+        return out
+    }
+
+    /**
+     * Events from a month back to six months ahead whose title or place has every word of [query], and the notes
+     * ("Note: …", six months back) whose text has them. A repeating event counts once: its next occurrence, else its
+     * latest. The launcher's own "launcher-data" event is never shown.
+     */
+    fun calendar(context: Context, query: String, now: Long = System.currentTimeMillis()): Pair<List<Found.Event>, List<Found.Note>> {
+        if (!allowed(context, Manifest.permission.READ_CALENDAR)) return emptyList<Found.Event>() to emptyList()
+        val w = words(query)
+        if (w.isEmpty()) return emptyList<Found.Event>() to emptyList()
+        val events = LinkedHashMap<Long, Found.Event>()
+        val notes = LinkedHashMap<Long, Found.Note>()
+        for (o in occurrences(context, now)) {
+            if (!w.all { it in o.words }) continue
+            if (o.note != null) {
+                if (o.note.isNotEmpty() && o.begin <= now + DAY) notes[o.id] = Found.Note(o.id, o.note, o.begin)
+                continue
+            }
+            if (o.end < now - 30 * DAY) continue
+            val known = events[o.id]
+            // The next occurrence wins (they come in order); a past one only until a coming one is seen.
+            if (known == null || known.end < now) events[o.id] = Found.Event(o.id, o.title, o.begin, o.end, o.allDay, o.color, o.place)
         }
         val (coming, past) = events.values.partition { it.end >= now }
         val sortedEvents = coming.sortedBy { it.begin } + past.sortedByDescending { it.begin }

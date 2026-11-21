@@ -237,7 +237,9 @@ fun SearchOverlay(
         }
         controller.closeSearch()
     }
-    androidx.compose.runtime.SideEffect { controller.searchSubmit = { results.firstOrNull()?.let { open(it) } } }
+    // Enter opens the first app, calculation, Claude or the web as before 0.13.0: people, events, notes, cards and
+    // Settings arrive a moment after the letters, and Enter should not depend on how quickly they came.
+    androidx.compose.runtime.SideEffect { controller.searchSubmit = { results.firstOrNull { it !is SearchResult.More }?.let { open(it) } } }
 
     if (fieldInPill) {
         BottomSearch(controller, config, glass, transition, rise, env, suggestions, results, query, claudeApp, pillOffsetDp, live) { open(it) }

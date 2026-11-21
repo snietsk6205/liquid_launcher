@@ -1326,3 +1326,57 @@ gap: the web page writes some characters that way). No "ANR in" was seen in thes
 ms" or "shown the usual way (reason)": if MagicOS refuses, the reason says whether to ask later or differently. (2) The
 "REDIRECT (…); fades in over 180 ms" and "launcher drawn …" lines after recents. (3) The speed check lines for still
 glass (the 0.11.2 entry's exact next step).
+
+## Session of 2026-11-21, night (Opus 5.5): 0.13.0, Med's feedback on 0.12.0 and three new ideas
+
+Brief: Med's message after 0.12.0, with his settings export, his WM Keyboard theme file ("wallpaper"), his log of 20:11
+to 20:35 and the diagnostics; then his answers to the designer's read I gave him, and three new ideas from my list he
+asked for ("Live pill", "Flashcards one tap away", "Search everything"). Same branch.
+
+**Released:** 0.13.0 by the CI run of the commit "0.13.0 [release]: …" that carries this entry: it runs the whole
+emulator test, the new sections included, and publishes only when every check passes.
+
+**Items**
+
+| # | Med's point | State | What |
+|---|---|---|---|
+| 1 | The test photo works but he could not choose the camera | Done | Every camera app is listed (also those that cannot hand a photo back); those open as they are and the photo picker follows, saving into Pictures/ESSAI/<class> (D177). |
+| 2 | Search: a fast swipe took the pill down then up with the keyboard; slow, it dipped and the bounce and stretch were not smooth; he wants it up with the keyboard at once, iOS-smooth, speed in Settings | Done; on the phone, to see | The pill only rises, from rest to just above the keyboard, on search's spring; the keyboard rises under it from the first frame, its picture standing in until it is ready; closing takes it down with the pill; the stretch follows the pill's speed and settles without a wobble at Bounce 0 (D175). Speed and Bounce were already in Settings › Search › Behaviour. |
+| 3 | Glass in motion: frosted while moving? | No change | His answer was no: the glass stays liquid while it moves. |
+| 4 | The keyboard theme: blurry toolbar; his file as the base; follow the wallpaper | Done | Built on his file, no picture inside (crisp toolbar), "Follow wallpaper colors" on, another file can be the base (D177). |
+| 5 | The plugin and the layout switch did nothing for him | Replaced | Both removed; a guide to WM Keyboard's Modes (a mode bound to the launcher) instead (D177). |
+| 6 | Smoother transitions, popups and closing animations | Done | Overlays leave as a picture of themselves into what opened them or sink, sheets close by drag and by predictive Back (D176). |
+| 7 | Live pill | Done | `PillSlot.Live`, in the default items: focus timer, next class, what's playing, cards due; the pill swells when it changes (D178). |
+| 8 | Flashcards one tap away | Done | A count on the live item; a tap or a long press opens the quick review over the home screen (D178). |
+| 9 | Search everything | Done | People, events, notes, flashcards and options of Settings (D179). |
+| 10 | Glass cheaper, a steady 60 Hz (I offered it) | Not done | It needs his speed check log (Settings › Diagnostics › Speed check): without numbers from his phone it would be guesswork (D166). |
+
+**CI runs:** 116 (the search rise; cancelled by the next push), 117 (transitions) and 118 (keyboard theme, camera) green
+with build and unit tests, 119 (`[smoke]`: live pill, quick review, search everything, with the new emulator sections
+14f and 14g; its build and unit tests passed, its emulator test was cancelled by the release push, which runs it
+again) and the release run. Unit tests: 273 (5 new for the finder: matching, cards, the Settings links). No "ANR in" seen; the snapshot
+cache stays.
+
+**Known bugs and limits**
+- Nothing of this entry has been on Med's phone yet: the emulator checks the pill's count, the quick review and search
+  finding a setting and a card, not how the motion feels.
+- The keyboard's picture is taken through the redirect service's screenshot ability (Android 11+); a service enabled
+  before 0.13.0 may need to be switched off and on once. Until a picture exists, a plain plate stands in.
+- What's playing needs notification access, and only shows players that publish a media session (most do).
+- The pill's swell redraws its glass for about a second each time the live item changes (not at rest).
+- Search everything reads events from a month back to six months ahead, notes from six months back; contacts only
+  after he allows them from the row search offers (once).
+
+**Questions for Med**
+1. Search: does the pill now go up with the keyboard in one motion, fast and slow? Is Speed/Bounce enough to tune it?
+2. Keyboard theme: import it once (Settings › Drawer and search › Keyboard › Look › Open in WM Keyboard); is the
+   toolbar sharp, and does it follow the next wallpaper by itself?
+3. Live pill: is the order right (focus, a class within 15 minutes, music, the block running, the next one, cards)?
+   Notification access for the music part: the Pill page has the button.
+4. Quick review: is closing by itself after the last card right, or should it stay open?
+5. Search everything: did you allow contacts? Anything it should find that it does not?
+6. Still owed: the speed check log, for a cheaper glass at a steady 60 Hz.
+
+**Exact next step:** read Med's next log: "search: keyboard opened at … (…)" for each opening, "search: the keyboard's
+picture was taken (…)", "Live: media sessions …" (only when not allowed), and his answers above; then, with the speed
+check log, measure the glass (D166) before changing it.
