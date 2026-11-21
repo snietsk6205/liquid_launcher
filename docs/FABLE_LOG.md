@@ -1156,3 +1156,108 @@ letter circle 13–45 % late, the string 5–37 %, the wallpaper screen 39–61 
 "drawer; letter area" with their split (input and composing, layout, draw, sync, GPU). If the drawer is still late on
 more than 5 % of frames while the letters move, look at what the split points to (composing: lighter app cells;
 draw or GPU: the glass over the list) before changing anything else.
+
+## Session of 2026-11-20, night: 0.11.2, Med's answers on 0.11.1
+
+Brief: Med's message on 0.11.1 (a debug log from 19:10 to 21:01 and his settings export): "I told you to make things
+snappier and smooth and faster, now almost all the animations lag", but the letter areas work very well; the search
+pill still goes higher than the keyboard and comes back, more often after a wallpaper change; with the pill on liquid
+the animations are snappier, so make that the default and find out whether the frosted glass is the problem; a board
+photo in "TD micro" (around 11:00) made the folder in ESSAI but the photo did not save (the camera asks to confirm);
+and ideas worth doing, with questions before any change. His answers: the switch was the theme's "Kind of glass:
+Liquid"; search "never above"; for the camera, "give me the option to select the camera app I want" (he could not
+test, not being in class); first idea "Still glass in motion", and more ideas. Branch `ccr-f4d083cc-vpyudk`.
+
+**Released:** 0.11.2, by the CI run of the commit "0.11.2 [release]: …" that carries this entry. It replaces the APK
+that run 99 had published one push early (commit `d8e1574`, "Faster CI: …"): that commit's message described the new CI
+rules and so quoted the release marker, and the release step reads the whole message (my mistake; the rule in
+NEXT_SESSION_PROMPT.md now says the body counts too). Run 99 had passed every check before publishing; the app's code
+did not change after it, only CI and documents. Run 98 (`b09caf1`) had failed one check, "What's new" (the version said
+0.11.2 before its CHANGELOG entry, which came with the next push).
+
+**His 0.11.1 log:** the launcher's own work per frame was 0.2–4 ms (input and composing, layout, draw); almost all of
+each frame was preparing the drawing for the GPU ("sync": mostly 7–20 ms, 48 ms in the study hub) and the GPU itself
+(6–26 ms): home at rest 20–35 ms a frame, the drawer 30–39 ms, the letter areas 30–94 ms, the wallpaper screen 41–58
+ms (GPU 18–26), the study hub 142 ms. The numbers matched 0.11.0's except the hub; 0.11.1 had made more things move
+(sheets sinking back as they closed), so the same cost showed in more places. At rest the home screen drew 600 frames
+a minute: the unmarked block's halo breathing every 14 s. Letter areas: many swipes ("swiped from U to S" and the
+like), no complaint. Icon colours against MagicOS's: off by under 1.3 three times, 2.9–3.7 twice and 7.4–7.6 twice
+(two pictures MagicOS mixes differently). Redirects fine. About half the search openings had no keyboard 200 ms after
+asking.
+
+**Items**
+
+| # | Med's point | State | What |
+|---|---|---|---|
+| 1 | Animations lag | Partly, to measure | Closing is a 110 ms fade again (no sinking glass); outline paths of themed buttons, pills and materials are kept between frames (`OutlineCache`), the likely cause of the hub's 48 ms of sync; the halo rests 5 minutes; "Frames:" lines give the refresh rate. D165. |
+| 2 | Liquid snappier: make it the default; is frosted the problem? | Done | The default theme's glass kind is Liquid (D164). In the code Frosted and Liquid take the same steps (same blur, same AGSL shader; liquid bends the edge), so the difference he felt is measured by the speed check on his phone. |
+| 3 | Search field above the keyboard | Done | `KeyboardLine`: the field waits at the lowest of the last six opening heights and only the keyboard pushes it up; every opening is logged with where the field waited; no second request while the keyboard slides in. D162. |
+| 4 | Board photo not saved; choose the camera | Done, to try on the phone | The camera writes into a private file (FileProvider) and the launcher saves it in Pictures/ESSAI/<class>; the photo in progress survives a launcher restart; kept whenever written. Settings → Study companion → More: the camera app, and a test photo into ESSAI/Test. D163. |
+| 5 | Ideas, first "Still glass in motion" | Measured first | Settings → Diagnostics → Speed check plays the drawer, search, the home menu and the hub with the glass as set, without blur (what still glass would save), frosted, liquid, without shadows, without the material and as a tint; one "Frames:" line per step. The glass library redraws a moving surface every frame, so still glass needs a picture of the surface (taken on the main thread) or a pre-blurred backdrop (wallpaper only); the numbers decide. D166. |
+
+**CI speed-up (Med's change of plan, D167)**
+
+Where the time went before (run 97, the last green run, 16m18s from push to release): the build job 5m16s, of which
+5m07s compiling and testing with no Gradle cache (a branch only read one, and main had none); the emulator job 10m43s,
+of which 10m31s in one step that downloaded the system image, cold-booted Android and ran `ci/smoke.sh` with 142 fixed
+sleeps (254 s); publishing 12 s. Changes: the system image and a booted emulator's snapshot are cached (on a miss one
+step boots and saves it, the test boots from it and does not save it back); Gradle saves its cache on every branch;
+the emulator test runs only for the release marker, for `[smoke]`, for manual runs and for changes to the redirect,
+`ci/` or the workflows; `smoke.sh` waits for what it checks (with a timeout) instead of fixed sleeps, keeps the
+warm-up, the ANR handling and every check, and now ends with the time of each section.
+
+| Step | Run 97, before | Run 103, fills the snapshot | Run 104, after |
+|---|---|---|---|
+| Gradle setup (restores its cache) | 0m02s | 0m06s | 0m06s |
+| Unit tests and release APK | 5m07s | 2m23s | 2m18s |
+| Gradle cache saved (post step) | 0m01s | 0m19s | 0m16s |
+| **Build job** | **5m16s** | **2m54s** | **2m46s** |
+| System image and snapshot caches | none | 0m17s (image restored, snapshot missed) | 0m54s (both restored) |
+| Boot, wait for calm, save the snapshot | none | 2m35s (calm after 89 s) | skipped |
+| Run on emulator (boot, `smoke.sh`) | 10m31s | 11m06s (`smoke.sh` 646 s) | 10m27s (`smoke.sh` 592 s, calm after 6 s) |
+| **Emulator job** | **10m43s** | **14m22s** | **11m32s** |
+| **Push to result** | **16m18s** (with publishing) | **17m21s** | **14m22s** |
+
+A push that changes none of the redirect, `ci/` or the workflows now ends after the build job: about 3 minutes instead
+of 16. Runs 98 and later also run the speed check (section 17, about 65 s), which run 97 did not have.
+
+How it got there: run 99 filled the first caches (and published 0.11.2, above); run 100 measured them: the build job
+went from 5m16s to 2m20s, but the emulator step took 12m08s. Run 101 failed checks 2 and 3: the first snapshot had
+been saved the moment Android said "booted", in the middle of its first-boot work, so every run started inside it, and
+the launcher was killed twice as "not responding" in its first minute (an input event waited 5 s with the CPU 87 %
+busy), taking its redirect service with it. `ci/settle.sh` now waits for a calm phone (the CPU under 40 % busy, read
+from `/proc/stat`, three times in a row; the CPU pressure file cannot be read from adb, which run 102 showed): before
+the snapshot is saved (run 103: 100 % busy for over a minute, calm after 89 s) and at the start of `smoke.sh` (calm
+after 12 s from the restored snapshot); the first redirect checks then passed without a retry. `smoke.sh` now ends with
+each section's time and its slow waits: most of its ~11 minutes is its own work (72 screen dumps, 29 screenshots, the
+speed check, and the sleeps that check something does not happen, which stay). Two waits on a moving screen were slower
+than the fixed sleeps they replaced (a dump of a moving screen waits ~10 s and fails); the glass benchmark keeps its
+fixed wait for that reason.
+
+**The snapshot: kept.** Med's stopping rule gave the calm snapshot (v3) one run: any "not responding" or failed check
+and it would be dropped for a cold boot each run (the system image cache kept, then `settle.sh`, then the test). Run
+104 restored it: calm after 6 s, no "ANR in" line in the system log (20,301 lines, from the install to the end), the
+launcher one process from start to end, no retry, every check passed; `smoke.sh` 592 s. If a run shows "not
+responding" again, the cold boot is the fallback: remove the two snapshot steps and `force-avd-creation: false` from
+the workflow (the system image cache and the calm wait at the start of `smoke.sh` stay).
+
+**Known bugs and limits**
+- CI: a push that changes the app but not the redirect, `ci/` or the workflows no longer runs the emulator test; put
+  `[smoke]` in the message to run it (a release always runs it).
+- Not measured on the phone: whether the fade exits, the outline cache and Liquid make the animations feel snappy
+  enough; the speed check will say what costs what.
+- Still glass in motion is not built yet (D166).
+- The first search opening on a new phone waits at 30 % of the screen; after that, at the lowest opening.
+- Ideas offered and not picked yet: 90 Hz during animations, predictive Back, grab any sheet, a focus timer and the
+  next class in the pill, now playing, search for settings/contacts/events, quick toggles in the home menu.
+
+**Questions for Med**
+1. Run Settings → Diagnostics → Speed check once (about a minute, hands off) and send the debug log: it says what the
+   blur, the bending, the shadows and the material each cost on your phone, and whether still glass is worth it.
+2. Take a test photo (Settings → Study companion → More) with the camera you want; does it land in Pictures/ESSAI/Test?
+3. Does the search field still ever go above the keyboard? The log now says where it waited each time.
+
+**Exact next step:** read the speed check's "Frames: … speed check: <what>, <variant>" lines. If "glass without its
+blur" is much cheaper than "glass as set" for the drawer and search, build still glass for the pill and the field
+(a pre-blurred backdrop while they move); if "without shadows" or "without the theme's material" is the big saving,
+cut those first. Then the hub's line against 0.11.1's 142 ms.
