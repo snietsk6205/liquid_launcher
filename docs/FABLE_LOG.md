@@ -1333,8 +1333,8 @@ Brief: Med's message after 0.12.0, with his settings export, his WM Keyboard the
 to 20:35 and the diagnostics; then his answers to the designer's read I gave him, and three new ideas from my list he
 asked for ("Live pill", "Flashcards one tap away", "Search everything"). Same branch.
 
-**Released:** 0.13.0 by the CI run of the commit "0.13.0 [release]: …" that carries this entry: it runs the whole
-emulator test, the new sections included, and publishes only when every check passes.
+**Released:** 0.13.0 by run 121 (build 121), the second "0.13.0 [release]" commit, after every check passed; the
+first release run (120) published nothing (see the CI runs).
 
 **Items**
 
@@ -1360,7 +1360,9 @@ still coming back after Home (InputDispatcher: "No new touched window"; the syst
 search never opened; the test now waits for the redirect's "launcher drawn" line and the end of the transition
 (`home_and_settle`). And an option found by search opened the Settings page 14e had left in the background, a real
 bug: with `NEW_TASK` alone Android brings that task back as it was; every link to a page of Settings now clears it
-(also Customise, gestures and the drawer's menu, which had the same flaw). Then the second release run. Unit tests: 273 (5 new for the finder: matching, cards, the Settings links). No "ANR in" seen; the snapshot
+(also Customise, gestures and the drawer's menu, which had the same flaw). 121, the second release run: every check
+passed, published. Its 14e also showed that Back with the keyboard up still only puts the keyboard away (search stays
+open) with predictive Back switched on (D176): the keyboard's back callback is registered after the activity's. Unit tests: 273 (5 new for the finder: matching, cards, the Settings links). No "ANR in" seen; the snapshot
 cache stays.
 
 **Known bugs and limits**
