@@ -10,6 +10,12 @@ sealed interface PillSlot {
     /** The study block running now (or next), from the study companion; tap opens Today (0.6.3). */
     data object Study : PillSlot
 
+    /**
+     * 0.13.0 (D178): what is happening now, in one item that changes as it does: the focus timer, a countdown to the
+     * next class, what is playing, and how many flashcards are due. Empty (and taking no room) when nothing is.
+     */
+    data object Live : PillSlot
+
     /** Empty, flexible space. */
     data object Spacer : PillSlot
     data class Action(val action: LauncherAction) : PillSlot
@@ -20,6 +26,7 @@ sealed interface PillSlot {
         Date -> "date"
         Time -> "time"
         Study -> "study"
+        Live -> "live"
         Spacer -> "spacer"
         is Action -> "action:${action.encode()}"
         is App -> "app:${ref.key}"
@@ -31,6 +38,7 @@ sealed interface PillSlot {
             text == "date" -> Date
             text == "time" -> Time
             text == "study" -> Study
+            text == "live" -> Live
             text == "spacer" -> Spacer
             text.startsWith("action:") -> LauncherAction.decode(text.removePrefix("action:"))
                 .takeIf { it != LauncherAction.None }?.let { Action(it) }

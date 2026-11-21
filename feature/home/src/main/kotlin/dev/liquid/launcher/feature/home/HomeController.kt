@@ -179,12 +179,40 @@ class HomeController(
     val drawerOpen: Boolean get() = drawer.targetValue > 0.5f || drawer.value > 0.01f
     val anyOverlay: Boolean get() = drawerOpen || searchOpen || menu != null || editMode || renaming != null || tagging != null ||
         iconPicking != null || swipeEditing != null || openFolder != null || homeMenu || wallpaperStudio || layoutsSheet || savingLayout ||
-        wallpaperStrip || clockStudio != null || todaySheet || widgetPicker || speedBump != null
+        wallpaperStrip || clockStudio != null || todaySheet || widgetPicker || speedBump != null || reviewSheet != null
 
     // ---- home menu, wallpaper, layouts ----
 
     /** The home menu's glass pills are open. */
     var homeMenu by mutableStateOf(false)
+
+    /**
+     * 0.13.0 (D178): the quick review of the flashcards, over the home screen (from the pill's live item, or a card
+     * found by search). The value is the card to start with ("" for the first due); null when closed.
+     */
+    var reviewSheet by mutableStateOf<String?>(null)
+
+    /** Opens the quick review on [cardId] (or the first card due). */
+    fun openReview(cardId: String = "") {
+        if (drawerOpen) closeDrawer(immediately = true)
+        homeMenu = false
+        menu = null
+        openFolder = null
+        Haptics.tick(view)
+        reviewSheet = cardId
+    }
+
+    /**
+     * 0.13.0 (D178): the pill swells and settles like a drop when its live item changes (Settings → Pill → "Changes
+     * shape when something happens"). Read while drawing only.
+     */
+    val livePop = Animatable(0f)
+
+    fun popPill() {
+        scope.launch {
+            livePop.animateTo(0f, spring(dampingRatio = 0.32f, stiffness = MotionScale.stiffness(300f)), initialVelocity = 9f)
+        }
+    }
 
     /** W8 (P8): the layout whose wallpaper is being chosen from the library; null when none. */
     var layoutWallpaperPick by mutableStateOf<String?>(null)
@@ -1399,6 +1427,7 @@ class HomeController(
 
     fun closeAll(immediately: Boolean = false) {
         speedBump = null
+        reviewSheet = null
         customise = null
         endSelecting()
         tagApps = null
@@ -1426,6 +1455,7 @@ class HomeController(
             tagApps != null -> tagApps = null
             selection != null -> endSelecting()
             speedBump != null -> speedBump = null
+            reviewSheet != null -> reviewSheet = null
             renaming != null -> renaming = null
             tagging != null -> tagging = null
             iconPicking != null -> iconPicking = null
@@ -2143,6 +2173,12 @@ class HomeController(
 
     fun openSection(id: String) = callbacks.openSection(id)
 
+    /** 0.13.0: Settings at a page, a tab and an option ("page:pill:layout:pill.live.music"). */
+    fun openSettingsAt(target: String) = callbacks.openSettingsAt(target)
+
+    /** 0.13.0: asks for the contacts; [done] says whether search may read them. */
+    fun requestContacts(done: (Boolean) -> Unit) = callbacks.requestContacts(done)
+
     /** Static shortcuts may point at activities their app does not export; then only the default launcher can open them. */
     fun openShortcut(shortcut: dev.liquid.launcher.core.data.StaticShortcut) {
         try {
@@ -2196,6 +2232,10 @@ class HomeCallbacks(
     val openSetup: () -> Unit,
     /** Opens one settings section by its id. */
     val openSection: (String) -> Unit = { openSettings() },
+    /** 0.13.0: Settings at a page, a tab and an option ("page:pill:layout:pill.live.music"), for search's results. */
+    val openSettingsAt: (String) -> Unit = { openSettings() },
+    /** 0.13.0: asks for the contacts (search finds people); answers whether they may be read. */
+    val requestContacts: ((Boolean) -> Unit) -> Unit = { it(false) },
     /** Shows the photo picker; the callback gets the picked image or null. */
     val pickImage: ((android.net.Uri?) -> Unit) -> Unit = { it(null) },
     /** Shows the photo picker for several images; the callback gets them (maybe none). */

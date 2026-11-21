@@ -48,6 +48,12 @@ class MainActivity : ComponentActivity() {
         folderCallback = null
     }
 
+    private var contactsCallback: ((Boolean) -> Unit)? = null
+    private val askContacts = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { granted ->
+        contactsCallback?.invoke(granted)
+        contactsCallback = null
+    }
+
     private var calendarCallback: ((Boolean) -> Unit)? = null
     private val askCalendar = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()) { result ->
         calendarCallback?.invoke(result[android.Manifest.permission.READ_CALENDAR] == true)
@@ -130,6 +136,21 @@ class MainActivity : ComponentActivity() {
             openSettings = { startActivity(SettingsActivity.intent(this)) },
             openSetup = { startActivity(SettingsActivity.intent(this, SettingsActivity.SCREEN_SETUP)) },
             openSection = { startActivity(SettingsActivity.intent(this, SettingsActivity.SECTION_PREFIX + it)) },
+            openSettingsAt = { startActivity(SettingsActivity.intent(this, it)) },
+            requestContacts = { callback ->
+                if (checkSelfPermission(android.Manifest.permission.READ_CONTACTS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    callback(true)
+                } else {
+                    contactsCallback = callback
+                    try {
+                        askContacts.launch(android.Manifest.permission.READ_CONTACTS)
+                    } catch (e: Exception) {
+                        DebugLog.error("App", "contacts permission request failed: $e")
+                        contactsCallback = null
+                        callback(false)
+                    }
+                }
+            },
             pickImage = { callback ->
                 imageCallback = callback
                 try {

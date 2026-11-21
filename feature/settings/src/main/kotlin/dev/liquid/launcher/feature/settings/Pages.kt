@@ -119,7 +119,10 @@ private val editorTabs: Map<String, Set<SettingsTab>> = mapOf(
 @Composable
 private fun PageEditors(surface: String, tab: SettingsTab, store: SettingsStore, open: (Screen) -> Unit) {
     when (surface to tab) {
-        "pill" to SettingsTab.LAYOUT -> PillItemsEditor(store)
+        "pill" to SettingsTab.LAYOUT -> {
+            PillItemsEditor(store)
+            LiveMusicAccessCard(store)
+        }
         "pill" to SettingsTab.LOOK -> PillStudyEditor(store)
         "menus" to SettingsTab.LAYOUT -> {
             HomeMenuEditor(store)

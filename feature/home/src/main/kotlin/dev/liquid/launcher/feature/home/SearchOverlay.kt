@@ -96,6 +96,9 @@ private sealed interface SearchResult {
 
     /** 0.10.2: one of your prompt templates, offered while "?" is typed alone; a tap asks Claude with it. */
     data class Prompt(val label: String, val prompt: String) : SearchResult
+
+    /** 0.13.0 (D179): a person, an event, a note, a flashcard or an option of Settings. */
+    data class More(val found: dev.liquid.launcher.core.data.Found) : SearchResult
 }
 
 /**
@@ -146,8 +149,35 @@ fun SearchOverlay(
     val studyLoaded by controller.data.study.loaded.collectAsState()
     val minute = rememberMinuteTick()
     val templates by controller.data.settings.derive { get(dev.liquid.launcher.core.settings.LauncherSettings.StudyTemplates) }
-    val results = remember(query, visible, usage, config.engine, config.claude, askMode, studyDay, studyLoaded, minute, templates) {
-        buildResults(query, visible, usage, config.engine, config.claude, askMode, studyDay, studyLoaded, templates)
+    // 0.13.0 (D179): search everything. People, events, notes, cards and Settings are read off the main thread a moment
+    // after the last letter; what was found for the letters before stays meanwhile if it still fits.
+    val sources by controller.data.settings.derive {
+        dev.liquid.launcher.core.data.Everything.Sources(
+            settings = get(dev.liquid.launcher.core.settings.LauncherSettings.SearchFindSettings),
+            contacts = get(dev.liquid.launcher.core.settings.LauncherSettings.SearchFindContacts),
+            events = get(dev.liquid.launcher.core.settings.LauncherSettings.SearchFindEvents),
+            notes = get(dev.liquid.launcher.core.settings.LauncherSettings.SearchFindNotes),
+            cards = get(dev.liquid.launcher.core.settings.LauncherSettings.SearchFindCards),
+        )
+    }
+    val contactsAsked by controller.data.settings.derive { get(dev.liquid.launcher.core.settings.LauncherSettings.SearchContactsAsked) }
+    var found by remember { mutableStateOf<List<dev.liquid.launcher.core.data.Found>>(emptyList()) }
+    var refind by remember { mutableStateOf(0) }
+    LaunchedEffect(query, sources, askMode, contactsAsked, refind, live) {
+        val text = query.trim()
+        if (!live || askMode || text.length < 2 || text.startsWith("!") || text.startsWith("?")) {
+            found = emptyList()
+            return@LaunchedEffect
+        }
+        found = found.filter { dev.liquid.launcher.core.data.Everything.stillMatches(it, text) }
+        kotlinx.coroutines.delay(110)
+        val deck = controller.data.study.deck.value
+        found = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            dev.liquid.launcher.core.data.Everything.find(context.applicationContext, deck, text, sources, contactsAsked)
+        }
+    }
+    val results = remember(query, visible, usage, config.engine, config.claude, askMode, studyDay, studyLoaded, minute, templates, found) {
+        buildResults(query, visible, usage, config.engine, config.claude, askMode, studyDay, studyLoaded, templates, found)
     }
 
     fun open(result: SearchResult) {
@@ -169,6 +199,20 @@ fun SearchOverlay(
                 return
             }
             is SearchResult.Prompt -> controller.askTemplate(result.prompt, heroBlock(studyDay, System.currentTimeMillis()))
+            is SearchResult.More -> when (val f = result.found) {
+                is dev.liquid.launcher.core.data.Found.Option -> controller.openSettingsAt(f.target)
+                is dev.liquid.launcher.core.data.Found.Contact -> controller.start(contactIntent(f))
+                is dev.liquid.launcher.core.data.Found.Event -> controller.start(eventIntent(f.id, f.begin, f.end))
+                is dev.liquid.launcher.core.data.Found.Note -> controller.start(eventIntent(f.id, f.begin, f.begin))
+                is dev.liquid.launcher.core.data.Found.Card -> controller.openReview(f.card.id)
+                dev.liquid.launcher.core.data.Found.AllowContacts -> {
+                    controller.requestContacts { granted ->
+                        controller.data.settings.set(dev.liquid.launcher.core.settings.LauncherSettings.SearchContactsAsked, true)
+                        if (granted) refind++
+                    }
+                    return
+                }
+            }
             is SearchResult.Study -> {
                 val key = result.row.key
                 when {
@@ -296,9 +340,10 @@ private fun resultKey(result: SearchResult): String = when (result) {
     is SearchResult.Study -> "study:" + result.row.key
     is SearchResult.Command -> "command:" + result.command
     is SearchResult.Prompt -> "prompt:" + result.label
+    is SearchResult.More -> "more:" + result.found.key
 }
 
-private fun fieldHint(askMode: Boolean): String = if (askMode) "Ask Claude anything…" else "Apps, calculations, web, Claude…"
+private fun fieldHint(askMode: Boolean): String = if (askMode) "Ask Claude anything…" else "Apps, people, events, cards, settings…"
 
 private fun buildResults(
     query: String,
@@ -310,6 +355,7 @@ private fun buildResults(
     studyDay: dev.liquid.launcher.core.data.StudyDay = dev.liquid.launcher.core.data.StudyDay(),
     studyLoaded: Boolean = false,
     templates: List<String> = emptyList(),
+    found: List<dev.liquid.launcher.core.data.Found> = emptyList(),
 ): List<SearchResult> {
     val text = query.trim()
     if (text.isEmpty()) return emptyList()
@@ -346,6 +392,8 @@ private fun buildResults(
         val claudeFirst = claude == "first" || (claude == "questions" && calc == null && ClaudeQuery.looksLikeQuestion(text))
         if (claudeFirst) out += ask
         Fuzzy.rank(text, apps, { it.label }, { usageBoost(it, usage) }).take(8).forEach { out += SearchResult.App(it) }
+        // 0.13.0 (D179): people, events, notes, cards and Settings, after the apps.
+        found.forEach { out += SearchResult.More(it) }
         if (!claudeFirst && claude != "off") out += ask
         out += SearchResult.Web(text, WebSearch.url(engine, text))
     }
@@ -422,6 +470,7 @@ private fun ResultRow(result: SearchResult, claudeApp: AppEntry?, modifier: Modi
                     Text("“${result.prompt}”", style = style.copy(fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f)), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
+            is SearchResult.More -> FoundRow(result.found, style)
             is SearchResult.Study -> {
                 IconBox(result.row.icon, (result.row.color ?: Color.White).copy(alpha = 0.28f))
                 Spacer(Modifier.width(14.dp))

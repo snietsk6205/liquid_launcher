@@ -615,73 +615,18 @@ private fun FlashcardCard(controller: HomeController, @Suppress("UNUSED_PARAMETE
     val due = remember(deck, today) { dev.liquid.launcher.core.data.FlashcardDeck.due(deck, today) }
     val card = due.firstOrNull()
     if (card == null) {
-        val next = remember(deck, today) { dev.liquid.launcher.core.data.FlashcardDeck.next(deck, today) }
         Box(Modifier.fillMaxWidth().clip(cardOutline()).background(Ink.copy(alpha = 0.09f)).padding(horizontal = 16.dp, vertical = 14.dp)) {
             Column {
                 Text("Flashcards", style = searchText(11, FontWeight.Medium, alpha = 0.65f))
                 Spacer(Modifier.height(4.dp))
-                Text("All done for today", style = searchText(16, FontWeight.SemiBold))
-                next?.let { (date, count) ->
-                    val days = java.time.temporal.ChronoUnit.DAYS.between(today, date)
-                    val whenText = if (days == 1L) "tomorrow" else "in $days days"
-                    Spacer(Modifier.height(2.dp))
-                    Text(if (count == 1) "Next: 1 card $whenText" else "Next: $count cards $whenText", style = searchText(12, alpha = 0.6f))
-                }
+                DeckDone(deck, today, Ink)
             }
         }
         return
     }
     val more = due.size - 1
-    var side by remember(card.id, card.due) { mutableStateOf(0) }
-    val turn by androidx.compose.animation.core.animateFloatAsState(
-        side * 180f, spring(dampingRatio = 0.72f, stiffness = MotionScale.stiffness(260f)), label = "flip",
-    )
-    // The face shown is the one turned towards you: the content swaps at the half turn and is mirrored back.
-    val shown = ((turn + 90f) / 180f).toInt().coerceIn(0, 2)
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .flipAround(turn)
-            .clip(cardOutline())
-            .background(Ink.copy(alpha = if (shown == 0) 0.14f else 0.09f))
-            .squishClickable(delayMs = 40L) { if (side < 2) side++ }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-    ) {
-        Column(Modifier.readableWhenFlipped(turn)) {
-            val left = if (more > 0) "$more more due today" else "the last one today"
-            Text(card.module.ifBlank { "Flashcard" } + " · " + left, style = searchText(11, FontWeight.Medium, alpha = 0.65f))
-            Spacer(Modifier.height(4.dp))
-            when (shown) {
-                0 -> Text("Tap to turn it over", style = searchText(16, FontWeight.SemiBold))
-                1 -> MathText(card.q, searchText(15, FontWeight.Medium))
-                else -> {
-                    MathText(card.a, searchText(15, FontWeight.Medium))
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        GlassButton("Wrong", Ink, icon = LauncherIcons.Close) { controller.answerCard(card, right = false) }
-                        GlassButton("Right", Ink, icon = LauncherIcons.Check, emphasis = ControlEmphasis.Main) { controller.answerCard(card, right = true) }
-                    }
-                }
-            }
-        }
-    }
+    FlashcardFace(card, if (more > 0) "$more more due today" else "the last one today", Ink, controller)
 }
-
-/** Turns the card around the vertical axis by [degrees] (a little perspective). */
-private fun Modifier.flipAround(degrees: Float): Modifier = this.then(
-    Modifier.graphicsLayer {
-        rotationY = degrees
-        cameraDistance = 14f * density
-    }
-)
-
-/** Mirrors the content back on odd half turns, so the side facing you reads the right way round. */
-private fun Modifier.readableWhenFlipped(degrees: Float): Modifier = this.then(
-    Modifier.graphicsLayer {
-        val half = ((degrees + 90f) / 180f).toInt()
-        if (half % 2 == 1) rotationY = 180f
-    }
-)
 
 /** E5, on Sundays: the week in four numbers; a tap goes through it with Claude. */
 @Composable

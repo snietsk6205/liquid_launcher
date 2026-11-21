@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -109,6 +110,7 @@ fun Pill(
             .fillMaxWidth(config.widthFraction)
             .height(config.heightDp.dp)
             .then(if (interactive) Modifier.onGloballyPositioned { controller.pillBounds = it.boundsInRoot() } else Modifier)
+            .livePop(controller)
             .pillSurface(dev.liquid.launcher.core.data.ThemePill.HOME, backdrop, shape, glass.style(Surfaces.Pill, lightBackground))
             .clip(shape)
             .then(if (interactive) gestures else Modifier)
@@ -170,45 +172,8 @@ internal fun RowScope.PillSlotView(
     controller: HomeController,
     interactive: Boolean,
 ) {
-    // Each item's own gestures (0.9.1): Settings → Pill → an item's gestures; unset ones keep the defaults.
-    val gestures = config.slotGestures[slot.encode()]
-    val isStudy = slot == PillSlot.Study || (slot is PillSlot.Action && slot.action == LauncherAction.Today)
-
-    // Each item squishes under the finger (0.7.2, D108); the pill's glass stays put around it.
     @Composable
-    fun Modifier.press(onClick: () -> Unit): Modifier {
-        if (!interactive) return this
-        val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-        val tap = gestures?.tap
-        // The study item's own long press writes a note for tonight's check-in (D5) unless set otherwise.
-        val long = gestures?.longPress ?: if (isStudy) LauncherAction.StudyNote else config.longPress
-        val up = gestures?.swipeUp
-        val down = gestures?.swipeDown
-        // A swipe of the item's own is caught here only when one is set; otherwise the pill's swipes work over it.
-        val swipes = if (up == null && down == null) Modifier else Modifier.pointerInput(up, down) {
-            var total = 0f
-            detectVerticalDragGestures(
-                onDragStart = { total = 0f },
-                onVerticalDrag = { change, dy ->
-                    total += dy
-                    change.consume()
-                },
-                onDragEnd = {
-                    val threshold = 32.dp.toPx()
-                    when {
-                        total < -threshold && up != null -> controller.run(up)
-                        total > threshold && down != null -> controller.run(down)
-                    }
-                },
-            )
-        }
-        return this.then(swipes).combinedClickable(
-            interactionSource = interaction,
-            indication = null,
-            onClick = { if (tap != null) controller.run(tap) else onClick() },
-            onLongClick = { controller.longPressPill(long, null) },
-        ).squishOn(interaction)
-    }
+    fun Modifier.press(onClick: () -> Unit): Modifier = pillItemPress(slot, config, controller, interactive, onClick = onClick)
 
     val textStyle = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp, fontWeight = FontWeight.Medium)
     when (slot) {
@@ -227,6 +192,8 @@ internal fun RowScope.PillSlotView(
         }
 
         PillSlot.Spacer -> Spacer(Modifier.weight(1f))
+
+        PillSlot.Live -> LivePillItem(controller, config, color, textStyle, interactive)
 
         PillSlot.Date -> {
             val now = rememberMinuteTick()
@@ -288,3 +255,62 @@ internal fun RowScope.PillSlotView(
         }
     }
 }
+
+/**
+ * A pill item's press: it squishes under the finger (0.7.2, D108) and runs its own gestures (0.9.1: Settings → Pill →
+ * an item's gestures), else [onClick] and, for a long press, [onLongClick] (0.13.0) or the pill's own.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun Modifier.pillItemPress(
+    slot: PillSlot,
+    config: PillConfig,
+    controller: HomeController,
+    interactive: Boolean,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
+): Modifier {
+    if (!interactive) return this
+    val gestures = config.slotGestures[slot.encode()]
+    val isStudy = slot == PillSlot.Study || (slot is PillSlot.Action && slot.action == LauncherAction.Today)
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val tap = gestures?.tap
+    // The study item's own long press writes a note for tonight's check-in (D5) unless set otherwise.
+    val long = gestures?.longPress ?: if (isStudy) LauncherAction.StudyNote else config.longPress
+    val up = gestures?.swipeUp
+    val down = gestures?.swipeDown
+    // A swipe of the item's own is caught here only when one is set; otherwise the pill's swipes work over it.
+    val swipes = if (up == null && down == null) Modifier else Modifier.pointerInput(up, down) {
+        var total = 0f
+        detectVerticalDragGestures(
+            onDragStart = { total = 0f },
+            onVerticalDrag = { change, dy ->
+                total += dy
+                change.consume()
+            },
+            onDragEnd = {
+                val threshold = 32.dp.toPx()
+                when {
+                    total < -threshold && up != null -> controller.run(up)
+                    total > threshold && down != null -> controller.run(down)
+                }
+            },
+        )
+    }
+    return this.then(swipes).combinedClickable(
+        interactionSource = interaction,
+        indication = null,
+        onClick = { if (tap != null) controller.run(tap) else onClick() },
+        onLongClick = { if (gestures?.longPress == null && onLongClick != null) onLongClick() else controller.longPressPill(long, null) },
+    ).squishOn(interaction)
+}
+
+/** 0.13.0 (D178): the pill swells and settles like a drop when its live item changes ([HomeController.popPill]). */
+internal fun Modifier.livePop(controller: HomeController): Modifier = this.then(
+    Modifier.graphicsLayer {
+        val pop = controller.livePop.value
+        if (pop == 0f) return@graphicsLayer
+        scaleX = 1f + 0.035f * pop
+        scaleY = 1f + 0.09f * pop
+    }
+)

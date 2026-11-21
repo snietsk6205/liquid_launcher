@@ -95,9 +95,17 @@ private fun SettingsApp(
                     val section = start.removePrefix(SettingsActivity.SECTION_PREFIX)
                     add(pageForSection(section) ?: Screen.Section(section))
                 } else if (start != null && start.startsWith(SettingsActivity.PAGE_PREFIX)) {
-                    // "page:study" or "page:study:behaviour": a page, on a tab.
-                    val (id, tab) = start.removePrefix(SettingsActivity.PAGE_PREFIX).split(':').let { it[0] to it.getOrNull(1) }
-                    add(Screen.Page(id, dev.liquid.launcher.core.settings.SettingsTab.entries.firstOrNull { it.name.equals(tab, ignoreCase = true) }))
+                    // "page:study" or "page:study:behaviour": a page, on a tab. 0.13.0: "page:pill:layout:pill.live.music" also
+                    // lights up one option (a setting found by the launcher's search).
+                    val parts = start.removePrefix(SettingsActivity.PAGE_PREFIX).split(':')
+                    val tab = parts.getOrNull(1)
+                    add(
+                        Screen.Page(
+                            parts[0],
+                            dev.liquid.launcher.core.settings.SettingsTab.entries.firstOrNull { it.name.equals(tab, ignoreCase = true) },
+                            parts.getOrNull(2)?.takeIf { it.isNotBlank() },
+                        )
+                    )
                 }
             }
         }

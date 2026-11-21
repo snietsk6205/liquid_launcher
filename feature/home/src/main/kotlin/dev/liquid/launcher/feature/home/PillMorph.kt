@@ -109,7 +109,15 @@ fun MorphingPill(
             }
             .graphicsLayer {
                 // Search only (the drawer's morph stays as Fable made it): a drop stretching the way it travels.
-                if (!(controller.searchInPill && controller.search.value > controller.drawer.value)) return@graphicsLayer
+                if (!(controller.searchInPill && controller.search.value > controller.drawer.value)) {
+                    // 0.13.0 (D178): the closed pill swells and settles when its live item changes.
+                    val pop = controller.livePop.value
+                    if (pop != 0f && controller.morph() < 0.01f) {
+                        scaleX = 1f + 0.035f * pop
+                        scaleY = 1f + 0.09f * pop
+                    }
+                    return@graphicsLayer
+                }
                 val st = stretch.value
                 scaleY = 1f + st
                 scaleX = 1f - st * 0.55f

@@ -88,7 +88,7 @@ object SettingsMap {
         SettingsSurface(
             "pill", "Pill", "Its items, size, position, the study item and its gestures", SettingsEntry.HOME, listOf("pill"),
             mapOf(
-                L to listOf("pill.enabled", "pill.position", "pill.offset", "pill.width", "pill.height", "pill.iconSize"),
+                L to listOf("pill.enabled", "pill.position", "pill.offset", "pill.width", "pill.height", "pill.iconSize", "pill.live.*"),
                 K to listOf("pill.corner", "pill.hint", "pill.study.*"),
                 B to listOf("pill.tap", "pill.longPress", "pill.swipeUp", "pill.swipeDown"),
             ),
@@ -155,7 +155,7 @@ object SettingsMap {
                 L to listOf("search.field", "search.fieldHeight", "search.fieldWidth", "search.fieldGap", "search.homeScale"),
                 K to listOf("search.blur", "search.dim"),
                 B to listOf("motion.search", "search.bounce", "search.speed", "search.stretch", "search.keyboard", "search.clipboard"),
-                M to listOf("search.engine", "search.claude", "search.claudeTarget"),
+                M to listOf("search.find.*", "search.engine", "search.claude", "search.claudeTarget"),
             ),
         ),
         // 0.12.0 (D171, D172): Med's keyboard, WM Keyboard, and the launcher.
@@ -300,7 +300,7 @@ object SettingsMap {
     val editors: List<Editor> = listOf(
         Editor("Search page cards", "Which cards the search page shows and in what order: the Today line (calendar and exams), the study card, Ask Claude, your apps, and every other card",
             "search page cards order today line calendar month exam countdown timeline widgets claude prompts commands next block apps calm", "search", SettingsTab.LAYOUT),
-        Editor("Pill items", "What the pill holds and in what order", "pill items slots icons order search apps claude study", "pill", SettingsTab.LAYOUT),
+        Editor("Pill items", "What the pill holds and in what order", "pill items slots icons order search apps claude study live focus music", "pill", SettingsTab.LAYOUT),
         Editor(
             "Camera for board photos", "The camera app that takes the board photos, and a test photo",
             "camera photo board picture app essai class test", "study", SettingsTab.MORE,

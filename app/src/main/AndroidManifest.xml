@@ -14,6 +14,8 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+    <!-- 0.13.0: search finds people (asked the first time search offers it; never read otherwise). -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Study companion, arrival home (0.9.1): Android tells an app the Wi-Fi name only with location access. Asked for only when you set your home Wi-Fi. -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />

@@ -1099,6 +1099,92 @@ else
 fi
 
 clear_anr
+# 0.13.0 (D178): the pill's live item counts the flashcards still due (one, after 14e); a long press on the count
+# opens the quick review over the home screen, without search; Back closes it.
+section "14f. Flashcards on the pill: the count and the quick review"
+if [ -n "$EVENT_ID" ]; then
+  adb shell input keyevent KEYCODE_HOME
+  sleep 2.5
+  peek 14f-home
+  dump 14f-home
+  POS=$(python3 ci/find_text.py "$OUT/14f-home.xml" "flashcards due") || POS=$(python3 ci/find_text.py "$OUT/14f-home.xml" "1 card" exact) || POS=""
+  if [ -n "$POS" ]; then
+    pass "the pill shows the card still due"
+    adb shell input swipe $POS $POS 800
+    sleep 1.8
+    peek 14f-review
+    dump 14f-review
+    if on_screen 14f-review "Tap to turn it over" exact; then pass "a long press on the count opens the quick review"; else fail "a long press on the count opens the quick review"; texts 14f-review 25; fi
+    adb shell input keyevent KEYCODE_BACK
+    sleep 1.5
+    dump 14f-closed
+    if on_screen 14f-closed "Tap to turn it over" exact; then fail "Back closes the quick review"; else pass "Back closes the quick review"; fi
+  else
+    fail "the pill shows the card still due"
+    texts 14f-home 30
+  fi
+else
+  echo "NOTE: the pill's flashcards not checked (no test calendar)"
+fi
+
+clear_anr
+# 0.13.0 (D179): search finds options of Settings (a tap opens the page with the option lit up) and flashcards
+# (a tap opens the card in the quick review).
+section "14g. Search finds Settings and flashcards"
+adb shell input keyevent KEYCODE_HOME
+sleep 1.5
+adb shell input swipe 540 900 540 1700 250
+sleep 1.5
+adb shell input text "liquid%sstretch"
+sleep 2
+peek 14g-search
+dump 14g-search
+if on_screen 14g-search "Settings › "; then
+  pass "search finds an option of Settings"
+  tap_text 14g-search "Settings › " || true
+  sleep 3
+  dump 14g-settings
+  if top_activity | grep -q "SettingsActivity" && on_screen 14g-settings "Liquid stretch"; then
+    pass "the option opens its page in Settings"
+  else
+    fail "the option opens its page in Settings"
+  fi
+  adb shell input keyevent KEYCODE_BACK
+  sleep 1
+  adb shell input keyevent KEYCODE_HOME
+  sleep 1.5
+else
+  fail "search finds an option of Settings"
+  texts 14g-search 30
+  adb shell input keyevent KEYCODE_BACK
+  sleep 0.6
+  adb shell input keyevent KEYCODE_BACK
+  sleep 1
+fi
+if [ -n "$EVENT_ID" ]; then
+  adb shell input swipe 540 900 540 1700 250
+  sleep 1.5
+  adb shell input text "fatou"
+  sleep 2
+  dump 14g-card
+  if tap_text 14g-card "Flashcard · Proba 2" exact; then
+    sleep 2
+    peek 14g-review
+    dump 14g-review
+    if on_screen 14g-review "A card you looked for" exact; then pass "a flashcard found by search opens in the quick review"; else fail "a flashcard found by search opens in the quick review"; texts 14g-review 25; fi
+    adb shell input keyevent KEYCODE_BACK
+    sleep 1.2
+  else
+    fail "search finds a flashcard"
+    texts 14g-card 30
+    adb shell input keyevent KEYCODE_BACK
+    sleep 0.6
+    adb shell input keyevent KEYCODE_BACK
+    sleep 1
+  fi
+fi
+
+clear_anr
 # 0.6.4: the letter index bends out from under the finger and the bubble sits past the letters. A picture only:
 # the screenshot is taken while a slow swipe holds the right edge of the drawer.
 section "14c. Letter index while held"

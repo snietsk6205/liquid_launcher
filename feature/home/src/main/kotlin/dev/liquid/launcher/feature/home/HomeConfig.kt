@@ -110,6 +110,8 @@ data class PillConfig(
     val study: StudyItemLook = StudyItemLook(),
     /** Each item's own gestures, by item code (0.9.1). */
     val slotGestures: Map<String, dev.liquid.launcher.core.data.SlotGestures> = emptyMap(),
+    /** What the live item shows (0.13.0, D178). */
+    val live: LiveLook = LiveLook(),
 )
 
 data class DrawerConfig(
@@ -403,6 +405,14 @@ fun SettingsStore.pillConfig() = PillConfig(
         ring = get(S.PillStudyRing),
     ),
     slotGestures = dev.liquid.launcher.core.data.SlotGestures.decodeAll(get(S.PillSlotGestures)),
+    live = LiveLook(
+        focus = get(S.PillLiveFocus),
+        classes = get(S.PillLiveClass),
+        leadMinutes = get(S.PillLiveLead),
+        music = get(S.PillLiveMusic),
+        cards = get(S.PillLiveCards),
+        shape = get(S.PillLiveShape),
+    ),
 )
 
 fun SettingsStore.drawerConfig() = DrawerConfig(

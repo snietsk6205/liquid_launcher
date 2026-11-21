@@ -644,7 +644,7 @@ private fun HomeScreenBody(
         // point is to preview the screen behind them (clock, widget options, wallpaper) leave it sharp.
         val windowBlurDp = LocalControls.current?.theme?.windowBlurDp ?: 0
         val sheetOpen = controller.layoutsSheet || controller.tagging != null || controller.wallpaperStrip || controller.widgetPicker ||
-            controller.todaySheet || controller.homeMenu || controller.menu != null || controller.openFolder != null
+            controller.todaySheet || controller.homeMenu || controller.menu != null || controller.openFolder != null || controller.reviewSheet != null
         val sheetBlur by androidx.compose.animation.core.animateFloatAsState(
             if (windowBlurDp > 0 && sheetOpen) 1f else 0f,
             androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = MotionScale.stiffness(420f)),
@@ -1010,6 +1010,10 @@ private fun HomeScreenBody(
         }
         Presence(if (live && controller.wallpaperStrip) Unit else null, onClose = { controller.back() }) {
             WallpaperStrip(glass, lightBackground, overlayBackdrop, controller)
+        }
+        // 0.13.0 (D178): the flashcards due, from the pill's live item or a card search found.
+        Presence(if (live) controller.reviewSheet else null, onClose = { controller.back() }) { start ->
+            ReviewSheet(start, glass, lightBackground, overlayBackdrop, controller)
         }
         // 0.11.1: the sheet sinks away when the screen closes (it vanished in one frame); after Apply with a new picture it
         // goes at once, as it leaves inside the picture of the old screen that ripples away.

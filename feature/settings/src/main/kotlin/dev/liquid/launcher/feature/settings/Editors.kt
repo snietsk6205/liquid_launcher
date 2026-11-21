@@ -42,6 +42,7 @@ private fun slotLabel(slot: PillSlot): String = when (slot) {
     PillSlot.Date -> "Date"
     PillSlot.Time -> "Time"
     PillSlot.Study -> "Study block"
+    PillSlot.Live -> "Live: focus, next class, music, cards"
     PillSlot.Spacer -> "Flexible space"
     is PillSlot.Action -> actionLabel(slot.action)
     is PillSlot.App -> actionLabel(LauncherAction.LaunchApp(slot.ref))
@@ -108,6 +109,7 @@ internal fun PillItemsEditor(store: SettingsStore) {
                         "Date" to { save(slots + PillSlot.Date) },
                         "Time" to { save(slots + PillSlot.Time) },
                         "Study block (now or next)" to { save(slots + PillSlot.Study) },
+                        "Live: focus timer, next class, what's playing, cards due" to { save(slots + PillSlot.Live) },
                         "Flexible space" to { save(slots + PillSlot.Spacer) },
                         "Action button…" to { pickAction = true },
                         "App…" to { pickApp = true },

@@ -796,10 +796,52 @@ object LauncherSettings {
         section = "pill", keywords = "pill bar dock search",
     )
 
-    /** Ordered slot codes, see PillSlot in core/data. Edited with the pill editor, not a generic row. */
+    /**
+     * Ordered slot codes, see PillSlot in core/data. Edited with the pill editor, not a generic row. 0.13.0 (D178): the
+     * live item joined the default (it takes no room while nothing is happening).
+     */
     val PillSlots = StringListSetting(
-        key = "pill.slots", default = listOf("search", "date"),
+        key = "pill.slots", default = listOf("search", "live", "date"),
         title = "Pill items", section = "pill", hidden = true,
+    )
+
+    // 0.13.0 (D178): the pill's live item (Settings → Pill → Layout).
+    val PillLiveFocus = BoolSetting(
+        key = "pill.live.focus", default = true,
+        title = "Live item: focus timer",
+        summary = "While a focus timer runs on a block, the pill counts down to the end of the block",
+        section = "pill", keywords = "live item focus timer countdown block study seconds dynamic island",
+    )
+    val PillLiveClass = BoolSetting(
+        key = "pill.live.class", default = true,
+        title = "Live item: next class",
+        summary = "A countdown to your next block or class, the time left in the one running, and when to leave in the morning",
+        section = "pill", keywords = "live item next class block countdown starts in minutes left leave dynamic island",
+    )
+    val PillLiveLead = IntSetting(
+        key = "pill.live.lead", default = 60, min = 10, max = 180, step = 5, unit = "min",
+        title = "Count down from",
+        summary = "How long before a class the live item starts counting down",
+        section = "pill", keywords = "live item countdown minutes before class lead early next",
+    )
+    val PillLiveMusic = BoolSetting(
+        key = "pill.live.music", default = true,
+        title = "Live item: what's playing",
+        summary = "The song or podcast playing, with play and pause; a tap opens the app playing it. Needs notification access " +
+            "(the same switch as Quiet during blocks)",
+        section = "pill", keywords = "live item music playing song podcast spotify youtube media play pause now playing notification access",
+    )
+    val PillLiveCards = BoolSetting(
+        key = "pill.live.cards", default = true,
+        title = "Live item: flashcards due",
+        summary = "How many flashcards are due today; a tap or a long press opens a quick review over the home screen",
+        section = "pill", keywords = "live item flashcards cards due count review quick sheet deck repeat badge",
+    )
+    val PillLiveShape = BoolSetting(
+        key = "pill.live.shape", default = true,
+        title = "Changes shape when something happens",
+        summary = "The pill swells and settles like a drop when the live item changes: a class starts, music plays, cards are due",
+        section = "pill", keywords = "live item shape pop bounce swell drop wobble animation change dynamic island",
     )
     val PillPosition = ChoiceSetting(
         key = "pill.position", default = "bottom",
@@ -1875,6 +1917,42 @@ object LauncherSettings {
         section = "search", keywords = "web search engine google duckduckgo",
     )
     /** 0.12.0 (D171): "Liquid" in other apps' text selection menu (an activity alias the launcher turns on or off). */
+    // 0.13.0 (D179): search finds more than apps. Each source can be turned off.
+    val SearchFindSettings = BoolSetting(
+        key = "search.find.settings", default = true,
+        title = "Find settings",
+        summary = "Options of Settings that match, each opening its page with the option lit up",
+        section = "search", keywords = "search everything find settings options results",
+    )
+    val SearchFindContacts = BoolSetting(
+        key = "search.find.contacts", default = true,
+        title = "Find contacts",
+        summary = "People from your contacts; a tap opens their card. Asks for access to contacts the first time",
+        section = "search", keywords = "search everything find contacts people phone call names permission",
+    )
+    val SearchFindEvents = BoolSetting(
+        key = "search.find.events", default = true,
+        title = "Find calendar events",
+        summary = "Events of your calendars from a month ago to six months ahead whose title or place matches; a tap opens it",
+        section = "search", keywords = "search everything find calendar events agenda classes exams appointments",
+    )
+    val SearchFindNotes = BoolSetting(
+        key = "search.find.notes", default = true,
+        title = "Find notes",
+        summary = "Your notes for the evening check-in (\"Note: …\" in the calendar), from the last six months",
+        section = "search", keywords = "search everything find notes check-in evening written",
+    )
+    val SearchFindCards = BoolSetting(
+        key = "search.find.cards", default = true,
+        title = "Find flashcards",
+        summary = "Cards of your deck whose question, answer or module matches; a tap opens it in the quick review",
+        section = "search", keywords = "search everything find flashcards cards deck question answer module review",
+    )
+    /** Hidden: contacts were asked for once from search (an "allow" row is not offered again). */
+    val SearchContactsAsked = BoolSetting(
+        key = "search.contactsAsked", default = false,
+        title = "Contacts asked", section = "search", hidden = true,
+    )
     val SearchSelectionEntry = BoolSetting(
         key = "search.selectionEntry", default = true,
         title = "\"Liquid\" in the text selection menu",
@@ -2665,6 +2743,7 @@ object LauncherSettings {
         PillEnabled, PillSlots, PillPosition, PillOffset, PillWidth, PillHeight, PillCorner, PillIconSize,
         SearchCards,
         PillStudyLook, PillStudyGlyph, PillStudyApp, PillStudyPicture, PillStudyFrame, PillStudySize, PillStudyTint, PillStudyRing, PillSlotGestures,
+        PillLiveFocus, PillLiveClass, PillLiveLead, PillLiveMusic, PillLiveCards, PillLiveShape,
         PillHint, PillTap, PillLongPress, PillSwipeUp, PillSwipeDown,
         DrawerColumns, DrawerIconSize, DrawerLabels, DrawerFromBottom, DrawerAutoKeyboard, DrawerSort,
         DrawerWork, DrawerCloseOnLaunch, DrawerSideMargin, DrawerDim, DrawerTabsPosition,
@@ -2676,7 +2755,8 @@ object LauncherSettings {
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
         TagStripPosition, TagButtonPosition, TagButtonSize, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
         MenuEntries,
-        SearchTransition, SearchBounce, SearchSpeed, SearchStretch, SearchFieldHeight, SearchFieldWidth, SearchFieldGap, SearchSelectionEntry, SearchField, SearchOpenKeyboard, SearchBlur, SearchDim, SearchHomeScale,
+        SearchTransition, SearchBounce, SearchSpeed, SearchStretch, SearchFieldHeight, SearchFieldWidth, SearchFieldGap, SearchSelectionEntry,
+        SearchFindSettings, SearchFindContacts, SearchFindEvents, SearchFindNotes, SearchFindCards, SearchContactsAsked, SearchField, SearchOpenKeyboard, SearchBlur, SearchDim, SearchHomeScale,
         SearchClaude, SearchClaudeTarget, SearchClipboard, SearchEngine, SearchKeyboardHeight, SearchKeyboardOpenings, WallpaperSheetTall,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
