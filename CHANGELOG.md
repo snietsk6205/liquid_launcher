@@ -6,6 +6,30 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
+## 0.11.3 — 2026-11-21
+
+### Added
+- Settings → Drawer and search → Search → Layout: the search pill's height, its width and its gap above the keyboard,
+  each shown in the page's preview.
+- Settings → System → Redirect → Look: "Try the arrival" shows the system's home screen, so you see the launcher come
+  back the way it is set.
+
+### Changed
+- Search: the launcher slides the keyboard in itself, in step with the pill, from the moment you start swiping towards
+  search. The field rides on the keyboard: never above it, never above an empty gap. If the keyboard will not be moved
+  (or is not ready within 1.5 s) it comes up the usual way and the field rides on it. The debug log says which way
+  each opening went, when the keyboard was ready and where the field and the keyboard were.
+- Arriving after a redirect ("Arrival after a redirect", was "Content animation on return"): fading in now covers the
+  whole screen, wallpaper included, over the system's home screen instead of cutting to it. "At once" arrives on the
+  launcher's last picture when it is up to date, and the icons no longer disappear and come back.
+- The launcher's last picture stays usable after you open an app from search: the keyboard on its way out no longer
+  makes it out of date.
+
+### Fixed
+- The clock and every timer showed the old time for some seconds after unlocking. They now read the phone's clock
+  when the screen turns on, at unlock, when the launcher comes back and on the system's minute tick; the debug log
+  says when a minute on screen was late, and by how much.
+
 ## 0.11.2 — 2026-11-20
 
 ### Added
