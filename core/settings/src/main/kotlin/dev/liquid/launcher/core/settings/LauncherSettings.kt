@@ -1882,14 +1882,6 @@ object LauncherSettings {
             "\"Search in Liquid\" does the same",
         section = "keyboard", keywords = "text selection menu process text share other apps keyboard copy liquid wm",
     )
-    /** 0.12.0 (D172): WM Keyboard's layout while search is open (its automation intents), and back after. */
-    val KeyboardSearchLayout = TextSetting(
-        key = "keyboard.searchLayout", default = "", placeholder = "builtin_qwerty",
-        title = "WM Keyboard layout while searching",
-        summary = "While search is open WM Keyboard switches to this layout, and back to yours when search closes. Pick it " +
-            "below from your keyboard's layouts. Needs WM Keyboard › Privacy › Let other apps control the keyboard",
-        section = "keyboard", keywords = "wm keyboard layout search switch tasker automation qwerty language",
-    )
     val SearchOpenKeyboard = BoolSetting(
         key = "search.keyboard", default = true,
         title = "Open the keyboard",
@@ -2684,7 +2676,7 @@ object LauncherSettings {
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
         TagStripPosition, TagButtonPosition, TagButtonSize, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
         MenuEntries,
-        SearchTransition, SearchBounce, SearchSpeed, SearchStretch, SearchFieldHeight, SearchFieldWidth, SearchFieldGap, SearchSelectionEntry, KeyboardSearchLayout, SearchField, SearchOpenKeyboard, SearchBlur, SearchDim, SearchHomeScale,
+        SearchTransition, SearchBounce, SearchSpeed, SearchStretch, SearchFieldHeight, SearchFieldWidth, SearchFieldGap, SearchSelectionEntry, SearchField, SearchOpenKeyboard, SearchBlur, SearchDim, SearchHomeScale,
         SearchClaude, SearchClaudeTarget, SearchClipboard, SearchEngine, SearchKeyboardHeight, SearchKeyboardOpenings, WallpaperSheetTall,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,

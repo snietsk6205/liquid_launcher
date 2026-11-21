@@ -49,6 +49,29 @@ class KeyboardThemeTest {
     }
 
     @Test
+    fun medsFileIsTheBaseWithTheLaunchersKeysAndItFollowsTheWallpaper() {
+        val base = ThemeDoc.parse(
+            """{"id":"custom_1795289804543","name":"wallpaper ","boardBackground":4280162336,"backgroundImageBase64":null,
+               "toolCircleBackground":1128084031,"chipBackground":4281477941,"keyBackground":1,"keyText":2,
+               "followWallpaper":false,"frost":{"enabled":true,"style":"FROSTED","backdropBlur":9.0}}""",
+        )!!
+        val launcher = doc().withString("backgroundImageBase64", "PICTURE")
+        val out = KeyboardTheme.build(base, launcher, palette, "Liquid", 7)
+        // The toolbar, chips, board and frost stay his; the keys are the launcher's (followed colours written out).
+        assertEquals(1128084031L, out.color("toolCircleBackground"))
+        assertEquals(4281477941L, out.color("chipBackground"))
+        assertEquals(4280162336L, out.color("boardBackground"))
+        assertEquals("FROSTED", out.string("frost.style"))
+        assertEquals((472657461L ushr 24 shl 24) or 0x2E312AL, out.color("keyBackground"))
+        assertEquals(4293519854L, out.color("keyText"))
+        assertEquals(0xFFC8EEA8L, out.color("accent"))
+        // No picture of its own (the toolbar stays crisp), and WM Keyboard follows the wallpaper by itself.
+        assertNull(out.string("backgroundImageBase64"))
+        assertEquals(true, out.bool("followWallpaper"))
+        assertEquals("custom_7", out.string("id"))
+    }
+
+    @Test
     fun fileNamesEndTheWayWmKeyboardRecognisesThem() {
         assertEquals("Liquid-21-Nov.wmtheme.json", KeyboardTheme.fileName("Liquid · 21 Nov"))
         assertEquals("liquid.wmtheme.json", KeyboardTheme.fileName("···"))

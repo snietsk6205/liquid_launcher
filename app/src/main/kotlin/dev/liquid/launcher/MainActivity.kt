@@ -57,6 +57,20 @@ class MainActivity : ComponentActivity() {
     // the camera was open used to lose it); what is being taken is written down in the settings (BoardPhotos).
     private val takePhotoLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
         val app = application as LauncherApp
+        // 0.13.0: a camera that cannot hand a photo back: the photo picker opens on the newest photos.
+        if (dev.liquid.launcher.core.data.BoardPhotos.pending(app.settings)?.pick == true) {
+            imageCallback = { uri ->
+                app.appScope.launch {
+                    dev.liquid.launcher.core.data.BoardPhotos.savePicked(app, app.settings, uri)?.let { module ->
+                        dev.liquid.launcher.core.common.Notices.post(dev.liquid.launcher.core.common.NoticeKind.Study, "Board photo: $module", "Pictures/ESSAI/$module")
+                    }
+                }
+            }
+            runCatching {
+                pickMedia.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }.onFailure { DebugLog.error("App", "photo picker failed: $it") }
+            return@registerForActivityResult
+        }
         app.appScope.launch {
             dev.liquid.launcher.core.data.BoardPhotos.finish(app, app.settings, result.resultCode == RESULT_OK)?.let { module ->
                 dev.liquid.launcher.core.common.Notices.post(dev.liquid.launcher.core.common.NoticeKind.Study, "Board photo: $module", "Pictures/ESSAI/$module")

@@ -2,9 +2,7 @@ package dev.liquid.launcher.feature.settings
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.net.Uri
-import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -23,8 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -60,7 +56,6 @@ import dev.liquid.launcher.core.settings.observe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
 import java.io.File
 
 /*
@@ -85,60 +80,50 @@ private fun openInWmKeyboard(context: Context, file: File, type: String): Boolea
     return runCatching { context.startActivity(intent) }.isSuccess
 }
 
-/** The keyboard's layouts, to pick the one used while searching (Behaviour). */
+/**
+ * 0.13.0 (D177): a search mode in WM Keyboard (Behaviour), in place of 0.12.0's layout switch: a mode bound to the
+ * launcher applies before the keyboard draws, where switching layouts through its intents re-drew the keyboard while it
+ * slid in (and needed "Let other apps control the keyboard"). Search already asks for no autocorrection and a Search key.
+ */
 @Composable
-internal fun KeyboardLayoutPicker(store: SettingsStore) {
+internal fun KeyboardModeGuide() {
     val context = LocalContext.current
-    val chosen by store.observe(LauncherSettings.KeyboardSearchLayout)
-    val scope = rememberCoroutineScope()
-    var layouts by remember { mutableStateOf<List<WmKeyboard.Layout>?>(null) }
-    var status by remember { mutableStateOf<String?>(null) }
     val installed = remember { WmKeyboard.installed(context) }
-
+    var message by remember { mutableStateOf<String?>(null) }
     InfoCard {
-        Text("Layout while searching", style = MaterialTheme.typography.titleMedium)
-        if (!installed) {
-            BodyText("WM Keyboard is not on this phone.", Modifier.padding(top = 4.dp))
-            return@InfoCard
-        }
+        Text("A keyboard made for search", style = MaterialTheme.typography.titleMedium)
         BodyText(
-            "Asks WM Keyboard for your layouts. It answers only with WM Keyboard › Privacy › Let other apps control the " +
-                "keyboard on (\"Switch language and layout\" is on by default under it).",
-            Modifier.padding(top = 4.dp, bottom = 6.dp),
+            "Search already asks your keyboard for no autocorrection and a Search key. To give it its own look and keys " +
+                "in search (a numbers row, no emoji row, no suggestions…), make a mode in WM Keyboard once:\n" +
+                "1. Keyboard modes › New mode, and name it Search.\n" +
+                "2. Under What this mode changes, set what you want for search.\n" +
+                "3. Under Activate automatically for, add the app Liquid Launcher.\n" +
+                "It then applies before the keyboard appears, every time search opens.",
+            Modifier.padding(top = 4.dp, bottom = 8.dp),
         )
-        OutlinedButton(onClick = {
-            status = "Asking WM Keyboard…"
-            scope.launch {
-                val answer = WmKeyboard.send(context, "LIST_LAYOUTS")
-                layouts = if (answer.ok) WmKeyboard.parseLayouts(answer.text) else null
-                status = if (answer.ok) null else "WM Keyboard: " + WmKeyboard.describe(answer)
-                DebugLog.event("Keyboard", "layouts asked: ${WmKeyboard.describe(answer).take(120)}")
-            }
-        }) { Text(if (layouts == null) "Read my layouts" else "Read them again") }
-        status?.let { BodyText(it, Modifier.padding(top = 6.dp)) }
-        layouts?.let { list ->
-            ChoiceLine("Off: the keyboard stays as it is", chosen.isBlank()) { store.reset(LauncherSettings.KeyboardSearchLayout) }
-            for (layout in list) {
-                val label = layout.name + (if (layout.language.isNotEmpty()) " · ${layout.language}" else "") + (if (layout.inUse) " (in use now)" else "")
-                ChoiceLine(label, chosen.equals(layout.id, ignoreCase = true)) { store.set(LauncherSettings.KeyboardSearchLayout, layout.id) }
-            }
+        if (installed) {
+            OutlinedButton(onClick = {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("wmkeyboard://settings/modes"))
+                    .setPackage(WmKeyboard.PACKAGE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                message = if (runCatching { context.startActivity(intent) }.isSuccess) null
+                else "WM Keyboard did not open its modes: open WM Keyboard › Keyboard modes."
+            }) { Text("Open WM Keyboard's modes") }
+        } else {
+            BodyText("WM Keyboard is not on this phone.")
         }
-        if (chosen.isNotBlank() && !WmKeyboard.inUse(context)) {
-            BodyText("WM Keyboard is not the keyboard in use: nothing is switched.", Modifier.padding(top = 6.dp))
-        }
+        message?.let { BodyText(it, Modifier.padding(top = 6.dp)) }
     }
 }
 
-@Composable
-private fun ChoiceLine(label: String, selected: Boolean, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        RadioButton(selected = selected, onClick = onClick)
-        Spacer(Modifier.width(4.dp))
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-    }
+/** The base theme: a file chosen in Settings, else the one Med made in WM Keyboard (bundled). */
+private fun baseTheme(context: Context): ThemeDoc? {
+    val own = File(context.filesDir, "keyboard-base.wmtheme.json")
+    val text = if (own.isFile) runCatching { own.readText() }.getOrNull()
+    else runCatching { context.assets.open("wmkeyboard/template.wmtheme.json").bufferedReader().use { it.readText() } }.getOrNull()
+    return text?.let { ThemeDoc.parse(it) }
 }
 
-/** The launcher's theme as a WM Keyboard theme: a preview, then open it in WM Keyboard, save it or share it (Look). */
+/** The launcher's keys on Med's own WM Keyboard theme, following the wallpaper: a preview, open, save, share (Look). */
 @Composable
 internal fun KeyboardThemeEditor(store: SettingsStore) {
     val context = LocalContext.current
@@ -146,24 +131,22 @@ internal fun KeyboardThemeEditor(store: SettingsStore) {
     val wallpaperStore = remember { WallpaperStore.get(context) }
     val wallpaper by wallpaperStore.image.collectAsState()
     val tone by WallpaperTones.tone.collectAsState()
-    var withWallpaper by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf<String?>(null) }
+    var baseVersion by remember { mutableStateOf(0) }
+    val ownBase = remember(baseVersion) { File(context.filesDir, "keyboard-base.wmtheme.json").isFile }
     val palette: WallpaperPalette? = remember(tone) {
         tone?.roles ?: runCatching { WallpaperPalette.fromSeed(ThemedColors.seed(context)) }.getOrNull()
     }
-    val name = remember { "Liquid · " + java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("d MMM")) }
-    val doc = remember(palette) { KeyboardTheme.build(ThemeStore.doc(store), palette, name, System.currentTimeMillis()) }
+    val name = "Liquid"
+    val base = remember(baseVersion) { baseTheme(context) }
+    val doc = remember(palette, base) { base?.let { KeyboardTheme.build(it, ThemeStore.doc(store), palette, name, System.currentTimeMillis()) } }
     val canOpen = remember { WmKeyboard.installed(context) }
 
-    /** The file, with the wallpaper embedded when asked (on a background thread). */
+    /** The theme file, ready to hand over (on a background thread). */
     suspend fun file(): File? = withContext(Dispatchers.IO) {
+        val built = doc ?: return@withContext null
         runCatching {
-            val jpeg = if (withWallpaper) wallpaperStore.currentFile?.let { jpegBase64(it) } else null
-            val built = if (jpeg != null) {
-                KeyboardTheme.build(ThemeStore.doc(store), palette, name, System.currentTimeMillis(), jpeg, doc.float("backgroundImageBlur") ?: 3f)
-            } else doc
-            val out = ThemeStore.embed(built)
-            File(shareDir(context), KeyboardTheme.fileName(name)).apply { writeText(out.encode()) }
+            File(shareDir(context), KeyboardTheme.fileName(name)).apply { writeText(ThemeStore.embed(built).encode()) }
         }.onFailure { DebugLog.error("Keyboard", "keyboard theme not written: $it") }.getOrNull()
     }
 
@@ -177,18 +160,46 @@ internal fun KeyboardThemeEditor(store: SettingsStore) {
             message = if (ok) "Saved. Open it with WM Keyboard to add it." else "Could not write the file."
         }
     }
+    val pickBase = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            val text = withContext(Dispatchers.IO) {
+                runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() } }.getOrNull()
+            }
+            val parsed = text?.let { ThemeDoc.parse(it) }
+            if (parsed == null || !KeyboardTheme.recognisable(parsed)) {
+                message = "That file is not a WM Keyboard theme (.wmtheme.json)."
+            } else {
+                withContext(Dispatchers.IO) { File(context.filesDir, "keyboard-base.wmtheme.json").writeText(text) }
+                baseVersion++
+                message = "\"${parsed.name}\" is the base now."
+                DebugLog.event("Keyboard", "keyboard theme base: ${parsed.name}")
+            }
+        }
+    }
 
     InfoCard {
-        Text("A keyboard theme in your colours", style = MaterialTheme.typography.titleMedium)
+        Text("A keyboard theme that follows your wallpaper", style = MaterialTheme.typography.titleMedium)
         BodyText(
-            "Your theme as WM Keyboard draws it: the colours that follow the wallpaper as they are now, your keys, glass and " +
-                "material. WM Keyboard shows it once more before it adds it.",
+            "Your own WM Keyboard theme as the base (its board, toolbar and chips), with the launcher's keys and popups. " +
+                "Follow wallpaper colors is on: WM Keyboard recolours it from your wallpaper by itself at every change, so " +
+                "you open it in WM Keyboard once.",
             Modifier.padding(top = 4.dp, bottom = 8.dp),
         )
-        KeyboardPreview(doc, if (withWallpaper) wallpaper else null)
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Your wallpaper behind the keys", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            Switch(checked = withWallpaper, onCheckedChange = { withWallpaper = it })
+        if (doc != null) KeyboardPreview(doc, wallpaper)
+        BodyText(
+            "Base: " + (base?.name?.trim()?.ifEmpty { null } ?: "your theme") + if (ownBase) " (chosen here)" else " (the one you sent)",
+            Modifier.padding(top = 8.dp),
+        )
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+            OutlinedButton(onClick = { pickBase.launch(arrayOf("application/json", "application/octet-stream", "text/plain")) }) { Text("Use another file") }
+            if (ownBase) {
+                Spacer(Modifier.width(8.dp))
+                OutlinedButton(onClick = {
+                    File(context.filesDir, "keyboard-base.wmtheme.json").delete()
+                    baseVersion++
+                }) { Text("Back to yours") }
+            }
         }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
             if (canOpen) {
@@ -265,50 +276,5 @@ private fun KeyboardPreview(doc: ThemeDoc, wallpaper: androidx.compose.ui.graphi
                 }
             }
         }
-    }
-}
-
-/** The wallpaper as a JPEG of at most 1440 px across, base64, as WM Keyboard embeds its background pictures. */
-private fun jpegBase64(source: File): String? {
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(source.path, bounds)
-    var sample = 1
-    while (bounds.outWidth / (sample * 2) >= 1440) sample *= 2
-    val bitmap = BitmapFactory.decodeFile(source.path, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
-    val out = ByteArrayOutputStream()
-    bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
-    bitmap.recycle()
-    return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
-}
-
-/** The Liquid plugin for WM Keyboard (More). */
-@Composable
-internal fun KeyboardPluginEditor() {
-    val context = LocalContext.current
-    var message by remember { mutableStateOf<String?>(null) }
-    val installed = remember { WmKeyboard.installed(context) }
-    InfoCard {
-        Text("Liquid in WM Keyboard", style = MaterialTheme.typography.titleMedium)
-        BodyText(
-            "A plugin for WM Keyboard's Plugins tool: type or paste in its box and press Search or Ask Claude, then pick " +
-                "\"Search in Liquid\" in the share sheet (WM Keyboard's plugins cannot open an app themselves). Turn on WM " +
-                "Keyboard › Tools › Plugins › Manage plugins › Allow plugins first.",
-            Modifier.padding(top = 4.dp, bottom = 8.dp),
-        )
-        if (installed) {
-            Button(onClick = {
-                val ok = runCatching {
-                    val f = File(shareDir(context), "liquid.wmplugin")
-                    context.assets.open("wmkeyboard/liquid.wmplugin").use { input -> f.outputStream().use { input.copyTo(it) } }
-                    openInWmKeyboard(context, f, "application/octet-stream")
-                }.getOrDefault(false)
-                message = if (ok) null else "WM Keyboard did not open the plugin. Its install steps are in the launcher's " +
-                    "repository, integrations/wmkeyboard."
-                DebugLog.event("Keyboard", if (ok) "Liquid plugin opened in WM Keyboard" else "WM Keyboard would not open the Liquid plugin")
-            }) { Text("Install the Liquid plugin") }
-        } else {
-            BodyText("WM Keyboard is not on this phone.")
-        }
-        message?.let { BodyText(it, Modifier.padding(top = 6.dp)) }
     }
 }

@@ -31,27 +31,44 @@ object BoardPhotos {
     /** A photo left by a launcher restarted with the camera open is saved by the next start after this long. */
     private const val STALE_MS = 30 * 60_000L
 
-    /** A photo being taken: its private file, the module it belongs to, the name it gets in the gallery, when. */
-    data class Pending(val path: String, val module: String, val name: String, val at: Long)
+    /**
+     * A photo being taken: its private file, the module it belongs to, the name it gets in the gallery, when; [pick]: the
+     * camera cannot hand a photo back (0.13.0), so the photo picker opens when it closes.
+     */
+    data class Pending(val path: String, val module: String, val name: String, val at: Long, val pick: Boolean = false)
 
-    fun encode(p: Pending): String = listOf(p.path, p.module, p.name, p.at.toString()).joinToString("\n")
+    fun encode(p: Pending): String =
+        listOf(p.path, p.module, p.name, p.at.toString()).joinToString("\n") + if (p.pick) "\npick" else ""
 
     fun decode(raw: String): Pending? {
         val parts = raw.split("\n")
-        if (parts.size != 4 || parts[0].isBlank()) return null
-        return Pending(parts[0], parts[1], parts[2], parts[3].toLongOrNull() ?: return null)
+        if (parts.size !in 4..5 || parts[0].isBlank()) return null
+        return Pending(parts[0], parts[1], parts[2], parts[3].toLongOrNull() ?: return null, pick = parts.getOrNull(4) == "pick")
     }
+
+    /** The photo being taken, if any. */
+    fun pending(settings: SettingsStore): Pending? = decode(settings.get(LauncherSettings.StudyPendingPhoto))
+
+    /** A camera app: [handsBack] when it takes a photo for another app (else it is opened, and the photo picked after). */
+    data class Camera(val pkg: String, val label: String, val handsBack: Boolean)
 
     /** The module as a folder name: letters, digits, spaces, "_" and "-" only; "Notes" when nothing is left. */
     fun folderName(module: String): String = module.replace(Regex("[^\\p{L}\\p{N} _-]"), "").trim().ifEmpty { "Notes" }
 
-    /** The camera apps on the phone, as (package, name), by name. */
-    fun cameras(context: Context): List<Pair<String, String>> {
+    /**
+     * The camera apps on the phone, by name: those that take a photo for another app, and since 0.13.0 every other
+     * camera too (Med could not pick his: only the first kind was listed).
+     */
+    fun cameras(context: Context): List<Camera> {
         val pm = context.packageManager
-        return pm.queryIntentActivities(Intent(MediaStore.ACTION_IMAGE_CAPTURE), 0)
+        val capture = pm.queryIntentActivities(Intent(MediaStore.ACTION_IMAGE_CAPTURE), 0)
             .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
-            .distinctBy { it.first }
-            .sortedBy { it.second.lowercase() }
+        val still = pm.queryIntentActivities(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA), 0)
+            .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
+        val takers = capture.map { it.first }.toSet()
+        return (capture + still).distinctBy { it.first }
+            .map { (pkg, label) -> Camera(pkg, label, pkg in takers) }
+            .sortedBy { it.label.lowercase() }
     }
 
     /**
@@ -73,6 +90,19 @@ object BoardPhotos {
         val withChosen = chosen.takeIf { it.isNotEmpty() }?.let { pkg ->
             Intent(capture).setPackage(pkg).takeIf { it.resolveActivity(pm) != null }
         }
+        if (chosen.isNotEmpty() && withChosen == null) {
+            // 0.13.0: a camera that does not take photos for other apps is opened as it is; when it closes, the photo
+            // picker opens on the newest photos and the one picked is saved in the class's folder.
+            val open = Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).setPackage(chosen).takeIf { it.resolveActivity(pm) != null }
+                ?: pm.getLaunchIntentForPackage(chosen)
+            if (open != null) {
+                file.delete()
+                val date = java.time.LocalDate.now().toString()
+                settings.set(LauncherSettings.StudyPendingPhoto, encode(Pending(file.path, folder, "${date}_$folder.jpg", now, pick = true)))
+                DebugLog.event("Study", "board photo: $chosen opened for \"$folder\" (it cannot hand a photo back: the photo is picked when it closes)")
+                return open
+            }
+        }
         if (chosen.isNotEmpty() && withChosen == null) DebugLog.event("Study", "board photo: the chosen camera ($chosen) is gone; the phone's default is used")
         val intent = withChosen ?: capture.takeIf { it.resolveActivity(pm) != null } ?: return null
         val date = java.time.LocalDate.now().toString()
@@ -85,6 +115,46 @@ object BoardPhotos {
      * The camera answered ([answeredOk]; null: no answer came, a photo left from before a restart). Saves the photo
      * written down by [start] when its file has data and returns its module; null when there was none to save.
      */
+    /**
+     * 0.13.0: the photo picked after a camera that cannot hand one back ([uri]; null: none picked) is saved in the class's
+     * folder under the name written down; returns the module, or null.
+     */
+    suspend fun savePicked(context: Context, settings: SettingsStore, uri: android.net.Uri?): String? {
+        val pending = pending(settings) ?: return null
+        settings.reset(LauncherSettings.StudyPendingPhoto)
+        if (uri == null) {
+            DebugLog.event("Study", "board photo: none picked for \"${pending.module}\"")
+            return null
+        }
+        val saved = withContext(Dispatchers.IO) {
+            try {
+                val resolver = context.contentResolver
+                val values = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, pending.name)
+                    put(MediaStore.Images.Media.MIME_TYPE, resolver.getType(uri) ?: "image/jpeg")
+                    put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/ESSAI/${pending.module}")
+                    put(MediaStore.Images.Media.DATE_TAKEN, pending.at)
+                    put(MediaStore.Images.Media.IS_PENDING, 1)
+                }
+                val target = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return@withContext false
+                try {
+                    resolver.openOutputStream(target)?.use { out -> resolver.openInputStream(uri)?.use { it.copyTo(out) } ?: error("no photo") }
+                        ?: error("no stream")
+                    resolver.update(target, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+                    true
+                } catch (e: Exception) {
+                    resolver.delete(target, null, null)
+                    throw e
+                }
+            } catch (e: Exception) {
+                DebugLog.error("Study", "board photo: could not save the picked photo: $e")
+                false
+            }
+        }
+        if (saved) DebugLog.event("Study", "board photo: the picked photo was saved in Pictures/ESSAI/${pending.module}")
+        return if (saved) pending.module else null
+    }
+
     suspend fun finish(context: Context, settings: SettingsStore, answeredOk: Boolean?): String? {
         val pending = decode(settings.get(LauncherSettings.StudyPendingPhoto)) ?: return null
         settings.reset(LauncherSettings.StudyPendingPhoto)

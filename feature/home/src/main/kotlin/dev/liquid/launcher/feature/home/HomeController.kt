@@ -997,14 +997,7 @@ class HomeController(
     var keyboardSession by mutableIntStateOf(0)
         private set
 
-    /** 0.12.0 (D172): WM Keyboard's layout while search is open (Settings → Keyboard), put back when it closes. */
-    private val searchLayout = dev.liquid.launcher.core.data.WmKeyboard.SearchLayout()
-
     private fun startExpectingKeyboard() {
-        val layout = data.settings.get(LauncherSettings.KeyboardSearchLayout).trim()
-        if (layout.isNotEmpty() && searchKeyboard && !speedChecking && live) {
-            scope.launch { searchLayout.enter(context, layout) }
-        }
         expectKeyboard = searchKeyboard && searchField == "keyboard" && searchInPill && !speedChecking
         if (expectKeyboard) {
             keyboardPath = null
@@ -1377,7 +1370,6 @@ class HomeController(
                 askClaudeMode = false
                 expectKeyboard = false
                 stopKeyboardRise()
-                searchLayout.leave(context)
             }
         }
     }

@@ -12,6 +12,63 @@ import kotlinx.serialization.json.JsonArray
  * blurred by [wallpaperBlur] (WM Keyboard's backgroundImageBlur), so the keyboard sits in the same picture.
  */
 object KeyboardTheme {
+    /**
+     * 0.13.0 (D177): the keys, buttons and popups the launcher gives the keyboard (Med liked them); everything else —
+     * the board, the toolbar, the chips, the frost — comes from the base theme (his own file by default).
+     */
+    val KEY_FIELDS = listOf(
+        "keyShape", "keyTexture", "keyTextureModifier", "keyTextureEnter", "keyTextureSpace", "keyTexturePressed",
+        "keyTextureScale", "keyTextureOpacity", "keyGradient", "keyBackground", "keyText", "modifierKeyBackground",
+        "modifierKeyText", "hintText", "enterKeyBackground", "enterKeyText", "pressedKeyBackground", "keyBorderColor",
+        "keyBorderWidthDp", "keyElevationDp", "keyShadowColor", "keyCornerRadiusDp", "modifierKeyCornerRadiusDp",
+        "actionKeyCornerRadiusDp", "keyMaterial", "keyLighting", "keySkin", "touchBloom", "keyEffect", "keyEffectParam",
+        "keyEffectIntensity", "keyEffectImages", "keyEffectColor", "keyEffectCustomColor", "keyEffectSize",
+        "keyEffectSpeed", "keyEffectSpread", "keyEffectGravity", "keyEffectDurationMs", "popupBackground", "popupText",
+        "popupSelectedBackground", "popupSelectedText", "accent",
+    )
+
+    /** [doc] with the colours that follow the wallpaper written out as the launcher shows them with [palette]. */
+    fun withFollowedWritten(doc: ThemeDoc, palette: WallpaperPalette?): ThemeDoc {
+        if (palette == null) return doc
+        var d = doc
+        for ((path, role) in doc.followed) {
+            val element = doc.element(path)
+            if (element is JsonArray) {
+                val list = doc.colors(path)
+                val tones = listOf(palette.of(role), palette.vibrant, palette.muted, palette.light).distinct()
+                    .take(maxOf(1, list.size)).map { it.toLong() and 0xFFFFFFFFL }
+                d = d.withColors(path, tones)
+            } else {
+                val stored = doc.color(path)
+                val alpha = ((stored ?: 0xFF000000L) ushr 24) and 0xFFL
+                d = d.withColor(path, (alpha shl 24) or (palette.of(role).toLong() and 0x00FFFFFFL))
+            }
+        }
+        return d
+    }
+
+    /**
+     * 0.13.0 (D177): the keyboard theme the launcher hands to WM Keyboard: [base] (Med's own theme file unless he chose
+     * another) with the launcher's keys and popups ([KEY_FIELDS], from [launcher] with its wallpaper colours written
+     * out), no picture of its own (WM Keyboard stands its glass on its own band of the wallpaper, so the toolbar stays
+     * crisp), and "Follow wallpaper colors" on: WM Keyboard recolours it from the wallpaper by itself at every change,
+     * so it is imported once.
+     */
+    fun build(base: ThemeDoc, launcher: ThemeDoc, palette: WallpaperPalette?, name: String, idMillis: Long): ThemeDoc {
+        val keys = withFollowedWritten(launcher, palette)
+        var d = base
+        for (field in KEY_FIELDS) {
+            val element = keys.element(field) ?: continue
+            d = d.with(field, element)
+        }
+        return d.withString("id", "custom_$idMillis").withString("name", name)
+            .withString("backgroundImage", null).withString("backgroundImageBase64", null)
+            .withString("backgroundImageLandscape", null).withString("backgroundImageLandscapeBase64", null)
+            .with("backgroundPhoto", null)
+            .withBool("followWallpaper", true)
+    }
+
+    /** 0.12.0's build: [doc] alone, its followed colours written out, optionally with a picture (kept for files made before). */
     fun build(
         doc: ThemeDoc,
         palette: WallpaperPalette?,
@@ -20,22 +77,7 @@ object KeyboardTheme {
         wallpaperJpegBase64: String? = null,
         wallpaperBlur: Float = 3f,
     ): ThemeDoc {
-        var d = doc
-        if (palette != null) {
-            for ((path, role) in doc.followed) {
-                val element = doc.element(path)
-                if (element is JsonArray) {
-                    val list = doc.colors(path)
-                    val tones = listOf(palette.of(role), palette.vibrant, palette.muted, palette.light).distinct()
-                        .take(maxOf(1, list.size)).map { it.toLong() and 0xFFFFFFFFL }
-                    d = d.withColors(path, tones)
-                } else {
-                    val stored = doc.color(path)
-                    val alpha = ((stored ?: 0xFF000000L) ushr 24) and 0xFFL
-                    d = d.withColor(path, (alpha shl 24) or (palette.of(role).toLong() and 0x00FFFFFFL))
-                }
-            }
-        }
+        var d = withFollowedWritten(doc, palette)
         d = d.withString("id", "custom_$idMillis").withString("name", name)
         if (wallpaperJpegBase64 != null) {
             d = d.withString("backgroundImage", null)

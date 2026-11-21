@@ -83,33 +83,4 @@ object WmKeyboard {
         answer.text == null -> "no answer (is WM Keyboard installed and up to date?)"
         else -> answer.text
     }
-
-    /**
-     * While search is open, the layout chosen in Settings › Keyboard ([target], a layout id); [leave] puts back the one
-     * that was in use. Each step and the keyboard's answer go to the debug log.
-     */
-    class SearchLayout {
-        private var previous: String? = null
-
-        suspend fun enter(context: Context, target: String) {
-            if (target.isBlank() || !inUse(context)) return
-            val list = send(context, "LIST_LAYOUTS")
-            if (!list.ok) {
-                DebugLog.event("Keyboard", "search layout: WM Keyboard's layouts could not be read: ${describe(list)}")
-                return
-            }
-            val current = parseLayouts(list.text).firstOrNull { it.inUse }?.id
-            if (current != null && current.equals(target, ignoreCase = true)) return
-            val set = send(context, "SET_LAYOUT", mapOf("layout" to target))
-            DebugLog.event("Keyboard", "search layout $target: ${describe(set)}")
-            if (set.ok) previous = current
-        }
-
-        suspend fun leave(context: Context) {
-            val back = previous ?: return
-            previous = null
-            val set = send(context, "SET_LAYOUT", mapOf("layout" to back))
-            DebugLog.event("Keyboard", "back to layout $back: ${describe(set)}")
-        }
-    }
 }

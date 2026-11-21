@@ -59,11 +59,13 @@ internal fun CameraAppEditor(store: SettingsStore) {
             Modifier.padding(top = 4.dp, bottom = 6.dp),
         )
         CameraRow("The phone's default camera", null, chosen.isBlank()) { store.reset(LauncherSettings.StudyCameraApp) }
-        for ((pkg, label) in cameras) {
-            CameraRow(label, pkg, chosen == pkg) { store.set(LauncherSettings.StudyCameraApp, pkg) }
+        for (camera in cameras) {
+            // 0.13.0: every camera; one that cannot take a photo for another app opens as it is, and the photo is picked after.
+            val label = if (camera.handsBack) camera.label else camera.label + " (opens; you pick the photo after)"
+            CameraRow(label, camera.pkg, chosen == camera.pkg) { store.set(LauncherSettings.StudyCameraApp, camera.pkg) }
         }
         if (cameras.isEmpty()) BodyText("No camera app was found on the phone.")
-        if (chosen.isNotBlank() && cameras.none { it.first == chosen }) {
+        if (chosen.isNotBlank() && cameras.none { it.pkg == chosen }) {
             BodyText("The camera chosen before ($chosen) is no longer on the phone: the default one is used.")
         }
         OutlinedButton(
