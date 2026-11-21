@@ -131,6 +131,12 @@ object RedirectStatus {
         service?.resumeEngine()
     }
 
+    /** 0.13.0 (D175): a picture of the screen through the redirect service, or null (see LauncherAccessibilityService). */
+    fun captureScreen(onResult: (android.graphics.Bitmap?) -> Unit) {
+        val s = service
+        if (s == null) onResult(null) else s.captureScreen(onResult)
+    }
+
     /** Opens the system launcher on purpose and keeps the redirect off for a while. */
     fun openSystemLauncher(context: Context, pauseMs: Long) {
         service?.pauseEngine(pauseMs, "system launcher opened on purpose")

@@ -175,29 +175,36 @@ fun MorphingPill(
 private fun rememberLiquidStretch(controller: HomeController, insets: FieldInsets): androidx.compose.animation.core.Animatable<Float, androidx.compose.animation.core.AnimationVector1D> {
     val stretch = remember { androidx.compose.animation.core.Animatable(0f) }
     LaunchedEffect(controller, insets) {
-        var lastP = controller.search.value
-        var lastLine = 0f
+        var lastY = controller.fieldBottomPx
         var lastT = System.nanoTime()
-        snapshotFlow { controller.search.value to insets.ime() }.collectLatest { (p, line) ->
+        var smooth = 0f
+        // 0.13.0 (D175): the stretch follows the pill's own speed (one motion now: the pill only rises with the
+        // keyboard), smoothed so it swells and eases instead of following each frame, and it settles without a wobble
+        // unless Bounce asks for one (it wobbled at 0.62 damping even with Bounce at 0).
+        snapshotFlow { controller.search.value }.collectLatest {
+            androidx.compose.runtime.withFrameNanos { }
+            val y = controller.fieldBottomPx
             val t = System.nanoTime()
             val dt = ((t - lastT) / 1e9f).coerceIn(1f / 240f, 0.1f)
-            // Progress per second, plus the field riding up with the keyboard (screen heights per second).
-            val v = (p - lastP) / dt + (line - lastLine) / controller.screenHeight.coerceAtLeast(1f) / dt * 3f
-            lastP = p
-            lastLine = line
+            val v = (y - lastY) / controller.screenHeight.coerceAtLeast(1f) / dt
+            lastY = y
             lastT = t
             // Settings → Search, Liquid stretch and Bounce (0.8.1, D118).
             val amount = controller.data.settings.get(dev.liquid.launcher.core.settings.LauncherSettings.SearchStretch) / 100f
             val bounce = controller.data.settings.get(dev.liquid.launcher.core.settings.LauncherSettings.SearchBounce) / 100f
             if (amount <= 0f) return@collectLatest
-            val target = (kotlin.math.abs(v) * 0.09f * amount).coerceIn(0f, 0.28f * amount)
-            // Eased towards the speed, so the drop swells smoothly instead of jumping with each frame.
-            stretch.animateTo(stretch.value + (target - stretch.value) * 0.5f, androidx.compose.animation.core.tween(16))
-            // No new position for a moment: it has landed, and settles with the bounce chosen for search.
-            kotlinx.coroutines.delay(40)
+            val target = (kotlin.math.abs(v) * 0.12f * amount).coerceIn(0f, 0.22f * amount)
+            smooth += (target - smooth) * 0.3f
+            stretch.snapTo(smooth)
+            // No new position for a moment: it has landed, and settles (with a wobble only when Bounce asks for one).
+            kotlinx.coroutines.delay(48)
+            smooth = 0f
             stretch.animateTo(
                 0f,
-                androidx.compose.animation.core.spring(dampingRatio = (0.62f - 0.4f * bounce).coerceIn(0.2f, 1f), stiffness = MotionScale.stiffness(300f)),
+                androidx.compose.animation.core.spring(
+                    dampingRatio = if (bounce <= 0.001f) 1f else (1f - 0.6f * bounce).coerceIn(0.35f, 1f),
+                    stiffness = MotionScale.stiffness(420f),
+                ),
             )
         }
     }
@@ -286,6 +293,16 @@ internal fun rememberFieldInsets(): FieldInsets {
  */
 internal fun fieldBottom(controller: HomeController, insets: FieldInsets, p: Float, closedOffset: Float, openMargin: Float, searchy: Boolean): Float {
     val nav = insets.nav()
+    val rise = controller.keyboardRise
+    if (searchy && rise > 0f) {
+        // 0.13.0 (D175): only up, from where the pill rests to just above the keyboard's height, on search's spring
+        // (past 1 when it bounces). The keyboard rises under it in step ([keyboardTop]), so the two meet at the end
+        // and the pill is never below the keyboard or above an empty gap.
+        val rest = nav + closedOffset
+        val bottom = rest + (maxOf(nav, rise) + openMargin - rest) * p.coerceAtLeast(0f)
+        val ime = controller.searchFieldLine(nav, insets.ime(), insets.imeTarget())
+        return maxOf(bottom, ime + openMargin, keyboardTop(controller, p) + openMargin)
+    }
     val ime = if (searchy) controller.searchFieldLine(nav, insets.ime(), insets.imeTarget()) else insets.ime()
     val closed = maxOf(nav, ime) + closedOffset
     val bottom = lerp(closed, maxOf(nav, ime) + openMargin, p.coerceIn(0f, 1f))
@@ -297,6 +314,10 @@ internal fun fieldBottom(controller: HomeController, insets: FieldInsets, p: Flo
  * height once it is known, else above the height it usually opens at. Search lays its results out from here, so
  * they stay still while the keyboard slides in and only ride with the field.
  */
+/** 0.13.0 (D175): the top of the rising keyboard (its picture until it is ready), px from the bottom: in step with search. */
+internal fun keyboardTop(controller: HomeController, p: Float): Float =
+    if (controller.keyboardRise > 0f) controller.keyboardRise * p.coerceIn(0f, 1f) else 0f
+
 internal fun fieldBottomPlanned(controller: HomeController, insets: FieldInsets, openMargin: Float): Float =
     controller.searchFieldPlanned(insets.nav(), insets.ime(), insets.imeTarget()) + openMargin
 

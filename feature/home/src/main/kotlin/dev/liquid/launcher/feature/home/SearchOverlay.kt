@@ -534,7 +534,11 @@ private fun SearchKeyboard(controller: HomeController, focus: FocusRequester, wa
     LaunchedEffect(controller.searchOpen) {
         if (!controller.searchOpen) {
             // Only when search closes: on the field's first frame (a swipe still moving) the drive has just focused it.
-            if (wasOpen[0]) focusManager.clearFocus(force = true)
+            // 0.13.0: the keyboard slides down with the pill first, then the field lets go of the focus.
+            if (wasOpen[0]) {
+                if (drives) runCatching { driveKeyboardDown(controller, view) }
+                focusManager.clearFocus(force = true)
+            }
             wasOpen[0] = false
             return@LaunchedEffect
         }
@@ -551,9 +555,11 @@ private fun SearchKeyboard(controller: HomeController, focus: FocusRequester, wa
 }
 
 /**
- * 0.11.3 (D169): asks for the keyboard as search starts opening and slides it in with search, frame by frame
- * ([KeyboardDriver], [dev.liquid.launcher.core.common.KeyboardDrive]); hands it over fully up once search is open and
- * still, or puts it away if search closes. Falls back to [usual] when refused or not ready in time. Each step is logged.
+ * 0.11.3 (D169), 0.13.0 (D175): asks for the keyboard as search starts opening and moves it in step with search's
+ * progress, frame by frame ([KeyboardDriver]). Until it is ready, its picture ([KeyboardPicture], drawn by
+ * [KeyboardStandIn]) rises in its place from the first frame; once ready, the keyboard is put exactly where the picture
+ * is and the picture goes. Handed back fully up once search is open and still, or put away if search closes. Falls
+ * back to [usual] when refused or not ready in time (the picture then stays up until the keyboard is). Logged.
  */
 private suspend fun driveKeyboard(
     controller: HomeController,
@@ -576,7 +582,7 @@ private suspend fun driveKeyboard(
     fun at() = "search at " + "%.2f".format(controller.search.value) + ", the field at ${controller.fieldBottomPx.roundToInt()} px"
     suspend fun fallBack() {
         controller.keyboardPath = "usual"
-        DebugLog.event("Home", "search: the keyboard is shown the usual way (${driver.cancelReason}, ${android.os.SystemClock.uptimeMillis() - driver.askedAt} ms after asking; ${at()}); the field rides on it")
+        DebugLog.event("Home", "search: the keyboard is shown the usual way (${driver.cancelReason}, ${android.os.SystemClock.uptimeMillis() - driver.askedAt} ms after asking; ${at()}); its picture stays until it is up")
         if (controller.searchOpen || controller.searchDragging) usual()
     }
     if (!driver.ask()) {
@@ -594,23 +600,37 @@ private suspend fun driveKeyboard(
         }
         controller.keyboardPath = "drive"
         controller.keyboardDriveShown = driver.shownPx.toFloat()
-        DebugLog.event("Home", "search: the keyboard slides with the pill: ready ${driver.readyAt - driver.askedAt} ms after asking at the swipe's start (${at()}, the keyboard down; it goes to ${driver.shownPx} px)")
-        // Once search has reached open, the keyboard stays fully up while the pill bounces on it.
+        val pictured = KeyboardPicture.image != null && controller.keyboardStandInOn
+        DebugLog.event(
+            "Home",
+            "search: the keyboard rises with the pill: ready ${driver.readyAt - driver.askedAt} ms after asking at the swipe's start " +
+                "(${at()}; ${if (pictured) "its picture rose meanwhile" else "no picture of it yet"}; it goes to ${driver.shownPx} px)",
+        )
+        // The keyboard takes the picture's place this frame, at its height; the rise then follows its real height.
+        var frames = 0
         var topped = false
         while (driver.phase == KeyboardDriver.Phase.Ready) {
-            androidx.compose.runtime.withFrameNanos { }
-            if (driver.phase != KeyboardDriver.Phase.Ready) break
-            val since = android.os.SystemClock.uptimeMillis() - driver.readyAt
             val p = controller.search.value
             if (controller.searchOpen && p >= 1f) topped = true
             if (!controller.searchOpen) topped = false
-            driver.move(drive.fraction(if (topped) 1f else p, since))
+            val rise = controller.keyboardRise.takeIf { it > 0f } ?: driver.shownPx.toFloat()
+            // Where the picture stands now, as a share of the keyboard's own height.
+            val f = if (topped) 1f else (rise * p.coerceIn(0f, 1f) / driver.shownPx.coerceAtLeast(1)).coerceIn(0f, 1f)
+            driver.move(f)
+            if (frames == 2) {
+                // Two frames in, the keyboard stands where its picture is: the picture goes, the rise uses its height.
+                controller.keyboardStandInOn = false
+                if (driver.shownPx > 0) controller.keyboardRise = driver.shownPx.toFloat()
+            }
+            frames++
+            androidx.compose.runtime.withFrameNanos { }
+            if (driver.phase != KeyboardDriver.Phase.Ready) break
             val moving = controller.search.isRunning || controller.searchDragging
-            if (drive.done(p, controller.searchOpen, moving, since)) {
+            if (controller.searchOpen && !moving && controller.search.value >= 0.999f && frames > 2) {
                 driver.finish(true)
                 break
             }
-            if (!controller.searchOpen && !moving && p <= 0.001f) {
+            if (!controller.searchOpen && !moving && controller.search.value <= 0.001f) {
                 driver.finish(false)
                 break
             }
@@ -622,6 +642,77 @@ private suspend fun driveKeyboard(
             KeyboardDriver.Phase.Ready -> driver.finish(controller.searchOpen)
             KeyboardDriver.Phase.Asking -> driver.giveUp("search closed before the keyboard was ready")
             else -> Unit
+        }
+        if (controller.keyboardPath == "drive") controller.keyboardStandInOn = false
+    }
+}
+
+/**
+ * 0.13.0 (D175): search closing with the keyboard up: the keyboard slides down with the pill, on search's spring, as
+ * one piece (the system's own hide animation ran on a curve of its own). True when it was driven down.
+ */
+private suspend fun driveKeyboardDown(controller: HomeController, view: android.view.View): Boolean {
+    val up = view.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true
+    if (!up || controller.search.value <= 0.001f) return false
+    val driver = KeyboardDriver(view)
+    if (!driver.ask()) return false
+    val ready = kotlinx.coroutines.withTimeoutOrNull(250) {
+        snapshotFlow { driver.phase }.first { it != KeyboardDriver.Phase.Asking }
+    }
+    if (ready == null || driver.phase != KeyboardDriver.Phase.Ready) {
+        driver.giveUp("not ready to close in time")
+        return false
+    }
+    val start = controller.search.value.coerceIn(0.001f, 1f)
+    try {
+        while (driver.phase == KeyboardDriver.Phase.Ready) {
+            val p = controller.search.value
+            if (controller.searchOpen) {
+                driver.finish(true)
+                return true
+            }
+            driver.move((p / start).coerceIn(0f, 1f))
+            if (p <= 0.001f) {
+                driver.finish(false)
+                break
+            }
+            androidx.compose.runtime.withFrameNanos { }
+        }
+    } finally {
+        if (driver.phase == KeyboardDriver.Phase.Ready) driver.finish(controller.searchOpen)
+    }
+    return true
+}
+
+/**
+ * 0.13.0 (D175): the keyboard's picture, rising in its place with the pill from the first frame of the swipe until the
+ * keyboard itself is ready (then the keyboard covers it and it goes). Without a picture yet, a plain plate.
+ */
+@Composable
+internal fun KeyboardStandIn(controller: HomeController, modifier: Modifier) {
+    if (!controller.keyboardStandInOn || controller.keyboardRise <= 0f) return
+    val image = KeyboardPicture.image
+    Box(
+        modifier
+            .fillMaxWidth()
+            .layout { measurable, constraints ->
+                val h = controller.keyboardRise.roundToInt().coerceIn(1, constraints.maxHeight.coerceAtLeast(1))
+                val placeable = measurable.measure(androidx.compose.ui.unit.Constraints.fixed(constraints.maxWidth, h))
+                layout(constraints.maxWidth, h) { placeable.place(0, 0) }
+            }
+            .graphicsLayer {
+                // In step with search, as the keyboard will be (read here: moving it redraws nothing else).
+                translationY = size.height - keyboardTop(controller, controller.search.value)
+            },
+    ) {
+        if (image != null) {
+            androidx.compose.foundation.Image(
+                image, contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.FillBounds,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)).background(Color(0xFF1B1C20)))
         }
     }
 }
@@ -646,9 +737,13 @@ private fun KeyboardWatch(controller: HomeController) {
             } else if (seenUp && controller.searchOpen) {
                 // Put away (Back, or the keyboard's own button): the field glides down with it.
                 controller.expectKeyboard = false
+                controller.stopKeyboardRise()
             }
         }
     }
+    // 0.13.0: the keyboard's picture kept from before a restart.
+    val appContext = LocalContext.current.applicationContext
+    LaunchedEffect(Unit) { KeyboardPicture.load(appContext) }
     // When search last opened, for the log's "started … ms after search opened".
     val openedAt = remember { longArrayOf(0L) }
     LaunchedEffect(controller.searchOpen) { if (controller.searchOpen) openedAt[0] = android.os.SystemClock.uptimeMillis() }
@@ -697,6 +792,15 @@ private fun KeyboardWatch(controller: HomeController) {
                 )
                 controller.rememberKeyboard(now, opening = true)
                 opening = false
+                // 0.13.0 (D175): up and still: its picture stands in for it at the next opening; a picture still up
+                // (the keyboard came the usual way) goes now that the keyboard covers it.
+                controller.keyboardStandInOn = false
+                if (controller.searchOpen) {
+                    val height = now.roundToInt()
+                    val screen = controller.screenHeight.roundToInt()
+                    kotlinx.coroutines.delay(180)
+                    if (controller.searchOpen && kotlin.math.abs(insets.ime() - now) < 1f) KeyboardPicture.take(appContext, height, screen)
+                }
             } else if (controller.searchOpen) {
                 if (now < lastSettled - 1f) DebugLog.event("Home", "search: keyboard went down to ${now.roundToInt()} px while open")
                 controller.rememberKeyboard(now, opening = false)
@@ -709,9 +813,10 @@ private fun KeyboardWatch(controller: HomeController) {
             // Generous: on a slow phone the keyboard can take two seconds or more (the emulator: 2.7 s); the drive
             // asks for 1.5 s and the usual way asks again until 1.7 s after that.
             kotlinx.coroutines.delay(4000)
-            if (controller.searchOpen && insets.imeTarget() <= insets.nav() + 1f && insets.ime() <= insets.nav() + 1f) {
-                DebugLog.event("Home", "search: no keyboard came, the field stays down")
+            if (controller.searchOpen && controller.expectKeyboard && insets.imeTarget() <= insets.nav() + 1f && insets.ime() <= insets.nav() + 1f) {
+                DebugLog.event("Home", "search: no keyboard came, the field comes down")
                 controller.expectKeyboard = false
+                controller.stopKeyboardRise()
             }
         }
     }
@@ -938,6 +1043,8 @@ private fun BottomSearch(
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = progress.value.coerceIn(0f, 1f) }.background(Color.Black.copy(alpha = config.dim)))
         // A settings preview has no keyboard: a plate shows where it would be.
         if (!live) PreviewKeyboard(controller, insets, Modifier.align(Alignment.BottomCenter))
+        // 0.13.0 (D175): the keyboard's picture rising in its place until the keyboard itself is ready.
+        if (live) KeyboardStandIn(controller, Modifier.align(Alignment.BottomCenter))
         ProvideControls(controller, glass, null) {
             Column(
                 Modifier
@@ -1011,7 +1118,8 @@ private fun PreviewKeyboard(controller: HomeController, insets: FieldInsets, mod
         modifier
             .fillMaxWidth()
             .layout { measurable, constraints ->
-                val h = if (controller.expectKeyboard) controller.keyboardGuess.roundToInt().coerceIn(0, constraints.maxHeight) else 0
+                val planned = if (controller.keyboardRise > 0f) controller.keyboardRise else controller.keyboardGuess
+                val h = if (controller.expectKeyboard) planned.roundToInt().coerceIn(0, constraints.maxHeight) else 0
                 val placeable = measurable.measure(androidx.compose.ui.unit.Constraints.fixed(constraints.maxWidth, h))
                 layout(constraints.maxWidth, h) { placeable.place(0, 0) }
             }

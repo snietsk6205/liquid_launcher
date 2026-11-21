@@ -970,12 +970,13 @@ class HomeController(
      */
     fun searchFieldPlanned(nav: Float, ime: Float, target: Float): Float {
         if (!expectKeyboard) return maxOf(nav, previewIme(ime))
+        if (keyboardRise > 0f) return maxOf(nav, previewIme(ime), keyboardRise)
         return dev.liquid.launcher.core.common.KeyboardLine.planned(nav, previewIme(ime), target, keyboardDriveShown, keyboardGuess)
     }
 
     /** A settings preview has no keyboard: the plate it shows instead slides in with search, at the usual height. */
     private fun previewIme(ime: Float): Float =
-        if (live || !expectKeyboard) ime else keyboardGuess * search.value.coerceIn(0f, 1f)
+        if (live || !expectKeyboard) ime else (if (keyboardRise > 0f) keyboardRise else keyboardGuess) * search.value.coerceIn(0f, 1f)
 
     /** False for a settings preview (set by the home screen): it never asks for a keyboard and shows a plate instead. */
     var live by mutableStateOf(true)
@@ -1008,8 +1009,28 @@ class HomeController(
         if (expectKeyboard) {
             keyboardPath = null
             keyboardDriveShown = 0f
+            // 0.13.0 (D175): the keyboard rises with the pill from the first frame, at the height of its picture (or
+            // the height it usually opens at): its picture until it is ready, then the keyboard itself.
+            keyboardRise = KeyboardPicture.height.takeIf { it > 0 }?.toFloat() ?: keyboardGuess
+            keyboardStandInOn = live
             keyboardSession++
         }
+    }
+
+    /**
+     * 0.13.0 (D175): while search opens with the keyboard, the height the keyboard rises to (px from the bottom of the
+     * screen); the pill goes only up, from where it rests to just above that height, on search's own spring, and the
+     * keyboard (its picture until it is ready) rises in step under it. 0: not rising (the field rides on the keyboard).
+     */
+    var keyboardRise by mutableFloatStateOf(0f)
+
+    /** The keyboard's picture stands in for it (from the swipe's first frame until the keyboard itself is in place). */
+    var keyboardStandInOn by mutableStateOf(false)
+
+    /** The keyboard was put away or never came: search stops planning around it. */
+    fun stopKeyboardRise() {
+        keyboardRise = 0f
+        keyboardStandInOn = false
     }
 
     /** 0.11.2: the speed check is playing (Settings → Diagnostics): search opens without the keyboard. */
@@ -1355,6 +1376,7 @@ class HomeController(
                 searchQuery = ""
                 askClaudeMode = false
                 expectKeyboard = false
+                stopKeyboardRise()
                 searchLayout.leave(context)
             }
         }

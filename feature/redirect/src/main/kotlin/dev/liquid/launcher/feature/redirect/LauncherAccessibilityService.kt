@@ -455,6 +455,42 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
 
     internal fun pauseEngine(durationMs: Long, reason: String) = onEngine { engine.pause(durationMs, reason) }
 
+    /**
+     * 0.13.0 (D175): a picture of the screen (the service's screenshot ability, Android 11+), for the launcher's own
+     * search screen only: the keyboard's picture that rises with the pill before the keyboard is ready. [onResult] gets
+     * a software bitmap of the whole screen, or null (refused, too soon after the last one, or not allowed).
+     */
+    internal fun captureScreen(onResult: (android.graphics.Bitmap?) -> Unit) {
+        try {
+            takeScreenshot(
+                android.view.Display.DEFAULT_DISPLAY,
+                mainExecutor,
+                object : TakeScreenshotCallback {
+                    override fun onSuccess(screenshot: ScreenshotResult) {
+                        val buffer = screenshot.hardwareBuffer
+                        val bitmap = try {
+                            android.graphics.Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
+                                ?.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+                        } catch (e: Exception) {
+                            null
+                        } finally {
+                            buffer.close()
+                        }
+                        onResult(bitmap)
+                    }
+
+                    override fun onFailure(errorCode: Int) {
+                        DebugLog.event(TAG, "screen picture refused (code $errorCode)")
+                        onResult(null)
+                    }
+                },
+            )
+        } catch (e: Exception) {
+            DebugLog.error(TAG, "screen picture failed: $e")
+            onResult(null)
+        }
+    }
+
     internal fun resumeEngine() = onEngine { engine.resume() }
 
     internal fun startCalibration() = onEngine {
