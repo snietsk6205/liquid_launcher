@@ -1,0 +1,14 @@
+core/designsystem/src/main/kotlin/dev/liquid/launcher/core/designsystem/Components.kt: argument type mismatch: actual type is 'Int', but 'String' was expected.
+core/designsystem/src/main/kotlin/dev/liquid/launcher/core/designsystem/Theme.kt: unresolved reference 'dynamicDarkColorScheme'.
+core/designsystem/src/main/kotlin/dev/liquid/launcher/core/designsystem/Theme.kt: unresolved reference 'dynamicLightColorScheme'.
+core/designsystem/src/main/kotlin/dev/liquid/launcher/core/designsystem/Theme.kt: unresolved reference 'dynamicDarkColorScheme'.
+core/designsystem/src/main/kotlin/dev/liquid/launcher/core/designsystem/Theme.kt: unresolved reference 'dynamicLightColorScheme'.
+feature/home/src/main/kotlin/dev/liquid/launcher/feature/home/Clocks.kt: argument type mismatch: actual type is 'Typeface!', but 'Boolean' was expected.
+feature/home/src/main/kotlin/dev/liquid/launcher/feature/home/Clocks.kt: argument type mismatch: actual type is 'File', but 'Int' was expected.
+feature/home/src/main/kotlin/dev/liquid/launcher/feature/home/HomeTheme.kt: argument type mismatch: actual type is 'Typeface!', but 'Boolean' was expected.
+feature/home/src/main/kotlin/dev/liquid/launcher/feature/home/HomeTheme.kt: argument type mismatch: actual type is 'Typeface!', but 'Boolean' was expected.
+feature/home/src/main/kotlin/dev/liquid/launcher/feature/home/HomeTheme.kt: argument type mismatch: actual type is 'Typeface!', but 'Boolean' was expected.
+feature/home/src/main/kotlin/dev/liquid/launcher/feature/home/HomeTheme.kt: argument type mismatch: actual type is 'Typeface!', but 'Boolean' was expected.
+feature/home/src/main/kotlin/dev/liquid/launcher/feature/home/HomeTheme.kt: argument type mismatch: actual type is 'File', but 'Int' was expected.
+feature/home/src/main/kotlin/dev/liquid/launcher/feature/home/IconPaint.kt: unresolved reference 'drawBitmap'.
+feature/home/src/main/kotlin/dev/liquid/launcher/feature/home/IconPaint.kt: unresolved reference 'drawBitmap'.

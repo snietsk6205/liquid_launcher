@@ -1,0 +1,560 @@
+package dev.liquid.launcher.feature.home
+
+import androidx.compose.foundation.gestures.awaitFirstDown
+
+import androidx.compose.foundation.gestures.awaitEachGesture
+
+import android.app.ActivityOptions
+import android.graphics.Rect as AndroidRect
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.kyant.backdrop.Backdrop
+import dev.liquid.launcher.core.data.AppEntry
+import dev.liquid.launcher.core.data.AppRef
+import dev.liquid.launcher.core.data.HomeItem
+import dev.liquid.launcher.core.data.HomePage
+import dev.liquid.launcher.core.data.ItemKind
+import dev.liquid.launcher.core.data.LauncherAction
+import dev.liquid.launcher.core.settings.LauncherSettings
+import dev.liquid.launcher.core.settings.derive
+import kotlin.math.min
+import kotlin.math.roundToInt
+
+/** Holds a node's coordinates without causing recomposition when they change. */
+class CoordinatesHolder {
+    var value: LayoutCoordinates? = null
+}
+
+/** What every page needs from the screen around it. */
+class PageEnv(
+    val grid: GridConfig,
+    val clock: ClockConfig,
+    val gestures: GestureConfig,
+    val glass: GlassConfig,
+    val lightBackground: Boolean,
+    val contentColor: Color,
+    val shadow: Shadow?,
+    val apps: Map<AppRef, AppEntry>,
+    val wallpaperBackdrop: Backdrop,
+    val editMode: Boolean,
+    val interactive: Boolean,
+)
+
+@Composable
+fun HomePageView(index: Int, page: HomePage, env: PageEnv, controller: HomeController) {
+    Box(Modifier.fillMaxSize()) {
+        // Empty space: double tap and long press. Icons sit above and take their own touches.
+        if (env.interactive) {
+            val gestures = env.gestures
+            val editMode = env.editMode
+            // Remembered so a recomposition between two taps does not restart the detector.
+            val taps = remember(gestures, editMode, controller) {
+                Modifier.pointerInput(gestures, editMode) {
+                    detectTapGestures(
+                        onTap = {
+                            if (!editMode) return@detectTapGestures
+                            if (controller.selectedItem != null || controller.pagesSheet) {
+                                controller.selectedItem = null
+                                controller.pagesSheet = false
+                            } else {
+                                controller.exitEdit()
+                            }
+                        },
+                        onDoubleTap = if (editMode || gestures.doubleTap == LauncherAction.None) {
+                            null
+                        } else {
+                            { controller.run(gestures.doubleTap) }
+                        },
+                        onLongPress = { if (!editMode) controller.run(gestures.longPress) },
+                    )
+                }
+            }
+            // After a long press opened the home menu, follow the same finger so it can slide onto an item.
+            val slide = remember(controller) { Modifier.homeMenuSlide(controller) }
+            Box(Modifier.fillMaxSize().then(taps).then(slide))
+        }
+        val columns = env.grid.columns
+        val rows = env.grid.rows
+        Layout(
+            content = {
+                for (item in page.items) {
+                    key(item.id) { ItemView(item, index, env, controller) }
+                }
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .onPlaced { controller.pageGrids[index] = it }
+                .drawBehind {
+                    val cellW = size.width / columns
+                    val cellH = size.height / rows
+                    if (env.editMode) {
+                        val outline = env.contentColor.copy(alpha = 0.14f)
+                        for (y in 0 until rows) for (x in 0 until columns) {
+                            drawRoundRect(
+                                outline, Offset(x * cellW + 3, y * cellH + 3), Size(cellW - 6, cellH - 6),
+                                CornerRadius(14.dp.toPx()), style = Stroke(1.dp.toPx()),
+                            )
+                        }
+                    }
+                    controller.resizing?.let { r ->
+                        if (page.items.none { it.id == r.itemId }) return@let
+                        drawRoundRect(
+                            env.contentColor.copy(alpha = 0.22f),
+                            Offset(r.x * cellW + 4, r.y * cellH + 4),
+                            Size(r.w * cellW - 8, r.h * cellH - 8),
+                            CornerRadius(18.dp.toPx()),
+                        )
+                    }
+                    val drag = controller.drag ?: return@drawBehind
+                    val target = controller.previewCell() ?: return@drawBehind
+                    if (target.first != index || drag.overRemove) return@drawBehind
+                    drawRoundRect(
+                        env.contentColor.copy(alpha = 0.22f),
+                        Offset(target.second * cellW + 4, target.third * cellH + 4),
+                        Size(drag.cells.width * cellW - 8, drag.cells.height * cellH - 8),
+                        CornerRadius(16.dp.toPx()),
+                    )
+                },
+        ) { measurables, constraints ->
+            val cellW = constraints.maxWidth.toFloat() / columns
+            val cellH = constraints.maxHeight.toFloat() / rows
+            val placeables = measurables.mapIndexed { i, m ->
+                val item = page.items[i]
+                val w = (item.w.coerceAtMost(columns) * cellW).roundToInt()
+                val h = (item.h.coerceAtMost(rows) * cellH).roundToInt()
+                m.measure(Constraints.fixed(w, h))
+            }
+            layout(constraints.maxWidth, constraints.maxHeight) {
+                placeables.forEachIndexed { i, p ->
+                    val item = page.items[i]
+                    p.place((item.x * cellW).roundToInt(), (item.y * cellH).roundToInt())
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ItemView(item: HomeItem, pageIndex: Int, env: PageEnv, controller: HomeController) {
+    val holder = remember { CoordinatesHolder() }
+    val beingDragged = (controller.drag?.source as? DragSource.Home)?.itemId == item.id
+    val wobbling = env.editMode && env.interactive && EditWobble.degrees > 0f && controller.selectedItem != item.id
+    // Each item its own phase and a slightly different pace, so the page shivers rather than swings (0.9.4, P9).
+    val phase = remember(item.id) { (item.id.hashCode() and 0xFFFF) / 65535f * 6.2832f }
+    val pace = remember(item.id) { 2.4f + ((item.id.hashCode() ushr 16) and 0xFF) / 255f * 0.5f }
+    val base = Modifier
+        .fillMaxSize()
+        .onPlaced { holder.value = it }
+        .graphicsLayer {
+            alpha = if (beingDragged) 0f else 1f
+            if (wobbling) {
+                val t = EditWobble.time.floatValue
+                val big = (64.dp.toPx() / size.minDimension.coerceAtLeast(1f)).coerceIn(0.15f, 1f)
+                rotationZ = kotlin.math.sin(t * pace * 6.2832f + phase) * EditWobble.degrees * big
+                translationY = kotlin.math.sin(t * pace * 6.2832f * 0.5f + phase * 1.7f) * 0.6.dp.toPx() * big
+            }
+        }
+    when (item.kind) {
+        ItemKind.APP -> {
+            val app = item.app?.let { env.apps[it] }
+            if (app == null) {
+                // Uninstalled or not loaded yet. Always emit one node per item (the grid layout
+                // places children by index); show a placeholder only while editing.
+                Box(base.iconGestures({ holder.value }, dragOnly(item, null, holder, controller), env.interactive && env.editMode)) {
+                    if (env.editMode) {
+                        Box(
+                            Modifier
+                                .align(Alignment.Center)
+                                .squareFraction(env.grid.iconFraction)
+                                .background(env.contentColor.copy(alpha = 0.2f), CircleShape)
+                        )
+                    }
+                }
+                return
+            }
+            AppIconView(
+                app = app,
+                iconFraction = env.grid.iconFraction,
+                label = if (env.grid.labels) app.label else null,
+                labelSizeSp = env.grid.labelSizeSp,
+                color = env.contentColor,
+                shadow = env.shadow,
+                modifier = base.iconGestures({ holder.value }, appHandler(item, app, holder, controller), env.interactive, landKey = app.key),
+            )
+        }
+
+        ItemKind.FOLDER -> FolderIcon(
+            item = item,
+            env = env,
+            config = controller.folderConfig,
+            modifier = base.iconGestures({ holder.value }, folderHandler(item, holder, controller), env.interactive),
+        )
+
+        ItemKind.WIDGET -> {
+            Box(base.iconGestures({ holder.value }, widgetHandler(item, holder, controller), env.interactive)) {
+                WidgetContent(item, env, controller)
+                if (env.editMode && env.interactive && controller.selectedItem == item.id) {
+                    ResizeFrame(item, pageIndex, env, controller)
+                }
+            }
+        }
+    }
+}
+
+/** Icon and optional label, centred in whatever space it is given. */
+@Composable
+fun AppIconView(
+    app: AppEntry,
+    iconFraction: Float,
+    label: String?,
+    labelSizeSp: Int,
+    color: Color,
+    shadow: Shadow?,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            AppIcon(app, true, Modifier.squareFraction(iconFraction), app.label)
+        }
+        if (label != null) {
+            Text(
+                text = label,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp),
+                style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = labelSizeSp.sp, textAlign = TextAlign.Center, shadow = shadow),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+fun AppIconImage(icon: ImageBitmap?, modifier: Modifier, description: String?) {
+    if (icon != null) {
+        Image(bitmap = icon, contentDescription = description, modifier = modifier)
+    } else {
+        Box(modifier.background(Color.Gray.copy(alpha = 0.3f), CircleShape))
+    }
+}
+
+/** A square filling [fraction] of the smaller side of the available space. */
+fun Modifier.squareFraction(fraction: Float): Modifier = layout { measurable, constraints ->
+    val side = (min(constraints.maxWidth, constraints.maxHeight) * fraction).roundToInt().coerceAtLeast(0)
+    val placeable = measurable.measure(Constraints.fixed(side, side))
+    layout(side, side) { placeable.place(0, 0) }
+}
+
+@Composable
+internal fun appHandler(item: HomeItem, app: AppEntry, holder: CoordinatesHolder, controller: HomeController): IconGestureHandler {
+    val view = LocalView.current
+    return remember(item, app, controller) {
+        object : IconGestureHandler {
+            override fun onTap() {
+                if (controller.editMode) return
+                val bounds = holder.value?.takeIf { it.isAttached }?.boundsInRoot()
+                val rect = bounds?.let { AndroidRect(it.left.toInt(), it.top.toInt(), it.right.toInt(), it.bottom.toInt()) }
+                val options = controller.launchOptions(view, rect)
+                controller.launch(app, rect, options)
+            }
+
+            override fun onLongPress() {
+                val bounds = holder.value?.takeIf { it.isAttached }?.boundsInRoot() ?: return
+                controller.menu = MenuTarget(app, item.id, bounds)
+            }
+
+            override fun onDragStart(grab: Offset, finger: Offset) = startHomeDrag(item, app.homeIcon, grab, finger, holder, controller, app.homeArt)
+
+            override fun hasSwipe(up: Boolean): Boolean =
+                !controller.editMode && (if (up) item.swipeUp else item.swipeDown) != null
+
+            override fun onSwipe(up: Boolean) {
+                val encoded = (if (up) item.swipeUp else item.swipeDown) ?: return
+                controller.run(LauncherAction.decode(encoded))
+            }
+
+            override fun hasDoubleTap(): Boolean = !controller.editMode && item.doubleTap != null
+
+            override fun onDoubleTap() {
+                val encoded = item.doubleTap ?: return
+                Haptics.confirm(controller.view)
+                controller.run(LauncherAction.decode(encoded))
+            }
+            override fun onDrag(finger: Offset) = controller.moveDrag(finger)
+            override fun onDragEnd() = controller.endDrag()
+            override fun onDragCancel() = controller.cancelDrag()
+        }
+    }
+}
+
+/** Folders: tap opens, hold enters edit mode, hold and move carries the folder. */
+@Composable
+private fun folderHandler(item: HomeItem, holder: CoordinatesHolder, controller: HomeController): IconGestureHandler =
+    remember(item, controller) {
+        object : IconGestureHandler {
+            private fun open() {
+                controller.folderOrigin = holder.value?.takeIf { it.isAttached }?.boundsInRoot()?.center
+                controller.openFolder = item.id
+            }
+
+            override fun onTap() {
+                val first = item.folder?.firstOrNull()?.let { controller.data.apps.find(it) }
+                if (controller.folderConfig.tapFirst && !controller.editMode && first != null) controller.launch(first) else open()
+            }
+
+            override fun onLongPress() {
+                if (!controller.editMode) controller.run(LauncherAction.EditHome)
+            }
+
+            override fun onDragStart(grab: Offset, finger: Offset) = startHomeDrag(item, null, grab, finger, holder, controller)
+            override fun onDrag(finger: Offset) = controller.moveDrag(finger)
+            override fun onDragEnd() = controller.endDrag()
+            override fun onDragCancel() = controller.cancelDrag()
+
+            // With "tap opens the first app", a swipe up opens the folder.
+            override fun hasSwipe(up: Boolean): Boolean = up && controller.folderConfig.tapFirst
+            override fun onSwipe(up: Boolean) = open()
+        }
+    }
+
+/** Widgets: hold to edit with this widget selected; tap while editing selects it; drag moves it. */
+@Composable
+private fun widgetHandler(item: HomeItem, holder: CoordinatesHolder, controller: HomeController): IconGestureHandler =
+    remember(item, controller) {
+        object : IconGestureHandler {
+            override fun onTap() {
+                if (controller.editMode) controller.selectedItem = if (controller.selectedItem == item.id) null else item.id
+            }
+
+            override fun onLongPress() = controller.editItem(item.id)
+
+            // Quick capture (D5, 0.9.1): a double tap on a clock opens the study hub with the note field ready.
+            override fun hasDoubleTap(): Boolean = item.widget == "clock" && !controller.editMode && controller.data.study.enabled
+
+            override fun onDoubleTap() {
+                if (!hasDoubleTap()) return
+                controller.hubNoteFocus = true
+                controller.openToday(holder.value?.takeIf { it.isAttached }?.boundsInRoot())
+            }
+
+            override fun onDragStart(grab: Offset, finger: Offset) = startHomeDrag(item, null, grab, finger, holder, controller)
+            override fun onDrag(finger: Offset) = controller.moveDrag(finger)
+            override fun onDragEnd() = controller.endDrag()
+            override fun onDragCancel() = controller.cancelDrag()
+        }
+    }
+
+@Composable
+private fun dragOnly(item: HomeItem, icon: ImageBitmap?, holder: CoordinatesHolder, controller: HomeController): IconGestureHandler =
+    remember(item, controller) {
+        object : IconGestureHandler {
+            override fun onTap() = Unit
+            override fun onLongPress() {
+                if (!controller.editMode) controller.run(LauncherAction.EditHome)
+            }
+
+            override fun onDragStart(grab: Offset, finger: Offset) = startHomeDrag(item, icon, grab, finger, holder, controller)
+            override fun onDrag(finger: Offset) = controller.moveDrag(finger)
+            override fun onDragEnd() = controller.endDrag()
+            override fun onDragCancel() = controller.cancelDrag()
+        }
+    }
+
+private fun startHomeDrag(
+    item: HomeItem,
+    icon: ImageBitmap?,
+    grab: Offset,
+    finger: Offset,
+    holder: CoordinatesHolder,
+    controller: HomeController,
+    art: dev.liquid.launcher.core.data.IconArt? = null,
+) {
+    val size = holder.value?.size ?: IntSize.Zero
+    controller.startDrag(
+        DragState(
+            source = DragSource.Home(item.id),
+            icon = icon,
+            art = art,
+            widget = item.widget,
+            cells = IntSize(item.w, item.h),
+            grab = grab,
+            size = Size(size.width.toFloat(), size.height.toFloat()),
+            start = finger,
+        )
+    )
+}
+
+/**
+ * Watches the finger of a press on empty space without taking it. If the press opened the
+ * home menu, the finger's position is passed on while it stays down, and letting go over an
+ * item runs it.
+ */
+private fun Modifier.homeMenuSlide(controller: HomeController): Modifier {
+    var coords: androidx.compose.ui.layout.LayoutCoordinates? = null
+    return this
+        .onPlaced { coords = it }
+        .pointerInput(controller) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                val wasOpen = controller.homeMenu
+                var start: androidx.compose.ui.geometry.Offset? = null
+                var moved = false
+                while (true) {
+                    val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Final)
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    val layout = coords?.takeIf { it.isAttached }
+                    val root = layout?.localToRoot(change.position)
+                    if (!wasOpen && controller.homeMenu && root != null) {
+                        if (start == null) start = root
+                        if ((root - start).getDistance() > viewConfiguration.touchSlop) moved = true
+                        if (moved) controller.homeMenuFinger = root
+                    }
+                    if (!change.pressed) {
+                        if (start != null && root != null) controller.releaseHomeMenuSlide(root, moved)
+                        break
+                    }
+                }
+                controller.homeMenuFinger = null
+            }
+        }
+}
+
+/**
+ * What a widget item shows, without its gestures or edit frame: used on home pages and on the
+ * search screen (0.7.1).
+ */
+@Composable
+internal fun WidgetContent(item: HomeItem, env: PageEnv, controller: HomeController) {
+    if (item.widget == "clock") {
+        // The clock's own style over the Clock settings; while the gallery is open on it, the draft.
+        val base = remember(env.clock) { ClockStyle.fromSettings(env.clock) }
+        val saved = remember(item.options, base) { ClockStyle.decode(item.options, base) }
+        val draft = controller.clockStudio?.takeIf { it.itemId == item.id }?.style
+        val style = draft ?: saved
+        // The study block running now (or next) as a line under the clock, when the companion is on (0.6.3, D92).
+        val showStudy by controller.data.settings.derive { get(LauncherSettings.StudyClockLine) != "off" }
+        val glance = if (showStudy) rememberStudyGlance(controller) else null
+        // 0.10.2: by default the line, its ring and its ✓ are in the clock design's own colour (from the wallpaper when
+        // the clock takes it from there) with the clock's own shadow; or, as chosen, dark over a light wallpaper and light
+        // over a dark one, white, or black, with a soft halo in the opposite tone.
+        val lineInk by controller.data.settings.derive { get(LauncherSettings.StudyLineInk) }
+        val lineHalo by controller.data.settings.derive { get(LauncherSettings.StudyLineShadow) }
+        val tone by dev.liquid.launcher.core.common.WallpaperTones.tone.collectAsState()
+        val clock = clockColours(style, env.contentColor, env.shadow, env.glass, env.lightBackground, tone?.roles)
+        val followsClock = lineInk == "clock"
+        val lineColor = when (lineInk) {
+            "white" -> Color.White
+            "black" -> Color(0xFF111316)
+            "clock" -> clock.primary
+            else -> if (env.lightBackground) Color(0xFF111316) else Color.White
+        }
+        val lineShadow = when {
+            !lineHalo -> null
+            followsClock -> clock.shadow
+            else -> {
+                val dark = lineColor.luminance() > 0.5f
+                androidx.compose.ui.graphics.Shadow(
+                    if (dark) Color.Black.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.55f),
+                    androidx.compose.ui.geometry.Offset(0f, 1.5f), 10f,
+                )
+            }
+        }
+        // 0.10.2: the Stacked design reads at a glance: the date and the study line above the digits.
+        val atAGlance = style.design == "glance"
+        val studyLine: @Composable () -> Unit = {
+            if (glance != null) {
+                StudyLine(
+                    glance, controller, lineColor, lineShadow, env.interactive && !env.editMode,
+                    Modifier.padding(horizontal = if (style.plate == "none") 0.dp else 10.dp).padding(bottom = 2.dp),
+                    ownColours = followsClock,
+                )
+            }
+        }
+        Column(
+            Modifier.fillMaxSize(),
+            horizontalAlignment = when (style.align) {
+                "start" -> Alignment.Start
+                "end" -> Alignment.End
+                else -> Alignment.CenterHorizontally
+            },
+        ) {
+            if (atAGlance) {
+                if (style.date != "off") {
+                    rememberMinuteTick()
+                    androidx.compose.material3.Text(
+                        clockDateText(style),
+                        style = androidx.compose.ui.text.TextStyle(
+                            fontFamily = HomeTheme.font, color = clock.primary, fontSize = 16.sp,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, shadow = clock.shadow,
+                        ),
+                        maxLines = 1,
+                        modifier = Modifier.padding(horizontal = if (style.plate == "none") 6.dp else 16.dp).padding(top = 2.dp),
+                    )
+                }
+                studyLine()
+            }
+            ClockFace(style, env.contentColor, env.shadow, env.glass, env.lightBackground, env.wallpaperBackdrop, Modifier.weight(1f))
+            if (!atAGlance) studyLine()
+        }
+    }
+    when (item.widget) {
+        "app" -> AppWidgetItem(item, env, controller)
+        "date" -> DateWidget(env.contentColor, env.shadow, WidgetLook.of(item))
+        "battery" -> BatteryWidget(env.contentColor, env.shadow, WidgetLook.of(item))
+        "calendar" -> CalendarWidget(item, env, controller)
+        "next" -> NextBlockWidget(controller, env.contentColor, env.shadow, env.interactive && !env.editMode)
+    }
+    if (item.widget == "now" || item.widget == "today") {
+        // Ticks and buttons work on the live home screen, not while editing or in a preview.
+        val boxedForAll by controller.data.settings.derive { get(LauncherSettings.WidgetBackground) == "glass" }
+        // W8 (P7): this widget's own card, corners, colour and parts (its Customise sheet in edit mode).
+        val o = item.options.orEmpty()
+        val look = WidgetLook.of(item)
+        val surface = StudySurface(
+            env.glass, env.lightBackground, env.wallpaperBackdrop, env.interactive && !env.editMode,
+            boxed = when (o["card"]) { "glass" -> true; "none" -> false; else -> boxedForAll },
+            corner = when (o["corner"]) { "s" -> 14.dp; "l" -> 36.dp; else -> 26.dp },
+            tint = if (look.accent) HomeTheme.accent else null,
+            shows = look::shows,
+        )
+        if (item.widget == "now") NowCard(controller, surface) else TodayWidget(controller, surface)
+    }
+}

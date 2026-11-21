@@ -1,0 +1,172 @@
+package dev.liquid.launcher.feature.home
+
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.LayoutCoordinates
+
+/** Callbacks of [iconGestures]. Positions are in root coordinates. */
+interface IconGestureHandler {
+    fun onTap()
+    fun onLongPress()
+
+    /** The finger moved after a long press: the item is picked up. [grab] is the finger inside the item. */
+    fun onDragStart(grab: Offset, finger: Offset)
+    fun onDrag(finger: Offset)
+    fun onDragEnd()
+    fun onDragCancel()
+
+    /** True when a vertical swipe on the item does something of its own ([up] or down). */
+    fun hasSwipe(up: Boolean): Boolean = false
+    fun onSwipe(up: Boolean) = Unit
+
+    /** True when a double tap does something of its own; a single tap then waits to tell them apart. */
+    fun hasDoubleTap(): Boolean = false
+    fun onDoubleTap() = Unit
+}
+
+/**
+ * Tap launches, long press opens the menu, long press and move picks the item up. One
+ * gesture detector instead of separate tap and drag detectors, so a long press never also
+ * counts as a tap. Before the long press nothing is consumed, so a parent can still take
+ * a swipe (pager, drawer).
+ */
+@Composable
+fun Modifier.iconGestures(
+    coordinates: () -> LayoutCoordinates?,
+    handler: IconGestureHandler,
+    enabled: Boolean = true,
+    /** The app this item opens: it lands when the launcher comes back from that app (0.9.4). */
+    landKey: String? = null,
+): Modifier {
+    val current by rememberUpdatedState(handler)
+    val coords by rememberUpdatedState(coordinates)
+    if (!enabled) return this
+    // The item squishes under the finger and springs back when tapped (0.7.2, D108).
+    val feel = rememberPressFeel()
+    if (landKey != null) {
+        // Watched without recomposing: only the icon that opened the app moves.
+        androidx.compose.runtime.LaunchedEffect(feel, landKey) {
+            var seen = IconLanding.tick.intValue
+            androidx.compose.runtime.snapshotFlow { IconLanding.tick.intValue }.collect { tick ->
+                if (tick != seen && IconLanding.key == landKey) feel.land()
+                seen = tick
+            }
+        }
+    }
+    // Remembered so recompositions (which happen during a drag) never restart the detector:
+    // a new pointerInput lambda would cancel the gesture in progress.
+    val gesture = remember(feel) { Modifier.iconPointerInput({ current }, { coords() }, feel).pressSquash(feel) }
+    return this.then(gesture)
+}
+
+private enum class Early { Tap, Gone, SwipeUp, SwipeDown }
+
+private fun Modifier.iconPointerInput(
+    handler: () -> IconGestureHandler,
+    coords: () -> LayoutCoordinates?,
+    feel: PressFeel,
+): Modifier {
+    return pointerInput(Unit) {
+        val slop = viewConfiguration.touchSlop
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            // A short wait before squashing, so a swipe through the item (pager, drawer list) never does.
+            feel.press(delayMs = 60L, position = down.position)
+            // Before the long press: a tap, a swipe of the item's own, or a swipe for a parent.
+            val early = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                var moved = Offset.Zero
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull Early.Gone
+                    if (!change.pressed) {
+                        return@withTimeoutOrNull if (change.isConsumed) Early.Gone else Early.Tap
+                    }
+                    if (change.isConsumed) return@withTimeoutOrNull Early.Gone
+                    moved += change.positionChange()
+                    if (moved.getDistance() > slop) {
+                        val vertical = kotlin.math.abs(moved.y) > kotlin.math.abs(moved.x)
+                        val upward = moved.y < 0
+                        if (vertical && handler().hasSwipe(upward)) {
+                            change.consume()
+                            return@withTimeoutOrNull if (upward) Early.SwipeUp else Early.SwipeDown
+                        }
+                        // Not ours: leave the swipe to the pager, the drawer or search.
+                        return@withTimeoutOrNull Early.Gone
+                    }
+                }
+                @Suppress("UNREACHABLE_CODE")
+                Early.Gone
+            }
+            when (early) {
+                Early.Tap -> feel.release()
+                Early.Gone, Early.SwipeUp, Early.SwipeDown -> feel.cancel()
+                // A long press: the item springs back as the menu opens or it is picked up.
+                null -> feel.release()
+            }
+            when (early) {
+                Early.Tap -> {
+                    if (handler().hasDoubleTap()) {
+                        // Wait briefly for a second tap close to the first.
+                        val second = withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) {
+                            awaitFirstDown(requireUnconsumed = false)
+                        }
+                        if (second != null && (second.position - down.position).getDistance() < slop * 4) {
+                            second.consume()
+                            waitForUpOrCancellation()?.consume()
+                            handler().onDoubleTap()
+                            return@awaitEachGesture
+                        }
+                    }
+                    handler().onTap()
+                    return@awaitEachGesture
+                }
+                Early.Gone -> return@awaitEachGesture
+                Early.SwipeUp, Early.SwipeDown -> {
+                    // Take the rest of the gesture, then run the action on release.
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        change.consume()
+                        if (!change.pressed) break
+                    }
+                    handler().onSwipe(early == Early.SwipeUp)
+                    return@awaitEachGesture
+                }
+                null -> Unit
+            }
+            handler().onLongPress()
+            var dragging = false
+            var travelled = Offset.Zero
+            while (true) {
+                val event = awaitPointerEvent()
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (!change.pressed) {
+                    if (dragging) handler().onDragEnd()
+                    change.consume()
+                    return@awaitEachGesture
+                }
+                travelled += change.positionChange()
+                change.consume()
+                val layout = coords() ?: continue
+                if (!layout.isAttached) continue
+                val root = layout.localToRoot(change.position)
+                if (!dragging && travelled.getDistance() > slop) {
+                    dragging = true
+                    handler().onDragStart(down.position, root)
+                }
+                if (dragging) handler().onDrag(root)
+            }
+            if (dragging) handler().onDragCancel()
+        }
+    }
+}

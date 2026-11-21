@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <application>
+        <service
+            android:name="dev.liquid.launcher.feature.redirect.LauncherAccessibilityService"
+            android:exported="true"
+            android:label="@string/redirect_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/redirect_accessibility_service" />
+        </service>
+
+        <service
+            android:name="dev.liquid.launcher.feature.redirect.RedirectTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_redirect_tile"
+            android:label="@string/redirect_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

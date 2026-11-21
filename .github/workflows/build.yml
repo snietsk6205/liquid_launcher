@@ -1,0 +1,249 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+      # Cloud sessions may be given a ccr-… branch to push to (0.10.2's session was).
+      - 'ccr-*'
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Publish a release from this build
+        type: boolean
+        default: false
+
+# A push builds and runs the unit tests. The emulator test runs on "[release]" commits, on commits whose message
+# contains "[smoke]", on manual runs, and when the push changed feature/redirect/**, ci/** or .github/workflows/**
+# (0.11.2: most pushes need only the build). A release is published only when the message of the pushed (head)
+# commit contains "[release]" (a manual run publishes one when asked to), and only after every check passed: the
+# emulator test always runs for a release. The release notes are that version's section of CHANGELOG.md, which must
+# exist (checked first).
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Unit tests and APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.release.outputs.release }}
+      smoke: ${{ steps.smoke.outputs.smoke }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # 0.11.2: every branch saves its Gradle cache (by default only the default branch does), so claude/** and ccr-*
+      # branches build from a warm cache too.
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Read version
+        id: version
+        run: echo "version=$(grep '^app.versionName=' gradle.properties | cut -d= -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Release or only build
+        id: release
+        env:
+          EVENT: ${{ github.event_name }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+          ASKED: ${{ inputs.release }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            release="${ASKED:-false}"
+          elif printf '%s' "$MESSAGE" | grep -qF '[release]'; then
+            release=true
+          else
+            release=false
+          fi
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "Publishes a release: $release"
+
+      # 0.11.2: whether the emulator test runs (see the top of this file).
+      - name: Emulator test or not
+        id: smoke
+        env:
+          EVENT: ${{ github.event_name }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+          RELEASE: ${{ steps.release.outputs.release }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ] || [ "$RELEASE" = "true" ] || printf '%s' "$MESSAGE" | grep -qF '[smoke]'; then
+            smoke=true
+          elif [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git fetch --no-tags --depth=1 origin "$BEFORE" >/dev/null 2>&1; then
+            smoke=true   # a new branch or a rewritten one: what changed is not known
+          elif git diff --name-only "$BEFORE" "$AFTER" | grep -qE '^(feature/redirect/|ci/|\.github/workflows/)'; then
+            smoke=true
+          else
+            smoke=false
+          fi
+          echo "smoke=$smoke" >> "$GITHUB_OUTPUT"
+          echo "Runs the emulator test: $smoke"
+
+      - name: Check the changelog has this version
+        if: steps.release.outputs.release == 'true'
+        run: python3 ci/release_notes.py "${{ steps.version.outputs.version }}" > /dev/null
+
+      # The app shows "What's new" after an update from its own copy of the changelog.
+      - name: Bundle the changelog in the app
+        run: mkdir -p app/src/main/assets && cp CHANGELOG.md app/src/main/assets/CHANGELOG.md
+
+      - name: Unit tests and release APK
+        run: >
+          ./gradlew --quiet --console=plain --continue
+          testDebugUnitTest :app:assembleRelease
+          -PversionCode=${{ github.run_number }}
+
+      - name: Summarise failed unit tests
+        if: failure()
+        run: python3 ci/test_failures.py
+
+      - name: Collect APK
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/release/app-release.apk \
+            "out/LiquidLauncher-${{ steps.version.outputs.version }}-build${{ github.run_number }}.apk"
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: out/*.apk
+          retention-days: 14
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: '**/build/reports/tests/'
+          retention-days: 7
+
+  smoke:
+    name: Emulator test (redirect against AOSP launcher)
+    needs: build
+    if: needs.build.outputs.smoke == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: out
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install screenshot helper
+        run: python3 -m pip install --quiet --user pillow || true
+
+      # 0.11.2: the system image and a booted emulator's snapshot are kept between runs, so the test boots from the
+      # snapshot instead of downloading the image and cold-booting Android each time. The snapshot is saved once the
+      # phone is calm (ci/settle.sh): v1 was saved mid first-boot work and v2 after a blind 30 s. Bump the version to
+      # start anew.
+      - name: System image cache
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk/system-images/android-34/google_apis/x86_64
+          key: sysimg-34-google_apis-x86_64-v1
+
+      - name: Emulator snapshot cache
+        id: avd-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-34-google_apis-x86_64-v3
+
+      - name: Boot once and save the snapshot (cache miss only)
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          force-avd-creation: false
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash ci/settle.sh 300
+
+      - name: Run on emulator (Android 14)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          force-avd-creation: false
+          disable-animations: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash ci/smoke.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-output
+          path: out/smoke/
+          retention-days: 14
+
+  release:
+    name: Publish release
+    needs: [build, smoke]
+    if: needs.build.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: out
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          python3 ci/release_notes.py "${{ needs.build.outputs.version }}" > notes.md
+          printf '\n---\nBuild %s from `%s`. Install the APK below: it installs over the previous build and keeps everything.\n' \
+            "${{ github.run_number }}" "${{ github.sha }}" >> notes.md
+          cat notes.md
+
+      # One APK per release: remove the previous build's file before adding the new one.
+      - name: Remove older APKs from this release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ needs.build.outputs.version }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null \
+            | while read -r name; do
+                gh release delete-asset "$TAG" "$name" --repo "$GITHUB_REPOSITORY" --yes || true
+              done
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.build.outputs.version }}
+          name: Liquid Launcher ${{ needs.build.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          files: out/*.apk
+          body_path: notes.md
+          make_latest: true
