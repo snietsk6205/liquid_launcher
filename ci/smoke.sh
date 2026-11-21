@@ -1035,9 +1035,9 @@ content insert --uri 'content://com.android.calendar/calendars?caller_is_syncada
   --bind account_name:s:smoke --bind account_type:s:LOCAL --bind name:s:Launcher --bind calendar_displayName:s:Launcher \
   --bind calendar_color:i:-7617718 --bind calendar_access_level:i:700 --bind ownerAccount:s:smoke --bind visible:i:1 --bind sync_events:i:1
 LCAL=\$(content query --uri content://com.android.calendar/calendars --projection _id:calendar_displayName | grep 'calendar_displayName=Launcher' | sed -E 's/.*_id=([0-9]+).*/\1/' | head -1)
-# content's --bind cuts a value at its colons (and keeps a backslash put before one): the JSON goes in as the HTML a
-# description edited on Google Calendar's web page is, with its colons written &#58;, which the launcher decodes.
-F="<p>\$(sed 's/:/\\&#58;/g' /data/local/tmp/feed.json)</p>"
+# content's --bind cuts a value at its colons and halves its backslashes: the JSON goes in as the HTML a description
+# edited on Google Calendar's web page is, colons written &#58; (the launcher decodes them), backslashes doubled.
+F="<p>\$(sed -e 's/\\\\/\\\\\\\\/g' -e 's/:/\\&#58;/g' /data/local/tmp/feed.json)</p>"
 content insert --uri content://com.android.calendar/events --bind calendar_id:i:\$LCAL --bind 'title:s:launcher-data' \
   --bind description:s:"\$F" --bind dtstart:l:$DAY_MS --bind dtend:l:$(( DAY_MS + 86400000 )) --bind allDay:i:1 --bind eventTimezone:s:UTC
 content query --uri content://com.android.calendar/events --projection _id:title --where "calendar_id=\$LCAL"
@@ -1060,7 +1060,12 @@ CAL3EOF
   sleep 2
   for i in 1 2 3 4 5 6 7 8; do grep -q "flashcards: 2 new in the deck" "$LOG" && break; sleep 1; done
   grep "flashcards: \|launcher-data" "$LOG" | tail -3 | sed 's/^/        /'
-  if grep -q "flashcards: 2 new in the deck" "$LOG"; then pass "launcher-data's two flashcards joined the deck"; else fail "launcher-data's two flashcards joined the deck"; fi
+  if grep -q "flashcards: 2 new in the deck" "$LOG"; then
+    pass "launcher-data's two flashcards joined the deck"
+  else
+    fail "launcher-data's two flashcards joined the deck"
+    adb shell su 0 content query --uri content://com.android.calendar/events --projection description --where "title='launcher-data'" 2>/dev/null | cut -c1-260 | sed 's/^/        stored: /'
+  fi
   adb shell input swipe 540 900 540 1700 250
   sleep 2
   adb shell input keyevent KEYCODE_BACK
