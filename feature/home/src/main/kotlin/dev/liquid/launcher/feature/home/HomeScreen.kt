@@ -986,23 +986,29 @@ private fun HomeScreenBody(
         if (searchHere && searchShown && !controller.searchInPill) {
             SearchOverlay(controller, search, glass, lightBackground, overlayBackdrop, apps, motionConfig.searchTransition, motion, env = searchEnv, live = live)
         }
-        Presence(controller.openFolder?.let { id -> layout.find(id)?.second?.takeIf { it.kind == ItemKind.FOLDER } }) { folder ->
+        // 0.13.0 (D176): overlays leave as a picture of themselves, into what opened them; sheets follow a drag down and
+        // the Back gesture.
+        val folderAt = controller.folderOrigin
+        Presence(
+            controller.openFolder?.let { id -> layout.find(id)?.second?.takeIf { it.kind == ItemKind.FOLDER } },
+            origin = { folderAt?.let { androidx.compose.ui.geometry.Rect(it.x - 90f, it.y - 90f, it.x + 90f, it.y + 90f) } },
+        ) { folder ->
             FolderOverlay(folder, appIndex, controller, glass, lightBackground, overlayBackdrop, grid)
         }
-        Presence(controller.menu) { target ->
+        Presence(controller.menu, origin = { it.anchor }) { target ->
             AppMenu(target, menuEntries, controller, glass, lightBackground, overlayBackdrop)
         }
         if (mode == HomeMode.PreviewHomeMenu) SideEffect { controller.homeMenu = true }
-        Presence(if ((live || mode == HomeMode.PreviewHomeMenu) && controller.homeMenu) Unit else null) {
+        Presence(if ((live || mode == HomeMode.PreviewHomeMenu) && controller.homeMenu) Unit else null, onClose = { controller.back() }) {
             HomeMenu(homeMenuConfig, glass, lightBackground, overlayBackdrop, appIndex, controller)
         }
-        Presence(if (live && controller.layoutsSheet) Unit else null) {
+        Presence(if (live && controller.layoutsSheet) Unit else null, onClose = { controller.back() }) {
             LayoutsSheet(glass, lightBackground, overlayBackdrop, controller)
         }
-        Presence(if (live) controller.widgetOptions?.let { id -> layout.find(id)?.second } else null) { item ->
+        Presence(if (live) controller.widgetOptions?.let { id -> layout.find(id)?.second } else null, onClose = { controller.back() }) { item ->
             WidgetOptionsSheet(item, glass, lightBackground, overlayBackdrop, controller)
         }
-        Presence(if (live && controller.wallpaperStrip) Unit else null) {
+        Presence(if (live && controller.wallpaperStrip) Unit else null, onClose = { controller.back() }) {
             WallpaperStrip(glass, lightBackground, overlayBackdrop, controller)
         }
         // 0.11.1: the sheet sinks away when the screen closes (it vanished in one frame); after Apply with a new picture it
@@ -1027,10 +1033,13 @@ private fun HomeScreenBody(
             StudyHub(glass, lightBackground, overlayBackdrop, controller)
         }
         // C1: a distracting app asked for during a block waits here.
-        Presence(controller.speedBump.takeIf { live }) { bump ->
+        Presence(
+            controller.speedBump.takeIf { live },
+            origin = { b -> b.bounds?.let { androidx.compose.ui.geometry.Rect(it.left.toFloat(), it.top.toFloat(), it.right.toFloat(), it.bottom.toFloat()) } },
+        ) { bump ->
             SpeedBumpOverlay(bump, glass, lightBackground, overlayBackdrop, controller)
         }
-        Presence(if (live && controller.widgetPicker) Unit else null) {
+        Presence(if (live && controller.widgetPicker) Unit else null, onClose = { controller.back() }) {
             WidgetPicker(glass, lightBackground, overlayBackdrop, controller)
         }
         if (live) {
@@ -1061,7 +1070,7 @@ private fun HomeScreenBody(
             DragGhost(drag)
         }
         controller.renaming?.let { RenameDialog(it, controller) }
-        Presence(controller.tagging) { app -> ProvideControls(controller, glass, null) { AppTagsSheet(app, controller, glass, lightBackground, overlayBackdrop) } }
+        Presence(controller.tagging, onClose = { controller.back() }) { app -> ProvideControls(controller, glass, null) { AppTagsSheet(app, controller, glass, lightBackground, overlayBackdrop) } }
         controller.iconPicking?.let { IconPickerDialog(it, controller) }
         controller.swipeEditing?.let { id -> layout.find(id)?.let { (_, item) -> SwipeActionsDialog(item, apps, controller) } }
         // W6: picking apps in the drawer, tagging them together, and a tag's own list of apps.
@@ -1071,11 +1080,11 @@ private fun HomeScreenBody(
         if (controller.selection != null && !picking) SideEffect { controller.endSelecting() }
         val bulk = controller.bulkTag
         val picked = controller.selection
-        Presence(if (bulk != null && picked != null) bulk to picked else null) { (shownBulk, shownPicked) ->
+        Presence(if (bulk != null && picked != null) bulk to picked else null, onClose = { controller.back() }) { (shownBulk, shownPicked) ->
             ProvideControls(controller, glass, null) { BulkTagSheet(controller, shownBulk, shownPicked, glass, lightBackground, overlayBackdrop) }
         }
-        Presence(controller.tagApps) { tag -> ProvideControls(controller, glass, null) { TagAppsSheet(controller, tag, glass, lightBackground, overlayBackdrop) } }
-        Presence(controller.layoutWallpaperPick) { id -> ProvideControls(controller, glass, null) { LayoutWallpaperSheet(controller, id, glass, lightBackground, overlayBackdrop) } }
+        Presence(controller.tagApps, onClose = { controller.back() }) { tag -> ProvideControls(controller, glass, null) { TagAppsSheet(controller, tag, glass, lightBackground, overlayBackdrop) } }
+        Presence(controller.layoutWallpaperPick, onClose = { controller.back() }) { id -> ProvideControls(controller, glass, null) { LayoutWallpaperSheet(controller, id, glass, lightBackground, overlayBackdrop) } }
         // W4: "Customise …" after a long press on a surface.
         Presence(controller.customise) { offer -> CustomiseChip(controller, offer, if (lightBackground) Color(0xFF16181C) else Color.White) }
         if (live) TransitionOverlay(controller, transitionStyle)

@@ -18,3 +18,6 @@ class ManagedActivityResultLauncher<I, O> : ActivityResultLauncher<I>() {
 
 @Composable
 fun <I, O> rememberLauncherForActivityResult(contract: ActivityResultContract<I, O>, onResult: (O) -> Unit): ManagedActivityResultLauncher<I, O> = error("stub")
+
+@Composable
+fun PredictiveBackHandler(enabled: Boolean = true, onBack: suspend (kotlinx.coroutines.flow.Flow<androidx.activity.BackEventCompat>) -> Unit) {}
