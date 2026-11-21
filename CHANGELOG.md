@@ -36,6 +36,8 @@ Versions marked *not published on its own* were built but came to the phone insi
 - 0.11.3: with search open and its keyboard up, opening recents or a dialog over the launcher could drop the search
   field under the keyboard until you came back. The launcher now lays itself out without the keyboard only when an
   app was just started from it.
+- Calendar descriptions edited on Google Calendar's web page: characters it writes as numeric codes (such as `&#58;`
+  for a colon) are read as those characters, in launcher-data and in study blocks.
 
 ## 0.11.3 — 2026-11-21
 

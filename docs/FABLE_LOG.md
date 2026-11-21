@@ -1288,8 +1288,11 @@ run of the commit "0.12.0 [release]: …" that carries this entry.
 (green with the emulator test), 109 the redirect (cancelled by the release), 110 0.11.3 (green, published), 111 WM
 Keyboard (green), 112 the deck and formulas: every check passed but the new section 14e, which failed on its own
 set-up (`content insert --bind` splits a value at its colons, so the JSON's are escaped as `\:`; and Settings came
-back on the page section 14d had left open, so it is started afresh); fixed for the release run. No "ANR in" was seen
-in these runs; the snapshot cache stays.
+back on the page section 14d had left open, so it is started afresh); 113, the first "0.12.0 [release]" commit, failed
+the same section only (nothing was published): `content` keeps the backslash put before a colon, so the description
+was not JSON. The test now writes launcher-data as the HTML Google Calendar's web page makes, colons as `&#58;`, and the
+launcher now decodes numeric character references in HTML descriptions (a real gap: the web page writes some
+characters that way). No "ANR in" was seen in these runs; the snapshot cache stays.
 
 **Known bugs and limits**
 - Fixed in 0.12.0, present in 0.11.3: the "keyboard on its way out" layout (D170) also applied when the launcher was
