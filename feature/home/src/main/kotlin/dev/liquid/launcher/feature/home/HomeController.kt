@@ -491,8 +491,8 @@ class HomeController(
         }
     }
 
-    /** E4: the day's flashcard, right or wrong (wrong becomes a note for the check-in). */
-    fun answerCard(card: dev.liquid.launcher.core.data.FeedCard, right: Boolean) {
+    /** E4: a flashcard of the deck, right or wrong (wrong comes back tomorrow and becomes a note for the check-in). */
+    fun answerCard(card: dev.liquid.launcher.core.data.DeckCard, right: Boolean) {
         if (right) Haptics.tick(view) else Haptics.confirm(view)
         scope.launch {
             val ok = data.study.answerCard(card, right)

@@ -1019,6 +1019,77 @@ else
 fi
 
 clear_anr
+# 0.12.0 (D173, D174): launcher-data's flashcards become a deck with repeats, and their LaTeX is drawn. A "Launcher"
+# calendar gets today's launcher-data with two cards (formulas inline and on their own line); the Flashcards card is
+# added to the search page in Settings; search shows the first card due and how many more, a tap turns it over to the
+# question (the screenshots show the formulas), another to the answer, and Right brings the second card.
+section "14e. Flashcard deck with formulas"
+if [ -n "$EVENT_ID" ]; then
+  cat > "$OUT/feed.json" <<'FEEDEOF'
+{"v":1,"flashcards":[{"id":"smoke-fatou","module":"Proba 2","q":"Lemme de Fatou : pour $f_n \\ge 0$ mesurables,\n$$\\int \\liminf_{n\\to\\infty} f_n \\, d\\mu \\le \\liminf_{n\\to\\infty} \\int f_n \\, d\\mu$$","a":"Vrai : aucune domination, seulement $f_n \\ge 0$ et $\\mu$ une mesure."},{"id":"smoke-sum","module":"Proba 2","q":"Que vaut $\\sum_{k=1}^{\\infty} \\frac{1}{k^2}$ ?","a":"$$\\sum_{k=1}^{\\infty} \\frac{1}{k^2} = \\frac{\\pi^2}{6}, \\quad \\sqrt{x^2+y^2} \\in \\mathbb{R}$$"}]}
+FEEDEOF
+  adb push "$OUT/feed.json" /data/local/tmp/feed.json >/dev/null 2>&1
+  DAY_MS=$(( (NOW_S / 86400) * 86400 * 1000 ))
+  cat > "$OUT/cal3.sh" <<CAL3EOF
+content insert --uri 'content://com.android.calendar/calendars?caller_is_syncadapter=true&account_name=smoke&account_type=LOCAL' \
+  --bind account_name:s:smoke --bind account_type:s:LOCAL --bind name:s:Launcher --bind calendar_displayName:s:Launcher \
+  --bind calendar_color:i:-7617718 --bind calendar_access_level:i:700 --bind ownerAccount:s:smoke --bind visible:i:1 --bind sync_events:i:1
+LCAL=\$(content query --uri content://com.android.calendar/calendars --projection _id:calendar_displayName | grep 'calendar_displayName=Launcher' | sed -E 's/.*_id=([0-9]+).*/\1/' | head -1)
+F=\$(cat /data/local/tmp/feed.json)
+content insert --uri content://com.android.calendar/events --bind calendar_id:i:\$LCAL --bind 'title:s:launcher-data' \
+  --bind description:s:"\$F" --bind dtstart:l:$DAY_MS --bind dtend:l:$(( DAY_MS + 86400000 )) --bind allDay:i:1 --bind eventTimezone:s:UTC
+content query --uri content://com.android.calendar/events --projection _id:title --where "calendar_id=\$LCAL"
+CAL3EOF
+  adb push "$OUT/cal3.sh" /data/local/tmp/cal3.sh >/dev/null 2>&1
+  adb shell su 0 sh /data/local/tmp/cal3.sh > "$OUT/cal3.txt" 2>&1 || adb shell sh /data/local/tmp/cal3.sh > "$OUT/cal3.txt" 2>&1
+  tail -2 "$OUT/cal3.txt" | sed 's/^/        /'
+  # The Flashcards card on the search page (Settings → Search → Layout → Cards on the search page).
+  adb shell am start -n "$PKG/dev.liquid.launcher.feature.settings.SettingsActivity" --es screen page:search >/dev/null 2>&1
+  wait_screen 14e-settings "Cards on the search page" 10 || true
+  for i in 1 2 3; do
+    on_screen 14e-settings "Add Flashcards" && break
+    adb shell input swipe 540 1700 540 700 400
+    sleep 1
+    dump 14e-settings
+  done
+  if tap_text 14e-settings "Add Flashcards"; then sleep 1; else note "the Flashcards card could not be added in Settings"; fi
+  adb shell input keyevent KEYCODE_HOME
+  sleep 2
+  grep "flashcards: " "$LOG" | tail -2 | sed 's/^/        /'
+  if grep -q "flashcards: 2 new in the deck" "$LOG"; then pass "launcher-data's two flashcards joined the deck"; else fail "launcher-data's two flashcards joined the deck"; fi
+  adb shell input swipe 540 900 540 1700 250
+  sleep 2
+  adb shell input keyevent KEYCODE_BACK
+  sleep 1
+  dump 14e-search
+  if on_screen 14e-search "Proba 2 · 1 more due today"; then pass "search shows the first card due and how many more"; else fail "search shows the first card due and how many more"; fi
+  if tap_text 14e-search "Tap to turn it over" exact; then
+    sleep 1.5
+    peek 14e-question
+    dump 14e-question
+    if on_screen 14e-question "Lemme de Fatou"; then pass "the card turns over to its question"; else fail "the card turns over to its question"; fi
+    tap_text 14e-question "Lemme de Fatou" || true
+    sleep 1.5
+    peek 14e-answer
+    dump 14e-answer
+    if tap_text 14e-answer "Right" exact; then
+      sleep 1.5
+      dump 14e-next
+      if on_screen 14e-next "the last one today"; then pass "Right brings the next card due"; else fail "Right brings the next card due"; fi
+      grep "flashcard right" "$LOG" | tail -1 | sed 's/^/        /'
+    else
+      fail "the answer offers Right and Wrong"
+    fi
+  else
+    fail "the flashcard can be turned over"
+  fi
+  adb shell input keyevent KEYCODE_BACK
+  sleep 1
+else
+  echo "NOTE: the flashcard deck not checked (no test calendar)"
+fi
+
+clear_anr
 # 0.6.4: the letter index bends out from under the finger and the bubble sits past the letters. A picture only:
 # the screenshot is taken while a slow swipe holds the right edge of the drawer.
 section "14c. Letter index while held"

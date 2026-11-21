@@ -601,15 +601,38 @@ private fun GradeCard(day: StudyDay) {
 }
 
 /**
- * E4: the day's flashcard from launcher-data, face down. A tap turns it over to the question, another to the
- * answer, each turn a spring around the vertical axis; then right or wrong (wrong writes a note for the check-in).
+ * E4: the deck's first card due (0.12.0, D173: launcher-data's flashcards kept with repeats), face down. A tap turns it
+ * over to the question, another to the answer, each turn a spring around the vertical axis; then right or wrong (wrong
+ * comes back tomorrow and writes a note for the check-in, right waits longer each time). The header says how many more
+ * are due; at the end, "All done for today". Formulas Claude writes in LaTeX are drawn ([MathText]).
  */
 @Composable
-private fun FlashcardCard(controller: HomeController, day: StudyDay) {
-    val card = day.feed?.flashcard?.takeIf { it.q.isNotBlank() } ?: return
-    val answered by controller.data.study.cardAnswered.collectAsState()
-    if (answered == card.q) return
-    var side by remember(card.q) { mutableStateOf(0) }
+private fun FlashcardCard(controller: HomeController, @Suppress("UNUSED_PARAMETER") day: StudyDay) {
+    val deck by controller.data.study.deck.collectAsState()
+    if (deck.cards.isEmpty()) return
+    val tick = rememberMinuteTick()
+    val today = remember(tick) { java.time.LocalDate.now() }
+    val due = remember(deck, today) { dev.liquid.launcher.core.data.FlashcardDeck.due(deck, today) }
+    val card = due.firstOrNull()
+    if (card == null) {
+        val next = remember(deck, today) { dev.liquid.launcher.core.data.FlashcardDeck.next(deck, today) }
+        Box(Modifier.fillMaxWidth().clip(cardOutline()).background(Ink.copy(alpha = 0.09f)).padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Column {
+                Text("Flashcards", style = searchText(11, FontWeight.Medium, alpha = 0.65f))
+                Spacer(Modifier.height(4.dp))
+                Text("All done for today", style = searchText(16, FontWeight.SemiBold))
+                next?.let { (date, count) ->
+                    val days = java.time.temporal.ChronoUnit.DAYS.between(today, date)
+                    val whenText = if (days == 1L) "tomorrow" else "in $days days"
+                    Spacer(Modifier.height(2.dp))
+                    Text(if (count == 1) "Next: 1 card $whenText" else "Next: $count cards $whenText", style = searchText(12, alpha = 0.6f))
+                }
+            }
+        }
+        return
+    }
+    val more = due.size - 1
+    var side by remember(card.id, card.due) { mutableStateOf(0) }
     val turn by androidx.compose.animation.core.animateFloatAsState(
         side * 180f, spring(dampingRatio = 0.72f, stiffness = MotionScale.stiffness(260f)), label = "flip",
     )
@@ -625,13 +648,14 @@ private fun FlashcardCard(controller: HomeController, day: StudyDay) {
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
         Column(Modifier.readableWhenFlipped(turn)) {
-            Text(card.module.ifBlank { "Flashcard" } + " · flashcard of the day", style = searchText(11, FontWeight.Medium, alpha = 0.65f))
+            val left = if (more > 0) "$more more due today" else "the last one today"
+            Text(card.module.ifBlank { "Flashcard" } + " · " + left, style = searchText(11, FontWeight.Medium, alpha = 0.65f))
             Spacer(Modifier.height(4.dp))
             when (shown) {
                 0 -> Text("Tap to turn it over", style = searchText(16, FontWeight.SemiBold))
-                1 -> Text(card.q, style = searchText(15, FontWeight.Medium))
+                1 -> MathText(card.q, searchText(15, FontWeight.Medium))
                 else -> {
-                    Text(card.a, style = searchText(15, FontWeight.Medium))
+                    MathText(card.a, searchText(15, FontWeight.Medium))
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         GlassButton("Wrong", Ink, icon = LauncherIcons.Close) { controller.answerCard(card, right = false) }

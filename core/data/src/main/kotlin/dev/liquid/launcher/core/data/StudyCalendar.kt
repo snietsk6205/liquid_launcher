@@ -102,7 +102,6 @@ class StudyCalendar(
             _homeAt.value = storedHome()
             _attendance.value = storedAttendance()
             _checkedIn.value = storedCheckin()
-            _cardAnswered.value = storedCard()
             // Not part of this job: a newer refresh must not cancel the write of the minutes.
             if (_focus.value != null) scope.launch(Dispatchers.IO) { finishFocusIfOver() }
         }
@@ -262,6 +261,8 @@ class StudyCalendar(
         val fromCalendar = StudyFeedParser.parse(feedText)
         if (feedText != null && fromCalendar == null) DebugLog.error("Study", "launcher-data of $feedDay is not valid JSON; using the local copy")
         val feed = fromCalendar ?: StudyFeedParser.parse(settings.get(LauncherSettings.StudyFeedLocal))
+        // 0.12.0 (D173): its flashcards join the local deck (new ones only; none is lost when the event changes).
+        feed?.let { ingestCards(it.cards) }
         val feedSource = when {
             fromCalendar != null -> "calendar"
             feed != null -> "local"
@@ -697,22 +698,75 @@ class StudyCalendar(
         _checkedIn.value = true
     }
 
+    /** 0.11.2's state: the question of the one flashcard answered today, read once to move it into the deck. */
     private fun storedCard(): String? = prefs.getString("card:" + LocalDate.now(), null)
 
-    private val _cardAnswered = MutableStateFlow(storedCard())
+    // ---- 0.12.0 (D173): the flashcard deck, in a file of its own ----
 
-    /** The question of the flashcard answered today (E4), or null. */
-    val cardAnswered: StateFlow<String?> = _cardAnswered
+    private val deckFile = java.io.File(context.filesDir, "flashcards.json")
+    private val deckJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val deckLock = Any()
+    private var deckMigrated = deckFile.exists()
+    private val _deck = MutableStateFlow(readDeck())
 
-    /** E4: the day's flashcard was answered; a wrong answer becomes "Note: flashcard wrong <module>: <question>". */
-    suspend fun answerCard(card: FeedCard, right: Boolean): Boolean {
-        val today = "card:" + LocalDate.now()
-        val edit = prefs.edit()
-        prefs.all.keys.filter { it.startsWith("card:") && it != today }.forEach { edit.remove(it) }
-        edit.putString(today, card.q).apply()
-        _cardAnswered.value = card.q
+    /** The local deck: every card launcher-data ever brought, with its schedule. */
+    val deck: StateFlow<Deck> = _deck
+
+    private fun readDeck(): Deck = runCatching {
+        if (deckFile.exists()) deckJson.decodeFromString(Deck.serializer(), deckFile.readText()) else Deck()
+    }.getOrElse {
+        DebugLog.error("Study", "the flashcard deck could not be read ($it); it is kept aside as flashcards.broken.json")
+        runCatching { deckFile.copyTo(java.io.File(context.filesDir, "flashcards.broken.json"), overwrite = true) }
+        Deck()
+    }
+
+    private fun writeDeck(deck: Deck) {
+        runCatching {
+            val tmp = java.io.File(context.filesDir, "flashcards.json.tmp")
+            tmp.writeText(deckJson.encodeToString(Deck.serializer(), deck))
+            if (!tmp.renameTo(deckFile)) {
+                deckFile.writeText(tmp.readText())
+                tmp.delete()
+            }
+        }.onFailure { DebugLog.error("Study", "the flashcard deck could not be saved: $it") }
+    }
+
+    private fun ingestCards(cards: List<FeedCard>) {
+        synchronized(deckLock) {
+            val today = LocalDate.now()
+            var next = FlashcardDeck.merge(_deck.value, cards, today)
+            if (!deckMigrated) {
+                // The first deck: 0.11.2's card answered today stays hidden today, as it was.
+                next = FlashcardDeck.migrateAnswered(next, storedCard(), today)
+                deckMigrated = true
+            }
+            if (next != _deck.value || !deckFile.exists()) {
+                val added = next.cards.size - _deck.value.cards.size
+                if (added > 0) DebugLog.event("Study", "flashcards: $added new in the deck (${next.cards.size} in all)")
+                _deck.value = next
+                writeDeck(next)
+            }
+        }
+    }
+
+    /**
+     * A flashcard was answered (E4, 0.12.0): wrong comes back tomorrow and writes "Note: flashcard wrong <module>:
+     * <question>" for the evening check-in; right waits longer each time (1, 3, 7, 14, 30 days).
+     */
+    suspend fun answerCard(card: DeckCard, right: Boolean): Boolean {
+        val today = LocalDate.now()
+        withContext(Dispatchers.IO) {
+            synchronized(deckLock) {
+                val next = FlashcardDeck.answer(_deck.value, card.id, right, today)
+                _deck.value = next
+                writeDeck(next)
+            }
+        }
+        val after = _deck.value.cards.firstOrNull { it.id == card.id }
+        DebugLog.event("Study", "flashcard ${if (right) "right" else "wrong"}: ${card.module.ifBlank { "card" }}, next on ${after?.due}")
         if (right) return true
         val module = card.module.trim().ifEmpty { "card" }
+        // The question as Claude wrote it (LaTeX included: the check-in reads it as written).
         return addNote("flashcard wrong $module: " + card.q.trim().replace('\n', ' ').take(90))
     }
 
