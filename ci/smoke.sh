@@ -692,13 +692,16 @@ if [ -n "$KB" ] && [ -n "$FIELD" ] && [ -n "$SCREEN_H" ]; then
 else
   echo "NOTE: no keyboard height in the log or no field found (keyboard '$KB', field '$FIELD'); field position not checked"
 fi
-# 0.11.2 (Med: "never above"): the field waits at the lowest height the keyboard opened at, so after the first opening
-# it never goes above the keyboard to come back down; the log says so when it had to.
-grep "search: keyboard opened at" "$LOG" | tail -4 | sed 's/^/        /'
-if grep -q "lower than the field waited" "$LOG"; then
-  note "the keyboard once opened lower than the field waited (a first opening with no height known, or a keyboard that changed)"
+# 0.11.3 (Med chose "Keyboard slides with the pill"): the launcher asks for the keyboard as search starts opening and
+# slides it in itself; when the keyboard or the system refuses, it is shown the usual way and the field rides on it.
+# Either way the field is never above the keyboard (checked above); which way it came depends on the keyboard.
+grep "search: keyboard opened at\|search: the keyboard slides\|search: the keyboard is shown the usual way" "$LOG" | tail -6 | sed 's/^/        /'
+if grep -q "search: keyboard opened at [0-9]* px (slid in with the pill)" "$LOG"; then
+  pass "the keyboard slid in with the pill"
+elif grep -q "search: the keyboard is shown the usual way" "$LOG"; then
+  note "the emulator's keyboard was shown the usual way: $(grep -o 'shown the usual way ([^,]*' "$LOG" | tail -1)"
 else
-  pass "the search field never waited above the keyboard"
+  note "no keyboard opening logged"
 fi
 adb shell input keyevent KEYCODE_BACK
 sleep 0.5

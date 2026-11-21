@@ -152,7 +152,7 @@ object SettingsMap {
         SettingsSurface(
             "search", "Search", "Its cards, its field, how it opens, the keyboard, web search and Ask Claude", SettingsEntry.DRAWER, listOf("search"),
             mapOf(
-                L to listOf("search.field", "search.homeScale"),
+                L to listOf("search.field", "search.fieldHeight", "search.fieldWidth", "search.fieldGap", "search.homeScale"),
                 K to listOf("search.blur", "search.dim"),
                 B to listOf("motion.search", "search.bounce", "search.speed", "search.stretch", "search.keyboard", "search.clipboard"),
                 M to listOf("search.engine", "search.claude", "search.claudeTarget"),

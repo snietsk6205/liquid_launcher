@@ -957,18 +957,52 @@ class HomeController(
     }
 
     /**
-     * Where the bottom of the open search field sits, in px from the bottom of the screen, before its margin: while
-     * search counts on the keyboard, at the lowest height it opened at lately until the keyboard gets there, then on
-     * the keyboard; otherwise above the keyboard or the navigation bar. It never goes above the keyboard to come back
-     * down, unless the keyboard opens lower than ever seen lately (then in step with it). See [KeyboardLine].
+     * Where the bottom of the open search field sits now, in px from the bottom of the screen, before its gap: on the
+     * keyboard or the navigation bar, never above them (0.11.3: the launcher slides the keyboard in with the pill, and
+     * the field rides on it; [KeyboardLine.ride]). In a settings preview the keyboard is a plate at the usual height.
      */
-    fun searchFieldLine(nav: Float, ime: Float, target: Float): Float {
-        if (!expectKeyboard) return maxOf(nav, ime)
-        return dev.liquid.launcher.core.common.KeyboardLine.line(nav, ime, target, keyboardGuess)
+    fun searchFieldLine(nav: Float, ime: Float, @Suppress("UNUSED_PARAMETER") target: Float): Float =
+        dev.liquid.launcher.core.common.KeyboardLine.ride(nav, previewIme(ime))
+
+    /**
+     * Where the bottom of the open search field will end up, for laying search's results out above it (they then stay
+     * still while the keyboard slides in): the keyboard's height once known, else the lowest recent opening.
+     */
+    fun searchFieldPlanned(nav: Float, ime: Float, target: Float): Float {
+        if (!expectKeyboard) return maxOf(nav, previewIme(ime))
+        return dev.liquid.launcher.core.common.KeyboardLine.planned(nav, previewIme(ime), target, keyboardDriveShown, keyboardGuess)
     }
+
+    /** A settings preview has no keyboard: the plate it shows instead slides in with search, at the usual height. */
+    private fun previewIme(ime: Float): Float =
+        if (live || !expectKeyboard) ime else keyboardGuess * search.value.coerceIn(0f, 1f)
+
+    /** False for a settings preview (set by the home screen): it never asks for a keyboard and shows a plate instead. */
+    var live by mutableStateOf(true)
+
+    /** 0.11.3: the open search pill's size and its gap above the keyboard (Settings → Search → Layout). Set by the home screen. */
+    var searchFieldSize by mutableStateOf(SearchFieldSize())
+
+    /**
+     * 0.11.3: how the keyboard came for the current opening of search: "drive" (the launcher slides it in with the
+     * pill), "usual" (shown the usual way, the field rides on it), or null (not asked yet).
+     */
+    var keyboardPath by mutableStateOf<String?>(null)
+
+    /** The keyboard's height fully up, from the system, while the launcher drives it (0: not known). */
+    var keyboardDriveShown by mutableFloatStateOf(0f)
+
+    /** Counts openings of search that count on the keyboard: each starts one drive. */
+    var keyboardSession by mutableIntStateOf(0)
+        private set
 
     private fun startExpectingKeyboard() {
         expectKeyboard = searchKeyboard && searchField == "keyboard" && searchInPill && !speedChecking
+        if (expectKeyboard) {
+            keyboardPath = null
+            keyboardDriveShown = 0f
+            keyboardSession++
+        }
     }
 
     /** 0.11.2: the speed check is playing (Settings → Diagnostics): search opens without the keyboard. */
@@ -1039,6 +1073,12 @@ class HomeController(
 
     /** Where the finger has put search, ahead of [search] (see [dragPosition]). */
     private var searchDragPosition: Float? = null
+
+    /** A finger is moving search (0.11.3: the keyboard drive waits for it to let go before handing the keyboard over). */
+    val searchDragging: Boolean get() = searchDragPosition != null
+
+    /** Where the bottom of search's field was at the last layout, px from the bottom of the screen (for the log; not state). */
+    var fieldBottomPx = 0f
 
     /** Lets the activity pick an image (photo picker); set by the activity. */
     internal val pickImage: ((android.net.Uri?) -> Unit) -> Unit get() = callbacks.pickImage

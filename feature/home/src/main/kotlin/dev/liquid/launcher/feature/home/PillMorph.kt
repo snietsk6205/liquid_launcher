@@ -133,13 +133,14 @@ fun MorphingPill(
             }
         }
         if (showSearch && searchMode) {
+            val fieldSize = controller.searchFieldSize
             SearchPillField(
                 controller = controller,
                 color = homeColor,
                 interactive = interactive && searchOpen,
                 canFocus = interactive,
                 modifier = Modifier
-                    .requiredSize(searchWidth, SearchHeight)
+                    .requiredSize(with(density) { (controller.screenWidth * fieldSize.widthShare).toDp() }, fieldSize.heightDp.dp)
                     .graphicsLayer { alpha = ((controller.search.value - 0.35f) / 0.65f).coerceIn(0f, 1f) },
             )
         } else if (showSearch) {
@@ -220,10 +221,16 @@ private fun Modifier.morphLayout(controller: HomeController, config: PillConfig,
     layout { measurable, constraints ->
         val p = controller.morph().coerceIn(0f, 1f)
         val full = constraints.maxWidth.toFloat()
-        val width = lerp(full * config.widthFraction, full - SearchSideMargin.toPx() * 2, p)
-        val height = lerp(config.heightDp.dp.toPx(), (SearchHeight + extra).toPx(), p)
         val searchy = controller.searchInPill && controller.search.value > controller.drawer.value
-        val bottom = fieldBottom(controller, insets, p, config.offsetDp.dp.toPx(), SearchBottomMargin.toPx(), searchy)
+        // 0.11.3: search's field has its own size and gap (Settings → Search → Layout); the drawer's keeps Fable's.
+        val size = controller.searchFieldSize
+        val openWidth = if (searchy) full * size.widthShare else full - SearchSideMargin.toPx() * 2
+        val openHeight = if (searchy) size.heightDp.dp.toPx() else (SearchHeight + extra).toPx()
+        val width = lerp(full * config.widthFraction, openWidth, p)
+        val height = lerp(config.heightDp.dp.toPx(), openHeight, p)
+        val gap = if (searchy) size.gapDp.dp.toPx() else SearchBottomMargin.toPx()
+        val bottom = fieldBottom(controller, insets, p, config.offsetDp.dp.toPx(), gap, searchy)
+        if (searchy) controller.fieldBottomPx = bottom
         val placeable = measurable.measure(Constraints.fixed(width.roundToInt(), height.roundToInt()))
         val total = (height + bottom).roundToInt().coerceAtMost(constraints.maxHeight.coerceAtLeast(1))
         layout(constraints.maxWidth, total) {
@@ -259,18 +266,25 @@ internal fun rememberFieldInsets(): FieldInsets {
 
 /**
  * Distance in px from the bottom of the screen to the bottom of the pill turning into a field
- * at [p] (0 = the pill, 1 = the field). For search (0.7.2, D107) the open field sits above the
- * keyboard that is coming, so the pill flows straight there and the keyboard slides in under it;
- * it never dips below a keyboard that is on screen.
+ * at [p] (0 = the pill, 1 = the field). For search the field rides on the keyboard (0.11.3: the
+ * launcher slides the keyboard in with the pill, D169), never above it, and never dips below a
+ * keyboard that is on screen.
  */
 internal fun fieldBottom(controller: HomeController, insets: FieldInsets, p: Float, closedOffset: Float, openMargin: Float, searchy: Boolean): Float {
     val nav = insets.nav()
-    val ime = insets.ime()
+    val ime = if (searchy) controller.searchFieldLine(nav, insets.ime(), insets.imeTarget()) else insets.ime()
     val closed = maxOf(nav, ime) + closedOffset
-    val line = if (searchy) controller.searchFieldLine(nav, ime, insets.imeTarget()) else maxOf(nav, ime)
-    val bottom = lerp(closed, line + openMargin, p.coerceIn(0f, 1f))
+    val bottom = lerp(closed, maxOf(nav, ime) + openMargin, p.coerceIn(0f, 1f))
     return if (ime > nav) maxOf(bottom, ime + openMargin) else bottom
 }
+
+/**
+ * Where search's open field will end up (px from the bottom of the screen to its bottom): above the keyboard's
+ * height once it is known, else above the height it usually opens at. Search lays its results out from here, so
+ * they stay still while the keyboard slides in and only ride with the field.
+ */
+internal fun fieldBottomPlanned(controller: HomeController, insets: FieldInsets, openMargin: Float): Float =
+    controller.searchFieldPlanned(insets.nav(), insets.ime(), insets.imeTarget()) + openMargin
 
 private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
 

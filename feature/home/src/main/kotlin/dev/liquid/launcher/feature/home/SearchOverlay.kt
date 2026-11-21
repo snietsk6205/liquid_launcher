@@ -469,39 +469,42 @@ private fun FieldModeIcon(controller: HomeController, color: Color, claudeOn: Bo
 }
 
 /**
- * Brings the keyboard up for search's field (0.8.0, D114), and takes focus away when search
- * closes. On the phone the keyboard sometimes never came ("no keyboard came" in the log, five
- * times in a morning): a focus request made while the window is still getting focus (just after
- * a redirect brought the launcher to the front) is dropped by the system, and a field that kept
- * its focus asks for nothing. So: wait for the window's focus, ask for focus and for the keyboard
- * explicitly, and ask again (dropping and taking focus anew) while no keyboard is on its way.
+ * Brings the keyboard up for search's field (0.8.0, D114), and takes focus away when search closes.
+ *
+ * 0.11.3 (Med chose "Keyboard slides with the pill", D169): with the field above the keyboard ([drives]), the launcher
+ * asks for the keyboard on the first frame search starts opening (the swipe's start) and slides it in itself, in step
+ * with search ([driveKeyboard]). When the keyboard or the system refuses, or is not ready in time, it is shown the
+ * usual way ([askUsual]) and the field rides on it.
+ *
+ * The usual way: on the phone the keyboard sometimes never came ("no keyboard came" in the log, five times in a
+ * morning): a focus request made while the window is still getting focus (just after a redirect brought the launcher
+ * to the front) is dropped by the system, and a field that kept its focus asks for nothing. So: wait for the window's
+ * focus, ask for focus and for the keyboard explicitly, and ask again while no keyboard is on its way.
  */
 @Composable
-private fun SearchKeyboard(controller: HomeController, focus: FocusRequester, wanted: Boolean) {
+private fun SearchKeyboard(controller: HomeController, focus: FocusRequester, wanted: Boolean, drives: Boolean = false) {
     val window = androidx.compose.ui.platform.LocalWindowInfo.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val view = androidx.compose.ui.platform.LocalView.current
     val insets = rememberFieldInsets()
-    LaunchedEffect(controller.searchOpen) {
-        if (!controller.searchOpen) {
-            focusManager.clearFocus(force = true)
-            return@LaunchedEffect
-        }
-        if (!wanted || controller.speedChecking) return@LaunchedEffect
+    val driving = remember { booleanArrayOf(false) }
+
+    // 0.11.2: a keyboard already sliding in counts as coming (its animation has a target): asking again then could
+    // restart it. On Med's phone about half the openings had no keyboard yet at 200 ms and were asked again.
+    fun coming(): Boolean = view.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true ||
+        insets.imeTarget() > insets.nav() + 1f || insets.ime() > insets.nav() + 1f
+
+    suspend fun askUsual() {
         if (!window.isWindowFocused) {
             DebugLog.event("Home", "search: waiting for the window's focus before asking for the keyboard")
             kotlinx.coroutines.withTimeoutOrNull(1500) { snapshotFlow { window.isWindowFocused }.first { it } }
         }
         runCatching { focus.requestFocus() }
         keyboard?.show()
-        // 0.11.2: a keyboard already sliding in counts as coming (its animation has a target): asking again then could
-        // restart it. On Med's phone about half the openings had no keyboard yet at 200 ms and were asked again.
-        fun coming(): Boolean = view.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true ||
-            insets.imeTarget() > insets.nav() + 1f || insets.ime() > insets.nav() + 1f
         for ((i, wait) in listOf(300L, 450L, 900L).withIndex()) {
             kotlinx.coroutines.delay(wait)
-            if (!controller.searchOpen || coming()) return@LaunchedEffect
+            if (!controller.searchOpen || coming()) return
             DebugLog.event("Home", "search: no keyboard yet, asking again (${i + 1}; window focused: ${if (window.isWindowFocused) "yes" else "no"})")
             // The first two only ask again, so a keyboard that is merely slow (the emulator's takes ~3 s) is not
             // interrupted; the last drops focus and takes it anew, for a field that kept focus and asks for nothing.
@@ -511,6 +514,114 @@ private fun SearchKeyboard(controller: HomeController, focus: FocusRequester, wa
             }
             keyboard?.show()
             if (i > 0) view.windowInsetsController?.show(android.view.WindowInsets.Type.ime())
+        }
+    }
+
+    if (drives) {
+        // One drive per opening of search, from its first frame (the field is there from 2 % open).
+        LaunchedEffect(controller.keyboardSession) {
+            if (!wanted || !controller.expectKeyboard || controller.speedChecking || !controller.live) return@LaunchedEffect
+            if (controller.keyboardPath != null) return@LaunchedEffect
+            driving[0] = true
+            try {
+                driveKeyboard(controller, view, focus, window) { askUsual() }
+            } finally {
+                driving[0] = false
+            }
+        }
+    }
+    val wasOpen = remember { booleanArrayOf(false) }
+    LaunchedEffect(controller.searchOpen) {
+        if (!controller.searchOpen) {
+            // Only when search closes: on the field's first frame (a swipe still moving) the drive has just focused it.
+            if (wasOpen[0]) focusManager.clearFocus(force = true)
+            wasOpen[0] = false
+            return@LaunchedEffect
+        }
+        wasOpen[0] = true
+        if (!wanted || controller.speedChecking) return@LaunchedEffect
+        if (drives && controller.expectKeyboard) {
+            // A drive running asks (and falls back to the usual way itself); asking the usual way meanwhile would take
+            // the keyboard from it. With none running (search opened again before it had closed), the usual way.
+            kotlinx.coroutines.delay(32)
+            if (driving[0]) return@LaunchedEffect
+        }
+        askUsual()
+    }
+}
+
+/**
+ * 0.11.3 (D169): asks for the keyboard as search starts opening and slides it in with search, frame by frame
+ * ([KeyboardDriver], [dev.liquid.launcher.core.common.KeyboardDrive]); hands it over fully up once search is open and
+ * still, or puts it away if search closes. Falls back to [usual] when refused or not ready in time. Each step is logged.
+ */
+private suspend fun driveKeyboard(
+    controller: HomeController,
+    view: android.view.View,
+    focus: FocusRequester,
+    window: androidx.compose.ui.platform.WindowInfo,
+    usual: suspend () -> Unit,
+) {
+    val drive = dev.liquid.launcher.core.common.KeyboardDrive
+    controller.keyboardPath = "asking"
+    if (!window.isWindowFocused) {
+        kotlinx.coroutines.withTimeoutOrNull(1500) { snapshotFlow { window.isWindowFocused }.first { it } }
+    }
+    // Focus without showing the keyboard (the field does not show it on focus): the keyboard binds to the field. Its
+    // input session starts on the next frame, and asking for control names the field that has it.
+    runCatching { focus.requestFocus() }
+    androidx.compose.runtime.withFrameNanos { }
+    androidx.compose.runtime.withFrameNanos { }
+    val driver = KeyboardDriver(view)
+    fun at() = "search at " + "%.2f".format(controller.search.value) + ", the field at ${controller.fieldBottomPx.roundToInt()} px"
+    suspend fun fallBack() {
+        controller.keyboardPath = "usual"
+        DebugLog.event("Home", "search: the keyboard is shown the usual way (${driver.cancelReason}, ${android.os.SystemClock.uptimeMillis() - driver.askedAt} ms after asking; ${at()}); the field rides on it")
+        if (controller.searchOpen || controller.searchDragging) usual()
+    }
+    if (!driver.ask()) {
+        fallBack()
+        return
+    }
+    try {
+        val answered = kotlinx.coroutines.withTimeoutOrNull(drive.ASK_LIMIT_MS) {
+            snapshotFlow { driver.phase }.first { it != KeyboardDriver.Phase.Asking }
+        }
+        if (answered == null) driver.giveUp("not ready after ${drive.ASK_LIMIT_MS} ms")
+        if (driver.phase != KeyboardDriver.Phase.Ready) {
+            fallBack()
+            return
+        }
+        controller.keyboardPath = "drive"
+        controller.keyboardDriveShown = driver.shownPx.toFloat()
+        DebugLog.event("Home", "search: the keyboard slides with the pill: ready ${driver.readyAt - driver.askedAt} ms after asking at the swipe's start (${at()}, the keyboard down; it goes to ${driver.shownPx} px)")
+        // Once search has reached open, the keyboard stays fully up while the pill bounces on it.
+        var topped = false
+        while (driver.phase == KeyboardDriver.Phase.Ready) {
+            androidx.compose.runtime.withFrameNanos { }
+            if (driver.phase != KeyboardDriver.Phase.Ready) break
+            val since = android.os.SystemClock.uptimeMillis() - driver.readyAt
+            val p = controller.search.value
+            if (controller.searchOpen && p >= 1f) topped = true
+            if (!controller.searchOpen) topped = false
+            driver.move(drive.fraction(if (topped) 1f else p, since))
+            val moving = controller.search.isRunning || controller.searchDragging
+            if (drive.done(p, controller.searchOpen, moving, since)) {
+                driver.finish(true)
+                break
+            }
+            if (!controller.searchOpen && !moving && p <= 0.001f) {
+                driver.finish(false)
+                break
+            }
+        }
+        if (driver.phase == KeyboardDriver.Phase.Cancelled) fallBack()
+    } finally {
+        // Leaving (search closed, or the field left the screen): the keyboard is handed back where search is going.
+        when (driver.phase) {
+            KeyboardDriver.Phase.Ready -> driver.finish(controller.searchOpen)
+            KeyboardDriver.Phase.Asking -> driver.giveUp("search closed before the keyboard was ready")
+            else -> Unit
         }
     }
 }
@@ -542,28 +653,48 @@ private fun KeyboardWatch(controller: HomeController) {
     val openedAt = remember { longArrayOf(0L) }
     LaunchedEffect(controller.searchOpen) { if (controller.searchOpen) openedAt[0] = android.os.SystemClock.uptimeMillis() }
     LaunchedEffect(insets) {
-        // 0.11.2: every opening is remembered with the last few (the field waits at the lowest of them, KeyboardLine)
-        // and logged with where the field waited, so a field that went too high shows in the log with its numbers. A
-        // later settle while the keyboard stays open only lowers the newest height (a strip that went away), never
-        // raises it (one that came while typing: 0.10.4 remembered 1041 px after typing, then it opened at 933 px).
+        // 0.11.2: every opening is remembered with the last few (search lays its results out above the lowest of them,
+        // KeyboardLine). A later settle while the keyboard stays open only lowers the newest height (a strip that went
+        // away), never raises it (one that came while typing: 0.10.4 remembered 1041 px after typing, then 933 px).
+        // 0.11.3: each opening says how the keyboard came (slid with the pill, or the usual way), where the field was
+        // when it started and where both ended.
         var opening = false
         var startedAt = 0L
+        var fieldAtStart = 0f
         var lastSettled = -1f
         snapshotFlow { Triple(insets.ime(), insets.imeTarget(), insets.nav()) }.collect { (now, target, nav) ->
-            if (target <= nav + 1f) {
-                // Away (or on its way out): the next time it comes up is an opening.
+            val up = now > nav + 1f
+            if (!up && target <= nav + 1f) {
+                // Away: the next time it comes up is an opening.
                 opening = true
                 startedAt = 0L
                 lastSettled = -1f
                 return@collect
             }
-            if (opening && startedAt == 0L) startedAt = android.os.SystemClock.uptimeMillis()
-            if (now <= nav + 1f || kotlin.math.abs(now - target) >= 1f || kotlin.math.abs(now - lastSettled) < 1f) return@collect
+            if (opening && startedAt == 0L && up) {
+                startedAt = android.os.SystemClock.uptimeMillis()
+                fieldAtStart = controller.fieldBottomPx
+            }
+            // Where it is going: while the launcher drives it, the height the system gave for it fully up (its own
+            // animation target may not be reported then); otherwise the target. On its way out it has not settled.
+            val goal = when {
+                opening && controller.keyboardPath == "drive" && controller.keyboardDriveShown > nav + 1f -> controller.keyboardDriveShown
+                target > nav + 1f -> target
+                else -> return@collect
+            }
+            if (!up || kotlin.math.abs(now - goal) >= 1f || kotlin.math.abs(now - lastSettled) < 1f) return@collect
             if (opening) {
-                val guess = controller.keyboardGuess
-                val lower = if (now < guess - 1f) ": lower than the field waited, it came down" else ""
-                val after = if (openedAt[0] > 0L && startedAt >= openedAt[0]) "; it started ${startedAt - openedAt[0]} ms after search opened" else ""
-                DebugLog.event("Home", "search: keyboard opened at ${now.roundToInt()} px (the field waited at ${guess.roundToInt()} px$lower)$after")
+                val how = when (controller.keyboardPath) {
+                    "drive" -> "slid in with the pill"
+                    "usual" -> "shown the usual way, the field rode on it"
+                    else -> "came by itself"
+                }
+                val after = if (openedAt[0] > 0L && startedAt >= openedAt[0]) "; it started ${startedAt - openedAt[0]} ms after search opened" else "; it started before search was open"
+                DebugLog.event(
+                    "Home",
+                    "search: keyboard opened at ${now.roundToInt()} px ($how)$after, the field then at ${fieldAtStart.roundToInt()} px; " +
+                        "the field ended at ${controller.fieldBottomPx.roundToInt()} px",
+                )
                 controller.rememberKeyboard(now, opening = true)
                 opening = false
             } else if (controller.searchOpen) {
@@ -575,11 +706,11 @@ private fun KeyboardWatch(controller: HomeController) {
     }
     LaunchedEffect(controller.searchOpen) {
         if (controller.searchOpen && controller.expectKeyboard) {
-            // Generous: on a slow phone the keyboard can take two seconds or more (the emulator: 2.7 s),
-            // and SearchKeyboard asks again until 1.7 s.
-            kotlinx.coroutines.delay(3500)
-            if (controller.searchOpen && insets.imeTarget() <= insets.nav() + 1f) {
-                DebugLog.event("Home", "search: no keyboard came, the field goes down")
+            // Generous: on a slow phone the keyboard can take two seconds or more (the emulator: 2.7 s); the drive
+            // asks for 1.5 s and the usual way asks again until 1.7 s after that.
+            kotlinx.coroutines.delay(4000)
+            if (controller.searchOpen && insets.imeTarget() <= insets.nav() + 1f && insets.ime() <= insets.nav() + 1f) {
+                DebugLog.event("Home", "search: no keyboard came, the field stays down")
                 controller.expectKeyboard = false
             }
         }
@@ -693,8 +824,6 @@ private fun easeOutBack(t: Float): Float {
 
 // ---- search as part of the home screen (0.7.1, D104, D105; 0.7.2, D107) ----
 
-private val PillFieldHeight = 54.dp
-private val PillFieldBottom = 14.dp
 
 /**
  * The search field inside the morphing pill: the pill itself becomes it (the same glass shape),
@@ -707,7 +836,7 @@ internal fun SearchPillField(controller: HomeController, color: Color, interacti
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboard by controller.data.settings.derive { get(dev.liquid.launcher.core.settings.LauncherSettings.SearchOpenKeyboard) }
     val claudeOn by controller.data.settings.derive { get(dev.liquid.launcher.core.settings.LauncherSettings.SearchClaude) != "off" }
-    if (canFocus) SearchKeyboard(controller, focus, keyboard)
+    if (canFocus) SearchKeyboard(controller, focus, keyboard, drives = controller.searchField == "keyboard")
     Row(modifier.padding(start = 12.dp, end = 18.dp), verticalAlignment = Alignment.CenterVertically) {
         FieldModeIcon(controller, color, claudeOn && interactive)
         Spacer(Modifier.width(8.dp))
@@ -728,7 +857,8 @@ internal fun SearchPillField(controller: HomeController, color: Color, interacti
                 singleLine = true,
                 textStyle = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 16.sp),
                 cursorBrush = SolidColor(color),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                // 0.11.3: focus alone does not bring the keyboard: search asks for it itself, to slide it in with the pill.
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go, showKeyboardOnFocus = false),
                 keyboardActions = KeyboardActions(onGo = { controller.searchSubmit?.invoke() }),
                 enabled = canFocus,
                 modifier = Modifier
@@ -798,10 +928,11 @@ private fun BottomSearch(
                 Modifier
                     .fillMaxSize()
                     .statusBarsPadding()
-                    // Room for the field where it ends up: above the keyboard that is coming.
+                    // Room for the field where it ends up: above the keyboard that is coming (0.11.3: planned from its
+                    // height, so the results stay still while the keyboard slides in and only ride with the field).
                     .reserveBottom {
-                        fieldBottom(controller, insets, 1f, pillOffsetDp.dp.toPx(), PillFieldBottom.toPx(), true) +
-                            PillFieldHeight.toPx() + 10.dp.toPx()
+                        val size = controller.searchFieldSize
+                        fieldBottomPlanned(controller, insets, size.gapDp.dp.toPx()) + size.heightDp.dp.toPx() + 10.dp.toPx()
                     }
                     .padding(start = 16.dp, end = 16.dp, top = 8.dp)
                     .offset {
@@ -818,8 +949,9 @@ private fun BottomSearch(
                         val grows = transition == "lift" || transition == "zoom"
                         if (grows) {
                             // Rides with the field on its way up, so the results grow out of it.
-                            val now = fieldBottom(controller, insets, p, pillOffsetDp.dp.toPx(), PillFieldBottom.toPx(), true)
-                            val end = fieldBottom(controller, insets, 1f, pillOffsetDp.dp.toPx(), PillFieldBottom.toPx(), true)
+                            val gap = controller.searchFieldSize.gapDp.dp.toPx()
+                            val now = fieldBottom(controller, insets, p, pillOffsetDp.dp.toPx(), gap, true)
+                            val end = fieldBottomPlanned(controller, insets, gap)
                             translationY = (end - now).coerceAtLeast(0f)
                         }
                         alpha = if (transition == "space" || grows) ((p - 0.04f) / 0.72f).coerceIn(0f, 1f) else p
@@ -864,13 +996,14 @@ private fun PreviewKeyboard(controller: HomeController, insets: FieldInsets, mod
         modifier
             .fillMaxWidth()
             .layout { measurable, constraints ->
-                val h = if (controller.expectKeyboard) controller.searchFieldLine(insets.nav(), 0f, 0f).roundToInt().coerceIn(0, constraints.maxHeight) else 0
+                val h = if (controller.expectKeyboard) controller.keyboardGuess.roundToInt().coerceIn(0, constraints.maxHeight) else 0
                 val placeable = measurable.measure(androidx.compose.ui.unit.Constraints.fixed(constraints.maxWidth, h))
                 layout(constraints.maxWidth, h) { placeable.place(0, 0) }
             }
             .graphicsLayer {
-                val k = ((controller.search.value - 0.45f) / 0.55f).coerceIn(0f, 1f)
-                translationY = (1f - k) * (1f - k) * size.height
+                // 0.11.3: it slides in with the pill, as the real keyboard does, and the field rides on it.
+                val k = controller.search.value.coerceIn(0f, 1f)
+                translationY = (1f - k) * size.height
             }
             .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
             .background(Color(0xFF202226).copy(alpha = 0.94f)),

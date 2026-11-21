@@ -657,13 +657,14 @@ object LauncherSettings {
     val SearchField = ChoiceSetting(
         key = "search.field", default = "keyboard",
         options = listOf(
-            "keyboard" to "Above the keyboard: the pill flows straight to where the keyboard will be",
+            "keyboard" to "Above the keyboard: the keyboard slides in with the pill",
             "bottom" to "At the bottom (the keyboard pushes it up)",
             "top" to "At the top of the screen",
         ),
         title = "Search field",
         summary = "Above the keyboard and at the bottom, the pill itself becomes the field (with \"The pill becomes the search field\" " +
-            "in Drawer motion and the pill at the bottom). The field waits at the lowest height your keyboard opened at lately and the keyboard pushes it up from there, so it never goes above the keyboard",
+            "in Drawer motion and the pill at the bottom). Above the keyboard, the launcher slides the keyboard in itself, in step with the pill, " +
+            "from the moment you start swiping; the field rides on it and is never above it",
         section = "search", keywords = "search field position keyboard bottom top pill morph",
     )
     val SearchHomeScale = IntSetting(
@@ -683,6 +684,25 @@ object LauncherSettings {
         title = "Speed",
         summary = "How quickly search opens and closes after you let go",
         section = "search", keywords = "search speed fast slow spring stiffness",
+    )
+    /** 0.11.3: the open search pill's size and its gap above the keyboard (Settings → Search → Layout, with its preview). */
+    val SearchFieldHeight = IntSetting(
+        key = "search.fieldHeight", default = 54, min = 40, max = 76, step = 2, unit = "dp",
+        title = "Search pill height",
+        summary = "How tall the search field is once the pill has become it",
+        section = "search", keywords = "search pill field bar height size tall thin bigger smaller",
+    )
+    val SearchFieldWidth = IntSetting(
+        key = "search.fieldWidth", default = 90, min = 50, max = 100, step = 2, unit = "%",
+        title = "Search pill width",
+        summary = "How wide the search field is, as a share of the screen. 100: from edge to edge",
+        section = "search", keywords = "search pill field bar width wide narrow size margin edge",
+    )
+    val SearchFieldGap = IntSetting(
+        key = "search.fieldGap", default = 14, min = 0, max = 40, step = 2, unit = "dp",
+        title = "Gap above the keyboard",
+        summary = "The space between the search field and the top of the keyboard it rides on",
+        section = "search", keywords = "search pill field gap space distance above keyboard margin",
     )
     val SearchStretch = IntSetting(
         key = "search.stretch", default = 50, min = 0, max = 100, step = 10, unit = "%",
@@ -1848,7 +1868,7 @@ object LauncherSettings {
     val SearchOpenKeyboard = BoolSetting(
         key = "search.keyboard", default = true,
         title = "Open the keyboard",
-        summary = "It comes up as soon as search is opening for good, under a field that is already in its place",
+        summary = "It is asked for as soon as you start swiping towards search and slides in with the pill (with the field above the keyboard)",
         section = "search", keywords = "keyboard focus",
     )
     val SearchClaude = ChoiceSetting(
@@ -2639,7 +2659,7 @@ object LauncherSettings {
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
         TagStripPosition, TagButtonPosition, TagButtonSize, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
         MenuEntries,
-        SearchTransition, SearchBounce, SearchSpeed, SearchStretch, SearchField, SearchOpenKeyboard, SearchBlur, SearchDim, SearchHomeScale,
+        SearchTransition, SearchBounce, SearchSpeed, SearchStretch, SearchFieldHeight, SearchFieldWidth, SearchFieldGap, SearchField, SearchOpenKeyboard, SearchBlur, SearchDim, SearchHomeScale,
         SearchClaude, SearchClaudeTarget, SearchClipboard, SearchEngine, SearchKeyboardHeight, SearchKeyboardOpenings, WallpaperSheetTall,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,

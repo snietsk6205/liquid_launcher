@@ -537,6 +537,8 @@ private fun HomeScreenBody(
         controller.searchInPill = morph && search.field != "top"
         controller.searchField = search.field
         controller.searchKeyboard = search.keyboard
+        controller.searchFieldSize = search.fieldSize
+        controller.live = live
     }
     val density = LocalDensity.current
     val settle = handover.first
