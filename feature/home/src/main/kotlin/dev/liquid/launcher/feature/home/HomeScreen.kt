@@ -147,6 +147,9 @@ class HomeReturnState {
 
     /** Called by the activity once the launcher is no longer visible. Set by the home screen. */
     var onLeft: () -> Unit = {}
+
+    /** 0.11.3: an app was just started from the launcher. Set by the home screen. */
+    var appJustStarted: () -> Boolean = { false }
 }
 
 /**
@@ -473,9 +476,11 @@ private fun HomeScreenBody(
         }
         DisposableEffect(controller, returnState) {
             returnState.closesWhileAway = { controller.closesWhileAway }
+            returnState.appJustStarted = { controller.appJustStarted }
             returnState.onLeft = { controller.tidyAfterLeaving() }
             onDispose {
                 returnState.closesWhileAway = { false }
+                returnState.appJustStarted = { false }
                 returnState.onLeft = {}
             }
         }

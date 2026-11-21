@@ -310,9 +310,11 @@ class MainActivity : ComponentActivity() {
         // 0.11.3 (D170): with nothing open that closes while away, a keyboard still on screen is only on its way out (an
         // app was started from search): the screen is laid out without it at once, so the picture taken as the launcher
         // leaves shows it as it will be on return, and stays usable.
+        // Only when an app was just started from the launcher: paused under recents or a dialog, search keeps its keyboard.
         val closes = returnState.closesWhileAway()
-        if (keyboard && !closes) dev.liquid.launcher.feature.home.KeyboardLeaving.active = true
-        RedirectStatus.staleSnapshot = closes
+        val leftover = keyboard && !closes && returnState.appJustStarted()
+        if (leftover) dev.liquid.launcher.feature.home.KeyboardLeaving.active = true
+        RedirectStatus.staleSnapshot = closes || (keyboard && !leftover)
         RedirectStatus.onLauncherPaused()
         super.onPause()
     }

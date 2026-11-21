@@ -1261,3 +1261,64 @@ the workflow (the system image cache and the calm wait at the start of `smoke.sh
 blur" is much cheaper than "glass as set" for the drawer and search, build still glass for the pill and the field
 (a pre-blurred backdrop while they move); if "without shadows" or "without the theme's material" is the big saving,
 cut those first. Then the hub's line against 0.11.1's 142 ms.
+
+## Session of 2026-11-21 (Opus 5.5): 0.11.3 and 0.12.0, Med's feedback on 0.11.2
+
+Brief: `docs/NEXT_SESSION_PROMPT.md` (Med's feedback on 0.11.2, his debug log of 08:06 to 12:49 and a screenshot of a
+flashcard whose formulas showed as plain text), with his answers: search "Keyboard slides with the pill"; keyboard: all
+four ideas; flashcards "a small deck with repeats"; maths "Claude writes LaTeX, rendered". Branch
+`claude/affectionate-sagan-u5it39`.
+
+**Released:** 0.11.3 (items 1 to 3) by run 110, build 110, after every check passed; 0.12.0 (items 5 to 7) by the CI
+run of the commit "0.12.0 [release]: …" that carries this entry.
+
+**Items**
+
+| # | Med's point | State | What |
+|---|---|---|---|
+| 1 | The clock wrong for some seconds after unlock | Done | One time source, `WallClock` (core/common), set from the wall clock by the minute tick, the time or zone being set, screen on, unlock, start and resume (`ClockRefresher`); the minute delay is only a backup. A "Clock:" line says how long a shown minute had been wrong and what caught it. Unit tests for the timing. D168. |
+| 2 | The keyboard slides with the pill; the pill's size | Done; on the phone, to see | The field rides on the keyboard (never above it). On the first frame search starts opening, the field takes focus without the keyboard and `controlWindowInsetsAnimation(ime)` is asked for; the keyboard then moves in step with search (a late one catches up in 180 ms), and is handed back fully up. Refused, taken back or not ready in 1.5 s: the usual way, the field riding on it. Results are laid out above the planned field line. Every opening is logged with its path. Emulator (run 108): "ready 385 ms after asking at the swipe's start … keyboard opened at 883 px (slid in with the pill)". Settings: the pill's height, width and gap above the keyboard, in the Search page's preview. D169. |
+| 3 | Recents: the launcher and HONOR's home fight | Done (the hand-over); waits kept | Up to 0.11.2 every return hid the content on the first frame and scaled it in, even when the system had just shown the launcher's last picture with the content (a blink), and with no picture the wallpaper cut in. Now fading in (the default) fades the whole screen, wallpaper included, over the system's home (the window shows the system wallpaper behind it) and never asks for the picture; "At once" uses the picture when up to date and nothing re-animates. Leaving with only a keyboard on its way out lays the screen out without it, so the picture stays usable. "Try the arrival" on the Redirect page. The 80 ms wait after leaving recents is what keeps a redirect off an app opened from a recents card, which no CI check exercises, so it stayed; the 260 ms case in his log was recents opened over the launcher itself (MagicOS reports the launcher's live tile as the active window, so the engine never saw recents open), kept too. The REDIRECT line now says which arrival was used. D170. |
+| 4 | Pending from 0.11.2 | Not attached | No speed check log, test photo or search log came with this brief: still glass waits (D166); asked again below. |
+| 5 | WM Keyboard | Done; on the phone, to try | Checked against its docs first. Search-friendly typing (no autocorrection or automatic capital, a Search key; Ask Claude mode: text with Send). Settings › Drawer and search › Keyboard: the layout while searching (its automation intents: LIST_LAYOUTS gives the layout in use, SET_LAYOUT switches, the old one comes back when search closes; each answer in the log); a keyboard theme in the launcher's colours (`KeyboardTheme`: the wallpaper-following colours written out, the wallpaper as the keyboard's background if wanted), previewed as a small keyboard, opened in WM Keyboard (it imports a .wmtheme.json opened with it, after its own confirm dialog), saved or shared; the Liquid plugin (Python, API 5, `share` permission: WM Keyboard's plugins cannot start an app, so it hands the text to "Search in Liquid" through the share sheet), installed from Settings. "Liquid" in the text selection menu, "Search in Liquid" in the share sheet and `dev.liquid.launcher.action.SEARCH` open search with text (or ready to ask Claude). D171, D172. |
+| 6 | Flashcards: a small deck with repeats | Done | `flashcards` in launcher-data (the single `flashcard` reads as a deck of one) join a local deck (`flashcards.json`), never lost; wrong: tomorrow; right: 1, 3, 7, 14, 30 days. Search shows the card waiting longest, how many more, then "All done for today". Every wrong answer still writes its Note. 0.11.2's answered card moved into the deck. docs/05 updated, with the text to paste (study plan doc, assistant's instructions). D173. |
+| 7 | Maths: Claude writes LaTeX, the launcher draws it | Done | A small renderer of the subset (D174) rather than JLaTeXMath for Android (no release since 2020, Android views, fonts in the APK). Rendered offline here with his measure theory cards before shipping (italic corrections for f and superscripts, drawn accents, \xrightarrow with its label); the emulator check (14e) turns a card with formulas over and answers it. |
+
+**CI runs:** 107 clock (build and tests green; its emulator test was cancelled by the next push), 108 search drive
+(green with the emulator test), 109 the redirect (cancelled by the release), 110 0.11.3 (green, published), 111 WM
+Keyboard (green), 112 the deck and formulas: every check passed but the new section 14e, which failed on its own
+set-up (`content insert --bind` splits a value at its colons, so the JSON's are escaped as `\:`; and Settings came
+back on the page section 14d had left open, so it is started afresh); fixed for the release run. No "ANR in" was seen
+in these runs; the snapshot cache stays.
+
+**Known bugs and limits**
+- Fixed in 0.12.0, present in 0.11.3: the "keyboard on its way out" layout (D170) also applied when the launcher was
+  paused under recents or a dialog with search's keyboard up, so the field dropped under the keyboard until the launcher
+  came back; it now applies only when an app was just started from the launcher.
+- Whether MagicOS and WM Keyboard let the launcher move the keyboard is only known from the phone's log; the usual way
+  is the fallback.
+- Fading in, the launcher is fully in about 180 ms after its first frame (about 380 ms after the trigger); "At once" is
+  faster, with a cut. If HONOR's home has icons, they still disappear at once.
+- The recents waits were not shortened (see item 3).
+- The flashcard deck lives in the launcher's files (`flashcards.json`) and goes into its backups (Settings › Backup);
+  a restore brings it back with its progress.
+- Maths: no matrices or aligned equations (their cells show in one row), and the formulas use the phone's serif face.
+- WM Keyboard: the layout switch needs its "Let other apps control the keyboard" switch; the plugin needs "Allow
+  plugins"; fonts are not embedded in an exported theme (WM Keyboard's own rule).
+
+**Questions for Med**
+1. Speed check (Settings › Diagnostics › Speed check, about a minute, hands off): send the debug log, for still glass.
+2. The test photo (Settings › Study companion › More) and a search log are still owed.
+3. Search: does the keyboard now slide up with the pill? The log says "the keyboard slides with the pill: ready … ms"
+   or "shown the usual way (why)" for each opening; send a log with a few openings.
+4. Recents: does the fade over HONOR's home read as one movement, or do you prefer "At once" (Settings › Redirect ›
+   Look)? Is HONOR's own home screen empty?
+5. WM Keyboard: with "Let other apps control the keyboard" on, does the layout switch while searching? Does "Open in
+   WM Keyboard" import the theme, and does the Liquid plugin install?
+6. Flashcards: paste the two texts from docs/05 ("Text for Med to paste") into the study plan doc and the assistant's
+   instructions; does the evening check-in write `flashcards` with LaTeX?
+
+**Exact next step:** read Med's next log. (1) Each search opening's "search: the keyboard slides with the pill: ready N
+ms" or "shown the usual way (reason)": if MagicOS refuses, the reason says whether to ask later or differently. (2) The
+"REDIRECT (…); fades in over 180 ms" and "launcher drawn …" lines after recents. (3) The speed check lines for still
+glass (the 0.11.2 entry's exact next step).

@@ -1613,6 +1613,9 @@ class HomeController(
     val closesWhileAway: Boolean
         get() = tidyPending && (drawerOpen || searchOpen || search.value > 0.01f || menu != null || todaySheet || hub.value > 0.01f)
 
+    /** 0.11.3 (D170): an app was just started from the launcher (a keyboard still up is only on its way out). */
+    val appJustStarted: Boolean get() = tidyPending
+
     /**
      * Called right after an app was started from anywhere in the launcher. The keyboard goes away at
      * once (so it is neither in the system's picture of this screen nor brought back on return);

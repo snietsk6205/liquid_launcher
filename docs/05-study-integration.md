@@ -84,7 +84,7 @@ And these all-day events in the Tasks calendar (titles start with `Note:`; they 
 |---|---|
 | `Note: <text>` | Quick capture: the note field of the study hub, or a double tap on the clock |
 | `Note: absent <module> <HH:MM>` | ✗ on "present?" five minutes after a class |
-| `Note: flashcard wrong <module>: <question>` | "Wrong" on the daily flashcard |
+| `Note: flashcard wrong <module>: <question>` | "Wrong" on a flashcard of the deck (0.12.0: any card due, not only the day's) |
 
 ### launcher-data (version 1), from the evening check-in to the launcher
 
@@ -96,7 +96,10 @@ with this JSON as its description (every part optional; unknown fields are ignor
  "exams":[{"label":"DS + Examens P2","date":"2027-01-07","confirmed":false}],
  "absences":{"rule_confirmed":false,"limit":0.20,
    "modules":[{"name":"Intégration et Probabilité TD","absent":3,"total":null}]},
- "flashcard":{"module":"Micro","q":"…","a":"…"},
+ "flashcards":[
+   {"id":"proba2-conv-monotone","module":"Proba 2",
+    "q":"Énoncer le théorème de convergence monotone pour $(f_n)$ croissante, $f_n \\ge 0$ mesurables.",
+    "a":"$$\\int \\lim_{n\\to\\infty} f_n \\, d\\mu = \\lim_{n\\to\\infty} \\int f_n \\, d\\mu$$ sans domination ; la limite peut valoir $+\\infty$."}],
  "grades":[{"module":"Stat Des","type":"DS","mark":null,"coef":null}]}
 ```
 
@@ -104,11 +107,52 @@ with this JSON as its description (every part optional; unknown fields are ignor
 |---|---|
 | `exams` | The exam countdown and `!exam`; `"confirmed": false` shows `≈` before the count. Without exams here, the timetable's events named DS, Examen, Partiel or Contrôle are used |
 | `absences` | One tube per module: rate = absent ÷ total, fill = rate ÷ limit; green below 0.5, amber to 0.8, red above; a grey UNVERIFIED badge while `rule_confirmed` is false; only the count while `total` is null |
-| `flashcard` | The daily card on the search page (face down, question, answer, right or wrong) |
+| `flashcards` | Since 0.12.0: cards (`id`, `module`, `q`, `a`) for the local deck with repeats (below). `flashcard` (one card, as before) still works: it reads as a deck of one |
 | `grades` | The weighted average Σ coef × mark ÷ Σ coef, shown only once every mark has its coefficient |
 
 When today's event is missing, the latest earlier one (up to the overdue window, 14 days) is used; when that is not
 valid JSON, the local copy kept in Settings → Study companion → launcher-data; when neither, these parts are hidden.
+
+### Flashcards: a deck with repeats (0.12.0)
+
+- The launcher keeps every card it reads in a local deck. A card is known by its `id` (keep the same id for the same
+  card; without one, its module and question name it). A new card is due the day it arrives; a card already in the deck
+  keeps its schedule (a new wording replaces the old one). Nothing is removed when a new `launcher-data` event comes:
+  write only the cards you want to add, or all of them again, either works.
+- Repeats: **Wrong** brings the card back tomorrow; **Right** waits longer each time: 1, 3, 7, 14, then 30 days.
+- Search's Flashcards card (Settings → Search → Layout → Cards) shows the card waiting longest, face down, with how
+  many more are due today; at the end, "All done for today" and when the next ones are due.
+- Every **Wrong** still writes `Note: flashcard wrong <module>: <question>` (the question as written, LaTeX included)
+  in the Tasks calendar for the evening check-in.
+
+### Formulas: LaTeX (0.12.0)
+
+In `q` and `a`, `$…$` is a formula inside the sentence and `$$…$$` a formula on its own line (`\(…\)` and `\[…\]`
+work too; `\$` is a dollar sign). The launcher draws them offline: subscripts and superscripts, `\frac`, `\sqrt`,
+`\int`, `\sum`, `\prod`, `\lim`, `\sup`, `\inf`, `\liminf`, `\limsup` with their bounds, Greek letters, arrows
+(`\to`, `\Rightarrow`, `\xrightarrow{…}`), relations (`\le`, `\ge`, `\ne`, `\in`, `\subset`…), `\infty`,
+`\mathbb{R}`, `\mathcal{F}`, `\text{…}`, `\operatorname{…}`, accents (`\hat`, `\bar`, `\tilde`, `\vec`,
+`\overline`) and `\left( … \right)`. In JSON every backslash is written twice (`\\int`). Text without `$` shows as
+before; an unknown command shows its name.
+
+### Text for Med to paste (0.12.0)
+
+**Into the study plan doc** (the part that describes launcher-data):
+
+> Flashcards: launcher-data carries `"flashcards": [{"id": "...", "module": "...", "q": "...", "a": "..."}]`. The
+> launcher keeps them in a deck with repeats (wrong: tomorrow; right: 1, 3, 7, 14, then 30 days) and writes
+> "Note: flashcard wrong <module>: <question>" for each wrong answer. Each card has a stable `id` (module and topic,
+> e.g. `proba2-fatou`); the same id is the same card. Formulas are LaTeX: `$…$` inline, `$$…$$` on its own line.
+
+**Into the assistant's instructions** (the evening check-in):
+
+> When you write launcher-data, add 3 to 6 new flashcards for today's courses under `"flashcards"` (not the single
+> `"flashcard"`): `{"id": "<module>-<topic>", "module": "<module as in the timetable>", "q": "<question>", "a":
+> "<answer>"}`. Keep each id stable and never reuse an id for a different card; do not repeat cards already sent unless
+> you reword them (same id). Write every formula in LaTeX: `$…$` inside a sentence, `$$…$$` for a formula on its own
+> line (theorems, integrals, sums, limits with their bounds), and double every backslash inside the JSON (`\\int`,
+> `\\frac{1}{n}`, `\\mathbb{R}`). Keep questions short enough for a phone (one idea per card). Read the Tasks
+> calendar's notes "flashcard wrong <module>: <question>" and go over those cards with me in the check-in.
 
 ### Rules for the evening check-in
 

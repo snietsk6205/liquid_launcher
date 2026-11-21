@@ -6,6 +6,37 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
+## 0.12.0 — 2026-11-21
+
+### Added
+- Flashcards with repeats: launcher-data can now carry several cards (`flashcards`), and the launcher keeps every card
+  it reads in a deck on the phone. Wrong brings a card back tomorrow; right waits longer each time (1, 3, 7, 14, then
+  30 days). Search's Flashcards card shows the card that has waited longest, how many more are due today, then "All
+  done for today" and when the next ones come. A wrong answer still writes its note for the evening check-in. The
+  single card of before still works, and the deck with its progress goes into your backups.
+- Formulas on flashcards: LaTeX between `$…$` (inside a sentence) or `$$…$$` (on its own line) is drawn on the phone,
+  without the internet: subscripts and superscripts, fractions, roots, integrals, sums and limits with their bounds,
+  Greek letters, arrows, ∞, ℝ and text.
+- Settings → Drawer and search → Keyboard, for WM Keyboard:
+  - "WM Keyboard layout while searching": while search is open the keyboard switches to the layout you pick from its
+    list, and back to yours afterwards (WM Keyboard › Privacy › Let other apps control the keyboard must be on).
+  - "A keyboard theme in your colours": a WM Keyboard theme made from your launcher theme with today's wallpaper
+    colours (and the wallpaper behind the keys if you like), with a preview; open it in WM Keyboard, save it or share it.
+  - "Install the Liquid plugin": a plugin for WM Keyboard's Plugins tool that hands what you type to Liquid's search,
+    or gets it ready to ask Claude.
+- "Liquid" in the text selection menu of any app, and "Search in Liquid" in the share sheet: search opens with the
+  text. Other apps (Tasker and the like) can open search with `dev.liquid.launcher.action.SEARCH`.
+
+### Changed
+- Search and the drawer's field no longer get autocorrection or an automatic capital (app names stay as you type
+  them), and the keyboard shows a Search key; in Ask Claude mode it is ordinary text with a Send key.
+- Search's "Daily flashcard" card is now "Flashcards" (Settings → Search → Layout → Cards).
+
+### Fixed
+- 0.11.3: with search open and its keyboard up, opening recents or a dialog over the launcher could drop the search
+  field under the keyboard until you came back. The launcher now lays itself out without the keyboard only when an
+  app was just started from it.
+
 ## 0.11.3 — 2026-11-21
 
 ### Added

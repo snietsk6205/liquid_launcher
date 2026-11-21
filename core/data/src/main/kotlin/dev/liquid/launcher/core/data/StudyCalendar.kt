@@ -712,6 +712,14 @@ class StudyCalendar(
     /** The local deck: every card launcher-data ever brought, with its schedule. */
     val deck: StateFlow<Deck> = _deck
 
+    /** After a backup was restored: the deck as the file now holds it. */
+    fun reloadDeck() {
+        synchronized(deckLock) {
+            _deck.value = readDeck()
+            deckMigrated = true
+        }
+    }
+
     private fun readDeck(): Deck = runCatching {
         if (deckFile.exists()) deckJson.decodeFromString(Deck.serializer(), deckFile.readText()) else Deck()
     }.getOrElse {

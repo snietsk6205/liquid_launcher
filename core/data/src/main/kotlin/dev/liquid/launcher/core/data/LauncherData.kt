@@ -260,6 +260,12 @@ class LauncherData private constructor(private val context: Context) {
                     zip.closeEntry()
                 }
             }
+            // 0.12.0 (D173): the flashcard deck and its progress.
+            File(context.filesDir, "flashcards.json").takeIf { it.isFile }?.let { file ->
+                zip.putNextEntry(java.util.zip.ZipEntry("files/flashcards.json"))
+                file.inputStream().use { it.copyTo(zip) }
+                zip.closeEntry()
+            }
         }
         DebugLog.event("Backup", "backup written")
     }
@@ -372,6 +378,7 @@ class LauncherData private constructor(private val context: Context) {
                 target.parentFile?.mkdirs()
                 target.writeBytes(bytes)
             }
+            if ("flashcards.json" in files) study.reloadDeck()
             if (values != null) {
                 val keys = (settings.values.value.keys + values.keys).filter { !LauncherSettings.isDeviceState(it) }.toSet()
                 settings.importValues(values, keys)

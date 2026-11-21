@@ -1035,7 +1035,8 @@ content insert --uri 'content://com.android.calendar/calendars?caller_is_syncada
   --bind account_name:s:smoke --bind account_type:s:LOCAL --bind name:s:Launcher --bind calendar_displayName:s:Launcher \
   --bind calendar_color:i:-7617718 --bind calendar_access_level:i:700 --bind ownerAccount:s:smoke --bind visible:i:1 --bind sync_events:i:1
 LCAL=\$(content query --uri content://com.android.calendar/calendars --projection _id:calendar_displayName | grep 'calendar_displayName=Launcher' | sed -E 's/.*_id=([0-9]+).*/\1/' | head -1)
-F=\$(cat /data/local/tmp/feed.json)
+# content's --bind splits at colons: those of the JSON are escaped (it turns "\\:" back into ":").
+F=\$(sed 's/:/\\\\:/g' /data/local/tmp/feed.json)
 content insert --uri content://com.android.calendar/events --bind calendar_id:i:\$LCAL --bind 'title:s:launcher-data' \
   --bind description:s:"\$F" --bind dtstart:l:$DAY_MS --bind dtend:l:$(( DAY_MS + 86400000 )) --bind allDay:i:1 --bind eventTimezone:s:UTC
 content query --uri content://com.android.calendar/events --projection _id:title --where "calendar_id=\$LCAL"
@@ -1044,9 +1045,10 @@ CAL3EOF
   adb shell su 0 sh /data/local/tmp/cal3.sh > "$OUT/cal3.txt" 2>&1 || adb shell sh /data/local/tmp/cal3.sh > "$OUT/cal3.txt" 2>&1
   tail -2 "$OUT/cal3.txt" | sed 's/^/        /'
   # The Flashcards card on the search page (Settings → Search → Layout → Cards on the search page).
-  adb shell am start -n "$PKG/dev.liquid.launcher.feature.settings.SettingsActivity" --es screen page:search >/dev/null 2>&1
-  wait_screen 14e-settings "Cards on the search page" 10 || true
-  for i in 1 2 3; do
+  # A fresh Settings (14d left one open on Study companion, which would come back without reading the page asked for).
+  adb shell am start --activity-clear-task -n "$PKG/dev.liquid.launcher.feature.settings.SettingsActivity" --es screen page:search >/dev/null 2>&1
+  wait_screen 14e-settings "Search field" 10 || true
+  for i in 1 2 3 4 5 6 7 8; do
     on_screen 14e-settings "Add Flashcards" && break
     adb shell input swipe 540 1700 540 700 400
     sleep 1
@@ -1055,7 +1057,8 @@ CAL3EOF
   if tap_text 14e-settings "Add Flashcards"; then sleep 1; else note "the Flashcards card could not be added in Settings"; fi
   adb shell input keyevent KEYCODE_HOME
   sleep 2
-  grep "flashcards: " "$LOG" | tail -2 | sed 's/^/        /'
+  for i in 1 2 3 4 5 6 7 8; do grep -q "flashcards: 2 new in the deck" "$LOG" && break; sleep 1; done
+  grep "flashcards: \|launcher-data" "$LOG" | tail -3 | sed 's/^/        /'
   if grep -q "flashcards: 2 new in the deck" "$LOG"; then pass "launcher-data's two flashcards joined the deck"; else fail "launcher-data's two flashcards joined the deck"; fi
   adb shell input swipe 540 900 540 1700 250
   sleep 2

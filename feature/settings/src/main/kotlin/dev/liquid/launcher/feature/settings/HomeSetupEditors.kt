@@ -322,7 +322,8 @@ private const val FEED_EXAMPLE = """{"v":1,"updated":"2026-11-16T20:50",
  "exams":[{"label":"DS + Examens P2","date":"2027-01-07","confirmed":false}],
  "absences":{"rule_confirmed":false,"limit":0.20,
    "modules":[{"name":"Intégration et Probabilité TD","absent":3,"total":null}]},
- "flashcard":{"module":"Micro","q":"…","a":"…"},
+ "flashcards":[{"id":"proba2-fatou","module":"Proba 2","q":"Lemme de Fatou pour ${'$'}f_n \\ge 0${'$'} ?",
+   "a":"${'$'}${'$'}\\int \\liminf f_n \\, d\\mu \\le \\liminf \\int f_n \\, d\\mu${'$'}${'$'}"}],
  "grades":[{"module":"Stat Des","type":"DS","mark":null,"coef":null}]}"""
 
 /**
