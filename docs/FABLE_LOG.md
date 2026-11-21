@@ -1354,7 +1354,13 @@ emulator test, the new sections included, and publishes only when every check pa
 **CI runs:** 116 (the search rise; cancelled by the next push), 117 (transitions) and 118 (keyboard theme, camera) green
 with build and unit tests, 119 (`[smoke]`: live pill, quick review, search everything, with the new emulator sections
 14f and 14g; its build and unit tests passed, its emulator test was cancelled by the release push, which runs it
-again) and the release run. Unit tests: 273 (5 new for the finder: matching, cards, the Settings links). No "ANR in" seen; the snapshot
+again). 120, the first "0.13.0 [release]" commit, failed four checks and published nothing: 14f passed (the count on
+the pill, the quick review by a long press, Back), but two swipes (14e, 14g) landed while the launcher's window was
+still coming back after Home (InputDispatcher: "No new touched window"; the system's gesture service got them), so
+search never opened; the test now waits for the redirect's "launcher drawn" line and the end of the transition
+(`home_and_settle`). And an option found by search opened the Settings page 14e had left in the background, a real
+bug: with `NEW_TASK` alone Android brings that task back as it was; every link to a page of Settings now clears it
+(also Customise, gestures and the drawer's menu, which had the same flaw). Then the second release run. Unit tests: 273 (5 new for the finder: matching, cards, the Settings links). No "ANR in" seen; the snapshot
 cache stays.
 
 **Known bugs and limits**

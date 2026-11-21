@@ -51,6 +51,11 @@ Versions marked *not published on its own* were built but came to the phone insi
   Keyboard → Behaviour now shows how to bind a WM Keyboard mode to the launcher instead, which applies before the
   keyboard is drawn.
 
+### Fixed
+- Opening Settings at a page from the launcher (Customise, a gesture or button set to open a page, the drawer's menu,
+  an option found by search) always shows that page now. When Settings had been left open in the background on
+  another page, it used to come back on that page instead.
+
 ## 0.12.0 — 2026-11-21
 
 ### Added

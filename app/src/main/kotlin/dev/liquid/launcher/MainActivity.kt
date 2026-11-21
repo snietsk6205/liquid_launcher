@@ -135,8 +135,12 @@ class MainActivity : ComponentActivity() {
         val callbacks = HomeCallbacks(
             openSettings = { startActivity(SettingsActivity.intent(this)) },
             openSetup = { startActivity(SettingsActivity.intent(this, SettingsActivity.SCREEN_SETUP)) },
-            openSection = { startActivity(SettingsActivity.intent(this, SettingsActivity.SECTION_PREFIX + it)) },
-            openSettingsAt = { startActivity(SettingsActivity.intent(this, it)) },
+            // 0.13.0: a link to a page starts Settings afresh. With only NEW_TASK, Android brought a Settings left open in
+            // the background to the front as it was, and the page asked for never came (the emulator test caught it).
+            openSection = {
+                startActivity(SettingsActivity.intent(this, SettingsActivity.SECTION_PREFIX + it).addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK))
+            },
+            openSettingsAt = { startActivity(SettingsActivity.intent(this, it).addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)) },
             requestContacts = { callback ->
                 if (checkSelfPermission(android.Manifest.permission.READ_CONTACTS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
                     callback(true)

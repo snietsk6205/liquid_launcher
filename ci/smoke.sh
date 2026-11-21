@@ -440,6 +440,20 @@ tap_text() {
   adb shell input tap $pos
 }
 
+# home_and_settle : Home, then wait until the launcher is back in front (the redirect's "launcher drawn" line) and its
+# window transition is over, so the next swipe lands on it. 0.13.0: run 120 swiped while the window was still coming
+# (InputDispatcher: "No new touched window"), and the swipe went to the system's gesture service instead.
+home_and_settle() {
+  local before i
+  before=$(grep -c "launcher drawn" "$LOG" || true)
+  adb shell input keyevent KEYCODE_HOME
+  for i in $(seq 1 16); do
+    [ "$(grep -c "launcher drawn" "$LOG" || true)" -gt "$before" ] && break
+    sleep 0.5
+  done
+  sleep 1.5
+}
+
 # 0.10.0 (W1): a fresh install of a version with a changelog entry shows "What's new" once, above the pill.
 section "8b. What's new card"
 adb shell am start -n "$HOME_ACTIVITY" >/dev/null
@@ -1048,7 +1062,7 @@ CAL3EOF
   # The Flashcards card on the search page (Settings → Search → Layout → Cards on the search page).
   # A fresh Settings (14d left one open on Study companion, which would come back without reading the page asked for).
   adb shell am start --activity-clear-task -n "$PKG/dev.liquid.launcher.feature.settings.SettingsActivity" --es screen page:search >/dev/null 2>&1
-  wait_screen 14e-settings "Search field" 10 || true
+  wait_screen 14e-settings "Reset the cards" 10 || true
   for i in 1 2 3 4 5 6 7 8; do
     on_screen 14e-settings "Add Flashcards" && break
     adb shell input swipe 540 1700 540 700 400
@@ -1056,8 +1070,7 @@ CAL3EOF
     dump 14e-settings
   done
   if tap_text 14e-settings "Add Flashcards"; then sleep 1; else note "the Flashcards card could not be added in Settings"; fi
-  adb shell input keyevent KEYCODE_HOME
-  sleep 2
+  home_and_settle
   for i in 1 2 3 4 5 6 7 8; do grep -q "flashcards: 2 new in the deck" "$LOG" && break; sleep 1; done
   grep "flashcards: \|launcher-data" "$LOG" | tail -3 | sed 's/^/        /'
   if grep -q "flashcards: 2 new in the deck" "$LOG"; then
@@ -1103,8 +1116,7 @@ clear_anr
 # opens the quick review over the home screen, without search; Back closes it.
 section "14f. Flashcards on the pill: the count and the quick review"
 if [ -n "$EVENT_ID" ]; then
-  adb shell input keyevent KEYCODE_HOME
-  sleep 2.5
+  home_and_settle
   peek 14f-home
   dump 14f-home
   POS=$(python3 ci/find_text.py "$OUT/14f-home.xml" "flashcards due") || POS=$(python3 ci/find_text.py "$OUT/14f-home.xml" "1 card" exact) || POS=""
@@ -1131,8 +1143,7 @@ clear_anr
 # 0.13.0 (D179): search finds options of Settings (a tap opens the page with the option lit up) and flashcards
 # (a tap opens the card in the quick review).
 section "14g. Search finds Settings and flashcards"
-adb shell input keyevent KEYCODE_HOME
-sleep 1.5
+home_and_settle
 adb shell input swipe 540 900 540 1700 250
 sleep 1.5
 adb shell input text "liquid%sstretch"
@@ -1142,17 +1153,17 @@ dump 14g-search
 if on_screen 14g-search "Settings › "; then
   pass "search finds an option of Settings"
   tap_text 14g-search "Settings › " || true
-  sleep 3
-  dump 14g-settings
-  if top_activity | grep -q "SettingsActivity" && on_screen 14g-settings "Liquid stretch"; then
+  # Its page, on its tab ("Behaviour"), even with another Settings page left open in the background by 14e.
+  wait_screen 14g-settings "Liquid stretch" 10 || true
+  if top_activity | grep -q "SettingsActivity" && on_screen 14g-settings "Liquid stretch" exact; then
     pass "the option opens its page in Settings"
   else
     fail "the option opens its page in Settings"
+    texts 14g-settings 20
   fi
   adb shell input keyevent KEYCODE_BACK
   sleep 1
-  adb shell input keyevent KEYCODE_HOME
-  sleep 1.5
+  home_and_settle
 else
   fail "search finds an option of Settings"
   texts 14g-search 30
