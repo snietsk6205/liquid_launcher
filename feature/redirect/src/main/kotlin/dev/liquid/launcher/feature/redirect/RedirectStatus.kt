@@ -145,6 +145,28 @@ object RedirectStatus {
         }
     }
 
+    /**
+     * 0.11.3 (D170), Settings → Redirect → "Try the arrival": shows the system's home screen with the redirect on, so it
+     * brings the launcher back the way the arrival is set. False when the redirect service or the system launcher is
+     * not known yet.
+     */
+    fun tryArrival(context: Context): Boolean {
+        val launcher = systemLauncher.value
+        if (service == null || launcher.isEmpty()) return false
+        val intent = Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_HOME)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .setPackage(launcher)
+        return try {
+            DebugLog.event("Redirect", "trying the arrival: the system's home screen is shown, the redirect brings the launcher back")
+            context.startActivity(intent)
+            true
+        } catch (e: Exception) {
+            DebugLog.error("Redirect", "could not show the system's home screen: $e")
+            false
+        }
+    }
+
     fun startCalibration(): Boolean {
         val s = service ?: return false
         s.startCalibration()

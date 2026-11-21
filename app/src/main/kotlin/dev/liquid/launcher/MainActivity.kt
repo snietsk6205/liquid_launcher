@@ -264,8 +264,12 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         clock?.onStart()
         (application as LauncherApp).data.widgets.listen(true)
-        // Set before the first frame, so the content is never drawn at full size first.
-        returnState.onReturn(animate = !firstStart)
+        // Set before the first frame, so the content is never drawn at full size first. 0.11.3 (D170): fading in, the
+        // whole screen fades in over the system's home screen; the redirect then never asks for the last picture.
+        val settings = (application as LauncherApp).settings
+        val fades = settings.get(LauncherSettings.SettleStyle) != "none" && settings.get(LauncherSettings.SettleDuration) > 0
+        returnState.onReturn(animate = !firstStart && fades, wholeScreen = fades)
+        dev.liquid.launcher.feature.home.KeyboardLeaving.active = false
         firstStart = false
         applyExcludeFromRecents()
     }
@@ -273,6 +277,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         clock?.onResume()
+        dev.liquid.launcher.feature.home.KeyboardLeaving.active = false
         // The wallpaper may have changed while another app was open (themed icons).
         dev.liquid.launcher.core.data.LauncherData.get(this).checkWallpaperColours()
         // So may the calendar (the study companion's blocks and tasks).
@@ -299,7 +304,12 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             false
         }
-        RedirectStatus.staleSnapshot = keyboard || returnState.closesWhileAway()
+        // 0.11.3 (D170): with nothing open that closes while away, a keyboard still on screen is only on its way out (an
+        // app was started from search): the screen is laid out without it at once, so the picture taken as the launcher
+        // leaves shows it as it will be on return, and stays usable.
+        val closes = returnState.closesWhileAway()
+        if (keyboard && !closes) dev.liquid.launcher.feature.home.KeyboardLeaving.active = true
+        RedirectStatus.staleSnapshot = closes
         RedirectStatus.onLauncherPaused()
         super.onPause()
     }

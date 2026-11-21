@@ -637,19 +637,26 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         }
         val now = SystemClock.uptimeMillis()
         RedirectStatus.onLaunchRequested(now, triggerAt)
-        DebugLog.decision(TAG, "REDIRECT ($reason), ${now - triggerAt} ms after trigger")
+        // 0.11.3 (D170): fading in, the launcher arrives over the system's home screen without its last picture (the
+        // picture, then the screen fading in, blinked); at once, it arrives on its last picture when that is up to date.
+        val fadeMs = if (store.get(LauncherSettings.SettleStyle) != "none") store.get(LauncherSettings.SettleDuration) else 0
+        val arrival = when {
+            fadeMs > 0 -> "fades in over $fadeMs ms"
+            RedirectStatus.staleSnapshot -> "at once; its last picture is out of date (drawer, search or a menu was open): none"
+            else -> "at once, on its last picture"
+        }
+        DebugLog.decision(TAG, "REDIRECT ($reason), ${now - triggerAt} ms after trigger; $arrival")
         if (DebugLog.verbosity == LogLevel.TREE) traceWindow("at redirect")
         try {
             val intent = Intent(Intent.ACTION_MAIN)
                 .setComponent(component)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
-            if (RedirectStatus.staleSnapshot) {
+            if (RedirectStatus.staleSnapshot || fadeMs > 0) {
                 // The system shows the task's last picture while the launcher comes to the front, unless
                 // the intent "asks for something else" (ActivityRecord.allowTaskSnapshot: an intent with
-                // extras that is not a plain launcher start). That picture shows the drawer and keyboard
-                // the launcher has closed since, so it is not wanted this time.
+                // extras that is not a plain launcher start). That picture can show the drawer or search
+                // the launcher has closed since; and a launcher fading in must start from the system's home.
                 intent.putExtra(EXTRA_FRESH, true)
-                DebugLog.decision(TAG, "the launcher's last picture is out of date (drawer, search or keyboard was open): asking for none")
             }
             startActivity(intent, ActivityOptions.makeCustomAnimation(this, 0, 0).toBundle())
         } catch (e: Exception) {

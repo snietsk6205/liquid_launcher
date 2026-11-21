@@ -112,6 +112,7 @@ private val editorTabs: Map<String, Set<SettingsTab>> = mapOf(
     "study" to setOf(SettingsTab.LAYOUT, SettingsTab.MORE),
     "layouts" to setOf(SettingsTab.LAYOUT),
     "backup" to setOf(SettingsTab.BEHAVIOUR, SettingsTab.MORE),
+    "redirect" to setOf(SettingsTab.LOOK),
 )
 
 @Composable
@@ -124,6 +125,15 @@ private fun PageEditors(surface: String, tab: SettingsTab, store: SettingsStore,
             MenuEntriesEditor(store)
         }
         "search" to SettingsTab.LAYOUT -> SearchCardsEditor(store)
+        // 0.11.3 (D170): the arrival's live preview is the real thing: the system's home, then the redirect.
+        "redirect" to SettingsTab.LOOK -> {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            NavRow("Try the arrival", "Shows the system's home screen; the launcher comes back the way set above (Settings closes)") {
+                if (!dev.liquid.launcher.feature.redirect.RedirectStatus.tryArrival(context)) {
+                    android.widget.Toast.makeText(context, "The redirect is not running yet", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
         "index" to SettingsTab.LAYOUT -> LetterAreasEditor(store)
         "tags" to SettingsTab.LAYOUT -> TabsAndTagsEditor()
         "icons" to SettingsTab.LOOK -> IconPacksEditor(store)

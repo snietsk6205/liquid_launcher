@@ -106,6 +106,12 @@ import kotlin.math.roundToInt
 class HomeReturnState {
     /** 0 = just returned (content hidden), 1 = settled. */
     val progress = mutableFloatStateOf(1f)
+
+    /**
+     * 0.11.3 (D170): the whole screen's opacity, wallpaper included, while the launcher fades in over the system's home
+     * screen after a redirect (its window shows the system wallpaper behind it). 1 when it arrives at once.
+     */
+    val screen = mutableFloatStateOf(1f)
     var tick by mutableIntStateOf(0)
         private set
     var homePresses by mutableIntStateOf(0)
@@ -115,8 +121,9 @@ class HomeReturnState {
      * Call before the first frame after the activity becomes visible again. Setting the
      * progress here, not in an effect, means no frame is drawn with the content fully visible.
      */
-    fun onReturn(animate: Boolean) {
+    fun onReturn(animate: Boolean, wholeScreen: Boolean = false) {
         if (animate) progress.floatValue = 0f
+        if (animate && wholeScreen) screen.floatValue = 0f
         tick++
     }
 
@@ -419,12 +426,21 @@ private fun HomeScreenBody(
                 IconLanding.land(key)
             }
             val progress = returnState.progress
-            if (progress.floatValue < 1f) {
+            val screen = returnState.screen
+            if (progress.floatValue < 1f || screen.floatValue < 1f) {
                 val (style, duration) = handover
                 if (style == "none" || duration == 0) {
                     progress.floatValue = 1f
+                    screen.floatValue = 1f
                 } else {
-                    animate(0f, 1f, animationSpec = tween(duration)) { value, _ -> progress.floatValue = value }
+                    // 0.11.3: the screen (wallpaper too) fades in over the system's home screen, eased out, and the
+                    // content settles in with it.
+                    val fromScreen = screen.floatValue
+                    animate(0f, 1f, animationSpec = tween(duration, easing = androidx.compose.animation.core.LinearOutSlowInEasing)) { value, _ ->
+                        progress.floatValue = value
+                        if (fromScreen < 1f) screen.floatValue = fromScreen + (1f - fromScreen) * value
+                    }
+                    screen.floatValue = 1f
                 }
             }
         }
@@ -587,6 +603,8 @@ private fun HomeScreenBody(
     Box(
         Modifier
             .fillMaxSize()
+            // 0.11.3 (D170): after a redirect the whole screen fades in over the system's home screen (read in the layer).
+            .then(if (live) Modifier.graphicsLayer { alpha = returnState.screen.floatValue } else Modifier)
             .onSizeChanged {
                 controller.screenHeight = it.height.toFloat().coerceAtLeast(1f)
                 controller.screenWidth = it.width.toFloat().coerceAtLeast(1f)

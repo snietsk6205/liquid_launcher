@@ -264,16 +264,25 @@ object LauncherSettings {
 
     // ---- Hand-over ----
 
+    // 0.11.3 (D170): the arrival after a redirect. Fading in now covers the whole screen, wallpaper included, over the
+    // system's home screen, and never starts from the launcher's last picture (the content blinked: picture, hidden,
+    // settling in). "At once" uses that picture when it is up to date, the fastest way, with a cut.
     val SettleStyle = ChoiceSetting(
         key = "handover.settle", default = "scale",
-        options = listOf("scale" to "Scale in", "fade" to "Fade in", "none" to "None"),
-        title = "Content animation on return",
-        section = "handover", keywords = "animation settle return home",
+        options = listOf(
+            "scale" to "Fade in over the system's home screen, the icons growing into place",
+            "fade" to "Fade in over the system's home screen",
+            "none" to "At once, from the launcher's last picture when it is up to date (fastest, a cut)",
+        ),
+        title = "Arrival after a redirect",
+        summary = "How the launcher takes over from the system's home screen after Home, recents or the screen going off",
+        section = "handover", keywords = "animation settle return home arrival fade cut picture snapshot swap recents smooth",
     )
     val SettleDuration = IntSetting(
         key = "handover.settleDuration", default = 180, min = 0, max = 400, step = 10, unit = "ms",
-        title = "Content animation length",
-        section = "handover", keywords = "animation duration speed",
+        title = "Arrival length",
+        summary = "How long the fade takes. 0: at once",
+        section = "handover", keywords = "animation duration speed arrival fade",
     )
     val ExcludeFromRecents = BoolSetting(
         key = "handover.excludeFromRecents", default = true,

@@ -250,8 +250,22 @@ internal class FieldInsets(
     private val target: WindowInsets,
 ) {
     fun nav(): Float = nav.getBottom(density).toFloat()
-    fun ime(): Float = ime.getBottom(density).toFloat()
-    fun imeTarget(): Float = target.getBottom(density).toFloat()
+    fun ime(): Float = if (KeyboardLeaving.active) 0f else ime.getBottom(density).toFloat()
+    fun imeTarget(): Float = if (KeyboardLeaving.active) 0f else target.getBottom(density).toFloat()
+}
+
+/**
+ * 0.11.3 (D170): the launcher is leaving (paused) with nothing open, and a keyboard still on screen is only on its way
+ * out (an app was started from search): the pill and the fields are laid out without it at once, so the picture the
+ * system takes as the launcher leaves shows the screen as it will be on return. Set and cleared by the activity.
+ */
+object KeyboardLeaving {
+    private val state = androidx.compose.runtime.mutableStateOf(false)
+    var active: Boolean
+        get() = state.value
+        set(value) {
+            state.value = value
+        }
 }
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
