@@ -1,0 +1,124 @@
+package dev.liquid.launcher.core.settings
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class SettingsStoreTest {
+    @Test
+    fun defaultsAreReturnedWhenNothingIsStored() {
+        val store = SettingsStore.inMemory()
+        assertEquals(true, store.get(LauncherSettings.RedirectEnabled))
+        assertEquals(80, store.get(LauncherSettings.OnRecentsExitDelay))
+        assertEquals(listOf("overview_panel_launcher3", "overview_panel"), store.get(LauncherSettings.RecentsIds))
+        assertFalse(store.isChanged(LauncherSettings.RedirectEnabled))
+    }
+
+    @Test
+    fun setAndReset() {
+        val store = SettingsStore.inMemory()
+        store.set(LauncherSettings.OnHomeDelay, 120)
+        assertEquals(120, store.get(LauncherSettings.OnHomeDelay))
+        assertTrue(store.isChanged(LauncherSettings.OnHomeDelay))
+        store.reset(LauncherSettings.OnHomeDelay)
+        assertEquals(LauncherSettings.OnHomeDelay.default, store.get(LauncherSettings.OnHomeDelay))
+        assertFalse(store.isChanged(LauncherSettings.OnHomeDelay))
+    }
+
+    @Test
+    fun settingTheDefaultValueStoresNothing() {
+        val store = SettingsStore.inMemory()
+        store.set(LauncherSettings.OnHomeDelay, 200)
+        store.set(LauncherSettings.OnHomeDelay, LauncherSettings.OnHomeDelay.default)
+        assertFalse(store.isChanged(LauncherSettings.OnHomeDelay))
+    }
+
+    @Test
+    fun aStoredValueEqualToTheDefaultIsNoChange() {
+        // As a restore or an older version can leave it (0.10.2: "Export for AI" listed these as changed).
+        val store = SettingsStore.inMemory()
+        store.importValues(mapOf(LauncherSettings.OnHomeDelay.key to "i:${LauncherSettings.OnHomeDelay.default}"), setOf(LauncherSettings.OnHomeDelay.key))
+        assertTrue(store.values.value.containsKey(LauncherSettings.OnHomeDelay.key))
+        assertFalse(store.isChanged(LauncherSettings.OnHomeDelay))
+        // Reset still removes it.
+        store.reset(LauncherSettings.OnHomeDelay)
+        assertFalse(store.values.value.containsKey(LauncherSettings.OnHomeDelay.key))
+    }
+
+    @Test
+    fun listsRoundTrip() {
+        val store = SettingsStore.inMemory()
+        store.set(LauncherSettings.LearnedIds, listOf("a:id/x", "a:id/y"))
+        assertEquals(listOf("a:id/x", "a:id/y"), store.get(LauncherSettings.LearnedIds))
+    }
+
+    @Test
+    fun outOfRangeAndUnknownValuesFallBack() {
+        val store = SettingsStore.inMemory(
+            mapOf(
+                LauncherSettings.OnHomeDelay.key to 99999,
+                LauncherSettings.ScreenOffMode.key to "bogus",
+                LauncherSettings.RedirectEnabled.key to "not a boolean",
+            )
+        )
+        assertEquals(LauncherSettings.OnHomeDelay.max, store.get(LauncherSettings.OnHomeDelay))
+        assertEquals("always", store.get(LauncherSettings.ScreenOffMode))
+        assertEquals(true, store.get(LauncherSettings.RedirectEnabled))
+    }
+
+    @Test
+    fun keysAreUnique() {
+        val keys = LauncherSettings.all.map { it.key }
+        assertEquals(keys.size, keys.toSet().size)
+    }
+
+    @Test
+    fun searchFindsByKeyword() {
+        val hits = LauncherSettings.search("loop guard")
+        assertTrue(hits.contains(LauncherSettings.GuardCount))
+        assertTrue(LauncherSettings.search("zzzz").isEmpty())
+    }
+
+    @Test
+    fun searchForgivesATypoAndLooksInSectionNames() {
+        assertTrue(LauncherSettings.search("paralax").contains(LauncherSettings.WallpaperParallax))
+        assertTrue(LauncherSettings.search("glas quality").contains(LauncherSettings.GlassQuality))
+        // "notices" is the section's name, not a word of this option.
+        assertTrue(LauncherSettings.search("notices position").contains(LauncherSettings.NoticePosition))
+        // Title matches come first.
+        assertEquals(LauncherSettings.DrawerTravel, LauncherSettings.search("finger travel").first())
+    }
+
+    @Test
+    fun changedOptionsAreRememberedNewestFirst() {
+        val store = SettingsStore.inMemory()
+        store.set(LauncherSettings.HomeColumns, 4)
+        store.set(LauncherSettings.HomeRows, 8)
+        store.set(LauncherSettings.HomeColumns, 6)
+        assertEquals(listOf(LauncherSettings.HomeColumns.key, LauncherSettings.HomeRows.key), store.get(LauncherSettings.RecentlyChanged))
+    }
+}
+
+class SettingsExportTest {
+    @org.junit.Test
+    fun exportImportRoundTripLimitedToKeys() {
+        val a = SettingsStore.inMemory()
+        a.set(LauncherSettings.HomeColumns, 4)
+        a.set(LauncherSettings.HomeLabels, true)
+        a.set(LauncherSettings.DrawerTabMenu, listOf("rename", "icon"))
+        a.set(LauncherSettings.DrawerColumns, 7)
+        val keys = setOf(LauncherSettings.HomeColumns.key, LauncherSettings.HomeLabels.key, LauncherSettings.DrawerTabMenu.key)
+        val exported = a.exportValues(keys)
+        val b = SettingsStore.inMemory()
+        b.set(LauncherSettings.DrawerColumns, 3)
+        b.set(LauncherSettings.HomeRows, 12)
+        b.importValues(exported, keys + LauncherSettings.HomeRows.key)
+        org.junit.Assert.assertEquals(4, b.get(LauncherSettings.HomeColumns))
+        org.junit.Assert.assertEquals(true, b.get(LauncherSettings.HomeLabels))
+        org.junit.Assert.assertEquals(listOf("rename", "icon"), b.get(LauncherSettings.DrawerTabMenu))
+        // In the keys but not exported: back to the default. Outside the keys: untouched.
+        org.junit.Assert.assertEquals(LauncherSettings.HomeRows.default, b.get(LauncherSettings.HomeRows))
+        org.junit.Assert.assertEquals(3, b.get(LauncherSettings.DrawerColumns))
+    }
+}

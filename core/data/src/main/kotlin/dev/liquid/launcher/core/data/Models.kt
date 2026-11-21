@@ -1,0 +1,118 @@
+package dev.liquid.launcher.core.data
+
+import kotlinx.serialization.Serializable
+
+/** Identifies one launchable activity in one profile. Stable across restarts. */
+@Serializable
+data class AppRef(
+    val pkg: String,
+    val cls: String,
+    /** Serial number of the Android user (profile) the app lives in. */
+    val profile: Long,
+) {
+    val key: String get() = "$pkg/$cls#$profile"
+
+    companion object {
+        fun parse(key: String): AppRef? {
+            val hash = key.lastIndexOf('#')
+            val slash = key.indexOf('/')
+            if (hash < 0 || slash < 0 || slash > hash) return null
+            val profile = key.substring(hash + 1).toLongOrNull() ?: return null
+            return AppRef(key.substring(0, slash), key.substring(slash + 1, hash), profile)
+        }
+    }
+}
+
+/** What the user changed about an app. Absent fields mean "as installed". */
+@Serializable
+data class AppMeta(
+    val label: String? = null,
+    val hidden: Boolean = false,
+    /** Ids of [Tag]s. */
+    val tags: List<String> = emptyList(),
+    /** Own icon: "iconPackPackage|drawableName". */
+    val icon: String? = null,
+    /** Keep the icon's own colours while icons follow the wallpaper. */
+    val keepColours: Boolean = false,
+)
+
+@Serializable
+enum class ItemKind { APP, WIDGET, FOLDER }
+
+/** One thing placed on a home page. Positions and sizes are in grid cells. */
+@Serializable
+data class HomeItem(
+    val id: String,
+    val kind: ItemKind,
+    val x: Int,
+    val y: Int,
+    val w: Int = 1,
+    val h: Int = 1,
+    val app: AppRef? = null,
+    /** Built-in widget type, for example "clock". */
+    val widget: String? = null,
+    /** Apps in a folder, in order. */
+    val folder: List<AppRef>? = null,
+    /** Folder name. */
+    val name: String? = null,
+    /** Encoded [LauncherAction]s run by swiping up or down on the item. */
+    val swipeUp: String? = null,
+    val swipeDown: String? = null,
+    /** Encoded [LauncherAction] run by double-tapping the item (a single tap then waits a moment). */
+    val doubleTap: String? = null,
+    /** A widget's own options (a clock's style, a system widget's id), as text values; null = the defaults. */
+    val options: Map<String, String>? = null,
+) {
+    fun covers(cx: Int, cy: Int): Boolean = cx in x until x + w && cy in y until y + h
+
+    fun overlaps(ox: Int, oy: Int, ow: Int, oh: Int): Boolean =
+        x < ox + ow && ox < x + w && y < oy + oh && oy < y + h
+}
+
+@Serializable
+data class HomePage(
+    val id: String,
+    val items: List<HomeItem> = emptyList(),
+    /** This page's own grid, or null for the home screen's. */
+    val columns: Int? = null,
+    val rows: Int? = null,
+    /** This page's own label setting, or null for the home screen's. */
+    val labels: Boolean? = null,
+    /** A name for the page overview, or null. */
+    val name: String? = null,
+)
+
+@Serializable
+data class HomeLayout(
+    val version: Int = 1,
+    val pages: List<HomePage> = emptyList(),
+    /** Id of the page Home returns to; the first page when null or gone. */
+    val defaultPage: String? = null,
+    /** Apps in the dock, which stays on every page; an item's x is its slot. */
+    val dock: List<HomeItem> = emptyList(),
+    /** Widgets on the search screen, top to bottom, each across its width (0.7.1); an item's h is its height in cells. */
+    val search: List<HomeItem> = emptyList(),
+) {
+    val defaultIndex: Int get() = pages.indexOfFirst { it.id == defaultPage }.coerceAtLeast(0)
+
+    fun find(itemId: String): Pair<Int, HomeItem>? {
+        pages.forEachIndexed { index, page ->
+            page.items.firstOrNull { it.id == itemId }?.let { return index to it }
+        }
+        return null
+    }
+
+    fun dockItem(itemId: String): HomeItem? = dock.firstOrNull { it.id == itemId }
+
+    fun containsApp(ref: AppRef): Boolean =
+        pages.any { page -> page.items.any { it.app == ref || it.folder?.contains(ref) == true } } || dock.any { it.app == ref }
+}
+
+/** Launch statistics for one app, used for "most used" sorting and search ranking. */
+@Serializable
+data class Usage(
+    val count: Int = 0,
+    val last: Long = 0,
+    /** Launches per hour of day, 24 entries. */
+    val hours: List<Int> = emptyList(),
+)

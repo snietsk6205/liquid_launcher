@@ -1,0 +1,13 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- A glass droplet -->
+    <path
+        android:fillColor="#FF9AD0FF"
+        android:pathData="M54,28C54,28 36,48 36,62a18,18 0,0 0,36 0C72,48 54,28 54,28z" />
+    <path
+        android:fillColor="#66FFFFFF"
+        android:pathData="M46,60a8,8 0,0 0,8 8v-3a5,5 0,0 1,-5 -5z" />
+</vector>

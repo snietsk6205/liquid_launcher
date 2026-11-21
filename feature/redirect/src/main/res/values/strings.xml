@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="redirect_service_label">Liquid Launcher redirect</string>
+    <string name="redirect_service_description">Brings Liquid Launcher to the front whenever the system launcher would be shown. It only looks at the system launcher\'s window, to tell the home screen from recents. It reads nothing from other apps and sends nothing anywhere.</string>
+    <string name="redirect_tile_label">Launcher redirect</string>
+</resources>
