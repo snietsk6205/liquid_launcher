@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerSize
@@ -284,170 +285,6 @@ internal fun heroBlock(day: StudyDay, now: Long): StudyEvent? =
     day.current(now) ?: day.blocks.firstOrNull { it.begin > now && it.status == StudyStatus.Open } ?: day.unmarked(now).firstOrNull()
 
 @Composable
-private fun HubContent(controller: HomeController, color: Color, scroll: ScrollState, modifier: Modifier) {
-    val study = controller.data.study
-    val day by study.day.collectAsState()
-    val loaded by study.loaded.collectAsState()
-    val focus by study.focus.collectAsState()
-    val homeAt by study.homeAt.collectAsState()
-    val shiftTick by study.shiftTick.collectAsState()
-    val tick = rememberMinuteTick()
-    val now = remember(tick, day, homeAt, shiftTick) { System.currentTimeMillis() }
-    val prefs by controller.data.settings.derive {
-        TodayPrefs(get(LauncherSettings.StudyBlockCards), get(LauncherSettings.StudyButtonSide) != "start", get(LauncherSettings.StudyTomorrow))
-    }
-    val hero = remember(day, now) { heroBlock(day, now) }
-    Column(modifier.padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 12.dp)) {
-        HubHeader(controller, day, now, color)
-        if (!loaded) {
-            Column(Modifier.weight(1f).padding(top = 10.dp)) {
-                Text(
-                    "The study companion is off, or it may not read the calendar yet.",
-                    style = studyText(color, 13, alpha = 0.8f), modifier = Modifier.padding(bottom = 10.dp),
-                )
-                ActionChip("Switch it on", color, filled = true) { controller.setupStudy() }
-            }
-        } else {
-            // W7: collapsed, the hub holds the block now or next; "The whole day" stays in sight above the list.
-            if (!controller.hubExpanded) {
-                val rest = day.blocks.count { it != hero } + day.tasks.size + day.overdue.size
-                val tomorrow = if (prefs.tomorrow != "off") day.tomorrowBlocks.size + day.tomorrowTasks.size else 0
-                if (rest > 0 || tomorrow > 0 || day.notes.isNotEmpty() || day.waitingToSync > 0) {
-                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.Center) {
-                        ActionChip(
-                            "The whole day" + when {
-                                rest > 0 -> " · $rest more"
-                                tomorrow > 0 -> " and tomorrow"
-                                else -> ""
-                            },
-                            color,
-                        ) { controller.expandHub(true) }
-                    }
-                }
-            }
-            // 0.10.4: the buttons and chips that scroll with the day are drawn without sampling the glass behind them
-            // ("crystal", as long rows of chips are elsewhere). Each one that sampled it drew its own blurred copy of
-            // the hub again on every frame of a scroll: on the phone the hub ran at 55-103 ms a frame.
-            val fill = Modifier.weight(1f)
-            WithoutBackdrop {
-            Column(fill.verticalScroll(scroll)) {
-                AttendanceCallout(controller, day, now, color)
-                ArrivalCallout(controller, day, now, homeAt, color)
-                if (day.isEmpty && day.classes.isEmpty()) {
-                    Text(
-                        "Nothing in your study and task calendars today. Blocks come from calendars named like \"${controller.data.settings.get(LauncherSettings.StudyBlockCalendars)}\", " +
-                            "tasks from \"${controller.data.settings.get(LauncherSettings.StudyTaskCalendars)}\" (Settings → Study companion).",
-                        style = studyText(color, 13, alpha = 0.8f), modifier = Modifier.padding(vertical = 8.dp),
-                    )
-                }
-                if (hero != null) {
-                    SectionLabel(heroLabel(hero, now), color)
-                    // 0.10.2: folded or open as "Blocks in Today" says (compact: title, time and steps; a tap shows them).
-                    BlockCard(hero, now, prefs, focus, color, controller, brief = !controller.hubExpanded)
-                }
-                // W7: collapsed, the hub holds the block now or next; the rest of the day is one tap or a swipe up away.
-                if (!controller.hubExpanded) return@Column
-                Timeline(controller, day, now, hero, prefs, focus, color)
-                if (day.overdue.isNotEmpty()) {
-                    SectionLabel("Still open from earlier", color)
-                    day.overdue.forEach { task ->
-                        TaskRow(task.title.text, false, color, true) { controller.studyStatus(task, StudyStatus.Done) }
-                    }
-                }
-                if (day.tasks.isNotEmpty()) SectionLabel("Tasks", color)
-                day.tasks.forEach { task ->
-                    val done = task.status != StudyStatus.Open
-                    TaskRow(task.title.text, done, color, true) { controller.studyStatus(task, if (done) StudyStatus.Open else StudyStatus.Done) }
-                }
-                if (day.notes.isNotEmpty()) {
-                    SectionLabel("Notes for tonight's check-in", color)
-                    day.notes.forEach { note ->
-                        Text(
-                            "• " + note.rawTitle.trim().removePrefix(dev.liquid.launcher.core.data.StudyFormat.NOTE_PREFIX).trim(),
-                            style = studyText(color, 13, alpha = 0.85f), modifier = Modifier.padding(vertical = 2.dp),
-                        )
-                    }
-                }
-                if (prefs.tomorrow != "off" && (day.tomorrowBlocks.isNotEmpty() || day.tomorrowTasks.isNotEmpty())) {
-                    TomorrowSection(day, prefs, color)
-                }
-                if (day.waitingToSync > 0) {
-                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            (if (day.waitingToSync == 1) "1 change" else "${day.waitingToSync} changes") + " not sent to Google yet",
-                            style = studyText(color, 11, alpha = 0.75f), modifier = Modifier.weight(1f),
-                        )
-                        ActionChip("Sync now", color) {
-                            study.requestSync(force = true)
-                            controller.toast("Asked the phone to sync the calendar")
-                        }
-                    }
-                }
-                if (!study.canWrite) {
-                    Text(
-                        "Ticks are not written to the calendar yet (no permission), so your assistant cannot see them.",
-                        style = studyText(color, 11, alpha = 0.7f), modifier = Modifier.padding(top = 6.dp),
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-            }
-            }
-        }
-        HubBar(controller, day, now, hero, homeAt, focus?.eventKey, color, loaded)
-    }
-}
-
-private fun heroLabel(block: StudyEvent, now: Long): String = when {
-    now >= block.begin && now < block.end -> "Now · " + studyDuration(block.end - now) + " left"
-    block.begin > now -> "Next · in " + studyDuration(block.begin - now)
-    else -> "Ended without a mark"
-}
-
-/** Handle, day ring, date and progress; Tell Claude and the plan as icons. */
-@Composable
-private fun HubHeader(controller: HomeController, day: StudyDay, now: Long, color: Color) {
-    Column(Modifier.fillMaxWidth()) {
-        // W7: the handle, wider while collapsed; a tap on it shows the whole day or folds it back.
-        val wide = 36f + 14f * (1f - controller.hubExpand.value.coerceIn(0f, 1f))
-        Box(
-            Modifier
-                .align(Alignment.CenterHorizontally)
-                .clip(RoundedCornerShape(50))
-                .clickable(onClickLabel = if (controller.hubExpanded) "Fold the day" else "The whole day") {
-                    controller.expandHub(!controller.hubExpanded)
-                }
-                .padding(horizontal = 16.dp, vertical = 6.dp)
-                .padding(bottom = 2.dp)
-                .size(width = wide.dp, height = 4.dp)
-                .clip(RoundedCornerShape(50))
-                .background(color.copy(alpha = 0.3f)),
-        )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            DayRing(day, now, color, 38.dp)
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                // 0.10.2: the count sits beside "Today" and the date has its own line, so neither is cut.
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text("Today", style = studyText(color, 18, FontWeight.SemiBold), maxLines = 1)
-                    if (day.blocks.isNotEmpty()) {
-                        Text(
-                            "  ${day.blocksDone}/${day.blocks.size} blocks",
-                            style = studyText(color, 12, alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(bottom = 2.dp),
-                        )
-                    }
-                }
-                val date = LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault()))
-                Text(date, style = studyText(color, 12, alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            HubIcon(LauncherIcons.Chat, "Tell Claude", color) { controller.run(LauncherAction.TellClaude) }
-            Spacer(Modifier.width(6.dp))
-            HubIcon(LauncherIcons.Calendar, "Plan", color) { controller.run(LauncherAction.StudyPlan) }
-        }
-    }
-}
-
-@Composable
 private fun HubIcon(icon: Int, description: String, color: Color, size: Dp = 40.dp, onClick: () -> Unit) {
     // W3: a round button of the theme (WM Keyboard's tool circles).
     if (currentTheme != null) {
@@ -524,364 +361,8 @@ internal fun DayRing(day: StudyDay, now: Long, color: Color, size: Dp, showCount
     }
 }
 
-/**
- * Today's timeline (B4): classes in grey, the study blocks on a rail in their colours, a line at the time
- * now when it falls between them. The block the hub shows above is only a row here; tapping another
- * block opens it in place with its steps and buttons.
- */
-@Composable
-private fun Timeline(
-    controller: HomeController,
-    day: StudyDay,
-    now: Long,
-    hero: StudyEvent?,
-    prefs: TodayPrefs,
-    focus: dev.liquid.launcher.core.data.StudyFocus?,
-    color: Color,
-) {
-    // 0.10.2: the block now or next is the card above, so the timeline leaves it out instead of showing it twice.
-    val rows = remember(day, hero?.key) {
-        (day.classes.map { it to true } + day.blocks.filter { it.key != hero?.key }.map { it to false }).sortedBy { it.first.begin }
-    }
-    if (rows.isEmpty()) return
-    var open by remember { mutableStateOf<String?>(null) }
-    SectionLabel("Timeline", color)
-    val anyRunning = day.blocks.any { now >= it.begin && now < it.end }
-    var nowShown = anyRunning
-    Column(Modifier.fillMaxWidth().animateContentSize(spring(dampingRatio = 0.86f, stiffness = MotionScale.stiffness(520f)))) {
-        rows.forEach { (event, isClass) ->
-            if (!nowShown && event.begin > now) {
-                NowLine(now, color)
-                nowShown = true
-            }
-            if (isClass) {
-                ClassRow(event, now, color)
-            } else {
-                val isHero = hero?.key == event.key
-                TimelineRow(event, now, color, isHero) { if (!isHero) open = if (open == event.key) null else event.key }
-                if (open == event.key && !isHero) {
-                    Box(Modifier.padding(start = 60.dp)) { BlockCard(event, now, prefs, focus, color, controller, startOpen = true) }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NowLine(now: Long, color: Color) {
-    val accent = HomeTheme.accent
-    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(studyClock(now), modifier = Modifier.width(42.dp), style = studyText(accent, 11, FontWeight.SemiBold))
-        Box(Modifier.width(18.dp), contentAlignment = Alignment.Center) { Box(Modifier.size(7.dp).clip(CircleShape).background(accent)) }
-        Box(Modifier.weight(1f).height(1.5.dp).background(accent.copy(alpha = 0.7f)))
-    }
-}
-
-@Composable
-private fun ClassRow(event: StudyEvent, now: Long, color: Color) {
-    val past = event.end <= now
-    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(studyClock(event.begin), modifier = Modifier.width(42.dp), style = studyText(color, 11, alpha = 0.5f))
-        Box(Modifier.width(18.dp), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(5.dp).clip(CircleShape).background(color.copy(alpha = if (past) 0.25f else 0.45f)))
-        }
-        Text(
-            event.rawTitle.ifBlank { "Class" } + " · until " + studyClock(event.end),
-            style = studyText(color, 12, alpha = if (past) 0.45f else 0.65f), maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 6.dp),
-        )
-    }
-}
-
-@Composable
-private fun TimelineRow(block: StudyEvent, now: Long, color: Color, isHero: Boolean, onTap: () -> Unit) {
-    val accent = eventColor(block)
-    val running = now >= block.begin && now < block.end
-    val missed = block.end <= now && block.status == StudyStatus.Open
-    val tasks = block.tasks
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min)
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (isHero) color.copy(alpha = 0.06f) else Color.Transparent)
-            .clickable(interactionSource = null, indication = null, onClick = onTap)
-            .padding(vertical = 3.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Text(studyClock(block.begin), modifier = Modifier.width(42.dp).padding(top = 1.dp), style = studyText(color, 12, alpha = 0.75f))
-        Canvas(Modifier.width(18.dp).fillMaxHeight()) {
-            val cx = this.size.width / 2f
-            val dot = 9.dp.toPx()
-            drawLine(color.copy(alpha = 0.16f), Offset(cx, 0f), Offset(cx, this.size.height), strokeWidth = 2.dp.toPx())
-            if (running) {
-                val gone = ((now - block.begin).toFloat() / (block.end - block.begin).coerceAtLeast(1)).coerceIn(0f, 1f)
-                drawLine(accent, Offset(cx, dot), Offset(cx, dot + (this.size.height - dot) * gone), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
-            }
-            val r = 5.dp.toPx()
-            when {
-                block.status == StudyStatus.Done -> drawCircle(accent, r, Offset(cx, dot))
-                block.status == StudyStatus.Skipped -> drawCircle(color.copy(alpha = 0.3f), r * 0.8f, Offset(cx, dot))
-                missed -> drawCircle(accent, r, Offset(cx, dot), style = Stroke(1.6.dp.toPx()))
-                running -> drawCircle(accent, r * 1.2f, Offset(cx, dot))
-                else -> drawCircle(accent.copy(alpha = 0.6f), r * 0.85f, Offset(cx, dot))
-            }
-        }
-        Column(Modifier.weight(1f).padding(start = 6.dp, bottom = 6.dp)) {
-            Text(
-                block.title.text,
-                style = studyText(
-                    color, 14, if (running) FontWeight.SemiBold else FontWeight.Medium,
-                    alpha = if (block.status != StudyStatus.Open) 0.6f else 1f, struck = block.status == StudyStatus.Skipped,
-                ),
-                maxLines = 2, overflow = TextOverflow.Ellipsis,
-            )
-            val parts = ArrayList<String>()
-            parts += "until " + studyClock(block.end)
-            if (tasks.isNotEmpty()) parts += "${tasks.count { it.done }}/${tasks.size} steps"
-            when {
-                block.status == StudyStatus.Done -> parts += "✓ done"
-                block.status == StudyStatus.Skipped -> parts += "skipped"
-                missed -> parts += "not marked: tap"
-                running -> parts += studyDuration(block.end - now) + " left"
-            }
-            val shifted = dev.liquid.launcher.core.data.StudyFormat.shiftedBy(block.description)
-            if (shifted != 0) parts += "moved " + (if (shifted > 0) "+" else "") + shifted + " min"
-            Text(parts.joinToString(" · "), style = studyText(color, 11, alpha = 0.65f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
-}
-
-/**
- * Getting home (A2) and the evening (A3): "I'm home" once the last class is over, then, if home later than
- * planned, "Home 19:20 · shift tonight +30 min?", or the shortening of the lowest-priority block when the
- * evening would run past its latest end. Answered once a day.
- */
-@Composable
-private fun ArrivalCallout(controller: HomeController, day: StudyDay, now: Long, homeAt: Long?, color: Color) {
-    val study = controller.data.study
-    val arrival by controller.data.settings.derive { get(LauncherSettings.StudyArrival) }
-    val homeWifi by controller.data.settings.derive { get(LauncherSettings.StudyHomeWifi) }
-    val lead by controller.data.settings.derive { get(LauncherSettings.StudyShiftLead) }
-    if (!arrival) return
-    val firstOpen = day.blocks.firstOrNull { it.end > now && it.status == StudyStatus.Open }
-    if (homeAt == null) {
-        val lastClass = day.lastClassEnd
-        // On the way home: after the last class, or on a day without classes once tonight's first block is near.
-        val travelling = when {
-            lastClass != null -> now >= lastClass
-            firstOpen != null -> firstOpen.begin - now in 0..(2 * 60 * 60_000L)
-            else -> false
-        }
-        if (!travelling || firstOpen == null) return
-        HubCallout(color) {
-            Text("On the way home?", style = studyText(color, 14, FontWeight.SemiBold))
-            // A4: what the check-in planned for the trip ("Pendant le trajet : …" in tonight's first block).
-            firstOpen.notes.lines().firstOrNull { it.trim().startsWith("Pendant le trajet", ignoreCase = true) }?.let { trip ->
-                Text(trip.trim(), style = studyText(color, 13), modifier = Modifier.padding(vertical = 4.dp))
-            }
-            Text(
-                "Tonight starts with ${firstOpen.title.subject} at ${studyClock(firstOpen.begin)}." +
-                    if (homeWifi.isBlank()) " Set your home Wi-Fi and it is noticed by itself." else "",
-                style = studyText(color, 12, alpha = 0.75f),
-            )
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp, Alignment.End)) {
-                if (homeWifi.isBlank()) ActionChip("This Wi-Fi is home", color, icon = LauncherIcons.Home) { controller.rememberHomeWifi() }
-                ActionChip("I'm home", color, filled = true, icon = LauncherIcons.Home) { controller.markHomeNow() }
-            }
-        }
-        return
-    }
-    if (study.shiftAnswered()) return
-    val delta = StudyShift.deltaFor(day.blocks, homeAt, lead)
-    if (delta <= 0) return
-    val latest = study.latestEnd()
-    val plain = StudyShift.plan(day.blocks, homeAt, delta, latest, shorten = false)
-    if (plain.moves.isEmpty()) return
-    val cut = if (plain.endsLate) StudyShift.plan(day.blocks, homeAt, delta, latest, shorten = true) else null
-    val victim = cut?.shortened
-    HubCallout(color) {
-        Text("Home ${studyClock(homeAt)} · shift tonight +$delta min?", style = studyText(color, 14, FontWeight.SemiBold))
-        Text(
-            if (cut != null && victim != null) {
-                "Moved as planned it would end at ${studyClock(plain.lastEnd)}. Shortening ${victim.title.subject} by ${cut.shortenedMinutes} min ends at ${studyClock(cut.lastEnd)}."
-            } else {
-                "${plain.moves.size} blocks you have not started move together; their lengths stay. Ends at ${studyClock(plain.lastEnd)}."
-            },
-            style = studyText(color, 12, alpha = 0.75f),
-        )
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp, Alignment.End)) {
-            ActionChip("Keep", color) { controller.keepEvening() }
-            if (cut != null && victim != null) {
-                ActionChip("Shift only", color) { controller.applyShift(plain) }
-                ActionChip("Shorten ${victim.title.subject}", color, filled = true) { controller.applyShift(cut) }
-            } else {
-                ActionChip("Shift +$delta min", color, filled = true) { controller.applyShift(plain) }
-            }
-        }
-    }
-}
-
-/** B3 in the hub: the class that just ended, present or absent. */
-@Composable
-private fun AttendanceCallout(controller: HomeController, day: StudyDay, now: Long, color: Color) {
-    val ask by controller.data.settings.derive { get(LauncherSettings.StudyAttendance) }
-    val answered by controller.data.study.attendance.collectAsState()
-    if (!ask) return
-    val due = attendanceDue(day, now, answered) ?: return
-    HubCallout(color) {
-        Text("${due.title.subject} ${studyClock(due.begin)} · were you there?", style = studyText(color, 14, FontWeight.SemiBold))
-        Text("Absent writes a note for tonight's check-in; !abs in search counts them.", style = studyText(color, 12, alpha = 0.75f))
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp, Alignment.End)) {
-            ActionChip("Absent", color, icon = LauncherIcons.Close) { controller.answerAttendance(due, false) }
-            ActionChip("Present", color, filled = true, icon = LauncherIcons.Check) { controller.answerAttendance(due, true) }
-        }
-    }
-}
-
-@Composable
-private fun HubCallout(color: Color, content: @Composable () -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(HomeTheme.accent.copy(alpha = 0.16f))
-            .padding(horizontal = 14.dp, vertical = 11.dp),
-    ) { content() }
-}
-
 /** The one-tap action the hub offers right where the thumb already is (it grew out of the pill under it). */
 private class HubAction(val label: String, val icon: Int, val accent: Color?, val run: () -> Unit)
-
-private fun mainAction(controller: HomeController, day: StudyDay, now: Long, hero: StudyEvent?, homeAt: Long?, focusKey: String?): HubAction? {
-    val settings = controller.data.settings
-    val firstOpen = day.blocks.firstOrNull { it.end > now && it.status == StudyStatus.Open }
-    val lastClass = day.lastClassEnd
-    if (settings.get(LauncherSettings.StudyArrival) && homeAt == null && lastClass != null && now >= lastClass && firstOpen != null) {
-        return HubAction("I'm home", LauncherIcons.Home, null) { controller.markHomeNow() }
-    }
-    if (hero != null && hero.status == StudyStatus.Open) {
-        val accent = eventColor(hero)
-        val running = now >= hero.begin && now < hero.end
-        return when {
-            running && focusKey == hero.key -> HubAction("Mark ${hero.title.subject} done", LauncherIcons.Check, accent) { controller.studyStatus(hero, StudyStatus.Done) }
-            running -> HubAction("Focus · ${studyDuration(hero.end - now)} left", LauncherIcons.Schedule, accent) { controller.studyFocus(hero) }
-            hero.end <= now -> HubAction("Mark ${hero.title.subject} done", LauncherIcons.Check, accent) { controller.studyStatus(hero, StudyStatus.Done) }
-            hero.begin - now <= 45 * 60_000L -> HubAction("Start ${hero.title.subject}", LauncherIcons.Schedule, accent) { controller.studyFocus(hero) }
-            else -> HubAction("Ask Claude about ${hero.title.subject}", LauncherIcons.Sparkle, accent) { controller.askTemplate("Help me prepare this block.", hero) }
-        }
-    }
-    // Nothing left to do today, or it is late: the evening check-in (D4).
-    val late = java.time.LocalTime.now().isAfter(java.time.LocalTime.of(21, 30))
-    if (firstOpen == null || late) return HubAction("Evening check-in", LauncherIcons.Chat, null) { controller.eveningCheckin() }
-    return null
-}
-
-/** Templates, the note-or-question field, Claude, and the main action: the part the thumb reaches. */
-@Composable
-private fun HubBar(
-    controller: HomeController,
-    day: StudyDay,
-    now: Long,
-    hero: StudyEvent?,
-    homeAt: Long?,
-    focusKey: String?,
-    color: Color,
-    loaded: Boolean,
-) {
-    val templates by controller.data.settings.derive { get(LauncherSettings.StudyTemplates) }
-    var text by remember { mutableStateOf("") }
-    val focus = remember { FocusRequester() }
-    val keyboard = LocalSoftwareKeyboardController.current
-    LaunchedEffect(controller.hubNoteFocus) {
-        if (controller.hubNoteFocus) {
-            kotlinx.coroutines.delay(220)
-            runCatching { focus.requestFocus() }
-            keyboard?.show()
-            controller.hubNoteFocus = false
-        }
-    }
-    fun saveNote() {
-        val note = text
-        if (note.isBlank()) return
-        controller.addStudyNote(note) { ok -> if (ok && text == note) text = "" }
-    }
-    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        if (loaded) {
-            // 0.10.2: the chips wrap onto a second line instead of running off the hub's edge ("Quiz m…").
-            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-            androidx.compose.foundation.layout.FlowRow(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                controller.classForPhoto(now)?.let { cls ->
-                    ActionChip("Board · ${cls.title.subject}", color, icon = LauncherIcons.Camera) { controller.boardPhoto() }
-                }
-                ActionChip("Evening check-in", color, icon = LauncherIcons.Chat) { controller.eveningCheckin() }
-                templates.forEach { line ->
-                    val label = line.substringBefore('|').trim()
-                    val prompt = line.substringAfter('|', "").trim()
-                    if (label.isNotEmpty() && prompt.isNotEmpty()) {
-                        ActionChip(label, color, icon = LauncherIcons.Sparkle) { controller.askTemplate(prompt, hero) }
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // W3: the field in the theme's button colours.
-            val (fieldBackground, fieldInk) = fieldStyle(color)
-            Row(
-                Modifier
-                    .weight(1f)
-                    .height(46.dp)
-                    .clip(RoundedCornerShape(50))
-                    .then(fieldBackground)
-                    .padding(start = 16.dp, end = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (text.isEmpty()) Text("Note for tonight, or ask Claude…", style = studyText(fieldInk, 14, alpha = 0.6f), maxLines = 1)
-                    BasicTextField(
-                        value = text,
-                        onValueChange = { text = it },
-                        singleLine = true,
-                        textStyle = TextStyle(fontFamily = HomeTheme.font, color = fieldInk, fontSize = 14.sp),
-                        cursorBrush = SolidColor(fieldInk),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { saveNote() }),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focus)
-                            .semantics { contentDescription = "Note or question" },
-                    )
-                }
-                if (text.isNotBlank()) {
-                    HubIcon(LauncherIcons.Add, "Save as a note for tonight's check-in", color, size = 38.dp) { saveNote() }
-                }
-            }
-            Spacer(Modifier.width(8.dp))
-            HubIcon(LauncherIcons.Sparkle, "Ask Claude", color, size = 46.dp) {
-                val question = text.trim()
-                when {
-                    question.isNotEmpty() -> {
-                        controller.askClaude(controller.withStudyHeader(question))
-                        text = ""
-                    }
-                    hero != null -> controller.askTemplate("Help me with this block.", hero)
-                    else -> controller.openAskClaude()
-                }
-            }
-        }
-        val action = if (loaded) mainAction(controller, day, now, hero, homeAt, focusKey) else null
-        if (action != null) {
-            Spacer(Modifier.height(8.dp))
-            MainHubButton(action)
-        }
-    }
-}
 
 @Composable
 private fun MainHubButton(action: HubAction) {
@@ -906,5 +387,316 @@ private fun MainHubButton(action: HubAction) {
         LauncherIcon(action.icon, contentDescription = null, tint = ink, size = 20.dp)
         Spacer(Modifier.width(8.dp))
         Text(action.label, style = studyText(ink, 15, FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+// ---- 0.14.0 (D186): Today, reimagined as one question and one button ----
+
+/**
+ * Med: "make it simple like the daily check-in, nothing complex … remove all the clutter, keep the note for tonight,
+ * remove the timeline and all useless info, I don't want to be overwhelmed; keep Quiz me; add some recommended tasks".
+ * Today is: what would you like to study (today's classes as chips, or typed), "Study with Claude" (a 45-minute session
+ * on the pill, and Claude opens with the day as context, [HomeController.studyKickoff]), what is recommended
+ * ([dev.liquid.launcher.core.data.Recommend]), the absences as plain numbers, Quiz me and the note for tonight.
+ * No timeline, blocks, tasks, sync row or other chips any more (study blocks no longer go into the calendar).
+ */
+@Composable
+private fun HubContent(controller: HomeController, color: Color, scroll: ScrollState, modifier: Modifier) {
+    val study = controller.data.study
+    val day by study.day.collectAsState()
+    val loaded by study.loaded.collectAsState()
+    val deck by study.deck.collectAsState()
+    val focus by study.focus.collectAsState()
+    val studied by study.studiedToday.collectAsState()
+    val tick = rememberMinuteTick()
+    val now = remember(tick, day, focus) { System.currentTimeMillis() }
+    val today = remember(tick) { LocalDate.now() }
+    val due = remember(deck, today) { dev.liquid.launcher.core.data.FlashcardDeck.due(deck, today).size }
+    val headerExam = remember(day, now) { day.exams.firstOrNull { it.begin > now } }
+    val recommended = remember(day, due, now, headerExam) {
+        dev.liquid.launcher.core.data.Recommend.items(day.feed, day.exams, day.unconfirmedExams, due, now, headerExam?.key)
+    }
+    val tickStore by controller.data.settings.derive { get(LauncherSettings.StudyRecommendDone) }
+    val ticked = remember(tickStore, today) { dev.liquid.launcher.core.data.Recommend.ticked(tickStore, today.toString()) }
+    // Today's classes, each once, as chips; the picks and the typed text make what is studied.
+    val classes = remember(day) {
+        day.classes.filter { !it.allDay }.sortedBy { it.begin }.map { it.title.subject.ifBlank { it.rawTitle }.trim() }.filter { it.isNotEmpty() }.distinct()
+    }
+    var picked by remember { mutableStateOf(setOf<String>()) }
+    var typed by remember { mutableStateOf("") }
+    val session = focus?.takeIf { it.isSession && it.until > now }
+
+    Column(modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp)) {
+        KickoffHeader(headerExam, day.unconfirmedExams, studied, now, color)
+        if (!loaded) {
+            Column(Modifier.weight(1f).padding(top = 14.dp)) {
+                Text(
+                    "The study companion is off, or it may not read the calendar yet.",
+                    style = studyText(color, 13, alpha = 0.8f), modifier = Modifier.padding(bottom = 10.dp),
+                )
+                ActionChip("Switch it on", color, filled = true) { controller.setupStudy() }
+            }
+            KickoffBar(controller, color)
+            return@Column
+        }
+        // Drawn without sampling the glass behind (0.10.4): nothing here redraws the hub's glass while it scrolls.
+        WithoutBackdrop {
+            Column(Modifier.weight(1f).verticalScroll(scroll)) {
+                if (session != null) {
+                    // A session runs: what, how long is left, and Finish.
+                    Row(Modifier.fillMaxWidth().padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Studying" + (session.subject.takeIf { it.isNotBlank() }?.let { " $it" } ?: "") + " · " + studyDuration(session.until - now) + " left",
+                            style = studyText(color, 14, FontWeight.Medium), maxLines = 2, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        ActionChip("Finish", color, icon = LauncherIcons.Check) { controller.stopStudySession() }
+                    }
+                }
+                Text(
+                    "What would you like to study today?",
+                    style = studyText(color, 18, FontWeight.SemiBold),
+                    modifier = Modifier.padding(top = 16.dp, bottom = 10.dp),
+                )
+                if (classes.isNotEmpty()) {
+                    Text("In class today", style = studyText(color, 12, alpha = 0.7f), modifier = Modifier.padding(bottom = 6.dp))
+                    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                    androidx.compose.foundation.layout.FlowRow(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        classes.forEach { c ->
+                            ActionChip(c, color, filled = c in picked, icon = if (c in picked) LauncherIcons.Check else null) {
+                                Haptics.tick(controller.view)
+                                picked = if (c in picked) picked - c else picked + c
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                }
+                KickoffField(typed, { typed = it }, color, if (classes.isEmpty()) "A chapter, a TD, a project…" else "Or type it: a chapter, a TD…")
+                Spacer(Modifier.height(12.dp))
+                MainHubButton(
+                    HubAction("Study with Claude", LauncherIcons.Sparkle, null) {
+                        controller.studyKickoff((picked.toList() + listOfNotNull(typed.trim().ifEmpty { null })).joinToString(", "), recommended.filter { it.key !in ticked }.map { it.text })
+                        picked = emptySet()
+                        typed = ""
+                    },
+                )
+                if (recommended.isNotEmpty()) {
+                    SectionLabel("Recommended", color)
+                    recommended.forEach { item ->
+                        RecommendedRow(item, item.key in ticked, color,
+                            onTick = { done ->
+                                controller.data.settings.set(
+                                    LauncherSettings.StudyRecommendDone,
+                                    dev.liquid.launcher.core.data.Recommend.tick(tickStore, today.toString(), item.key, done),
+                                )
+                            },
+                            onTap = {
+                                when (item.kind) {
+                                    dev.liquid.launcher.core.data.Recommend.Kind.Cards -> controller.openReview()
+                                    // Picks it as what to study (the button then starts it).
+                                    else -> typed = item.text
+                                }
+                            },
+                        )
+                    }
+                }
+                val absences = remember(day) { absenceCounts(day) }
+                if (absences.isNotEmpty()) {
+                    // Med: absences as numbers only (no meter, no limit), where he can find them.
+                    Text(
+                        "Absences · " + absences.joinToString("  ·  ") { "${it.first} ${it.second}" },
+                        style = studyText(color, 12, alpha = 0.7f),
+                        modifier = Modifier.padding(top = 14.dp),
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+        KickoffBar(controller, color)
+    }
+}
+
+/** The handle, "Today" with the date and the minutes studied, and the next exam counted down on the right. */
+@Composable
+private fun KickoffHeader(exam: StudyEvent?, unconfirmed: Set<String>, studied: Int, now: Long, color: Color) {
+    Column(Modifier.fillMaxWidth()) {
+        Box(
+            Modifier
+                .align(Alignment.CenterHorizontally)
+                .padding(top = 6.dp, bottom = 8.dp)
+                .size(width = 36.dp, height = 4.dp)
+                .clip(RoundedCornerShape(50))
+                .background(color.copy(alpha = 0.3f)),
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Today", style = studyText(color, 20, FontWeight.SemiBold), maxLines = 1)
+                val date = LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault()))
+                Text(
+                    date + if (studied > 0) " · $studied min studied" else "",
+                    style = studyText(color, 12, alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (exam != null) {
+                val days = (exam.begin - now) / 86_400_000L
+                if (days <= 30) {
+                    val (count, unit) = examCountdown(exam.begin, now)
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            (if (exam.key in unconfirmed) "≈" else "") + count + " " + unit,
+                            style = studyText(if (days > 14) color else examColor(days), 15, FontWeight.SemiBold), maxLines = 1,
+                        )
+                        Text(exam.title.text.ifBlank { exam.rawTitle }, style = studyText(color, 11, alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 150.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The field under the chips: what to study, typed. */
+@Composable
+private fun KickoffField(text: String, onChange: (String) -> Unit, color: Color, hint: String) {
+    val (fieldBackground, fieldInk) = fieldStyle(color)
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(46.dp)
+            .clip(RoundedCornerShape(50))
+            .then(fieldBackground)
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        if (text.isEmpty()) Text(hint, style = studyText(fieldInk, 14, alpha = 0.6f), maxLines = 1)
+        BasicTextField(
+            value = text,
+            onValueChange = onChange,
+            singleLine = true,
+            textStyle = TextStyle(fontFamily = HomeTheme.font, color = fieldInk, fontSize = 14.sp),
+            cursorBrush = SolidColor(fieldInk),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "What to study" },
+        )
+    }
+}
+
+/**
+ * A recommended task: a tick (Claude's tasks; kept for the day), its text (a tap picks it as what to study; the cards
+ * open the quick review), an exam soon in amber, close in red.
+ */
+@Composable
+private fun RecommendedRow(
+    item: dev.liquid.launcher.core.data.Recommend.Item,
+    done: Boolean,
+    color: Color,
+    onTick: (Boolean) -> Unit,
+    onTap: () -> Unit,
+) {
+    val kind = item.kind
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        when (kind) {
+            dev.liquid.launcher.core.data.Recommend.Kind.Claude -> Box(
+                Modifier.clip(CircleShape).clickable(onClickLabel = if (done) "Not done" else "Done") { onTick(!done) }.padding(4.dp),
+            ) { Tick(done, color) }
+            dev.liquid.launcher.core.data.Recommend.Kind.Cards -> Box(Modifier.padding(4.dp)) { LauncherIcon(LauncherIcons.Layers, contentDescription = null, tint = color, size = 18.dp) }
+            dev.liquid.launcher.core.data.Recommend.Kind.Exam -> Box(Modifier.padding(4.dp)) {
+                LauncherIcon(LauncherIcons.Schedule, contentDescription = null, tint = if (item.urgent) LeaveRed else Color(0xFFFFB74D), size = 18.dp)
+            }
+        }
+        Spacer(Modifier.width(6.dp))
+        Text(
+            item.text,
+            style = studyText(if (kind == dev.liquid.launcher.core.data.Recommend.Kind.Exam && item.urgent) LeaveRed else color, 14, alpha = if (done) 0.55f else 1f, struck = done),
+            maxLines = 2, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(onClick = onTap).padding(vertical = 4.dp),
+        )
+    }
+}
+
+/** The bottom: the prompt templates (Quiz me by default) and the note for tonight, or a question for Claude. */
+@Composable
+private fun KickoffBar(controller: HomeController, color: Color) {
+    val templates by controller.data.settings.derive { get(LauncherSettings.StudyTemplates) }
+    var text by remember { mutableStateOf("") }
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(controller.hubNoteFocus) {
+        if (controller.hubNoteFocus) {
+            kotlinx.coroutines.delay(220)
+            runCatching { focus.requestFocus() }
+            keyboard?.show()
+            controller.hubNoteFocus = false
+        }
+    }
+    fun saveNote() {
+        val note = text
+        if (note.isBlank()) return
+        controller.addStudyNote(note) { ok -> if (ok && text == note) text = "" }
+    }
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        val now = System.currentTimeMillis()
+        @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+        androidx.compose.foundation.layout.FlowRow(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            templates.forEach { line ->
+                val label = line.substringBefore('|').trim()
+                val prompt = line.substringAfter('|', "").trim()
+                if (label.isNotEmpty() && prompt.isNotEmpty()) {
+                    ActionChip(label, color, icon = LauncherIcons.Sparkle) { controller.askTemplate(prompt, null) }
+                }
+            }
+            // During or just after a class: its board, in its folder (only then).
+            controller.classForPhoto(now)?.let { cls ->
+                ActionChip("Board · ${cls.title.subject}", color, icon = LauncherIcons.Camera) { controller.boardPhoto() }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val (fieldBackground, fieldInk) = fieldStyle(color)
+            Row(
+                Modifier
+                    .weight(1f)
+                    .height(46.dp)
+                    .clip(RoundedCornerShape(50))
+                    .then(fieldBackground)
+                    .padding(start = 16.dp, end = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    if (text.isEmpty()) Text("Note for tonight, or ask Claude…", style = studyText(fieldInk, 14, alpha = 0.6f), maxLines = 1)
+                    BasicTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        singleLine = true,
+                        textStyle = TextStyle(fontFamily = HomeTheme.font, color = fieldInk, fontSize = 14.sp),
+                        cursorBrush = SolidColor(fieldInk),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { saveNote() }),
+                        modifier = Modifier.fillMaxWidth().focusRequester(focus).semantics { contentDescription = "Note or question" },
+                    )
+                }
+                if (text.isNotBlank()) {
+                    HubIcon(LauncherIcons.Add, "Save as a note for tonight", color, size = 38.dp) { saveNote() }
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            HubIcon(LauncherIcons.Sparkle, "Ask Claude", color, size = 46.dp) {
+                val question = text.trim()
+                if (question.isNotEmpty()) {
+                    controller.askClaude(controller.withStudyHeader(question))
+                    text = ""
+                } else {
+                    controller.openAskClaude()
+                }
+            }
+        }
     }
 }

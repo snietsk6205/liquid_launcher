@@ -33,8 +33,21 @@ import java.time.format.DateTimeFormatter
 /** A calendar on the phone, for choosing which ones hold study blocks and tasks. */
 data class StudyCalendarInfo(val id: Long, val name: String, val account: String, val color: Int, val writable: Boolean, val primary: Boolean = false)
 
-/** A focus timer running on a block. */
-data class StudyFocus(val eventKey: String, val eventId: Long, val startedAt: Long)
+/**
+ * A focus timer running on a block, or (0.14.0, D184) a study session not tied to any block: [subject] is what is
+ * studied (as chosen when Claude opened) and [until] when it ends (45 minutes after it began).
+ */
+data class StudyFocus(val eventKey: String, val eventId: Long, val startedAt: Long, val subject: String = "", val until: Long = 0) {
+    /** A session started from Today's "Study with Claude", not a block's focus. */
+    val isSession: Boolean get() = eventKey.startsWith(SESSION_PREFIX)
+
+    companion object {
+        const val SESSION_PREFIX = "session:"
+
+        /** Med's own rule: no study stretch longer than 45 minutes. */
+        const val SESSION_MINUTES = 45
+    }
+}
 
 /**
  * The study companion's data: study blocks and tasks read from the phone's calendar, and the
@@ -73,8 +86,20 @@ class StudyCalendar(
 
     init {
         val key = prefs.getString("focusKey", null)
-        if (key != null) _focus.value = StudyFocus(key, prefs.getLong("focusEvent", 0), prefs.getLong("focusStart", 0))
+        if (key != null) {
+            _focus.value = StudyFocus(
+                key, prefs.getLong("focusEvent", 0), prefs.getLong("focusStart", 0),
+                prefs.getString("focusSubject", null).orEmpty(), prefs.getLong("focusEnd", 0),
+            )
+        }
     }
+
+    private val _studied = MutableStateFlow(studiedOn(LocalDate.now()))
+
+    /** 0.14.0 (D184): minutes of study sessions finished today (the one running not counted until it ends). */
+    val studiedToday: StateFlow<Int> = _studied
+
+    private fun studiedOn(date: LocalDate): Int = prefs.getInt("studied:$date", 0)
 
     /** Starts or stops following calendar changes (while the launcher is on screen). */
     fun watch(on: Boolean) {
@@ -102,6 +127,7 @@ class StudyCalendar(
             _homeAt.value = storedHome()
             _attendance.value = storedAttendance()
             _checkedIn.value = storedCheckin()
+            _studied.value = studiedOn(LocalDate.now())
             // Not part of this job: a newer refresh must not cancel the write of the minutes.
             if (_focus.value != null) scope.launch(Dispatchers.IO) { finishFocusIfOver() }
         }
@@ -492,7 +518,19 @@ class StudyCalendar(
         val focus = StudyFocus(event.key, event.eventId, System.currentTimeMillis())
         _focus.value = focus
         prefs.edit().putString("focusKey", focus.eventKey).putLong("focusEvent", focus.eventId).putLong("focusStart", focus.startedAt)
-            .putLong("focusEnd", event.end).putBoolean("focusRecurring", event.recurring).apply()
+            .putLong("focusEnd", event.end).putBoolean("focusRecurring", event.recurring).remove("focusSubject").apply()
+    }
+
+    /**
+     * 0.14.0 (D184): a study session on [subject] for [minutes], started from Today's "Study with Claude" (no block in
+     * the calendar any more). It ends by itself like a block's focus; its minutes count towards [studiedToday] and are
+     * written nowhere in the calendar.
+     */
+    fun startSession(subject: String, minutes: Int = StudyFocus.SESSION_MINUTES, now: Long = System.currentTimeMillis()) {
+        val focus = StudyFocus(StudyFocus.SESSION_PREFIX + now, -1, now, subject.trim(), now + minutes * 60_000L)
+        _focus.value = focus
+        prefs.edit().putString("focusKey", focus.eventKey).putLong("focusEvent", -1).putLong("focusStart", now)
+            .putLong("focusEnd", focus.until).putBoolean("focusRecurring", false).putString("focusSubject", focus.subject).apply()
     }
 
     /** The end of the block the focus timer runs on (0 when unknown). */
@@ -509,7 +547,11 @@ class StudyCalendar(
         val end = focusEnd(focus)
         if (!StudyLocal.focusOver(end, now)) return null
         val minutes = stopFocus(until = end)
-        Notices.post(NoticeKind.Study, "Focus ended with the block: $minutes min", if (minutes > 0) "Added to the block" else null)
+        if (focus.isSession) {
+            Notices.post(NoticeKind.Study, "Study session over: $minutes min", "${_studied.value} min studied today")
+        } else {
+            Notices.post(NoticeKind.Study, "Focus ended with the block: $minutes min", if (minutes > 0) "Added to the block" else null)
+        }
         return minutes
     }
 
@@ -520,8 +562,16 @@ class StudyCalendar(
         val recurring = prefs.getBoolean("focusRecurring", false)
         // Taken atomically, so the minute tick and a refresh cannot both write the same minutes.
         val focus = _focus.getAndUpdate { if (it == running) null else it }.takeIf { it == running } ?: return 0
-        prefs.edit().remove("focusKey").remove("focusEvent").remove("focusStart").remove("focusEnd").remove("focusRecurring").apply()
+        prefs.edit().remove("focusKey").remove("focusEvent").remove("focusStart").remove("focusEnd").remove("focusRecurring").remove("focusSubject").apply()
         val minutes = StudyLocal.focusMinutes(focus.startedAt, until, end)
+        if (focus.isSession) {
+            // A session's minutes count for the day it began; nothing is written into the calendar.
+            val day = java.time.Instant.ofEpochMilli(focus.startedAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+            val total = studiedOn(day) + minutes
+            prefs.edit().putInt("studied:$day", total).apply()
+            if (day == LocalDate.now()) _studied.value = total
+            return minutes
+        }
         if (minutes > 0) addFocus(focus, end, recurring, minutes)
         return minutes
     }

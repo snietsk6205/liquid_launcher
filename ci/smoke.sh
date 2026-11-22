@@ -905,45 +905,50 @@ else
     sleep 1.5
     peek 14b-panel
     dump 14b-panel
-    if on_screen 14b-panel "Recall the theorems" exact; then pass "the clock line opens Today with the block's tasks"; else fail "the clock line opens Today with the block's tasks"; fi
-    on_screen 14b-panel "Done" exact || note "the hub does not show the block's Done in sight"
-    # 0.10.2: the hub opens with the whole day (0.10.1 opened it collapsed, with "The whole day" one tap away).
-    if on_screen 14b-panel "The whole day"; then
-      fail "the hub opens with the whole day, not collapsed"
-      tap_text 14b-panel "The whole day" || true
-      sleep 1.5
+    # 0.14.0 (D186): Today is the kick-off: one question with today's classes, Study with Claude, Quiz me and the note;
+    # no timeline, block cards or tasks any more (study blocks no longer go into the calendar).
+    if on_screen 14b-panel "What would you like to study today?" exact && on_screen 14b-panel "Study with Claude" exact; then
+      pass "the clock line opens Today, the kick-off screen"
     else
-      pass "the hub opens with the whole day"
+      fail "the clock line opens Today, the kick-off screen"
+      python3 ci/describe_ui.py "$OUT/14b-panel.xml" 25 | sed 's/^/        /'
+    fi
+    if on_screen 14b-panel "Quiz me" exact; then pass "Today keeps Quiz me"; else fail "Today keeps Quiz me"; fi
+    if on_screen 14b-panel "Recall the theorems" exact || on_screen 14b-panel "Timeline" exact || on_screen 14b-panel "Evening check-in" exact; then
+      fail "Today shows no blocks, timeline or extra chips any more"
+    else
+      pass "Today shows no blocks, timeline or extra chips any more"
     fi
     idle_frames "study hub"
-    dump 14b-panel
-    # "Done" first: once a task is ticked, its tick icon is also labelled "Done" (for accessibility) and comes earlier on screen.
-    tap_text 14b-panel "Done" exact || true
-    wait_until 10 event_has 'title=✓ Proba 2 smoke block' || true
-    if event_text | grep -q 'title=✓ Proba 2 smoke block'; then pass "Done puts ✓ in front of the event's title"; else fail "Done puts ✓ in front of the event's title"; event_text | head -8; fi
-    if event_text | grep -q '— launcher: done'; then pass "the launcher's status line is written"; else fail "the launcher's status line is written"; fi
-    dump 14b-panel2
-    tap_text 14b-panel2 "Recall the theorems" exact || true
-    wait_until 10 event_has '\[x\] Recall the theorems' || true
-    if event_text | grep -q '\[x\] Recall the theorems'; then pass "a tick is written into the event's description"; else fail "a tick is written into the event's description"; event_text | head -8; fi
-    if event_text | grep -q '— launcher: done .* · 1/2 tasks'; then pass "the status line counts the ticked task"; else fail "the status line counts the ticked task"; event_text | tail -2; fi
-    # 0.6.4: tomorrow opens from Today, and each of its blocks opens to its steps.
-    dump 14b-panel3
-    if tap_text 14b-panel3 "Tomorrow · "; then
-      sleep 1.5
-      dump 14b-tomorrow
-      if tap_text 14b-tomorrow "Micro smoke tomorrow" exact; then
-        sleep 1.5
-        peek 14b-tomorrow-open
-        dump 14b-tomorrow-open
-        if on_screen 14b-tomorrow-open "Refaire le TD 3" exact; then pass "a block of tomorrow opens to its steps"; else fail "a block of tomorrow opens to its steps"; fi
-      else
-        fail "Today lists tomorrow's block once tomorrow is opened"
-      fi
-    else
-      fail "Today shows a Tomorrow section"
-    fi
     adb shell input keyevent KEYCODE_BACK
+    sleep 2
+    # 0.13.1 (D181): the block's steps from the line under the clock: the focus timer, then a ✓ per step, written back
+    # into the event, then Done.
+    dump 14b-home3
+    if tap_text 14b-home3 "Start the focus timer" exact; then
+      sleep 2
+      peek 14b-step
+      dump 14b-step
+      if on_screen 14b-step "Step 1 of 2 · Recall the theorems"; then pass "while the pill counts the focus, the line shows the block's next step"; else fail "while the pill counts the focus, the line shows the block's next step"; fi
+      tap_text 14b-step "Tick the step: Recall the theorems" exact || true
+      wait_until 10 event_has '\[x\] Recall the theorems' || true
+      if event_text | grep -q '\[x\] Recall the theorems'; then pass "a step's tick is written into the event's description"; else fail "a step's tick is written into the event's description"; event_text | head -8; fi
+      sleep 2
+      dump 14b-step2
+      tap_text 14b-step2 "Tick the step: Serie 1, ex. 1-2" exact || true
+      wait_until 10 event_has '\[x\] Serie 1' || true
+      sleep 2
+      dump 14b-step3
+      peek 14b-step3
+      if on_screen 14b-step3 "All 2 steps done"; then pass "with every step ticked the line offers to mark the block done"; else fail "with every step ticked the line offers to mark the block done"; fi
+      tap_text 14b-step3 "Mark the block done" exact || true
+      wait_until 10 event_has 'title=✓ Proba 2 smoke block' || true
+      if event_text | grep -q 'title=✓ Proba 2 smoke block'; then pass "Done puts ✓ in front of the event's title"; else fail "Done puts ✓ in front of the event's title"; event_text | head -8; fi
+      if event_text | grep -q '— launcher: done .* · 2/2 tasks'; then pass "the status line counts the ticked steps"; else fail "the status line counts the ticked steps"; event_text | tail -2; fi
+    else
+      fail "the line under the clock offers the focus timer for the running block"
+      python3 ci/describe_ui.py "$OUT/14b-home3.xml" 25 | sed 's/^/        /'
+    fi
     sleep 2
     # With the block done and no task left, the clock line moves on to tomorrow instead of vanishing.
     dump 14b-home2

@@ -2212,13 +2212,13 @@ object LauncherSettings {
         ),
         title = "Blocks in Today",
         summary = "Compact: each block shows its title, time and step count, and a tap shows its steps and buttons (the block now or next too). Tap a block's title to open or close it",
-        section = "study", keywords = "study today hub block card cards expand collapse folded compact steps description notes details",
+        section = "study", keywords = "study today hub block card cards expand collapse folded compact steps description notes details", hidden = true,
     )
     val StudyButtonSide = ChoiceSetting(
         key = "study.buttonSide", default = "end",
         options = listOf("end" to "Right", "start" to "Left"),
         title = "Done and Skip buttons",
-        section = "study", keywords = "study done skip buttons right left side align",
+        section = "study", keywords = "study done skip buttons right left side align", hidden = true,
     )
     val StudyTomorrow = ChoiceSetting(
         key = "study.tomorrow", default = "peek",
@@ -2229,7 +2229,7 @@ object LauncherSettings {
         ),
         title = "Tomorrow in Today",
         summary = "Tap a block of tomorrow to read its steps and notes",
-        section = "study", keywords = "study tomorrow peek expand next day preview hide",
+        section = "study", keywords = "study tomorrow peek expand next day preview hide", hidden = true,
     )
     val StudyLinkOpener = ChoiceSetting(
         key = "study.linkOpener", default = "tab",
@@ -2477,25 +2477,33 @@ object LauncherSettings {
         section = "study", keywords = "study claude header prompt context",
     )
     val StudyCheckin = TextSetting(
-        key = "study.checkin", default = "Evening check-in. Here is my day; ask me what you need, then plan tomorrow.",
-        placeholder = "Evening check-in",
-        title = "Evening check-in message",
-        summary = "The study hub's Evening check-in button sends this with today's log to Claude",
-        section = "study", keywords = "study evening check-in claude prompt",
+        key = "study.checkin", default = "Study check-in. Here is my day; ask me what I want to study and how far I am, then let's start.",
+        placeholder = "Study check-in",
+        title = "Check-in message",
+        summary = "Today's \"Study with Claude\" sends this first, then your day: today's classes, what you picked, the minutes " +
+            "studied, your notes, what is recommended and the next exam. Point it to your plan doc's check-in section",
+        section = "study", keywords = "study evening check-in claude prompt kick-off study with claude message",
+    )
+    /** 0.14.0 (D186): the old five templates were checked once ([SettingsMigrations.migrate0140]). */
+    val TemplatesMigrated0140 = BoolSetting(
+        key = "state.templatesMigrated0140", default = false,
+        title = "Templates checked for 0.14.0", section = "state", hidden = true,
+    )
+    /** 0.14.0 (D185): Today's recommended tasks ticked, as "yyyy-MM-dd|key" (today's only are kept). */
+    val StudyRecommendDone = StringListSetting(
+        key = "state.recommendDone", default = emptyList(),
+        title = "Recommended tasks ticked today", section = "state", hidden = true,
     )
 
     /** "Label|prompt" lines; the hub shows the labels as chips. */
     val StudyTemplates = StringListSetting(
         key = "study.templates",
+        // 0.14.0 (D186, Med: "keep Quiz me", the rest is clutter): one template by default; add more here if wanted.
         default = listOf(
-            "Explain|Explain this to me step by step, with one worked example:",
-            "Quiz me|Quiz me on the block I am working on: five short questions, one at a time.",
-            "Stuck|I am stuck on this step. Give me a hint, not the answer:",
-            "Reschedule|I missed a block today. Suggest how to reschedule it this week without touching fixed dates.",
-            "Résumé|Fais-moi un résumé en 5 points de ce que je viens d'étudier :",
+            "Quiz me|Quiz me on what I studied today and in class: five short questions, one at a time, in French for course content.",
         ),
         title = "Prompt templates",
-        summary = "One per line as \"Label|prompt\". Shown as chips in the study hub; a tap sends the prompt to Claude with the header",
+        summary = "One per line as \"Label|prompt\". Shown as chips at the bottom of Today; a tap sends the prompt to Claude with the header",
         section = "study", keywords = "study claude prompt templates chips",
     )
     val StudyHubSize = IntSetting(
@@ -2513,7 +2521,7 @@ object LauncherSettings {
         ),
         title = "Study hub opens",
         summary = "At full height with the whole day, or collapsed to the block now or next",
-        section = "study", keywords = "study hub today panel collapsed expanded full whole day open compact size height half",
+        section = "study", keywords = "study hub today panel collapsed expanded full whole day open compact size height half", hidden = true,
     )
     val StudyHubDim = IntSetting(
         key = "study.hubDim", default = 26, min = 0, max = 80, step = 2, unit = "%",
@@ -2811,7 +2819,7 @@ object LauncherSettings {
         StudyCommuteLayout, StudyExamLayout, ContextActive, ContextApplied, ContextBase, LayoutTimerUntil, LayoutTimerLayout, LayoutTimerBack,
         StudyQuiet, StudyQuietPeople, StudyQuietEmail, StudyQuietTags, StudyAnnales,
         StudyArrival, StudyHomeWifi, StudyArrivalCharger, StudyShiftLead, StudyLatestEnd, StudyClassCalendars, StudyHeader, StudyCheckin, StudyTemplates,
-        StudyHubSize, StudyHubBounce, StudyClockAction, StudyHubOpen, StudyHubDim, StudyHubBlur, StudyHubInk, StudyLineInk, StudyLineShadow, StudyLineAfter,
+        StudyHubSize, StudyHubBounce, StudyClockAction, StudyHubOpen, StudyHubDim, StudyHubBlur, StudyHubInk, StudyLineInk, StudyLineShadow, StudyLineAfter, StudyRecommendDone, TemplatesMigrated0140,
         NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,
         NoticeLayout, NoticeWallpaper, NoticeTags, NoticeRedirect, NoticeUpdate, NoticeStudy, NoticeTask, NoticeInfo,
         GlassQuality, GlassEngine, GlassAuto, GlassCap, GlassFullPercent, GlassTintMode,

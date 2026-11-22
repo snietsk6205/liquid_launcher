@@ -1027,6 +1027,12 @@ private fun StudyLineRow(
 internal sealed interface ClockLineMain {
     data class Glance(val glance: StudyGlance) : ClockLineMain
     data class Own(val main: DayLine.Main) : ClockLineMain
+
+    /**
+     * 0.14.0 (D184): a study session runs ("Study with Claude"): what is studied, a ✓ to finish it; the time left only
+     * when the pill does not count it down ([onPill]).
+     */
+    data class Session(val subject: String, val startedAt: Long, val until: Long, val onPill: Boolean) : ClockLineMain
 }
 
 /** The line under the clock: its main line ([main]; null with only facts to say) and its quieter second line. */
@@ -1039,8 +1045,18 @@ internal data class ClockLineState(val main: ClockLineMain?, val facts: List<Day
  * block to mark; free until the next block or class; the tasks left; tomorrow. [glance] is the study glance (the pill's
  * and the drawer's, unchanged), which has every rule but the line's own.
  */
-internal fun clockLineMain(glance: StudyGlance?, day: StudyDay, now: Long, focusKey: String?, focusOnPill: Boolean): ClockLineMain? {
+internal fun clockLineMain(
+    glance: StudyGlance?,
+    day: StudyDay,
+    now: Long,
+    focusKey: String?,
+    focusOnPill: Boolean,
+    session: dev.liquid.launcher.core.data.StudyFocus? = null,
+): ClockLineMain? {
     if (glance is StudyGlance.LeaveBy || glance is StudyGlance.Attendance) return ClockLineMain.Glance(glance)
+    if (session != null && session.isSession && session.until > now) {
+        return ClockLineMain.Session(session.subject, session.startedAt, session.until, focusOnPill)
+    }
     if (focusOnPill) DayLine.focus(day, focusKey, now)?.let { return ClockLineMain.Own(it) }
     if (glance is StudyGlance.Running) return ClockLineMain.Glance(glance)
     DayLine.inClass(day, now)?.let { return ClockLineMain.Own(it) }
@@ -1056,6 +1072,7 @@ internal fun clockLineMain(glance: StudyGlance?, day: StudyDay, now: Long, focus
 /** The events [main] already names (the second line says something else), and from when "then" looks. */
 private fun clockLineScope(main: ClockLineMain?, now: Long): Pair<Set<String>, Long> = when (main) {
     null -> emptySet<String>() to now
+    is ClockLineMain.Session -> emptySet<String>() to maxOf(now, main.until)
     is ClockLineMain.Own -> when (val m = main.main) {
         is DayLine.Main.After -> setOfNotNull(m.event.key, m.next?.key) to maxOf(now, m.next?.end ?: m.event.end)
         is DayLine.Main.Free -> setOf(m.event.key) to m.event.end
@@ -1090,7 +1107,7 @@ internal fun rememberClockLine(controller: HomeController): ClockLineState? {
     return remember(glance, loaded, day, focus, tick, withAfter, focusOnPill) {
         if (!loaded) return@remember null
         val now = System.currentTimeMillis()
-        val main = clockLineMain(glance, day, now, focus?.eventKey, focusOnPill)
+        val main = clockLineMain(glance, day, now, focus?.eventKey, focusOnPill, focus)
         val facts = if (withAfter) {
             val (shown, from) = clockLineScope(main, now)
             val tasksShown = (main as? ClockLineMain.Glance)?.glance is StudyGlance.Tasks
@@ -1105,6 +1122,7 @@ internal fun rememberClockLine(controller: HomeController): ClockLineState? {
 
 /** What makes two main lines "the same line" for the animation: their kind and event. */
 private fun clockLineKey(main: ClockLineMain): String = when (main) {
+    is ClockLineMain.Session -> "session:" + main.startedAt
     is ClockLineMain.Glance -> glanceKey(main.glance)
     is ClockLineMain.Own -> when (val m = main.main) {
         is DayLine.Main.Step -> "step:" + m.event.key + ":" + m.task.index
@@ -1167,6 +1185,7 @@ internal fun ClockLine(
                         StudyLineRow(g, controller, color, shadow, interactive, focusing, ownColours)
                     }
                     is ClockLineMain.Own -> OwnLineRow(shown.main, controller, color, shadow, interactive, ownColours)
+                    is ClockLineMain.Session -> SessionLineRow(shown, controller, color, shadow, interactive, ownColours)
                 }
             }
         }
@@ -1218,6 +1237,62 @@ private fun OwnLineRow(
                 }
                 else -> Unit
             }
+        }
+    }
+}
+
+/** The words of a study session's line: "Studying Proba 2", with the time left when the pill does not count it. */
+internal fun sessionLineText(main: ClockLineMain.Session, now: Long = System.currentTimeMillis()): String =
+    "Studying" + (main.subject.takeIf { it.isNotBlank() }?.let { " $it" } ?: "") +
+        if (main.onPill) "" else " · " + minutes(main.until - now) + " left"
+
+/** 0.14.0 (D184): a study session on the line under the clock: a ring for the time gone, what is studied, ✓ to finish. */
+@Composable
+private fun SessionLineRow(
+    main: ClockLineMain.Session,
+    controller: HomeController,
+    color: Color,
+    shadow: androidx.compose.ui.graphics.Shadow?,
+    interactive: Boolean,
+    ownColours: Boolean,
+) {
+    val bounds = remember { arrayOfNulls<androidx.compose.ui.geometry.Rect>(1) }
+    val now = remember(rememberMinuteTick()) { System.currentTimeMillis() }
+    val length = (main.until - main.startedAt).coerceAtLeast(1)
+    val progress by animateFloatAsState(((now - main.startedAt).toFloat() / length).coerceIn(0f, 1f), androidx.compose.animation.core.tween(700), label = "sessionRing")
+    val accent = if (ownColours) color else HomeTheme.accent
+    Row(
+        Modifier
+            .height(30.dp)
+            .onGloballyPositioned { bounds[0] = it.boundsInRoot() }
+            .clip(RoundedCornerShape(50))
+            .then(if (interactive) Modifier.clickable(interactionSource = null, indication = null, onClick = { controller.openToday(bounds[0]) }) else Modifier)
+            .padding(horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        androidx.compose.foundation.Canvas(Modifier.size(15.dp)) {
+            val stroke = this.size.minDimension * 0.14f
+            val radius = (this.size.minDimension - stroke) / 2f
+            drawCircle(color.copy(alpha = 0.22f), radius = radius, style = Stroke(stroke))
+            if (progress > 0f) {
+                drawArc(
+                    accent, -90f, 360f * progress, false,
+                    androidx.compose.ui.geometry.Offset(stroke / 2f, stroke / 2f), androidx.compose.ui.geometry.Size(radius * 2f, radius * 2f),
+                    style = Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round),
+                )
+            }
+            drawCircle(accent, radius = radius * 0.42f)
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            sessionLineText(main, now),
+            style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp, fontWeight = FontWeight.Medium, shadow = shadow),
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        if (interactive) {
+            Spacer(Modifier.width(8.dp))
+            LineButton(LauncherIcons.Check, "Finish the study session", color, strong = true, own = ownColours) { controller.stopStudySession() }
         }
     }
 }

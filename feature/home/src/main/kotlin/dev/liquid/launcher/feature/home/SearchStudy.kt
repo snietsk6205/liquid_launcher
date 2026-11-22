@@ -506,83 +506,40 @@ internal fun examIntent(e: StudyEvent): Intent =
         Intent(Intent.ACTION_VIEW, uri)
     }
 
-// ---- absence meter (B2), grades (E2), flashcard (E4): from launcher-data ----
+// ---- absences (numbers, 0.14.0), grades (E2), flashcard (E4): from launcher-data ----
 
 private val Green = Color(0xFF66D19E)
 private val Amber = Color(0xFFFFB74D)
 
-private fun bandColor(band: String): Color = when (band) {
-    "green" -> Green
-    "amber" -> Amber
-    "red" -> LeaveRed
-    else -> Ink.copy(alpha = 0.45f)
-}
-
 /**
- * B2: one liquid tube per module, filled to absences ÷ (limit × sessions), green below half, amber to 0.8, red
- * above; a permanent grey UNVERIFIED badge while the rule is not confirmed, and never a "safe". Without a session
- * count only the number of absences is shown. Without launcher-data, the launcher's own "Note: absent" records.
+ * 0.14.0 (D186, Med: "keep present? on the phone, but I don't know where to see them, and I only want them as numbers, no
+ * bar with a limit like before"): each module's absences as a number, here and in Today. From his "present?" answers
+ * (the "Note: absent" records); from launcher-data only when the phone has none.
  */
 @Composable
 private fun AbsenceCard(day: StudyDay) {
-    val feedAbsences = day.feed?.absences
-    val levels = remember(feedAbsences) { feedAbsences?.let { dev.liquid.launcher.core.data.AbsenceMeter.levels(it) }.orEmpty() }
-    if (levels.isEmpty() && day.absences.isEmpty()) return
+    val counts = absenceCounts(day)
+    if (counts.isEmpty()) return
     SearchPane(onClick = null) {
         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Absences", style = searchText(13, FontWeight.SemiBold), modifier = Modifier.weight(1f))
-                if (feedAbsences?.ruleConfirmed != true) {
-                    Text(
-                        "UNVERIFIED",
-                        style = searchText(10, FontWeight.SemiBold, alpha = 0.75f),
-                        modifier = Modifier.clip(RoundedCornerShape(50)).cardFill(0.16f).padding(horizontal = 8.dp, vertical = 2.dp),
-                    )
+            Text("Absences", style = searchText(13, FontWeight.SemiBold))
+            for ((module, n) in counts) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(module, style = searchText(13), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("$n", style = searchText(15, FontWeight.SemiBold))
                 }
-            }
-            if (levels.isNotEmpty()) {
-                for (level in levels) AbsenceTube(level, (feedAbsences?.limit ?: 0.2))
-            } else {
-                for ((module, n) in day.absences.entries.sortedByDescending { it.value }) {
-                    Row {
-                        Text(module, style = searchText(13), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(if (n == 1) "1 absence" else "$n absences", style = searchText(12, alpha = 0.7f))
-                    }
-                }
-                Text("Counted from your \"Note: absent\" records; launcher-data adds the limit per module.", style = searchText(11, alpha = 0.55f))
             }
         }
     }
 }
 
-@Composable
-private fun AbsenceTube(level: dev.liquid.launcher.core.data.AbsenceLevel, limit: Double) {
-    val color = bandColor(level.band)
-    val fill by androidx.compose.animation.core.animateFloatAsState(
-        (level.fill ?: 0.0).toFloat().coerceIn(0f, 1.2f), spring(dampingRatio = 0.6f, stiffness = MotionScale.stiffness(120f)), label = "tube",
-    )
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(level.module, style = searchText(13, FontWeight.Medium), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                if (level.total != null) "${level.absent} of ${level.total} · limit ${(limit * 100).toInt()} %" else "${level.absent} absences · sessions unknown",
-                style = searchText(11, alpha = 0.7f),
-            )
-        }
-        Spacer(Modifier.height(4.dp))
-        Canvas(Modifier.fillMaxWidth().height(12.dp)) {
-            val r = CornerRadius(size.height / 2f, size.height / 2f)
-            drawRoundRect(Ink.copy(alpha = 0.12f), cornerRadius = r)
-            if (level.fill != null) {
-                val w = (size.width * fill.coerceAtMost(1f)).coerceAtLeast(size.height)
-                drawRoundRect(color.copy(alpha = 0.9f), size = Size(w, size.height), cornerRadius = r)
-                // The liquid's light: a brighter line along its top.
-                drawRoundRect(Color.White.copy(alpha = 0.28f), topLeft = Offset(size.height / 3f, 2.dp.toPx()), size = Size((w - size.height * 2f / 3f).coerceAtLeast(0f), 2.dp.toPx()), cornerRadius = CornerRadius(1.dp.toPx(), 1.dp.toPx()))
-            }
-            drawRoundRect(Ink.copy(alpha = 0.3f), cornerRadius = r, style = Stroke(1.dp.toPx()))
-        }
+/** Each module's absences, most first: the phone's own records, else launcher-data's counts. */
+internal fun absenceCounts(day: StudyDay): List<Pair<String, Int>> =
+    if (day.absences.isNotEmpty()) {
+        day.absences.entries.filter { it.value > 0 }.sortedByDescending { it.value }.map { it.key to it.value }
+    } else {
+        day.feed?.absences?.modules.orEmpty().filter { it.name.isNotBlank() && it.absent > 0 }.sortedByDescending { it.absent }.map { it.name.trim() to it.absent }
     }
-}
 
 /** E2: the weighted average, only once every mark has its coefficient. */
 @Composable
@@ -821,21 +778,8 @@ internal fun studyRows(command: String, day: StudyDay, now: Long, loaded: Boolea
 
 /** !abs: the tubes of launcher-data when there are some, else the launcher's own records. */
 private fun absenceRows(day: StudyDay): List<StudyRow> {
-    val absences = day.feed?.absences
-    return if (absences != null && absences.modules.isNotEmpty()) {
-            dev.liquid.launcher.core.data.AbsenceMeter.levels(absences).map { level ->
-                val detail = if (level.total != null) {
-                    "${level.absent} of ${level.total} sessions · ${(level.fill!! * 100).toInt()} % of the limit"
-                } else {
-                    "${level.absent} absences · sessions unknown"
-                }
-                StudyRow("abs:" + level.module, level.module, detail + if (!absences.ruleConfirmed) " · UNVERIFIED" else "", LauncherIcons.Info, if (level.fill != null) bandColor(level.band) else null)
-            }
-        } else if (day.absences.isEmpty()) {
-            listOf(StudyRow("none", "No absence recorded", "Each \"Note: absent <module> <time>\" in your task calendar counts here · UNVERIFIED", LauncherIcons.Info))
-        } else {
-            day.absences.entries.sortedByDescending { it.value }.map { (module, n) ->
-                StudyRow("abs:$module", module, (if (n == 1) "1 absence" else "$n absences") + " recorded · UNVERIFIED (the rule is not confirmed)", LauncherIcons.Info)
-            }
-        }
+    // 0.14.0 (D186): numbers only, as in Today.
+    val counts = absenceCounts(day)
+    if (counts.isEmpty()) return listOf(StudyRow("none", "No absence recorded", "Each \"no\" to \"present?\" after a class counts here", LauncherIcons.Info))
+    return counts.map { (module, n) -> StudyRow("abs:$module", module, if (n == 1) "1 absence" else "$n absences", LauncherIcons.Info) }
 }

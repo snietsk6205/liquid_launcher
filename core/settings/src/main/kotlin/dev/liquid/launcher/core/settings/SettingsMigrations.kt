@@ -42,4 +42,26 @@ object SettingsMigrations {
         }
         settings.set(LauncherSettings.IndexMigrated0111, true)
     }
+
+    /** 0.14.0 (D186): the five templates 0.9.1 gave the hub, exactly as they were (never edited). */
+    private val TEMPLATES_BEFORE_0140 = listOf(
+        "Explain|Explain this to me step by step, with one worked example:",
+        "Quiz me|Quiz me on the block I am working on: five short questions, one at a time.",
+        "Stuck|I am stuck on this step. Give me a hint, not the answer:",
+        "Reschedule|I missed a block today. Suggest how to reschedule it this week without touching fixed dates.",
+        "Résumé|Fais-moi un résumé en 5 points de ce que je viens d'étudier :",
+    )
+
+    /**
+     * 0.14.0 (D186, Med: "keep Quiz me", the rest is clutter): templates still exactly the old five (stored by an earlier
+     * version) become the new default, Quiz me alone; templates he wrote or changed are kept. Once.
+     */
+    fun migrate0140(settings: SettingsStore) {
+        if (settings.get(LauncherSettings.TemplatesMigrated0140)) return
+        if (settings.isChanged(LauncherSettings.StudyTemplates) && settings.get(LauncherSettings.StudyTemplates) == TEMPLATES_BEFORE_0140) {
+            settings.reset(LauncherSettings.StudyTemplates)
+            DebugLog.event("Settings", "0.14.0: the study templates are Quiz me alone now (the old five were never changed)")
+        }
+        settings.set(LauncherSettings.TemplatesMigrated0140, true)
+    }
 }

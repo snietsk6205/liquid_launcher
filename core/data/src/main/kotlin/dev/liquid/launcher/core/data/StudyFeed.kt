@@ -21,9 +21,17 @@ data class StudyFeed(
     /** 0.12.0 (D173): a small deck; the single [flashcard] still reads as a deck of one. */
     val flashcards: List<FeedCard> = emptyList(),
     val grades: List<FeedGrade> = emptyList(),
+    /**
+     * 0.14.0 (D185): up to three short tasks Claude recommends for the next days (written at the end of each study chat),
+     * shown in Today under "Recommended". Older launcher-data without it reads as before.
+     */
+    val recommended: List<String> = emptyList(),
 ) {
     /** True when there is nothing in it the launcher shows. */
-    val isEmpty: Boolean get() = exams.isEmpty() && (absences?.modules.isNullOrEmpty()) && cards.isEmpty() && grades.isEmpty()
+    val isEmpty: Boolean get() = exams.isEmpty() && (absences?.modules.isNullOrEmpty()) && cards.isEmpty() && grades.isEmpty() && tasks.isEmpty()
+
+    /** [recommended] without blanks or repeats, at most three. */
+    val tasks: List<String> get() = recommended.map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(3)
 
     /** Every card in it, the deck's and the single one, with a question. */
     val cards: List<FeedCard> get() = (flashcards + listOfNotNull(flashcard)).filter { it.q.isNotBlank() }
@@ -80,6 +88,7 @@ object StudyFeedParser {
         feed.absences?.modules?.takeIf { it.isNotEmpty() }?.let { parts += if (it.size == 1) "absences of 1 module" else "absences of ${it.size} modules" }
         feed.cards.size.takeIf { it > 0 }?.let { parts += if (it == 1) "a flashcard" else "$it flashcards" }
         if (feed.grades.isNotEmpty()) parts += if (feed.grades.size == 1) "1 grade" else "${feed.grades.size} grades"
+        feed.tasks.size.takeIf { it > 0 }?.let { parts += if (it == 1) "1 recommended task" else "$it recommended tasks" }
         return if (parts.isEmpty()) "valid, but empty" else parts.joinToString(", ")
     }
 }

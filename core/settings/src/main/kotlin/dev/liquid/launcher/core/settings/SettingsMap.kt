@@ -176,8 +176,9 @@ object SettingsMap {
                 // 0.10.2: what Med looked for first sits on the first tab: the line under the clock and its colour, how the
                 // hub opens and how its blocks show.
                 L to listOf(
-                    "study.enabled", "study.clockLine", "study.lineAfter", "study.lineInk", "study.lineShadow", "study.clockAction", "study.hubOpen", "study.blockCards",
-                    "study.buttonSide", "study.tomorrow", "study.hubSize",
+                    // 0.14.0 (D186): Today is one simple screen; its blocks, sides, tomorrow and collapsed state are gone.
+                    "study.enabled", "study.clockLine", "study.lineAfter", "study.lineInk", "study.lineShadow", "study.clockAction",
+                    "study.hubSize",
                 ),
                 K to listOf("study.glassTint", "study.hubDim", "study.hubBlur", "study.hubInk"),
                 B to listOf(

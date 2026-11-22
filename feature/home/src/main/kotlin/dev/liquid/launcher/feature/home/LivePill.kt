@@ -129,7 +129,9 @@ internal fun liveNow(
 ): LiveNow? {
     if (look.focus && focus != null) {
         val block = day.blocks.firstOrNull { it.key == focus.eventKey }
-        return LiveNow.Focus(block?.title?.subject?.ifBlank { null } ?: "Focus", focus.startedAt, block?.end?.takeIf { it > now }, block?.let { eventColor(it) })
+        // 0.14.0 (D184): a study session has no block: its own subject and end.
+        val end = block?.end ?: focus.until.takeIf { it > 0 }
+        return LiveNow.Focus(block?.title?.subject?.ifBlank { null } ?: focus.subject.ifBlank { "Focus" }, focus.startedAt, end?.takeIf { it > now }, block?.let { eventColor(it) })
     }
     var running: LiveNow.Running? = null
     var next: LiveNow.Next? = null

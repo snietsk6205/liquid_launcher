@@ -52,6 +52,8 @@ class LauncherApp : Application() {
         dev.liquid.launcher.core.settings.SettingsMigrations.migrate0110(settings)
         // 0.11.1: the letter circle becomes the first letter area, where it was, once.
         dev.liquid.launcher.core.settings.SettingsMigrations.migrate0111(settings)
+        // 0.14.0: Quiz me alone in Today, where the old five templates were never changed, once.
+        dev.liquid.launcher.core.settings.SettingsMigrations.migrate0140(settings)
         // W5: the daily backup job, if it is on.
         runCatching { dev.liquid.launcher.core.data.AutoBackup.schedule(this) }
         DebugLog.enabled = settings.get(LauncherSettings.LogEnabled)

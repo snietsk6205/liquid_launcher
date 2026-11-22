@@ -392,10 +392,9 @@ class HomeController(
         hubOrigin = from ?: pillBounds
         hubDragPos = null
         menu = null
-        // W7: from closed, the hub opens collapsed unless set to show the whole day at once.
+        // 0.14.0 (D186): Today is one simple screen, always at its full height (W7's collapsed day is gone with the blocks).
         if (!todaySheet && hub.value < 0.05f) {
-            val full = data.settings.get(LauncherSettings.StudyHubOpen) == "full"
-            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { hubExpand.snapTo(if (full) 1f else 0f) }
+            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { hubExpand.snapTo(1f) }
         }
         todaySheet = true
         scope.launch { hub.animateTo(1f, hubSpring(opening = true), initialVelocity = velocity ?: hub.velocity) }
@@ -482,12 +481,45 @@ class HomeController(
         askClaude(withStudyHeader(prompt.trim() + (block?.let { "\n\n" + blockContext(it) } ?: "")))
     }
 
-    /** The evening check-in: the message from the settings and today's log, to Claude. */
+    /**
+     * 0.14.0 (D186): the check-in, now the start of a study chat: the check-in message (Settings › Study companion, which
+     * points Claude to the plan doc) and the day as context ([dev.liquid.launcher.core.data.Kickoff]), to Claude. Today's
+     * "Study with Claude" also starts a 45-minute session on what was picked ([studyKickoff]); the evening line and the
+     * search card only open the chat.
+     */
     fun eveningCheckin() {
         Haptics.confirm(view)
+        sendKickoff("", recommendedNow())
+    }
+
+    /** 0.14.0 (D186): Today's "Study with Claude": a 45-minute session on [subject] and the chat with the day as context. */
+    fun studyKickoff(subject: String, recommended: List<String>) {
+        Haptics.confirm(view)
+        startStudySession(subject)
+        sendKickoff(subject, recommended)
+    }
+
+    private fun sendKickoff(subject: String, recommended: List<String>) {
         data.study.markCheckin()
         val message = data.settings.get(LauncherSettings.StudyCheckin).trim()
-        askClaude(withStudyHeader(message + "\n\n" + studyReport(data.study.day.value)))
+        val date = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", java.util.Locale.ENGLISH))
+        val text = dev.liquid.launcher.core.data.Kickoff.context(
+            message, data.study.day.value, subject, data.study.studiedToday.value, recommended,
+            System.currentTimeMillis(), date, ::studyClock,
+        )
+        askClaude(withStudyHeader(text))
+    }
+
+    /** What Today recommends now (the ones not ticked), as words, for a check-in sent from elsewhere. */
+    private fun recommendedNow(): List<String> {
+        val day = data.study.day.value
+        val now = System.currentTimeMillis()
+        val today = java.time.LocalDate.now()
+        val due = dev.liquid.launcher.core.data.FlashcardDeck.due(data.study.deck.value, today).size
+        val ticked = dev.liquid.launcher.core.data.Recommend.ticked(data.settings.get(LauncherSettings.StudyRecommendDone), today.toString())
+        val header = day.exams.firstOrNull { it.begin > now }?.key
+        return dev.liquid.launcher.core.data.Recommend.items(day.feed, day.exams, day.unconfirmedExams, due, now, header)
+            .filter { it.key !in ticked }.map { it.text }
     }
 
     // ---- arrival, shift tonight, quick notes (0.9.1, A2, A3, D5) ----
@@ -742,6 +774,28 @@ class HomeController(
             }
             data.study.startFocus(event)
             notice(dev.liquid.launcher.core.common.NoticeKind.Study, "Focus on ${event.title.subject}", "Until the block ends; tap Focus again to stop")
+        }
+    }
+
+    /**
+     * 0.14.0 (D184): a 45-minute study session on [subject], from Today's "Study with Claude" (a focus or session running
+     * is stopped first). The pill counts it down, the line under the clock says what is studied, and the speed bump holds
+     * distracting apps back while it runs.
+     */
+    fun startStudySession(subject: String) {
+        scope.launch {
+            if (data.study.focus.value != null) data.study.stopFocus()
+            data.study.startSession(subject)
+            DebugLog.event("Study", "session: ${subject.ifBlank { "(no subject)" }}, ${dev.liquid.launcher.core.data.StudyFocus.SESSION_MINUTES} min")
+        }
+    }
+
+    /** 0.14.0: ends the study session now (the ✓ on the line under the clock). */
+    fun stopStudySession() {
+        Haptics.confirm(view)
+        scope.launch {
+            val minutes = data.study.stopFocus()
+            notice(dev.liquid.launcher.core.common.NoticeKind.Study, "Session done: $minutes min", "${data.study.studiedToday.value} min studied today")
         }
     }
 
@@ -1650,7 +1704,12 @@ class HomeController(
         if (words.isEmpty() || app.tags.isEmpty()) return null
         val ids = data.organisation.value.value.tags.filter { it.name.trim().lowercase() in words }.map { it.id }.toSet()
         if (app.tags.none { it in ids }) return null
-        return data.study.day.value.current(System.currentTimeMillis())?.takeIf { it.status == dev.liquid.launcher.core.data.StudyStatus.Open }
+        val now = System.currentTimeMillis()
+        data.study.day.value.current(now)?.takeIf { it.status == dev.liquid.launcher.core.data.StudyStatus.Open }?.let { return it }
+        // 0.14.0 (D184): a study session holds them back too (as a block named after what is studied).
+        return data.study.focus.value?.takeIf { it.isSession && it.until > now }?.let {
+            dev.liquid.launcher.core.data.StudyEvent(-1, 0, it.startedAt, it.until, false, it.subject.ifBlank { "Study session" })
+        }
     }
 
     /** The speed bump's "Open anyway": the app it held back opens as it would have. */
