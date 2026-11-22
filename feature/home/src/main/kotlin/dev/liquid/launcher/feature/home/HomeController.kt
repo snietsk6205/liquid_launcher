@@ -1626,12 +1626,16 @@ class HomeController(
     /** Finger released while moving the drawer: open or close depending on position and speed. */
     fun settleDrawer(velocityPxPerSec: Float) {
         val position = dragPosition ?: drawer.value
-        DebugLog.event("Home", "drawer: released at " + "%.2f".format(position) + ", " + velocityPxPerSec.toInt() + " px/s")
         val open = when {
             velocityPxPerSec < -800f -> true
             velocityPxPerSec > 800f -> false
             else -> position > OPEN_POINT
         }
+        // 0.15.3: with what the release does, so a log (and the emulator test) can tell a swipe too short and slow apart.
+        DebugLog.event(
+            "Home",
+            "drawer: released at " + "%.2f".format(position) + ", " + velocityPxPerSec.toInt() + " px/s: " + if (open) "opens" else "closes",
+        )
         // Upward finger speed is negative on screen and positive for the drawer.
         val velocity = (-velocityPxPerSec / (screenHeight * drawerTravel())).coerceIn(-14f, 14f)
         if (open) openDrawer(velocity) else closeDrawer(velocity = velocity)
@@ -1701,12 +1705,15 @@ class HomeController(
     /** Finger released while moving search: open or close by position and speed, as the drawer does. */
     fun settleSearch(velocityPxPerSec: Float) {
         val position = searchDragPosition ?: search.value
-        DebugLog.event("Home", "search: released at " + "%.2f".format(position) + ", " + velocityPxPerSec.toInt() + " px/s")
         val open = when {
             velocityPxPerSec > 800f -> true
             velocityPxPerSec < -800f -> false
             else -> position > OPEN_POINT
         }
+        DebugLog.event(
+            "Home",
+            "search: released at " + "%.2f".format(position) + ", " + velocityPxPerSec.toInt() + " px/s: " + if (open) "opens" else "closes",
+        )
         val velocity = (velocityPxPerSec / (screenHeight * drawerTravel())).coerceIn(-14f, 14f)
         if (open) openSearch(velocity) else closeSearch(velocity = velocity)
     }

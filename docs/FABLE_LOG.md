@@ -1559,3 +1559,14 @@ Does the picture asleep look right (darker and paler), or should it be darker st
 
 **Exact next step:** his next log: "unlock: the screen wakes (ripple, 380 ms) from …" without "(no picture of it asleep
 yet…)" most of the time.
+
+### Addendum: run 137's failed check (14g), a test swipe too short
+
+Run 137 (the glide fix, [smoke]) failed one check, study's 14g "search finds an option of Settings": its swipe down
+reached the launcher as "released at 0.40, 710 px/s", under both what opens search (more than 0.40 of the way, or
+800 px/s), so search stayed shut and "liquid stretch" was typed into nothing. Not a regression: the glide fix showed
+as wanted in the same run (the first search's field ended at 919 px, no "stayed taller"), and run 136 passed 14g with
+a swipe that only just opened it ("released at 0.33, 869 px/s"). The emulator's `input swipe` of 250 ms arrives as
+a few points and the lift's own move is dropped, as the drawer's swipe did in 0.5.0. So: each release now says what it
+does ("…px/s: opens" / ": closes", drawer and search), and the smoke test's search swipes go through `open_search`,
+which swipes again, slower (450 ms), when the log says the first left search shut.

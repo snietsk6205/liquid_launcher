@@ -271,6 +271,23 @@ home_and_settle() {
   sleep 1.5
 }
 
+# open_search : a swipe down the home screen, which opens search. 0.15.3: like the drawer's (06), a fast `input swipe`
+# can reach the launcher as two or three points, short and slow, the lift's own move dropped: run 137's arrived as
+# "released at 0.40, 710 px/s", under both the distance and the speed that open search, and 14g failed with search shut.
+# When the launcher's log says the swipe left search shut, a second, slower one. The caller waits for the screen after.
+search_released_since() { [ "$(grep -c "search: released at" "$LOG" || true)" -gt "$1" ]; }
+open_search() {
+  local before
+  before=$(grep -c "search: released at" "$LOG" || true)
+  adb shell input swipe 540 900 540 1700 250
+  wait_until 3 search_released_since "$before" || true
+  if search_released_since "$before" && grep "search: released at" "$LOG" | tail -1 | grep -q ": closes"; then
+    echo "      the swipe left search shut ($(grep -o 'search: released at .*' "$LOG" | tail -1)): a second, slower one"
+    sleep 1
+    adb shell input swipe 540 900 540 1700 450
+  fi
+}
+
 # D187: a fresh install shows "What's new" above the pill until Got it. The drawer part checks it (8b); the other
 # parts put it away first, so their checks see the home screen they always saw (8b ran before them).
 put_away_whats_new() {
@@ -716,7 +733,7 @@ fi
 
 # Search: swipe down, type a calculation.
 clear_anr
-adb shell input swipe 540 900 540 1700 250
+open_search
 sleep 1.5
 adb shell input text "12+30"
 wait_screen 10-search "= 42" 8 || true
@@ -1122,7 +1139,7 @@ CAL3EOF
     fail "launcher-data's two flashcards joined the deck"
     adb shell su 0 content query --uri content://com.android.calendar/events --projection description --where "title='launcher-data'" 2>/dev/null | cut -c1-260 | sed 's/^/        stored: /'
   fi
-  adb shell input swipe 540 900 540 1700 250
+  open_search
   sleep 2
   adb shell input keyevent KEYCODE_BACK
   wait_screen 14e-search "Proba 2 · 1 more due today" 6 || true
@@ -1181,7 +1198,7 @@ clear_anr
 # (a tap opens the card in the quick review).
 section "14g. Search finds Settings and flashcards"
 home_and_settle
-adb shell input swipe 540 900 540 1700 250
+open_search
 sleep 1.5
 adb shell input text "liquid%sstretch"
 wait_screen 14g-search "Settings › " 8 || true
@@ -1209,7 +1226,7 @@ else
   sleep 1
 fi
 if [ -n "$EVENT_ID" ]; then
-  adb shell input swipe 540 900 540 1700 250
+  open_search
   sleep 1.5
   adb shell input text "fatou"
   wait_screen 14g-card "Flashcard · Proba 2" 8 exact || true
