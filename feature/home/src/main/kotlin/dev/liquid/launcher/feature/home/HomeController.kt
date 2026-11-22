@@ -1030,6 +1030,8 @@ class HomeController(
         if (expectKeyboard) {
             keyboardPath = null
             keyboardDriveShown = 0f
+            keyboardDriving = false
+            riseGlide?.cancel()
             // 0.13.0 (D175): the keyboard rises with the pill from the first frame, at the height of its picture (or
             // the height it usually opens at): its picture until it is ready, then the keyboard itself.
             keyboardRise = KeyboardPicture.height.takeIf { it > 0 }?.toFloat() ?: keyboardGuess
@@ -1050,8 +1052,38 @@ class HomeController(
 
     /** The keyboard was put away or never came: search stops planning around it. */
     fun stopKeyboardRise() {
+        riseGlide?.cancel()
         keyboardRise = 0f
         keyboardStandInOn = false
+    }
+
+    /**
+     * 0.13.1: the launcher holds the keyboard right now (between the drive's "ready" and its hand-back), so its height
+     * fully up is [keyboardDriveShown], not what the system's own animation would report.
+     */
+    var keyboardDriving by mutableStateOf(false)
+
+    private var riseGlide: kotlinx.coroutines.Job? = null
+
+    /**
+     * 0.13.1 (Med: "after I change the wallpaper the pill goes higher than intended the first time"): moves [keyboardRise]
+     * to [px] on a short spring without bounce instead of in one frame, so the pill (and the keyboard while the launcher
+     * holds it) glides to a height that turned out different: the keyboard's real height once it is ready, or where it
+     * settled while search stays open. Not rising: set at once.
+     */
+    fun glideKeyboardRise(px: Float) {
+        riseGlide?.cancel()
+        val from = keyboardRise
+        if (from <= 0f || px <= 0f || kotlin.math.abs(from - px) < 1f) {
+            keyboardRise = px
+            return
+        }
+        riseGlide = scope.launch {
+            androidx.compose.animation.core.animate(
+                from, px,
+                animationSpec = spring(dampingRatio = 1f, stiffness = MotionScale.stiffness(650f)),
+            ) { value, _ -> if (keyboardRise > 0f) keyboardRise = value }
+        }
     }
 
     /** 0.11.2: the speed check is playing (Settings → Diagnostics): search opens without the keyboard. */

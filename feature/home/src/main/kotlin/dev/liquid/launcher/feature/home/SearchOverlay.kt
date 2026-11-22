@@ -13,6 +13,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import androidx.compose.ui.layout.layout
 import dev.liquid.launcher.core.common.DebugLog
 import dev.liquid.launcher.core.data.ClaudeQuery
@@ -651,11 +652,17 @@ private suspend fun driveKeyboard(
         }
         controller.keyboardPath = "drive"
         controller.keyboardDriveShown = driver.shownPx.toFloat()
+        controller.keyboardDriving = true
         val pictured = KeyboardPicture.image != null && controller.keyboardStandInOn
+        // 0.13.1: a keyboard that has just rebuilt itself says it is taller than it will be (1188 px for 933 px on Med's
+        // phone, the first opening after a wallpaper change): the pill keeps to the height it opens at.
+        val expected = controller.keyboardRise
+        val believed = drive.believes(driver.shownPx.toFloat(), expected, drive.TALLER_DP * view.resources.displayMetrics.density)
         DebugLog.event(
             "Home",
             "search: the keyboard rises with the pill: ready ${driver.readyAt - driver.askedAt} ms after asking at the swipe's start " +
-                "(${at()}; ${if (pictured) "its picture rose meanwhile" else "no picture of it yet"}; it goes to ${driver.shownPx} px)",
+                "(${at()}; ${if (pictured) "its picture rose meanwhile" else "no picture of it yet"}; it goes to ${driver.shownPx} px" +
+                (if (believed) ")" else "; taller than the ${expected.roundToInt()} px it opens at, so the pill keeps to that until it settles)"),
         )
         // The keyboard takes the picture's place this frame, at its height; the rise then follows its real height.
         var frames = 0
@@ -665,13 +672,14 @@ private suspend fun driveKeyboard(
             if (controller.searchOpen && p >= 1f) topped = true
             if (!controller.searchOpen) topped = false
             val rise = controller.keyboardRise.takeIf { it > 0f } ?: driver.shownPx.toFloat()
-            // Where the picture stands now, as a share of the keyboard's own height.
-            val f = if (topped) 1f else (rise * p.coerceIn(0f, 1f) / driver.shownPx.coerceAtLeast(1)).coerceIn(0f, 1f)
+            // Where the picture stands now, as a share of the keyboard's own height; fully up once search is (unless its
+            // height is doubted: then its top stays on the pill's line).
+            val f = drive.share(rise, if (topped) 1f else p, driver.shownPx.toFloat())
             driver.move(f)
             if (frames == 2) {
-                // Two frames in, the keyboard stands where its picture is: the picture goes, the rise uses its height.
+                // Two frames in, the keyboard stands where its picture is: the picture goes, the rise glides to its height.
                 controller.keyboardStandInOn = false
-                if (driver.shownPx > 0) controller.keyboardRise = driver.shownPx.toFloat()
+                if (driver.shownPx > 0 && believed) controller.glideKeyboardRise(driver.shownPx.toFloat())
             }
             frames++
             androidx.compose.runtime.withFrameNanos { }
@@ -694,6 +702,7 @@ private suspend fun driveKeyboard(
             KeyboardDriver.Phase.Asking -> driver.giveUp("search closed before the keyboard was ready")
             else -> Unit
         }
+        controller.keyboardDriving = false
         if (controller.keyboardPath == "drive") controller.keyboardStandInOn = false
     }
 }
@@ -808,6 +817,37 @@ private fun KeyboardWatch(controller: HomeController) {
         var startedAt = 0L
         var fieldAtStart = 0f
         var lastSettled = -1f
+        val watchScope = this
+        // 0.13.1: the picture is taken on the side, 180 ms after the keyboard stood still: waiting for it inside the
+        // collection below held back the keyboard's next height (the pill stayed too high for those 180 ms).
+        fun takePictureSoon(at: Float) {
+            if (!controller.searchOpen) return
+            val height = at.roundToInt()
+            val screen = controller.screenHeight.roundToInt()
+            watchScope.launch {
+                kotlinx.coroutines.delay(180)
+                if (controller.searchOpen && kotlin.math.abs(insets.ime() - at) < 1f) KeyboardPicture.take(appContext, height, screen)
+            }
+        }
+
+        /**
+         * 0.13.1 (Med: "when I change the wallpaper the pill goes higher than intended the first time, then the next time it
+         * is normal"): the keyboard stood still at [at] while search is open. Up to 0.13.0 the pill kept the height the
+         * keyboard first said it had (1188 px) after it came down to its real one (933 px); now the pill comes down onto it
+         * (a glide) and is never left above a gap. Higher: the field already rides on it.
+         */
+        fun followSettled(at: Float) {
+            if (!controller.searchOpen || controller.keyboardDriving) return
+            val rise = controller.keyboardRise
+            if (rise <= 0f) return
+            if (at < rise - 1f) {
+                DebugLog.event("Home", "search: the pill comes down onto the keyboard, from ${rise.roundToInt()} to ${at.roundToInt()} px")
+                controller.glideKeyboardRise(at)
+            } else if (at > rise + 1f) {
+                controller.glideKeyboardRise(at)
+            }
+            if (controller.keyboardDriveShown > 0f) controller.keyboardDriveShown = at
+        }
         snapshotFlow { Triple(insets.ime(), insets.imeTarget(), insets.nav()) }.collect { (now, target, nav) ->
             val up = now > nav + 1f
             if (!up && target <= nav + 1f) {
@@ -823,8 +863,10 @@ private fun KeyboardWatch(controller: HomeController) {
             }
             // Where it is going: while the launcher drives it, the height the system gave for it fully up (its own
             // animation target may not be reported then); otherwise the target. On its way out it has not settled.
+            // 0.13.1: only while the launcher still holds it; once handed back, the system's target is the truth (a
+            // keyboard whose first height was doubted settles where it really is, never at that first height).
             val goal = when {
-                opening && controller.keyboardPath == "drive" && controller.keyboardDriveShown > nav + 1f -> controller.keyboardDriveShown
+                opening && controller.keyboardPath == "drive" && controller.keyboardDriving && controller.keyboardDriveShown > nav + 1f -> controller.keyboardDriveShown
                 target > nav + 1f -> target
                 else -> return@collect
             }
@@ -846,15 +888,16 @@ private fun KeyboardWatch(controller: HomeController) {
                 // 0.13.0 (D175): up and still: its picture stands in for it at the next opening; a picture still up
                 // (the keyboard came the usual way) goes now that the keyboard covers it.
                 controller.keyboardStandInOn = false
-                if (controller.searchOpen) {
-                    val height = now.roundToInt()
-                    val screen = controller.screenHeight.roundToInt()
-                    kotlinx.coroutines.delay(180)
-                    if (controller.searchOpen && kotlin.math.abs(insets.ime() - now) < 1f) KeyboardPicture.take(appContext, height, screen)
-                }
+                followSettled(now)
+                takePictureSoon(now)
             } else if (controller.searchOpen) {
-                if (now < lastSettled - 1f) DebugLog.event("Home", "search: keyboard went down to ${now.roundToInt()} px while open")
+                if (now < lastSettled - 1f) {
+                    DebugLog.event("Home", "search: keyboard went down to ${now.roundToInt()} px while open")
+                    // 0.13.1: its new look and height, for the next opening's picture (a wallpaper change recolours it).
+                    takePictureSoon(now)
+                }
                 controller.rememberKeyboard(now, opening = false)
+                followSettled(now)
             }
             lastSettled = now
         }

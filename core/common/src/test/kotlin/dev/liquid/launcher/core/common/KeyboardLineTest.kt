@@ -66,6 +66,29 @@ class KeyboardLineTest {
     }
 
     @Test
+    fun aKeyboardThatSaysItIsMuchTallerThanItOpensAtIsDoubted() {
+        val tolerance = KeyboardDrive.TALLER_DP * 3f // density 3, Med's phone
+        // Med's log, first opening after a wallpaper change: 1188 px said, 933 px real.
+        assertTrue(!KeyboardDrive.believes(1188f, 933f, tolerance))
+        // A few px either way, a shorter keyboard, or nothing expected yet: believed.
+        assertTrue(KeyboardDrive.believes(950f, 933f, tolerance))
+        assertTrue(KeyboardDrive.believes(800f, 933f, tolerance))
+        assertTrue(KeyboardDrive.believes(1188f, 0f, tolerance))
+    }
+
+    @Test
+    fun theKeyboardsTopStaysOnThePillsLine() {
+        // Same height: fully up at full progress, half at half.
+        assertEquals(1f, KeyboardDrive.share(933f, 1f, 933f), 1e-6f)
+        assertEquals(0.5f, KeyboardDrive.share(933f, 0.5f, 933f), 1e-6f)
+        // Doubted height: its top stays at the expected line (933 of 1188), never fully up while the launcher holds it.
+        assertEquals(933f / 1188f, KeyboardDrive.share(933f, 1f, 1188f), 1e-6f)
+        // A bounce past 1 never pushes it past fully up; no height known: nothing shown.
+        assertEquals(1f, KeyboardDrive.share(933f, 1.2f, 933f), 1e-6f)
+        assertEquals(0f, KeyboardDrive.share(933f, 1f, 0f), 1e-6f)
+    }
+
+    @Test
     fun openingsAreKeptAndOnlyAShrinkChangesTheNewest() {
         var list = emptyList<Int>()
         for (h in listOf(1041, 1040, 933, 935, 936, 940, 941)) list = KeyboardLine.record(list, h, opening = true, screenHeight = screen)
