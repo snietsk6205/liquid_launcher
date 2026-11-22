@@ -133,12 +133,19 @@ jobs:
           path: '**/build/reports/tests/'
           retention-days: 7
 
+  # D187: the emulator test runs as three parts at the same time, each on its own runner and emulator (the header of
+  # ci/smoke.sh says what each part checks): about 4 minutes each instead of 12 in a row. A part that fails does not
+  # cancel the others (fail-fast off), and the release waits for all three.
   smoke:
-    name: Emulator test (redirect against AOSP launcher)
+    name: Emulator test, ${{ matrix.part }} (against AOSP launcher)
     needs: build
     if: needs.build.outputs.smoke == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [redirect, drawer, study]
     steps:
       - uses: actions/checkout@v4
 
@@ -159,7 +166,8 @@ jobs:
       # 0.11.2: the system image and a booted emulator's snapshot are kept between runs, so the test boots from the
       # snapshot instead of downloading the image and cold-booting Android each time. The snapshot is saved once the
       # phone is calm (ci/settle.sh): v1 was saved mid first-boot work and v2 after a blind 30 s. Bump the version to
-      # start anew.
+      # start anew. v4 (D187): the emulator has 4 cores, as many as the runner (the action's default is 2); a snapshot
+      # saved with 2 cores does not load on 4. On a miss each of the three parts boots and saves its own; one is kept.
       - name: System image cache
         uses: actions/cache@v4
         with:
@@ -173,7 +181,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-34-google_apis-x86_64-v3
+          key: avd-34-google_apis-x86_64-v4
 
       - name: Boot once and save the snapshot (cache miss only)
         if: steps.avd-cache.outputs.cache-hit != 'true'
@@ -183,6 +191,7 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_6
+          cores: 4
           force-avd-creation: false
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
@@ -195,15 +204,16 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_6
+          cores: 4
           force-avd-creation: false
           disable-animations: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: bash ci/smoke.sh
+          script: bash ci/smoke.sh ${{ matrix.part }}
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: smoke-output
+          name: smoke-output-${{ matrix.part }}
           path: out/smoke/
           retention-days: 14
 

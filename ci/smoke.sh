@@ -2,7 +2,27 @@
 # End-to-end check on an emulator: installs the release APK, enables the accessibility
 # service and verifies the redirect against the emulator's launcher (same QuickStep base as
 # HONOR Home): home redirects, recents is left alone, leaving recents redirects.
+#
+# Usage: smoke.sh [all|redirect|drawer|study]. D187: CI runs the three parts at the same time, each on its own
+# emulator (about 4 minutes each instead of 12 in a row); "all" (the default) runs every check in one go, in the order
+# they always ran. Each part starts the same way (install, accessibility, first start, the redirect's warm-up) and
+# then runs its blocks:
+#   redirect  1 to 7b (redirect, recents, screen off, Settings, glass benchmark), 14c letter index, 12b another app's
+#             widget and the updates screen, 15 and 16 (shaders)
+#   drawer    8b What's new, the drawer, 9c thirty tags, 9d picking (uses 9c's tags), search, the home menu, the
+#             wallpaper screen, edit mode, the Today panel on a fresh install
+#   study     14b to 14g (each uses the test calendar 14b makes), 17 speed check (its study hub step needs the study
+#             companion 14b switches on)
 set -u
+
+PART=${1:-all}
+case "$PART" in
+  all)      BLOCKS="redirect settings drawer study index widget shaders speed" ;;
+  redirect) BLOCKS="redirect settings index widget shaders" ;;
+  drawer)   BLOCKS="drawer" ;;
+  study)    BLOCKS="study speed" ;;
+  *) echo "smoke.sh: unknown part '$PART' (all, redirect, drawer or study)"; exit 2 ;;
+esac
 
 PKG=dev.liquid.launcher
 HOME_ACTIVITY="$PKG/.MainActivity"
@@ -125,9 +145,18 @@ anr_trace() {
 # A slow emulator (software GPU on a busy runner) can miss the system's 5-second input
 # timeout, and the "isn't responding" dialog then covers the screen for every later step.
 # Dismiss it with "Wait", as a user would, and count it; crashes are still checked strictly.
+# D187: the window list says whether such a dialog is up (its window is titled "Application Not Responding: …", as
+# close_dialogs below reads it); only then is the screen dumped to find "Wait". Before, every call dumped the screen,
+# about 3 s each and some 25 calls a run. A window list that cannot be read falls back to the dump.
+anr_window() {
+  local windows
+  windows=$(adb shell dumpsys window windows 2>/dev/null)
+  [ -z "$windows" ] || printf '%s\n' "$windows" | grep -q "Application Not Responding"
+}
 clear_anr() {
   local i pos
   for i in 1 2 3; do
+    anr_window || return 0
     adb shell rm -f /sdcard/anr.xml >/dev/null 2>&1
     adb shell uiautomator dump /sdcard/anr.xml >/dev/null 2>&1
     adb exec-out cat /sdcard/anr.xml > "$OUT/anr-check.xml" 2>/dev/null || return 0
@@ -195,6 +224,61 @@ look() {
   texts "$1" "${2:-40}"
 }
 
+# dump <name>: save the screen tree (quietly) so find_text can look things up.
+dump() {
+  adb shell rm -f /sdcard/ui.xml >/dev/null 2>&1
+  adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
+  adb exec-out cat /sdcard/ui.xml > "$OUT/$1.xml" 2>/dev/null || true
+}
+# dump_ok <name> : the last dump is a screen tree (a screen still moving cannot be dumped: the file is then empty).
+dump_ok() { grep -q '<hierarchy' "$OUT/$1.xml" 2>/dev/null; }
+on_screen() { python3 ci/find_text.py "$OUT/$1.xml" "$2" ${3:-} >/dev/null; }
+tap_text() {
+  local pos
+  pos=$(python3 ci/find_text.py "$OUT/$1.xml" "$2" ${3:-}) || return 1
+  adb shell input tap $pos
+}
+
+# D187: a fixed sleep before a dump is replaced by wait_screen (above) for a text the new screen has and the one
+# before it had not, or by wait_gone for a text that leaves. A dump itself takes 2 to 3 s and waits until the screen
+# has been still for 1 s, so the first one is nearly always late enough; one too early only means one more dump.
+# Sleeps that stay: before typing or a key press, measuring windows (idle frames, recents left alone, screen off), the
+# redirect checks' own timings, the glass benchmark, pictures taken mid-swipe, and dumps whose positions are measured.
+
+# wait_gone <name> <text> <seconds> [exact] : dumps the screen until the text is no longer on it; the last dump stays
+# as <name>. Only a real screen tree counts: a dump that failed (a moving screen) is not "gone", it is tried again.
+wait_gone() {
+  local name=$1 text=$2 end=$((SECONDS + $3)) mode=${4:-} start=$SECONDS
+  while :; do
+    dump "$name"
+    if dump_ok "$name" && ! on_screen "$name" "$text" $mode; then note_wait "$start" 0 "gone: $text"; return; fi
+    if [ "$SECONDS" -ge "$end" ]; then note_wait "$start" 1 "gone: $text"; return; fi
+    sleep 0.4
+  done
+}
+
+# home_and_settle : Home, then wait until the launcher is back in front (the redirect's "launcher drawn" line) and its
+# window transition is over, so the next swipe lands on it. 0.13.0: run 120 swiped while the window was still coming
+# (InputDispatcher: "No new touched window"), and the swipe went to the system's gesture service instead.
+home_and_settle() {
+  local before i
+  before=$(grep -c "launcher drawn" "$LOG" || true)
+  adb shell input keyevent KEYCODE_HOME
+  for i in $(seq 1 16); do
+    [ "$(grep -c "launcher drawn" "$LOG" || true)" -gt "$before" ] && break
+    sleep 0.5
+  done
+  sleep 1.5
+}
+
+# D187: a fresh install shows "What's new" above the pill until Got it. The drawer part checks it (8b); the other
+# parts put it away first, so their checks see the home screen they always saw (8b ran before them).
+put_away_whats_new() {
+  wait_screen 00-whatsnew "What's new in" 10 || { note "no What's new card to put away"; return 0; }
+  tap_text 00-whatsnew "Got it" exact || true
+  wait_log "what's new in .*: seen" 6 || note "the What's new card did not say it was seen"
+}
+
 focus() { adb shell dumpsys window 2>/dev/null | grep -E 'mCurrentFocus' | head -1 | sed 's/^ *//'; }
 
 # 0.10.4: frames drawn while a screen sits still, from dumpsys gfxinfo's running total. A still screen draws next to
@@ -233,9 +317,6 @@ sleep 2
 section "1. App starts"
 adb shell am start -n "$HOME_ACTIVITY" >/dev/null
 if wait_top "$HOME_ACTIVITY" 15; then pass "launcher activity starts"; else fail "launcher activity starts"; fi
-sleep 4
-look 01-home 30
-idle_frames "home screen"
 
 # Warm-up (0.10.2): run 85 failed checks 2 and 3 twice right after the first start, when the redirect engine had not yet
 # handled a window of the system launcher (its first event after start can come late). Press Home once here and wait
@@ -256,6 +337,19 @@ if [ "$SEEN" = 1 ]; then note "the redirect engine saw its first window after $(
 wait_top "$HOME_ACTIVITY" 6 || adb shell am start -n "$HOME_ACTIVITY" >/dev/null
 wait_top "$HOME_ACTIVITY" 6 || true
 sleep 2
+
+case " $BLOCKS " in
+  *" drawer "*) ;;
+  *) section "What's new card put away (8b checks it, in the drawer part)"; put_away_whats_new ;;
+esac
+
+# D187: the checks, in blocks; the list for this part (BLOCKS, at the top) runs after their definitions, at the end.
+# A block may rely on an earlier block of the same part only (APP_LABEL from the drawer, EVENT_ID from 14b).
+
+blk_redirect() {
+section "1b. The home screen at rest"
+look 01-home 30
+idle_frames "home screen"
 
 section "2. Home button while on the launcher returns to the launcher"
 # A freshly booted emulator sometimes shows "Pixel Launcher isn't responding"; that dialog
@@ -384,7 +478,10 @@ if wait_top "$HOME_ACTIVITY" 10; then pass "launcher in front after screen off/o
   fail "launcher in front after screen off/on"
   grep -E "screen off|REDIRECT \(screen off\)|launcher drawn" "$LOG" | tail -4 | sed 's/^/        /'
 fi
+}
 
+blk_settings() {
+clear_anr
 section "7. Settings screens open"
 for screen in "" setup diagnostics log updates; do
   # --activity-clear-task recreates the activity so the new start screen is used.
@@ -421,38 +518,13 @@ if python3 ci/find_text.py "$OUT/05-glass-finished.xml" "Tune the glass" >/dev/n
 else
   fail "after measuring, the glass can be tuned live with presets"
 fi
+}
 
+blk_drawer() {
 clear_anr
 section "9. Launcher UI: drawer, search, long-press menu, edit mode"
 adb shell am start -n "$HOME_ACTIVITY" >/dev/null
 wait_top "$HOME_ACTIVITY" 8 || true
-sleep 2
-# dump <name>: save the screen tree (quietly) so find_text can look things up.
-dump() {
-  adb shell rm -f /sdcard/ui.xml >/dev/null 2>&1
-  adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
-  adb exec-out cat /sdcard/ui.xml > "$OUT/$1.xml" 2>/dev/null || true
-}
-on_screen() { python3 ci/find_text.py "$OUT/$1.xml" "$2" ${3:-} >/dev/null; }
-tap_text() {
-  local pos
-  pos=$(python3 ci/find_text.py "$OUT/$1.xml" "$2" ${3:-}) || return 1
-  adb shell input tap $pos
-}
-
-# home_and_settle : Home, then wait until the launcher is back in front (the redirect's "launcher drawn" line) and its
-# window transition is over, so the next swipe lands on it. 0.13.0: run 120 swiped while the window was still coming
-# (InputDispatcher: "No new touched window"), and the swipe went to the system's gesture service instead.
-home_and_settle() {
-  local before i
-  before=$(grep -c "launcher drawn" "$LOG" || true)
-  adb shell input keyevent KEYCODE_HOME
-  for i in $(seq 1 16); do
-    [ "$(grep -c "launcher drawn" "$LOG" || true)" -gt "$before" ] && break
-    sleep 0.5
-  done
-  sleep 1.5
-}
 
 # 0.10.0 (W1): a fresh install of a version with a changelog entry shows "What's new" once, above the pill.
 section "8b. What's new card"
@@ -462,8 +534,7 @@ wait_screen 08-whatsnew "What's new in" 10 || true
 if on_screen 08-whatsnew "What's new in"; then
   pass "the What's new card shows after an update"
   tap_text 08-whatsnew "Got it" exact || true
-  sleep 1.5
-  dump 08-whatsnew-after
+  wait_gone 08-whatsnew-after "What's new in" 8 || true
   if on_screen 08-whatsnew-after "What's new in"; then fail "Got it closes the What's new card"; else pass "Got it closes the What's new card"; fi
 else
   fail "the What's new card shows after an update"
@@ -474,14 +545,12 @@ clear_anr
 show_drawer_log() { grep -E "Home: (swipe|drawer)" "$LOG" | tail -6 | sed 's/^/        /'; }
 # 450 ms: on a slow emulator a faster swipe arrives as two or three points.
 adb shell input swipe 540 1500 540 400 450
-sleep 2
-dump 06-drawer
+wait_screen 06-drawer "Search apps" 5 || true
 if ! on_screen 06-drawer "Search apps"; then
   echo "      first swipe did not open the drawer; log so far:"
   show_drawer_log
   adb shell input swipe 540 1700 540 600 600
-  sleep 2
-  dump 06-drawer
+  wait_screen 06-drawer "Search apps" 6 || true
 fi
 peek 06-drawer
 echo "      bottom of the screen (search pill area):"
@@ -500,14 +569,14 @@ done
 if [ -n "$APP_LABEL" ]; then
   POS=$(python3 ci/find_text.py "$OUT/06-drawer.xml" "$APP_LABEL" exact)
   adb shell input swipe $POS $POS 900
-  sleep 1.5
+  wait_screen 07-menu "Add to home" 6 || true
   peek 07-menu
-  dump 07-menu
   if on_screen 07-menu "App info" && on_screen 07-menu "Add to home"; then pass "long press opens the app menu"; else fail "long press opens the app menu"; fi
   if on_screen 07-menu "Tags" exact && on_screen 07-menu "Change icon" exact; then pass "menu offers tags and icon change"; else fail "menu offers tags and icon change"; fi
   tap_text 07-menu "Add to home" || true
   sleep 1
   adb shell input keyevent KEYCODE_BACK
+  # A fixed wait still: the app's name is on the menu too, so waiting for it would pass at once.
   sleep 1.5
   dump 08-home-with-app
   if on_screen 08-home-with-app "$APP_LABEL" exact; then pass "Add to home places the app on the home screen"; else fail "Add to home places the app on the home screen"; fi
@@ -517,8 +586,7 @@ fi
 
 # Back closes the drawer.
 adb shell input keyevent KEYCODE_BACK
-sleep 1
-dump 09-after-back
+wait_gone 09-after-back "Search apps" 6 || true
 if on_screen 09-after-back "Search apps"; then fail "back closes the drawer"; else pass "back closes the drawer"; fi
 wait_top "$HOME_ACTIVITY" 3 || fail "launcher still in front after back"
 
@@ -528,22 +596,18 @@ if [ -n "$APP_LABEL" ]; then
   section "9c. Thirty tags"
   # From the drawer's long-press menu, which check 9 found offering "Tags".
   adb shell input swipe 540 1500 540 400 450
-  sleep 2
-  dump 09c-drawer-open
+  wait_screen 09c-drawer-open "Search apps" 6 || true
   POS=$(python3 ci/find_text.py "$OUT/09c-drawer-open.xml" "$APP_LABEL" exact) || POS=""
   if [ -n "$POS" ]; then
     adb shell input swipe $POS $POS 1000
-    sleep 1.2
-    dump 09c-menu
+    wait_screen 09c-menu "Tags" 6 exact || true
     tap_text 09c-menu "Tags" exact || note "no Tags row in the menu"
-    sleep 1.5
-    dump 09c-sheet
+    wait_screen 09c-sheet "New tag, for example Study" 6 || true
     if tap_text 09c-sheet "New tag, for example Study"; then
       sleep 1.5
       # The "Add tag" button shows beside the field once something is typed, always in the same place.
       adb shell input text "tag1"
-      sleep 0.8
-      dump 09c-typed
+      wait_screen 09c-typed "Add tag" 5 exact || true
       ADD=$(python3 ci/find_text.py "$OUT/09c-typed.xml" "Add tag" exact) || ADD=""
       for i in $(seq 1 30); do
         [ "$i" -gt 1 ] && adb shell input text "tag$i"
@@ -572,12 +636,12 @@ if [ -n "$APP_LABEL" ]; then
     sleep 1
     # The drawer's tag list with those tags: its buttons are on screen (not under the drawer's pill).
     adb shell input swipe 540 1500 540 400 450
-    sleep 2
-    dump 09c-drawer
+    wait_screen 09c-drawer "All tags" 6 exact || true
     if tap_text 09c-drawer "All tags" exact; then
+      # Positions are measured below: a fixed wait first, so the list has finished growing.
       sleep 1.5
+      wait_screen 09c-tag-list "Find a tag" 6 || true
       peek 09c-tag-list
-      dump 09c-tag-list
       if on_screen 09c-tag-list "Done" exact && on_screen 09c-tag-list "Clear" exact; then
         pass "the drawer's tag list keeps Clear and Done in sight with 30 tags"
       else
@@ -609,25 +673,22 @@ fi
 if [ -n "$APP_LABEL" ]; then
   section "9d. Picking apps in the drawer"
   adb shell input swipe 540 1500 540 400 450
-  sleep 2
-  dump 09d-drawer
+  wait_screen 09d-drawer "Search apps" 6 || true
   POS=$(python3 ci/find_text.py "$OUT/09d-drawer.xml" "$APP_LABEL" exact) || POS=""
   if [ -n "$POS" ]; then
     adb shell input swipe $POS $POS 1000
-    sleep 1.2
-    dump 09d-menu
+    wait_screen 09d-menu "Select" 6 exact || true
     if tap_text 09d-menu "Select" exact; then
-      sleep 1.2
-      dump 09d-bar
+      wait_screen 09d-bar "1 app picked" 6 || true
       if on_screen 09d-bar "1 app picked"; then
         pass "Select in the drawer starts picking apps"
         if tap_text 09d-bar "Tag" exact; then
+          # A fixed wait still: "tag1" is on the picking bar too, so waiting for it would pass at once.
           sleep 1.5
           dump 09d-sheet
           # Sorted by name, so the first row with "tag1" is tag1 itself.
           if tap_text 09d-sheet "tag1"; then
-            sleep 1.2
-            dump 09d-after
+            wait_gone 09d-after "1 app picked" 6 || true
             if on_screen 09d-after "1 app picked"; then fail "tagging the picked apps ends picking"; else pass "a tag goes onto the picked apps at once"; fi
           else
             fail "the tag sheet for picked apps lists the tags"
@@ -657,24 +718,21 @@ clear_anr
 adb shell input swipe 540 900 540 1700 250
 sleep 1.5
 adb shell input text "12+30"
-sleep 1.5
+wait_screen 10-search "= 42" 8 || true
 peek 10-search
-dump 10-search
 if on_screen 10-search "= 42"; then pass "swipe down opens search and the calculator answers"; else fail "swipe down opens search and the calculator answers"; fi
 # The field's cursor blinks (two frames a second), hence the higher limit.
 idle_frames "search screen" 30
 # 0.7.1: with nothing typed, the search screen (the pill turned into its field at the bottom) offers widgets.
 for i in 1 2 3 4 5; do adb shell input keyevent KEYCODE_DEL; done
-sleep 1
-peek 10b-search-empty
-dump 10b-search-empty
 # 0.10.2: the page is calm with nothing typed; its "Today · …" line opens the widgets (with Add widget) and the exams.
+wait_screen 10b-search-empty "Today · " 6 || true
+peek 10b-search-empty
 if on_screen 10b-search-empty "Add widget" exact; then
   pass "the search screen offers widgets"
 elif tap_text 10b-search-empty "Today · "; then
-  sleep 1.2
+  wait_screen 10b-search-glance "Add widget" 6 exact || true
   peek 10b-search-glance
-  dump 10b-search-glance
   if on_screen 10b-search-glance "Add widget" exact; then pass "the search page's Today line opens its widgets"; else fail "the search page's Today line opens its widgets"; fi
   tap_text 10b-search-glance "Today · " || true
   sleep 0.8
@@ -684,16 +742,14 @@ else
 fi
 # 0.10.2: "!" offers the study commands as you type.
 adb shell input text "!"
-sleep 1.2
-dump 10b-search-bang
+wait_screen 10b-search-bang "!next" 6 exact || true
 if on_screen 10b-search-bang "!next" exact; then pass "typing ! offers the study commands"; else fail "typing ! offers the study commands"; fi
 adb shell input keyevent KEYCODE_DEL
 sleep 0.8
 # 0.7.2: a question offers Ask Claude, and the field sits just above the keyboard (its height is in the log).
 adb shell input text "how%sdo%smagnets%swork"
-sleep 1.5
+wait_screen 10c-search-claude "Ask Claude" 6 exact || true
 peek 10c-search-claude
-dump 10c-search-claude
 if on_screen 10c-search-claude "Ask Claude" exact; then pass "a question offers Ask Claude"; else fail "a question offers Ask Claude"; fi
 # 0.11.2: each opening is logged as "search: keyboard opened at N px (the field waited at M px…)".
 KB=$(grep -o "keyboard opened at [0-9]* px" "$LOG" | tail -1 | grep -o "[0-9][0-9]*")
@@ -725,25 +781,21 @@ sleep 1
 clear_anr
 # Home menu: long press on empty space shows the two glass pills.
 adb shell input swipe 540 1250 540 1250 1000
-sleep 1.5
+wait_screen 11-menu "Layouts" 6 exact || true
 peek 11-menu
-dump 11-menu
 if on_screen 11-menu "Wallpaper" exact && on_screen 11-menu "Layouts" exact; then pass "long press on empty space opens the home menu"; else fail "long press on empty space opens the home menu"; fi
 if tap_text 11-menu "Wallpaper" exact; then
-  sleep 1.5
+  wait_screen 11-strip "Library and more" 6 exact || true
   peek 11-strip
-  dump 11-strip
   if on_screen 11-strip "Library and more" exact && on_screen 11-strip "Shuffle" exact; then pass "home menu opens the wallpaper strip"; else fail "home menu opens the wallpaper strip"; fi
   if tap_text 11-strip "Library and more" exact; then
-    sleep 1.5
+    wait_screen 11-wallpaper "Recent" 6 exact || true
     peek 11-wallpaper
-    dump 11-wallpaper
     if on_screen 11-wallpaper "Apply" exact && on_screen 11-wallpaper "Recent" exact; then pass "the strip opens the wallpaper screen"; else fail "the strip opens the wallpaper screen"; fi
     idle_frames "wallpaper screen"
     if on_screen 11-wallpaper "Wallpaper sheet handle"; then pass "the wallpaper sheet has a handle to pull it up"; else fail "the wallpaper sheet has a handle to pull it up"; fi
     if tap_text 11-wallpaper "Blur and dim" exact; then
-      sleep 1
-      dump 11-look
+      wait_screen 11-look "Drawer" 6 exact || true
       if on_screen 11-look "Drawer" exact; then pass "wallpaper screen has blur and dim per screen"; else fail "wallpaper screen has blur and dim per screen"; fi
       tap_text 11-look "Cancel" exact || adb shell input keyevent KEYCODE_BACK
     else
@@ -762,31 +814,25 @@ fi
 clear_anr
 # Edit mode from the home menu shows the edit toolbar.
 adb shell input swipe 540 1250 540 1250 1000
-sleep 1.5
-dump 11-menu2
+wait_screen 11-menu2 "Edit" 6 exact || true
 tap_text 11-menu2 "Edit" exact || true
-sleep 1.5
+wait_screen 11-edit "Done" 6 exact || true
 peek 11-edit
-dump 11-edit
 if on_screen 11-edit "Done" exact; then pass "home menu opens edit mode"; else fail "home menu opens edit mode"; fi
 if tap_text 11-edit "Pages" exact; then
-  sleep 1
-  dump 12-pages
+  wait_screen 12-pages "Add page" 6 exact || true
   if on_screen 12-pages "Add page" exact && on_screen 12-pages "Home page" exact; then pass "edit mode shows the pages overview"; else fail "edit mode shows the pages overview"; fi
   tap_text 12-pages "Pages" exact || true
-  sleep 0.5
-  dump 11-edit
+  wait_gone 11-edit "Add page" 6 exact || true
 else
   fail "edit mode has a Pages button"
 fi
 # The widget list (clock, Now card, Today). Only opened and closed: adding a study widget asks for the calendar.
 if tap_text 11-edit "Widgets" exact; then
-  sleep 1
-  dump 12-widgets
+  wait_screen 12-widgets "Tap one to add it to this page" 6 exact || true
   if on_screen 12-widgets "Tap one to add it to this page" exact; then pass "edit mode lists the widgets"; else fail "edit mode lists the widgets"; fi
   adb shell input keyevent KEYCODE_BACK
-  sleep 1
-  dump 11-edit
+  wait_gone 11-edit "Tap one to add it to this page" 6 exact || true
 else
   fail "edit mode has a Widgets button"
 fi
@@ -814,12 +860,10 @@ PY
 }
 if CLOCK=$(clock_pos 11-edit); then
   adb shell input tap $CLOCK
-  sleep 1.2
-  dump 11-edit
+  wait_screen 11-edit "Customise" 6 exact || true
 fi
 if tap_text 11-edit "Customise" exact; then
-  sleep 1.5
-  dump 12-clock
+  wait_screen 12-clock "Stacked" 6 exact || true
   if on_screen 12-clock "Tall" exact && on_screen 12-clock "Stacked" exact; then
     pass "the clock gallery offers Tall and Stacked"
     for design in Tall Stacked; do
@@ -831,8 +875,7 @@ if tap_text 11-edit "Customise" exact; then
   fi
   dump 12-clock2
   tap_text 12-clock2 "Cancel" exact || adb shell input keyevent KEYCODE_BACK
-  sleep 1
-  dump 11-edit
+  wait_gone 11-edit "Stacked" 6 exact || true
 else
   note "no Customise button on a widget in edit mode"
 fi
@@ -843,12 +886,10 @@ sleep 1
 clear_anr
 # Study companion: the home menu's Today item opens the panel; on a fresh install it offers to switch on.
 adb shell input swipe 540 1250 540 1250 1000
-sleep 1.5
-dump 14-menu
+wait_screen 14-menu "Today" 6 exact || true
 if tap_text 14-menu "Today" exact; then
-  sleep 1.5
+  wait_screen 14-today "Switch it on" 6 exact || true
   peek 14-today
-  dump 14-today
   if on_screen 14-today "Switch it on" exact; then pass "home menu opens the Today panel"; else fail "home menu opens the Today panel"; fi
   adb shell input keyevent KEYCODE_BACK
   sleep 1
@@ -856,6 +897,9 @@ else
   fail "home menu has a Today item"
   adb shell input keyevent KEYCODE_BACK
 fi
+}
+
+blk_study() {
 clear_anr
 # Study companion against the emulator's own calendar provider (0.6.3): a local calendar named "Study" with one block
 # running now, written the way the assistant writes them. The line under the clock must show it, a tap must open Today,
@@ -889,22 +933,19 @@ else
   adb shell pm grant "$PKG" android.permission.READ_CALENDAR 2>/dev/null
   adb shell pm grant "$PKG" android.permission.WRITE_CALENDAR 2>/dev/null
   adb shell input swipe 540 1250 540 1250 1000
-  sleep 1.5
-  dump 14b-menu
+  wait_screen 14b-menu "Today" 6 exact || true
   tap_text 14b-menu "Today" exact || true
-  sleep 1.5
-  dump 14b-today
+  wait_screen 14b-today "Switch it on" 6 exact || true
   tap_text 14b-today "Switch it on" exact || true
   sleep 3
   adb shell input keyevent KEYCODE_BACK
-  sleep 2
+  # The panel hides the home screen from the screen tree, so the clock line shows only once it has closed.
+  wait_screen 14b-home "min left" 10 || true
   peek 14b-home
-  dump 14b-home
   if on_screen 14b-home "Proba 2 smoke block · " && on_screen 14b-home "min left"; then pass "the clock line shows the running block"; else fail "the clock line shows the running block"; fi
   if tap_text 14b-home "min left"; then
-    sleep 1.5
+    wait_screen 14b-panel "What would you like to study today?" 6 exact || true
     peek 14b-panel
-    dump 14b-panel
     # 0.14.0 (D186): Today is the kick-off: one question with today's classes, Study with Claude, Quiz me and the note;
     # no timeline, block cards or tasks any more (study blocks no longer go into the calendar).
     if on_screen 14b-panel "What would you like to study today?" exact && on_screen 14b-panel "Study with Claude" exact; then
@@ -921,24 +962,20 @@ else
     fi
     idle_frames "study hub"
     adb shell input keyevent KEYCODE_BACK
-    sleep 2
     # 0.13.1 (D181): the block's steps from the line under the clock: the focus timer, then a ✓ per step, written back
     # into the event, then Done.
-    dump 14b-home3
+    wait_screen 14b-home3 "Start the focus timer" 8 exact || true
     if tap_text 14b-home3 "Start the focus timer" exact; then
-      sleep 2
+      wait_screen 14b-step "Step 1 of 2 · Recall the theorems" 8 || true
       peek 14b-step
-      dump 14b-step
       if on_screen 14b-step "Step 1 of 2 · Recall the theorems"; then pass "while the pill counts the focus, the line shows the block's next step"; else fail "while the pill counts the focus, the line shows the block's next step"; fi
       tap_text 14b-step "Tick the step: Recall the theorems" exact || true
       wait_until 10 event_has '\[x\] Recall the theorems' || true
       if event_text | grep -q '\[x\] Recall the theorems'; then pass "a step's tick is written into the event's description"; else fail "a step's tick is written into the event's description"; event_text | head -8; fi
-      sleep 2
-      dump 14b-step2
+      wait_screen 14b-step2 "Tick the step: Serie 1, ex. 1-2" 8 exact || true
       tap_text 14b-step2 "Tick the step: Serie 1, ex. 1-2" exact || true
       wait_until 10 event_has '\[x\] Serie 1' || true
-      sleep 2
-      dump 14b-step3
+      wait_screen 14b-step3 "All 2 steps done" 8 || true
       peek 14b-step3
       if on_screen 14b-step3 "All 2 steps done"; then pass "with every step ticked the line offers to mark the block done"; else fail "with every step ticked the line offers to mark the block done"; fi
       tap_text 14b-step3 "Mark the block done" exact || true
@@ -949,13 +986,13 @@ else
       fail "the line under the clock offers the focus timer for the running block"
       python3 ci/describe_ui.py "$OUT/14b-home3.xml" 25 | sed 's/^/        /'
     fi
-    sleep 2
     # With the block done and no task left, the clock line moves on to tomorrow instead of vanishing.
-    dump 14b-home2
-    peek 14b-home2
     # From 22:30 to 5:00 (the default wind-down) the line offers the evening check-in first, by design (run 75
     # ran at 22:46 and failed here), so what is expected depends on the emulator's clock.
     NOW=$(adb shell date +%H%M | tr -d '\r')
+    if [ "$((10#$NOW))" -ge 2230 ] || [ "$((10#$NOW))" -lt 500 ]; then NEXT_LINE="Evening check-in"; else NEXT_LINE="· Micro smoke tomorrow"; fi
+    wait_screen 14b-home2 "$NEXT_LINE" 8 || true
+    peek 14b-home2
     if [ "$((10#$NOW))" -ge 2230 ] || [ "$((10#$NOW))" -lt 500 ]; then
       if on_screen 14b-home2 "Evening check-in"; then pass "after 22:30 the clock line offers the evening check-in"; else fail "after 22:30 the clock line offers the evening check-in"; fi
     elif on_screen 14b-home2 "· Micro smoke tomorrow"; then pass "with today done the clock line shows tomorrow's first block"; else fail "with today done the clock line shows tomorrow's first block"; fi
@@ -981,17 +1018,16 @@ CAL2EOF
   adb shell cmd notification allow_listener "$PKG/dev.liquid.launcher.QuietService" >/dev/null 2>&1
   adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" >/dev/null
   wait_top "SettingsActivity" 8 || true
-  sleep 2
   QUIET_ON=0
   # W4 (0.10.1): search finds the option, and its result opens the Study page on the Behaviour tab with the row
   # in view. The row's text is its title and summary together, so the title is matched as a part.
-  dump 14d-main
+  wait_screen 14d-main "Search settings" 8 exact || true
   if tap_text 14d-main "Search settings" exact; then
     sleep 1
     adb shell input text "quiet%sduring"
-    sleep 2
-    dump 14d-results
+    wait_screen 14d-results "Quiet during blocks" 8 || true
     if tap_text 14d-results "Quiet during blocks"; then
+      # A fixed wait still: the result itself says "… › Behaviour", so waiting for that would pass at once.
       sleep 2.5
       dump 14d-page
       if on_screen 14d-page "Behaviour" && on_screen 14d-page "Quiet during blocks"; then
@@ -1067,7 +1103,8 @@ CAL3EOF
   # The Flashcards card on the search page (Settings → Search → Layout → Cards on the search page).
   # A fresh Settings (14d left one open on Study companion, which would come back without reading the page asked for).
   adb shell am start --activity-clear-task -n "$PKG/dev.liquid.launcher.feature.settings.SettingsActivity" --es screen page:search >/dev/null 2>&1
-  wait_screen 14e-settings "Reset the cards" 10 || true
+  # D187: the page's tabs, near its top (run 130 waited the whole 10 s for "Reset the cards", out of sight below).
+  wait_screen 14e-settings "Layout" 10 exact || true
   for i in 1 2 3 4 5 6 7 8; do
     on_screen 14e-settings "Add Flashcards" && break
     adb shell input swipe 540 1700 540 700 400
@@ -1087,21 +1124,17 @@ CAL3EOF
   adb shell input swipe 540 900 540 1700 250
   sleep 2
   adb shell input keyevent KEYCODE_BACK
-  sleep 1
-  dump 14e-search
+  wait_screen 14e-search "Proba 2 · 1 more due today" 6 || true
   if on_screen 14e-search "Proba 2 · 1 more due today"; then pass "search shows the first card due and how many more"; else fail "search shows the first card due and how many more"; fi
   if tap_text 14e-search "Tap to turn it over" exact; then
-    sleep 1.5
+    wait_screen 14e-question "Lemme de Fatou" 6 || true
     peek 14e-question
-    dump 14e-question
     if on_screen 14e-question "Lemme de Fatou"; then pass "the card turns over to its question"; else fail "the card turns over to its question"; fi
     tap_text 14e-question "Lemme de Fatou" || true
-    sleep 1.5
+    wait_screen 14e-answer "Right" 6 exact || true
     peek 14e-answer
-    dump 14e-answer
     if tap_text 14e-answer "Right" exact; then
-      sleep 1.5
-      dump 14e-next
+      wait_screen 14e-next "the last one today" 6 || true
       if on_screen 14e-next "the last one today"; then pass "Right brings the next card due"; else fail "Right brings the next card due"; fi
       grep "flashcard right" "$LOG" | tail -1 | sed 's/^/        /'
     else
@@ -1128,13 +1161,11 @@ if [ -n "$EVENT_ID" ]; then
   if [ -n "$POS" ]; then
     pass "the pill shows the card still due"
     adb shell input swipe $POS $POS 800
-    sleep 1.8
+    wait_screen 14f-review "Tap to turn it over" 6 exact || true
     peek 14f-review
-    dump 14f-review
     if on_screen 14f-review "Tap to turn it over" exact; then pass "a long press on the count opens the quick review"; else fail "a long press on the count opens the quick review"; texts 14f-review 25; fi
     adb shell input keyevent KEYCODE_BACK
-    sleep 1.5
-    dump 14f-closed
+    wait_gone 14f-closed "Tap to turn it over" 6 exact || true
     if on_screen 14f-closed "Tap to turn it over" exact; then fail "Back closes the quick review"; else pass "Back closes the quick review"; fi
   else
     fail "the pill shows the card still due"
@@ -1152,9 +1183,8 @@ home_and_settle
 adb shell input swipe 540 900 540 1700 250
 sleep 1.5
 adb shell input text "liquid%sstretch"
-sleep 2
+wait_screen 14g-search "Settings › " 8 || true
 peek 14g-search
-dump 14g-search
 if on_screen 14g-search "Settings › "; then
   pass "search finds an option of Settings"
   tap_text 14g-search "Settings › " || true
@@ -1181,12 +1211,10 @@ if [ -n "$EVENT_ID" ]; then
   adb shell input swipe 540 900 540 1700 250
   sleep 1.5
   adb shell input text "fatou"
-  sleep 2
-  dump 14g-card
+  wait_screen 14g-card "Flashcard · Proba 2" 8 exact || true
   if tap_text 14g-card "Flashcard · Proba 2" exact; then
-    sleep 2
+    wait_screen 14g-review "A card you looked for" 6 exact || true
     peek 14g-review
-    dump 14g-review
     if on_screen 14g-review "A card you looked for" exact; then pass "a flashcard found by search opens in the quick review"; else fail "a flashcard found by search opens in the quick review"; texts 14g-review 25; fi
     adb shell input keyevent KEYCODE_BACK
     sleep 1.2
@@ -1199,7 +1227,9 @@ if [ -n "$EVENT_ID" ]; then
     sleep 1
   fi
 fi
+}
 
+blk_index() {
 clear_anr
 # 0.6.4: the letter index bends out from under the finger and the bubble sits past the letters. A picture only:
 # the screenshot is taken while a slow swipe holds the right edge of the drawer.
@@ -1207,12 +1237,10 @@ section "14c. Letter index while held"
 adb shell input keyevent KEYCODE_HOME
 sleep 2.5
 adb shell input swipe 540 1500 540 400 450
-sleep 2
-dump 14c-drawer
+wait_screen 14c-drawer "Search apps" 5 || true
 if ! on_screen 14c-drawer "Search apps"; then
   adb shell input swipe 540 1700 540 600 600
-  sleep 2
-  dump 14c-drawer
+  wait_screen 14c-drawer "Search apps" 6 || true
 fi
 on_screen 14c-drawer "Search apps" || echo "NOTE: the drawer did not open; the picture below shows the home screen"
 # 0.9.6: the index is a short rail low on the right (Rail position 26 % from the bottom); drag along it slowly.
@@ -1237,8 +1265,7 @@ wait_top "SettingsActivity" 8 || true
 # cannot be read by uiautomator ("could not get idle state"), which is why run 92 found no row here.
 wait_screen 14c-settings "Rail: short" 25 || true
 if tap_text 14c-settings "Rail: short"; then
-  sleep 1.2
-  dump 14c-style
+  wait_screen 14c-style "String: letters" 6 || true
   tap_text 14c-style "String: letters" || note "the String choice was not found in the style dialog"
   sleep 1
 else
@@ -1278,7 +1305,9 @@ else
 fi
 adb shell input keyevent KEYCODE_HOME
 sleep 1
+}
 
+blk_widget() {
 clear_anr
 # 0.7.0: another app's widget (last, so the widget it places cannot be under a later check's long press). The picker lists the apps that offer widgets; searching "clock" opens the Clock app's
 # widgets; the system asks once whether the launcher may add widgets ("Create"); the clock widget then runs on the home
@@ -1302,17 +1331,14 @@ if on_screen 12b-before "Search apps"; then
   sleep 1.5
 fi
 adb shell input swipe 540 1250 540 1250 1000
-sleep 1.5
-dump 12b-menu
+wait_screen 12b-menu "Widgets" 6 exact || true
 if tap_text 12b-menu "Widgets" exact; then
-  sleep 2
-  dump 12b-picker
+  wait_screen 12b-picker "Search widgets and apps" 8 exact || true
   peek 12b-picker
   if tap_text 12b-picker "Search widgets and apps" exact; then
     sleep 0.5
     adb shell input text clock
-    sleep 2
-    dump 12b-search
+    wait_screen 12b-search "Analog" 8 || true
     peek 12b-search
     WIDGET=""
     # The Clock app calls them "Digital" and "Analog" on the emulator's image (run 51), "… clock" on others.
@@ -1321,8 +1347,7 @@ if tap_text 12b-menu "Widgets" exact; then
     done
     if [ -n "$WIDGET" ]; then
       tap_text 12b-search "$WIDGET" exact
-      sleep 3
-      dump 12b-bind
+      wait_screen 12b-bind "Create" 8 exact || true
       peek 12b-bind
       tap_text 12b-bind "Create" exact || tap_text 12b-bind "Allow" exact || true
       sleep 3
@@ -1366,11 +1391,9 @@ wait_screen 13-updates "Check for updates" 10 exact || true
 if on_screen 13-updates "Check for updates" exact; then pass "updates screen shows the check button"; else fail "updates screen shows the check button"; fi
 adb shell input keyevent KEYCODE_BACK
 sleep 1
+}
 
-# Wait for the service to be back after the screen dumps before the crash check.
-for i in $(seq 1 40); do service_up && break; sleep 0.5; done
-
-if [ "$ANR_DIALOGS" -gt 0 ]; then echo "NOTE: dismissed $ANR_DIALOGS 'not responding' dialog(s); the emulator was slow (see logcat for ANR reasons)"; fi
+blk_shaders() {
 section "15. Wallpaper transition shaders"
 # 0.7.0: ripple, ink, shine and melt are AGSL shaders compiled when the home screen starts; a shader that does not
 # compile falls back to the liquid fade, so it would never show as a crash. The launcher logs which compiled.
@@ -1390,7 +1413,9 @@ else
   fail "the real glass shader compiles"
   grep -E "liquid glass shader" "$LOG" | tail -4
 fi
+}
 
+blk_speed() {
 clear_anr
 # 0.11.2: the speed check (Settings → Diagnostics → Speed check) plays the drawer, search, the home menu and the study
 # hub with each way of drawing the glass, each step a "Frames:" line of its own. It must run to its end: every way of
@@ -1413,6 +1438,13 @@ else
 fi
 adb shell input keyevent KEYCODE_HOME
 sleep 1
+}
+
+for block in $BLOCKS; do "blk_$block"; done
+
+# Wait for the service to be back after the screen dumps before the crash check.
+for i in $(seq 1 40); do service_up && break; sleep 0.5; done
+if [ "$ANR_DIALOGS" -gt 0 ]; then echo "NOTE: dismissed $ANR_DIALOGS 'not responding' dialog(s); the emulator was slow (see logcat for ANR reasons)"; fi
 
 section "8. No crashes"
 adb logcat -d > "$OUT/logcat.txt" 2>/dev/null
@@ -1431,14 +1463,14 @@ echo
 echo "IDLE FRAMES (a still screen draws next to nothing):$IDLE_REPORT"
 echo
 section "-"
-echo "TIME PER SECTION ($SECONDS s in all):$SECTION_TIMES"
+echo "TIME PER SECTION, part '$PART' ($SECONDS s in all):$SECTION_TIMES"
 echo
 echo "SLOW WAITS (5 s or more, or gave up):${WAIT_NOTES:-
   none}"
 echo
 if [ "$FAILS" -eq 0 ]; then
-  echo "SMOKE RESULT: all checks passed"
+  echo "SMOKE RESULT ($PART): all checks passed"
 else
-  echo "SMOKE RESULT: $FAILS check(s) failed:$FAILED_CHECKS"
+  echo "SMOKE RESULT ($PART): $FAILS check(s) failed:$FAILED_CHECKS"
 fi
 exit "$FAILS"
