@@ -1247,6 +1247,9 @@ private fun BottomSearch(
                             translationY = (end - now).coerceAtLeast(0f)
                         }
                         alpha = if (transition == "space" || grows) ((p - 0.04f) / 0.72f).coerceIn(0f, 1f) else p
+                        // 0.15.0 (D188): the fade is applied to each card as it draws, not through an offscreen copy of the
+                        // whole page on every frame of the opening (the cards barely overlap, so it looks the same).
+                        compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
                         val scale = when (transition) {
                             "lift" -> 0.92f + 0.08f * p
                             // Comes forward as the home screen falls back.

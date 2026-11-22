@@ -1476,3 +1476,45 @@ doc https://claude.ai/artifact/GWFvdSR6uGVM7sVL1RT9JB and follow it." (his curre
 
 **Exact next step:** his next log: "Study: session: …" lines, "ask Claude (… characters)" after Study with Claude, and
 the Frames lines of Today ("study hub").
+
+## Session of 2026-11-22, evening (Opus 5.5): 0.15.0, search that lands, Settings after WM Keyboard, the unlock reveal
+
+Brief (in chat): Med's settings export, diagnostics and a log of 21:53 to 21:57. "The search page, every time you
+don't do it right: it isn't smooth, it lags and the pill sometimes goes to the top"; "the wallpaper doesn't appear in
+the keyboard even though I turned the setting on"; "copy the design and animations of WM Keyboard's settings, don't
+delete any feature, add if you can, move settings if you should but tell me"; "when I open my phone, the same animation
+as when I change the wallpaper, starting from random places"; "improve animations and the overall experience". Branch
+`claude/dreamy-turing-2ef9yy`, moved onto `claude/compassionate-ramanujan-snhabi` (0.14.0 and its CI fixes; `main` was
+still at 0.11.2).
+
+**Asked first** (three questions): the unlock reveal starts from "frosted, then clear"; Settings in "wallpaper colours"
+(WM Keyboard's layout and motion, Material You); the pill goes to the top "when I open search".
+
+**Items**
+
+| # | Med's point | State | What |
+|---|---|---|---|
+| 1 | Search not smooth, lags, the pill goes to the top when opening | Done; on the phone, to see | His log: search at 1.13 to 1.15 when the keyboard was ready (Bounce 40 %, flicks), so the pill floated 25 to 30 dp above a keyboard that stops at its height; closings while the opening's drive still held the keyboard asked for a second control ("the system took the keyboard back", the keyboard jumped up). Now the pill and the keyboard stop together and the bounce is a squash of the pill; the keyboard is handed back once fully up; one control per opening, a finger pushing search away takes the keyboard with it; a keyboard taller for a moment is not followed; the closed pill no longer rests 116 dp above a keyboard going down; the page's cards come in one a frame. D188. |
+| 2 | The keyboard wallpaper does nothing | Explained, made visible | WM Keyboard answered "no theme is called \"Liquid wallpaper 2\"" at every change: the themes were never added (or one twice). Two themes stay necessary (WM Keyboard's keyboard stops redrawing while hidden and loads a theme's picture once per load; checked in its source). Settings shows which theme is there, a failed hand-over says so on the home screen and opens the page, the theme there gets the picture too. D189. |
+| 3 | Settings like WM Keyboard's | Done | Hues per place, tiles, headings with breadcrumbs, grouped cards, page pushes with flying tiles, staggered rows, segmented tabs, chips, expressive sliders, "?" on every option, bold matches in search. Nothing moved or removed. D191. |
+| 4 | The unlock reveal | Done; on the phone, to see | Frost up at screen off, cleared from a random point at the unlock in the wallpaper transition's style (Settings › Wallpaper › When you unlock). D190. |
+| 5 | Animations and little tricks | Done in the items above | The squash landing, the follow-the-finger keyboard, the staggered search page and settings rows, the varied shaders, the deferred live previews. |
+
+**Known limits**
+- None of the drive changes has been on his phone: the log lines are unchanged ("the keyboard rises with the pill: ready
+  … ms", "keyboard opened at … (slid in with the pill)"), plus "the keyboard was taller for a moment (… px): the pill
+  stayed" and "the keyboard stayed taller (… px): the pill rises onto it".
+- The keyboard wallpaper still needs Med to add both themes in WM Keyboard (Settings › Drawer and search › Keyboard ›
+  Look, step 3), with WM Keyboard's Photos permission and "Let other apps control the keyboard".
+- The unlock reveal needs the launcher in front at the unlock (his "When the screen turns off: home" does that).
+- Settings' Theme lab and the glass benchmark keep their own frames (they are drawn by other code).
+
+**Questions for Med**
+1. Search: does the pill now land on the keyboard and stay? Is the squash right at Bounce 40 %, or too much?
+2. After adding both themes, does "Try it now" answer "Done", and does the next wallpaper reach the keys?
+3. The unlock reveal: right length (it uses the transition's 800 ms × 1.35 for Ripple)? Should it have its own length?
+4. Settings: anything from WM Keyboard's settings you miss (the settings depth, favourites, recent searches)?
+
+**Exact next step:** read Med's next log: "search: …" lines for each opening and closing (no "the system took the
+keyboard back" should appear on closings now), "unlock: the frost leaves (…) from …", and "Keyboard: wallpaper behind the
+keys (…)" after he added both themes.

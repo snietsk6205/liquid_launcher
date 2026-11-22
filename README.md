@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.15.0: search lands: the pill and the keyboard stop together (the bounce is a squash), one keyboard control per opening; Settings in WM Keyboard's style (hues, headings with breadcrumbs, grouped cards, page pushes with flying icons); the home screen comes out from under frost at the unlock, from a random point; the keyboard wallpaper says which theme is missing.
+
 0.9.23: the calendar widget's Customise sheet: its own glass card or not, corners, colour, month grid and next events.
 
 0.9.22: the date and battery widgets have a Customise sheet: size, weight, colour, font and the parts they show.

@@ -53,12 +53,22 @@ internal fun MainScreen(
     var query by remember { mutableStateOf("") }
 
     ScreenScaffold(title = "Liquid Launcher", onBack = onBack) {
+        // 0.15.0 (D191): WM Keyboard's search field, a pill on the page's own surface.
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
             singleLine = true,
             placeholder = { Text("Search settings") },
             leadingIcon = { LauncherIcon(LauncherIcons.Search, contentDescription = null) },
+            trailingIcon = if (query.isEmpty()) null else ({
+                androidx.compose.material3.IconButton(onClick = { query = "" }) { LauncherIcon(LauncherIcons.Close, contentDescription = "Clear") }
+            }),
+            shape = RoundedCornerShape(50),
+            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+            ),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 4.dp),
@@ -74,13 +84,22 @@ internal fun MainScreen(
             if (results.isEmpty() && editors.isEmpty()) {
                 BodyText("No option matches \"$query\"", Modifier.padding(20.dp))
             }
-            editors.forEach { e ->
-                val surface = dev.liquid.launcher.core.settings.SettingsMap.surface(e.surfaceId)
-                NavRow(e.title, listOfNotNull(surface?.entry?.title, surface?.title, e.tab.title).joinToString(" › ") + "\n" + e.summary) {
-                    open(Screen.Page(e.surfaceId, e.tab))
+            GroupCards {
+                editors.forEachIndexed { i, e ->
+                    val surface = dev.liquid.launcher.core.settings.SettingsMap.surface(e.surfaceId)
+                    Box(Modifier.staggerIn(i)) {
+                        NavRow(
+                            e.title,
+                            listOfNotNull(surface?.entry?.title, surface?.title, e.tab.title).joinToString(" › ") + "\n" + e.summary,
+                            icon = surface?.let { surfaceIcon(it.id, it.entry) },
+                            accent = surface?.let { entryAccent(it.entry) },
+                        ) {
+                            open(Screen.Page(e.surfaceId, e.tab))
+                        }
+                    }
                 }
+                results.take(60).forEachIndexed { i, setting -> Box(Modifier.staggerIn(editors.size + i)) { SearchResultRow(setting, open, query) } }
             }
-            results.take(60).forEach { setting -> SearchResultRow(setting, open) }
             return@ScreenScaffold
         }
 
@@ -93,13 +112,21 @@ internal fun MainScreen(
         }
         if (recentSettings.isNotEmpty()) {
             SectionHeader("Recently changed")
-            recentSettings.forEach { setting -> SearchResultRow(setting, open) }
+            GroupCards { recentSettings.forEach { setting -> SearchResultRow(setting, open) } }
         }
 
-        // W4: seven entries; the pages of each are one surface of the launcher.
+        // W4: seven entries; the pages of each are one surface of the launcher. 0.15.0: each in its own hue, its tile
+        // flying into the heading of the entry it opens.
         SectionHeader("Settings")
-        for (entry in SettingsEntry.entries) {
-            NavRow(entry.title, entry.summary) { open(Screen.Entry(entry)) }
+        GroupCards {
+            SettingsEntry.entries.forEachIndexed { i, entry ->
+                Box(Modifier.staggerIn(i)) {
+                    NavRow(
+                        entry.title, entry.summary,
+                        icon = entryIcon(entry), accent = entryAccent(entry), flightKey = "entry:${entry.name}",
+                    ) { open(Screen.Entry(entry)) }
+                }
+            }
         }
     }
 }

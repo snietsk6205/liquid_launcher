@@ -6,6 +6,42 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
+## 0.15.0 — 2026-11-22
+
+### Changed
+- Search opens in one motion that lands: the pill and the keyboard rise together and stop together at the top. With
+  Bounce, the pill no longer floats above the keyboard and falls back onto it (your log: search reached 1.13 to 1.15 of
+  open, the pill 25 to 30 dp above the keyboard); it squashes onto the keyboard like a drop instead. The keyboard is
+  handed back to the system as soon as it is fully up, so a swipe that closes search soon after never meets it still held
+  (that collision made the keyboard jump up before going down). A finger pushing search away takes the keyboard down with
+  it from the first movement. A keyboard that says it is taller for a moment while search is open (WM Keyboard rebuilding
+  itself after a wallpaper change) no longer throws the pill up and down; one that stays taller is followed after a
+  moment, on a glide. Search's cards come in one after the other as it opens, rising into place, so the first frame of
+  the swipe no longer builds the whole page at once.
+- Settings in WM Keyboard's style, in your wallpaper's colours: each place has its own hue (Home blue, Drawer and search
+  indigo, Study green, Look pink, Wallpaper cyan, Motion purple, System orange) on its icon tiles and, faintly, on its
+  heading; a page opens with its name large beside its icon, under breadcrumbs you can tap to go back, and the name
+  moves into the bar as you scroll; rows sit on cards stacked into groups; pages slide in from the right while the one
+  behind drifts left, and a row's icon flies into the heading of the page it opens; a page's rows come in one after the
+  other. Tabs are one segmented control with a sliding highlight, short choices are chips (one tap), sliders are thick
+  with a tall handle, switches and values take the place's hue, every option has a "?" that explains it, search shows
+  the words that matched in bold and where each option lives. Nothing moved and nothing was removed; the live previews
+  appear once the page has slid in.
+
+### Added
+- When you unlock (Settings › Wallpaper and layouts › Wallpaper › Behaviour): the home screen comes out from under
+  frosted glass as you unlock, with the wallpaper's transition (Ripple for you), starting from a different place each
+  time; Ink, Melt and Shine vary each time too. Its own style can be chosen, or Off.
+
+### Fixed
+- Your wallpaper behind the keys did nothing: WM Keyboard answered "no theme is called "Liquid wallpaper 2"" at every
+  change. Settings › Keyboard now shows which of the two themes WM Keyboard has (step 3 is ticked once both are there),
+  says on the home screen when a hand-over fails because a theme is missing (a tap opens the page), and also tells you
+  when WM Keyboard's automatic light and dark theme hides the one the launcher picked. The theme that is there gets the
+  new picture too.
+- The pill could jump up as search (or the drawer) finished closing while the keyboard was still on its way down: it
+  rested 116 dp (your distance from the edge) above the keyboard instead of on its own place.
+
 ## 0.14.0 — 2026-11-22
 
 ### Changed
