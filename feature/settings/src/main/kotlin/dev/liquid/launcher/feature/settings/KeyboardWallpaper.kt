@@ -122,6 +122,14 @@ object KeyboardWallpaper {
             }) ?: return@runCatching "the picture could not be created in Pictures/$FOLDER"
             resolver.openOutputStream(uri, "wt")?.use { out -> bitmap.compress(Bitmap.CompressFormat.JPEG, 92, out) }
                 ?: return@runCatching "the picture could not be written"
+            // Android may have named it otherwise (a file of that name left by an earlier install): the themes would
+            // read the old one.
+            @Suppress("DEPRECATION")
+            val actual = resolver.query(uri, arrayOf(MediaStore.MediaColumns.DATA), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+            if (actual != null && actual != path(slot)) {
+                DebugLog.error("Keyboard", "wallpaper behind the keys: the picture went to $actual instead of ${path(slot)}")
+                return@runCatching "the picture was saved as ${File(actual).name}: delete Pictures/$FOLDER/${fileName(slot)} in your files, then try again"
+            }
             null
         }.getOrElse { "the picture could not be written: $it" }
     }

@@ -6,6 +6,35 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
+## 0.13.1 — 2026-11-22
+
+### Added
+- Your wallpaper behind the keys (Settings → Drawer and search → Keyboard → Look): WM Keyboard's background becomes the
+  part of your wallpaper the keyboard covers, and changes with every wallpaper you set in the launcher. Android does
+  not let a keyboard read the wallpaper's picture (WM Keyboard only gets its colours), so the launcher hands it the
+  picture, either blurred and dimmed the way search shows the wallpaper (the keyboard carries search's background on),
+  or sharp like the home screen. Set it up once on that page: let WM Keyboard read your photos, let other apps control
+  it, and add the two themes "Liquid wallpaper 1" and "2"; the launcher switches between them so WM Keyboard reads each
+  new picture at once. "Try it now" does a change on the spot and says what WM Keyboard answered.
+- A second line under the clock, smaller: what comes after, the tasks left, and an exam within two weeks (amber, red
+  from three days, in hours). Settings → Study companion → Second line.
+
+### Changed
+- The line under the clock, reimagined: it no longer repeats the pill. While the pill counts a focus down, the line
+  shows the block's next step with a ✓ that ticks it in your calendar (then the next step, then "mark it done"); a
+  block without steps shows what comes after it. In a class it says until when and in which room; before a class, in
+  how long and where; with more than an hour free, "Free until 14:00" and what comes then. Leaving in the morning,
+  "present?", the rest after getting home, the evening check-in, a block to mark, the tasks and tomorrow stay. The
+  "Study block" widget shows the same.
+
+### Fixed
+- Search after a wallpaper change: the first time, the pill went up too high and stayed there (WM Keyboard, rebuilt
+  with its new colours, says it is taller for a moment, then comes down). The pill now keeps to the keyboard's usual
+  height, and comes down onto the keyboard whenever the keyboard settles lower while search is open.
+- The study hub was redrawn every second while a focus ran (the pill's countdown behind it), at about a tenth of a
+  second per frame: the countdown now waits while the hub, search or the drawer covers it. Sheets with a picture on
+  their board no longer blur it again on every frame.
+
 ## 0.13.0 — 2026-11-21
 
 ### Added

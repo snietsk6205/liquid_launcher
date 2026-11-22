@@ -1388,3 +1388,59 @@ cache stays.
 **Exact next step:** read Med's next log: "search: keyboard opened at … (…)" for each opening, "search: the keyboard's
 picture was taken (…)", "Live: media sessions …" (only when not allowed), and his answers above; then, with the speed
 check log, measure the glass (D166) before changing it.
+
+## Session of 2026-11-22 (Opus 5.5): 0.13.1, Med's questions on 0.13.0
+
+Brief (in chat): two screenshots (the home screen with the live pill, search with the keyboard), his settings export,
+diagnostics and a log of 00:41 to 11:09. He asked what the live pill does (a tap opened the study hub); reported that
+after a wallpaper change the search pill goes too high the first time; asked again for a switch so the keyboard's
+background changes with the wallpaper; asked to reimagine the line under the clock; and asked for recommendations.
+Branch `claude/confident-planck-nkjqga`, started from `claude/affectionate-sagan-u5it39` (0.13.0; `main` was at 0.11.2).
+
+**Released:** 0.13.1 by the CI run of the commit "0.13.1 [release]: …" that carries this entry.
+
+**Items**
+
+| # | Med's point | State | What |
+|---|---|---|---|
+| 1 | What the live pill does; a tap opened the study hub | Explained in chat | By design (D178): a tap on the live item opens Today unless it shows music (the player) or cards (the quick review). His pill: search, live, study circle; with the study item on the pill, the live item leaves blocks and classes to it and shows the focus timer, music and cards. |
+| 2 | After a wallpaper change the search pill goes too high the first time | Done | His log: "it goes to 1188 px", then "keyboard went down to 933 px while open", the field at 1206 px. D182. |
+| 3 | A switch: the keyboard's background changes with the wallpaper | Done; needs his three switches in WM Keyboard | The launcher hands WM Keyboard the picture (Android 13+ does not let WM Keyboard read it) through two themes it switches between. D180. |
+| 4 | Reimagine the line under the clock | Done | Never the pill's countdown: the block's next step with a ✓, the class now (until when, where), a class soon, "free until", and a second line for the rest of the day. D181. |
+| 5 | Recommendations | Given in chat; two speed fixes done | D183: the hub was redrawn every second under a focus; the board picture was blurred on every frame. The rest below. |
+
+**Recommendations given (not built; his choice)**
+- Speed: the focus countdown redraws the home screen's glass every second for as long as a focus runs (his idle home
+  logged 600 frames, 35 % late, around 10:04). An option "seconds only in the last minute" would cut it to once a minute.
+- Speed: the drawer's letter area runs 40 to 56 % late (composition 4 to 11 ms a frame, sync 15 to 18 ms): to measure
+  and make draw-only.
+- Speed: the speed check log (Settings › Diagnostics › Speed check) is still owed, for a cheaper glass at a steady rate.
+- Battery: a calendar sync is requested at most every 5 minutes on coming home; every 15 minutes would do.
+- Design: with the line no longer repeating it, the study circle and the live item on the pill overlap less; the
+  circle could become the live item's ring.
+- Practicality: a long press on the line (today: the clock widget's edit) for Start focus, Ask Claude about the block,
+  Write a note.
+
+**Known limits**
+- The keyboard's wallpaper needs, once: WM Keyboard's Photos permission ("Allow all"), "Let other apps control the
+  keyboard" (with "Change the theme" in its Allowed actions), and both themes added. Changing the Keyboard page's theme
+  (its base, the launcher's keys) means adding the two themes again; the look (search or sharp) does not.
+- Only wallpapers the launcher shows are handed over: one set in another app makes the launcher draw the system's
+  wallpaper instead, and the keyboard keeps its last picture until the launcher shows one of its own again.
+- The line's class facts read the class calendars (the account's main calendar unless set); a class without a place
+  shows no room.
+- Nothing here was seen on his phone: the emulator checks the line's old cases (14b) and the keyboard's drive.
+
+**Questions for Med**
+1. Keyboard: after the three steps, does "Try it now" answer "Done", and does the next wallpaper change the keyboard by
+   itself? Is "Like behind search" right, or "Sharp"? Is the toolbar sharp enough on the picture?
+2. The line under the clock: while you focus, is the next step useful, and the ✓? Is the second line too much?
+3. Search: after a wallpaper change, does the pill stay at the keyboard now (the log says "the pill comes down onto the
+   keyboard" when it had to correct)?
+4. Which of the recommendations do you want?
+5. Still owed: the speed check log.
+
+**Exact next step:** read Med's next log: "Keyboard: wallpaper behind the keys (…)" lines (each hand-over and WM
+Keyboard's answer); "search: the keyboard rises with the pill: … taller than the … px it opens at" and "the pill comes
+down onto the keyboard" after a wallpaper change; the "study hub" Frames lines (fewer frames while it stays open, and
+their time).
