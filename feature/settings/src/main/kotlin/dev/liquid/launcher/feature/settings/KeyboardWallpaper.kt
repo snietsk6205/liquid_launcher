@@ -15,6 +15,7 @@ import dev.liquid.launcher.core.common.KeyboardLine
 import dev.liquid.launcher.core.common.WallpaperPalette
 import dev.liquid.launcher.core.common.WallpaperTones
 import dev.liquid.launcher.core.data.KeyboardTheme
+import dev.liquid.launcher.core.data.KeyboardWallpaperThemes
 import dev.liquid.launcher.core.data.ThemeDoc
 import dev.liquid.launcher.core.data.ThemeStore
 import dev.liquid.launcher.core.data.ThemedColors
@@ -160,21 +161,61 @@ object KeyboardWallpaper {
         val shown = settings.get(LauncherSettings.KeyboardWallpaperSlot).coerceIn(0, SLOTS - 1)
         val next = (shown + 1) % SLOTS
         val error = write(context, next, picture)
-        picture.recycle()
         if (error != null) {
+            picture.recycle()
             DebugLog.error("Keyboard", "wallpaper behind the keys ($why): $error")
             return error
         }
         val answer = WmKeyboard.send(context, "SET_THEME", mapOf("theme" to themeName(next)))
         val said = WmKeyboard.describe(answer)
-        return if (answer.ok) {
+        if (answer.ok) {
+            picture.recycle()
             settings.set(LauncherSettings.KeyboardWallpaperSlot, next)
+            remember(settings, next, true)
             DebugLog.event("Keyboard", "wallpaper behind the keys ($why): \"${themeName(next)}\" on its new picture; WM Keyboard: $said")
-            "Done: WM Keyboard shows \"${themeName(next)}\" on the new picture"
-        } else {
-            DebugLog.event("Keyboard", "wallpaper behind the keys ($why): picture written, but WM Keyboard did not switch to \"${themeName(next)}\": $said")
-            "The picture is ready, but WM Keyboard did not switch to \"${themeName(next)}\": $said"
+            return if (KeyboardWallpaperThemes.automaticWins(answer.text)) {
+                "WM Keyboard took \"${themeName(next)}\", but its automatic light and dark theme is on and shows another one: turn it off in WM Keyboard › Themes"
+            } else {
+                "Done: WM Keyboard shows \"${themeName(next)}\" on the new picture"
+            }
         }
+        if (!KeyboardWallpaperThemes.missing(answer.text)) {
+            picture.recycle()
+            DebugLog.event("Keyboard", "wallpaper behind the keys ($why): picture written, but WM Keyboard did not switch to \"${themeName(next)}\": $said")
+            return "The picture is ready, but WM Keyboard did not switch to \"${themeName(next)}\": $said"
+        }
+        // 0.15.0 (D189): that theme is not in WM Keyboard. Med's log: "no theme is called \"Liquid wallpaper 2\"" at every
+        // change, so nothing changed on his keyboard. The theme that is there gets the new picture as well (WM Keyboard
+        // shows it the next time it loads that theme), and the launcher says what is missing.
+        remember(settings, next, false)
+        val other = write(context, shown, picture)
+        picture.recycle()
+        val back = if (other == null) WmKeyboard.send(context, "SET_THEME", mapOf("theme" to themeName(shown))) else null
+        if (back?.ok == true) remember(settings, shown, true) else if (back != null && KeyboardWallpaperThemes.missing(back.text)) remember(settings, shown, false)
+        val have = KeyboardWallpaperThemes.parse(settings.get(LauncherSettings.KeyboardWallpaperThemes))
+        DebugLog.event(
+            "Keyboard",
+            "wallpaper behind the keys ($why): WM Keyboard has no theme \"${themeName(next)}\" ($said); " +
+                if (back?.ok == true) "the picture went into \"${themeName(shown)}\" too, shown once WM Keyboard reloads it" else "nor \"${themeName(shown)}\"",
+        )
+        dev.liquid.launcher.core.common.Notices.post(
+            dev.liquid.launcher.core.common.NoticeKind.Info,
+            "Keyboard wallpaper: add \"${themeName(next)}\" in WM Keyboard",
+            if (have.isEmpty()) "Neither theme is in WM Keyboard yet. Tap to set it up" else "With both themes, every wallpaper reaches the keys at once. Tap to add it",
+            dev.liquid.launcher.core.data.LauncherAction.Section("keyboard").encode(),
+        )
+        return if (have.isEmpty()) {
+            "WM Keyboard has neither \"${themeName(0)}\" nor \"${themeName(1)}\" yet: add them below (step 3)"
+        } else {
+            "WM Keyboard has \"${themeName(shown)}\" but not \"${themeName(next)}\": add it below (step 3). Until then the new picture shows once WM Keyboard reloads its theme"
+        }
+    }
+
+    /** What WM Keyboard answered about slot [slot]'s theme: there ([has]) or not. */
+    private fun remember(settings: SettingsStore, slot: Int, has: Boolean) {
+        val now = KeyboardWallpaperThemes.parse(settings.get(LauncherSettings.KeyboardWallpaperThemes))
+        val next = if (has) now + slot else now - slot
+        settings.set(LauncherSettings.KeyboardWallpaperThemes, KeyboardWallpaperThemes.encode(next))
     }
 
     /** Both pictures written now (before the themes are added, so each has its picture from the start). */

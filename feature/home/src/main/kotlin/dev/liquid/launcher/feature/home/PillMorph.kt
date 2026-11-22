@@ -119,8 +119,10 @@ fun MorphingPill(
                     return@graphicsLayer
                 }
                 val st = stretch.value
-                scaleY = 1f + st
-                scaleX = 1f - st * 0.55f
+                // 0.15.0 (D188): past fully open (Bounce), the pill stays on the keyboard and squashes onto it instead.
+                val squash = dev.liquid.launcher.core.common.KeyboardDrive.squash(controller.search.value)
+                scaleY = (1f + st) * (1f - squash)
+                scaleX = (1f - st * 0.55f) * (1f + squash * 0.5f)
                 transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
             }
             .morphPillSurface({ controller.morph() }, backdrop, shape, glass.style(surface, if (open) drawerLight else lightBackground))
@@ -303,16 +305,22 @@ internal fun fieldBottom(controller: HomeController, insets: FieldInsets, p: Flo
     val nav = insets.nav()
     val rise = controller.keyboardRise
     if (searchy && rise > 0f) {
-        // 0.13.0 (D175): only up, from where the pill rests to just above the keyboard's height, on search's spring
-        // (past 1 when it bounces). The keyboard rises under it in step ([keyboardTop]), so the two meet at the end
-        // and the pill is never below the keyboard or above an empty gap.
+        // 0.13.0 (D175): only up, from where the pill rests to just above the keyboard's height, on search's spring.
+        // The keyboard rises under it in step ([keyboardTop]), so the two meet at the end and the pill is never below
+        // the keyboard or above an empty gap. 0.15.0 (D188): no longer past the keyboard when the spring bounces (Med's
+        // log: 1.13 to 1.15 open, the pill 25 to 30 dp above the keyboard before falling back): both stop at the top
+        // and the bounce becomes the pill's landing squash; a keyboard taller for a moment while open is not followed.
         val rest = nav + closedOffset
-        val bottom = rest + (maxOf(nav, rise) + openMargin - rest) * p.coerceAtLeast(0f)
-        val ime = controller.searchFieldLine(nav, insets.ime(), insets.imeTarget())
-        return maxOf(bottom, ime + openMargin, keyboardTop(controller, p) + openMargin)
+        val q = dev.liquid.launcher.core.common.KeyboardDrive.landed(p)
+        val bottom = rest + (maxOf(nav, rise) + openMargin - rest) * q
+        val ime = controller.pillKeyboardLine(controller.searchFieldLine(nav, insets.ime(), insets.imeTarget()))
+        return maxOf(bottom, ime + openMargin, keyboardTop(controller, q) + openMargin)
     }
     val ime = if (searchy) controller.searchFieldLine(nav, insets.ime(), insets.imeTarget()) else insets.ime()
-    val closed = maxOf(nav, ime) + closedOffset
+    // 0.15.0 (D188): the closed pill rests at its own place; a keyboard still on its way down carries it (just above it)
+    // instead of throwing it its whole distance from the edge above the keyboard (up to 0.14: a jump of 116 dp, Med's
+    // distance, as search or the drawer finished closing before the keyboard had gone).
+    val closed = if (ime > nav) maxOf(nav + closedOffset, ime + openMargin) else nav + closedOffset
     val bottom = lerp(closed, maxOf(nav, ime) + openMargin, p.coerceIn(0f, 1f))
     return if (ime > nav) maxOf(bottom, ime + openMargin) else bottom
 }

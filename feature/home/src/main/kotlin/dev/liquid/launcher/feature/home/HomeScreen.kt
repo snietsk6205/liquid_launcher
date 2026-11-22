@@ -374,6 +374,19 @@ private fun HomeScreenBody(
             null
         }
     }
+    // 0.15.0 (D190): the frost the unlock reveal clears: the wallpaper's blurred copy (search's), else one of its own.
+    val unlockOn by store.derive { get(LauncherSettings.WallpaperUnlock) != "off" }
+    val frostWallpaper by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, image, deepWallpaper, unlockOn) {
+        val source = image
+        val deep = deepWallpaper
+        value = when {
+            !unlockOn || source == null -> null
+            deep != null -> deep
+            else -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                dev.liquid.launcher.core.designsystem.WallpaperBlur.blur(source.asAndroidBitmap(), (homeBlurDp + 22) * density1.density).asImageBitmap()
+            }
+        }
+    }
     if (studio != null) {
         // Preview the screen being adjusted.
         LaunchedEffect(studio.surface) {
@@ -1091,6 +1104,13 @@ private fun HomeScreenBody(
         Presence(controller.layoutWallpaperPick, onClose = { controller.back() }) { id -> ProvideControls(controller, glass, null) { LayoutWallpaperSheet(controller, id, glass, lightBackground, overlayBackdrop) } }
         // W4: "Customise …" after a long press on a surface.
         Presence(controller.customise) { offer -> CustomiseChip(controller, offer, if (lightBackground) Color(0xFF16181C) else Color.White) }
+        if (live) {
+            UnlockFrost(controller, frostWallpaper) {
+                val pages = controller.pager.pageCount
+                if (pages <= 1) 0.5f else (controller.pager.currentPage + controller.pager.currentPageOffsetFraction) / (pages - 1)
+            }
+            UnlockWatch(controller, windowInfo.isWindowFocused)
+        }
         if (live) TransitionOverlay(controller, transitionStyle)
         if (mode == HomeMode.PreviewEffects && touchFx != null) EffectsDemo(touchFx, glass, lightBackground, overlayBackdrop)
         // What a press throws over the screen (0.8.0, D111), above everything it was pressed on.

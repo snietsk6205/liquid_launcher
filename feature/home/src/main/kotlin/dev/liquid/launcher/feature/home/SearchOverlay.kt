@@ -540,7 +540,24 @@ private fun SearchKeyboard(controller: HomeController, focus: FocusRequester, wa
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val view = androidx.compose.ui.platform.LocalView.current
     val insets = rememberFieldInsets()
-    val driving = remember { booleanArrayOf(false) }
+    // 0.15.0 (D188): the opening's drive, and the drive taking the keyboard down with search; one at a time, so the
+    // keyboard is never asked for twice (up to 0.14 a close while the opening's drive still held it asked again, the
+    // system took the first back and the keyboard jumped up before going down).
+    val driving = remember { mutableStateOf(false) }
+    val following = remember { mutableStateOf(false) }
+    val wasOpen = remember { mutableStateOf(false) }
+    val followScope = androidx.compose.runtime.rememberCoroutineScope()
+    fun follow() {
+        if (!drives || driving.value || following.value) return
+        following.value = true
+        followScope.launch {
+            try {
+                runCatching { driveKeyboardDown(controller, view) }
+            } finally {
+                following.value = false
+            }
+        }
+    }
 
     // 0.11.2: a keyboard already sliding in counts as coming (its animation has a target): asking again then could
     // restart it. On Med's phone about half the openings had no keyboard yet at 200 ms and were asked again.
@@ -574,33 +591,44 @@ private fun SearchKeyboard(controller: HomeController, focus: FocusRequester, wa
         LaunchedEffect(controller.keyboardSession) {
             if (!wanted || !controller.expectKeyboard || controller.speedChecking || !controller.live) return@LaunchedEffect
             if (controller.keyboardPath != null) return@LaunchedEffect
-            driving[0] = true
+            driving.value = true
             try {
                 driveKeyboard(controller, view, focus, window) { askUsual() }
             } finally {
-                driving[0] = false
+                driving.value = false
             }
         }
+        // 0.15.0 (D188): a finger pushing open search away takes the keyboard with it from its first movement (up to 0.14
+        // the keyboard stayed up until the finger let go, and the pill waited on it).
+        LaunchedEffect(Unit) {
+            snapshotFlow { controller.searchDragging && controller.searchOpen }.collect { pushed -> if (pushed) follow() }
+        }
     }
-    val wasOpen = remember { booleanArrayOf(false) }
     LaunchedEffect(controller.searchOpen) {
         if (!controller.searchOpen) {
             // Only when search closes: on the field's first frame (a swipe still moving) the drive has just focused it.
-            // 0.13.0: the keyboard slides down with the pill first, then the field lets go of the focus.
-            if (wasOpen[0]) {
-                if (drives) runCatching { driveKeyboardDown(controller, view) }
-                focusManager.clearFocus(force = true)
+            // 0.13.0: the keyboard slides down with the pill first, then the field lets go of the focus. 0.15.0: by the
+            // drive that already holds it, if one does; the focus goes once it is down (letting go of the focus first
+            // hides the keyboard on the system's own curve and takes it from the drive).
+            if (wasOpen.value) {
+                if (drives) {
+                    follow()
+                    kotlinx.coroutines.withTimeoutOrNull(2_500) { snapshotFlow { driving.value || following.value }.first { !it } }
+                }
+                if (!controller.searchOpen) focusManager.clearFocus(force = true)
             }
-            wasOpen[0] = false
+            wasOpen.value = false
             return@LaunchedEffect
         }
-        wasOpen[0] = true
+        wasOpen.value = true
         if (!wanted || controller.speedChecking) return@LaunchedEffect
         if (drives && controller.expectKeyboard) {
             // A drive running asks (and falls back to the usual way itself); asking the usual way meanwhile would take
             // the keyboard from it. With none running (search opened again before it had closed), the usual way.
             kotlinx.coroutines.delay(32)
-            if (driving[0]) return@LaunchedEffect
+            if (driving.value) return@LaunchedEffect
+            // 0.15.0: the keyboard already up (search sprang open again while it was following it down): nothing to ask.
+            if (following.value || coming()) return@LaunchedEffect
         }
         askUsual()
     }
@@ -634,8 +662,17 @@ private suspend fun driveKeyboard(
     fun at() = "search at " + "%.2f".format(controller.search.value) + ", the field at ${controller.fieldBottomPx.roundToInt()} px"
     suspend fun fallBack() {
         controller.keyboardPath = "usual"
-        DebugLog.event("Home", "search: the keyboard is shown the usual way (${driver.cancelReason}, ${android.os.SystemClock.uptimeMillis() - driver.askedAt} ms after asking; ${at()}); its picture stays until it is up")
-        if (controller.searchOpen || controller.searchDragging) usual()
+        // 0.15.0: a finger pushing search away: wait to see where it lets go (asking now would bring the keyboard up
+        // under a pill on its way down).
+        if (controller.searchOpen && controller.searchDragging) snapshotFlow { controller.searchDragging }.first { !it }
+        val wanted = controller.searchOpen || controller.searchDragging
+        DebugLog.event(
+            "Home",
+            "search: the keyboard " + (if (wanted) "is shown the usual way" else "was let go as search closed") +
+                " (${driver.cancelReason}, ${android.os.SystemClock.uptimeMillis() - driver.askedAt} ms after asking; ${at()})" +
+                if (wanted) "; its picture stays until it is up" else "",
+        )
+        if (wanted) usual()
     }
     if (!driver.ask()) {
         fallBack()
@@ -667,14 +704,16 @@ private suspend fun driveKeyboard(
         // The keyboard takes the picture's place this frame, at its height; the rise then follows its real height.
         var frames = 0
         var topped = false
+        var lastShare = -1f
+        var stillFrames = 0
         while (driver.phase == KeyboardDriver.Phase.Ready) {
             val p = controller.search.value
-            if (controller.searchOpen && p >= 1f) topped = true
+            if (controller.searchOpen && p >= 0.998f) topped = true
             if (!controller.searchOpen) topped = false
             val rise = controller.keyboardRise.takeIf { it > 0f } ?: driver.shownPx.toFloat()
             // Where the picture stands now, as a share of the keyboard's own height; fully up once search is (unless its
-            // height is doubted: then its top stays on the pill's line).
-            val f = drive.share(rise, if (topped) 1f else p, driver.shownPx.toFloat())
+            // height is doubted: then its top stays on the pill's line). 0.15.0: never past fully up while search bounces.
+            val f = drive.share(rise, if (topped) 1f else drive.landed(p), driver.shownPx.toFloat())
             driver.move(f)
             if (frames == 2) {
                 // Two frames in, the keyboard stands where its picture is: the picture goes, the rise glides to its height.
@@ -682,11 +721,19 @@ private suspend fun driveKeyboard(
                 if (driver.shownPx > 0 && believed) controller.glideKeyboardRise(driver.shownPx.toFloat())
             }
             frames++
+            // Up and no longer moving (the rise's glide to the real height done): it can be handed over.
+            stillFrames = if (topped && frames > 2 && kotlin.math.abs(f - lastShare) < 0.0005f) stillFrames + 1 else 0
+            lastShare = f
             androidx.compose.runtime.withFrameNanos { }
             if (driver.phase != KeyboardDriver.Phase.Ready) break
             val moving = controller.search.isRunning || controller.searchDragging
-            if (controller.searchOpen && !moving && controller.search.value >= 0.999f && frames > 2) {
+            // 0.15.0 (D188): handed back as soon as it stands fully up (the pill's bounce is only a squash now), so a
+            // swipe closing search soon after never meets a keyboard still held.
+            if (drive.handOver(controller.searchOpen, controller.searchDragging, fullyUp = topped, frames = stillFrames) ||
+                (controller.searchOpen && !moving && controller.search.value >= 0.999f && frames > 2)
+            ) {
                 driver.finish(true)
+                controller.keyboardSteady = controller.searchOpen
                 break
             }
             if (!controller.searchOpen && !moving && controller.search.value <= 0.001f) {
@@ -710,8 +757,12 @@ private suspend fun driveKeyboard(
 /**
  * 0.13.0 (D175): search closing with the keyboard up: the keyboard slides down with the pill, on search's spring, as
  * one piece (the system's own hide animation ran on a curve of its own). True when it was driven down.
+ *
+ * 0.15.0 (D188): also from the first movement of a finger pushing open search away, following the finger, and back up
+ * if search springs open again; handed back once search is still, closed (put away) or open (fully up).
  */
 private suspend fun driveKeyboardDown(controller: HomeController, view: android.view.View): Boolean {
+    val drive = dev.liquid.launcher.core.common.KeyboardDrive
     val up = view.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true
     if (!up || controller.search.value <= 0.001f) return false
     val driver = KeyboardDriver(view)
@@ -723,17 +774,20 @@ private suspend fun driveKeyboardDown(controller: HomeController, view: android.
         driver.giveUp("not ready to close in time")
         return false
     }
-    val start = controller.search.value.coerceIn(0.001f, 1f)
+    controller.keyboardSteady = false
+    val start = drive.landed(controller.search.value).coerceAtLeast(0.001f)
     try {
         while (driver.phase == KeyboardDriver.Phase.Ready) {
-            val p = controller.search.value
-            if (controller.searchOpen) {
-                driver.finish(true)
-                return true
-            }
+            val p = drive.landed(controller.search.value)
             driver.move((p / start).coerceIn(0f, 1f))
-            if (p <= 0.001f) {
+            val moving = controller.search.isRunning || controller.searchDragging
+            if (!moving && !controller.searchOpen && controller.search.value <= 0.001f) {
                 driver.finish(false)
+                break
+            }
+            if (!moving && controller.searchOpen && controller.search.value >= 0.998f) {
+                driver.finish(true)
+                controller.keyboardSteady = true
                 break
             }
             androidx.compose.runtime.withFrameNanos { }
@@ -836,15 +890,35 @@ private fun KeyboardWatch(controller: HomeController) {
          * keyboard first said it had (1188 px) after it came down to its real one (933 px); now the pill comes down onto it
          * (a glide) and is never left above a gap. Higher: the field already rides on it.
          */
+        var growCheck: kotlinx.coroutines.Job? = null
         fun followSettled(at: Float) {
             if (!controller.searchOpen || controller.keyboardDriving) return
             val rise = controller.keyboardRise
             if (rise <= 0f) return
             if (at < rise - 1f) {
+                growCheck?.cancel()
                 DebugLog.event("Home", "search: the pill comes down onto the keyboard, from ${rise.roundToInt()} to ${at.roundToInt()} px")
                 controller.glideKeyboardRise(at)
             } else if (at > rise + 1f) {
-                controller.glideKeyboardRise(at)
+                if (!controller.keyboardSteady) {
+                    // Still arriving (shown the usual way): the pill already rides on it; it stays there.
+                    controller.settleKeyboardRise(at)
+                } else {
+                    // 0.15.0 (D188): taller while search is open: followed only if it stays taller. WM Keyboard says it is
+                    // 85 dp taller for a moment as it rebuilds (after a wallpaper change, 25 ms on Med's phone); up to
+                    // 0.14 the pill went up with it and came back down.
+                    growCheck?.cancel()
+                    growCheck = watchScope.launch {
+                        kotlinx.coroutines.delay(dev.liquid.launcher.core.common.KeyboardDrive.GROW_SETTLE_MS)
+                        val now = insets.ime()
+                        if (controller.searchOpen && now > controller.keyboardRise + 1f) {
+                            DebugLog.event("Home", "search: the keyboard stayed taller (${now.roundToInt()} px): the pill rises onto it")
+                            controller.glideKeyboardRise(now)
+                        } else {
+                            DebugLog.event("Home", "search: the keyboard was taller for a moment (${at.roundToInt()} px): the pill stayed")
+                        }
+                    }
+                }
             }
             if (controller.keyboardDriveShown > 0f) controller.keyboardDriveShown = at
         }
@@ -889,6 +963,8 @@ private fun KeyboardWatch(controller: HomeController) {
                 // (the keyboard came the usual way) goes now that the keyboard covers it.
                 controller.keyboardStandInOn = false
                 followSettled(now)
+                // 0.15.0 (D188): from now on the open pill keeps to this line (moments taller are not followed).
+                if (controller.searchOpen && controller.keyboardRise > 0f) controller.keyboardSteady = true
                 takePictureSoon(now)
             } else if (controller.searchOpen) {
                 if (now < lastSettled - 1f) {

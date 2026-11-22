@@ -1087,6 +1087,7 @@ class HomeController(
 
     private fun startExpectingKeyboard() {
         expectKeyboard = searchKeyboard && searchField == "keyboard" && searchInPill && !speedChecking
+        keyboardSteady = false
         if (expectKeyboard) {
             keyboardPath = null
             keyboardDriveShown = 0f
@@ -1115,7 +1116,21 @@ class HomeController(
         riseGlide?.cancel()
         keyboardRise = 0f
         keyboardStandInOn = false
+        keyboardSteady = false
     }
+
+    /**
+     * 0.15.0 (D188): search is open and the keyboard stands up under the pill, handed back to the system (or shown the
+     * usual way and settled). While steady, the pill keeps to the line the keyboard settled at ([keyboardRise]): a
+     * keyboard that says it is taller for a moment (WM Keyboard rebuilding itself, 25 ms on Med's phone) no longer throws
+     * the pill up and down; one that stays taller is followed after [dev.liquid.launcher.core.common.KeyboardDrive.GROW_SETTLE_MS],
+     * on a glide. False while search opens or closes, where the pill rides on the keyboard as it moves.
+     */
+    var keyboardSteady by mutableStateOf(false)
+
+    /** The keyboard line the pill sits on now (see [keyboardSteady]), px from the bottom of the screen. */
+    fun pillKeyboardLine(ime: Float): Float =
+        dev.liquid.launcher.core.common.KeyboardDrive.steadyLine(ime, keyboardRise, keyboardSteady && searchOpen)
 
     /**
      * 0.13.1: the launcher holds the keyboard right now (between the drive's "ready" and its hand-back), so its height
@@ -1131,6 +1146,12 @@ class HomeController(
      * holds it) glides to a height that turned out different: the keyboard's real height once it is ready, or where it
      * settled while search stays open. Not rising: set at once.
      */
+    /** 0.15.0: the rise set at once (the pill already stands there, riding on the keyboard), any glide stopped. */
+    fun settleKeyboardRise(px: Float) {
+        riseGlide?.cancel()
+        if (keyboardRise > 0f && px > 0f) keyboardRise = px
+    }
+
     fun glideKeyboardRise(px: Float) {
         riseGlide?.cancel()
         val from = keyboardRise
@@ -1215,8 +1236,12 @@ class HomeController(
     /** Where the finger has put search, ahead of [search] (see [dragPosition]). */
     private var searchDragPosition: Float? = null
 
-    /** A finger is moving search (0.11.3: the keyboard drive waits for it to let go before handing the keyboard over). */
-    val searchDragging: Boolean get() = searchDragPosition != null
+    /**
+     * A finger is moving search (0.11.3: the keyboard drive waits for it to let go before handing the keyboard over).
+     * 0.15.0: snapshot state, so the keyboard can start following a finger that pushes open search away.
+     */
+    var searchDragging by mutableStateOf(false)
+        private set
 
     /** Where the bottom of search's field was at the last layout, px from the bottom of the screen (for the log; not state). */
     var fieldBottomPx = 0f
@@ -1247,6 +1272,90 @@ class HomeController(
 
     /** Where the change was started (the wallpaper tapped in the strip), in screen pixels: a ripple spreads from there. */
     var transitionOrigin: androidx.compose.ui.geometry.Offset? = null
+
+    // ---- 0.15.0 (D190): the unlock reveal (Med: "when I open my phone, the same animation as when I change the
+    // wallpaper, starting from random places"; he chose "frosted, then clear") ----
+
+    /** The frost over the home screen: put up as the screen turns off, so it is there on the first frame after unlock. */
+    var unlockFrost by mutableStateOf(false)
+        private set
+
+    /** How far the frost has gone, 0 (all there) to 1 (gone), in the style [unlockStyle]. */
+    val unlockProgress = Animatable(0f)
+    var unlockStyle by mutableStateOf("ripple")
+        private set
+    var unlockOrigin: androidx.compose.ui.geometry.Offset? = null
+        private set
+    internal var unlockVariation = WallpaperTransitions.Variation.None
+        private set
+
+    /** The unlock came (the keyguard went): the reveal waits for the home screen to be in front, then plays. */
+    var unlockPending by mutableStateOf(false)
+        private set
+
+    /** The screen is on (from the screen's broadcasts; a frost put up while it is off is not dropped meanwhile). */
+    var screenOn by mutableStateOf(true)
+    private var unlockJob: kotlinx.coroutines.Job? = null
+
+    /** The style the reveal plays in: its own setting, or the wallpaper's transition ("same"); null when off. */
+    private fun unlockStyleNow(): String? {
+        val chosen = data.settings.get(LauncherSettings.WallpaperUnlock)
+        val style = if (chosen == "same") data.settings.get(LauncherSettings.WallpaperTransition) else chosen
+        return style.takeIf { it != "off" && it != "none" }
+    }
+
+    /** The screen turned off: the frost goes up (unseen), ready for the unlock. */
+    fun armUnlockReveal() {
+        screenOn = false
+        val style = unlockStyleNow() ?: return
+        unlockJob?.cancel()
+        unlockPending = false
+        unlockStyle = style
+        scope.launch { unlockProgress.snapTo(0f) }
+        unlockFrost = true
+    }
+
+    /** The phone was unlocked: the reveal plays once the home screen is in front ([playUnlockReveal]). */
+    fun unlocked() {
+        if (unlockFrost) unlockPending = true
+    }
+
+    /**
+     * The home screen is in front after the unlock: the frost leaves from a random point, in the style chosen, over the
+     * transition's length. [w] and [h]: the screen in px.
+     */
+    fun playUnlockReveal(w: Float, h: Float) {
+        if (!unlockFrost) return
+        unlockPending = false
+        unlockJob?.cancel()
+        val random = kotlin.random.Random(System.nanoTime())
+        unlockOrigin = androidx.compose.ui.geometry.Offset(w * (0.12f + 0.76f * random.nextFloat()), h * (0.16f + 0.7f * random.nextFloat()))
+        unlockVariation = WallpaperTransitions.Variation.random(random)
+        val style = unlockStyle
+        DebugLog.event("Home", "unlock: the frost leaves ($style) from " + "%.0f, %.0f".format(unlockOrigin?.x, unlockOrigin?.y))
+        unlockJob = scope.launch {
+            try {
+                unlockProgress.snapTo(0f)
+                unlockProgress.animateTo(
+                    1f,
+                    androidx.compose.animation.core.tween(
+                        MotionScale.ms((data.settings.get(LauncherSettings.WallpaperTransitionMs) * WallpaperTransitions.lengthFactor(style)).toInt()),
+                        easing = WallpaperTransitions.easing(style),
+                    ),
+                )
+            } finally {
+                unlockFrost = false
+                unlockOrigin = null
+            }
+        }
+    }
+
+    /** The home screen came to the front without an unlock (Home from an app): no frost there. */
+    fun dropUnlockFrost() {
+        if (!unlockFrost || unlockJob?.isActive == true) return
+        unlockPending = false
+        unlockFrost = false
+    }
 
     /** The wallpaper strip from the home menu. */
     var wallpaperStrip by mutableStateOf(false)
@@ -1471,6 +1580,7 @@ class HomeController(
     fun openSearch(velocity: Float = Float.NaN) {
         menu = null
         searchDragPosition = null
+        searchDragging = false
         if (!searchOpen && search.value < 0.001f) startExpectingKeyboard()
         searchOpen = true
         val v = if (velocity.isNaN()) search.velocity else velocity
@@ -1479,7 +1589,9 @@ class HomeController(
 
     fun closeSearch(immediately: Boolean = false, velocity: Float = Float.NaN) {
         searchDragPosition = null
+        searchDragging = false
         searchOpen = false
+        keyboardSteady = false
         searchEditing = false
         searchGlanceOpen = false
         val v = if (velocity.isNaN()) search.velocity else velocity
@@ -1501,6 +1613,7 @@ class HomeController(
         val next = (before + deltaFraction / drawerTravel()).coerceIn(0f, 1f)
         if (motionConfig.drawerTick && (before > OPEN_POINT) != (next > OPEN_POINT)) Haptics.tick(view)
         searchDragPosition = next
+        if (!searchDragging) searchDragging = true
         scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { search.snapTo(next) }
     }
 

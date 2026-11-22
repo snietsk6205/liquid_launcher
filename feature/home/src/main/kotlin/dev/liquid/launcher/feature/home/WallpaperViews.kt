@@ -262,3 +262,77 @@ private fun StripButton(
         onClick()
     }
 }
+
+/**
+ * 0.15.0 (D190): the frost over the home screen at the unlock: the wallpaper's blurred copy, a little darker, put up
+ * as the screen turns off and cleared from a random point when the phone is unlocked, in the style of the wallpaper's
+ * transition (Settings › Wallpaper › When you unlock). Takes no touches: the home screen under it is live.
+ */
+@Composable
+internal fun UnlockFrost(controller: HomeController, frost: ImageBitmap?, offset: () -> Float) {
+    if (!controller.unlockFrost) return
+    androidx.compose.foundation.layout.Box(
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                with(WallpaperTransitions) {
+                    oldScreenLeaving(controller.unlockProgress.value, controller.unlockStyle, controller.unlockOrigin, controller.unlockVariation)
+                }
+            },
+    ) {
+        if (frost != null) WallpaperImage(image = frost, frame = { null }, offset = offset, modifier = Modifier)
+        androidx.compose.foundation.layout.Box(
+            Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = if (frost != null) 0.22f else 0.55f)),
+        )
+    }
+}
+
+/**
+ * 0.15.0 (D190): watches the screen going off (the frost goes up, unseen) and the unlock; plays the reveal once the home
+ * screen is in front after it. Coming to the front without an unlock (Home from an app) drops the frost unseen.
+ */
+@Composable
+internal fun UnlockWatch(controller: HomeController, focused: Boolean) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.DisposableEffect(context) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context, intent: android.content.Intent) {
+                when (intent.action) {
+                    android.content.Intent.ACTION_SCREEN_OFF -> controller.armUnlockReveal()
+                    android.content.Intent.ACTION_SCREEN_ON -> {
+                        controller.screenOn = true
+                        // On again before the phone locked (a lock delay): no unlock will come, this is the opening.
+                        val keyguard = c.getSystemService(android.app.KeyguardManager::class.java)
+                        if (keyguard?.isKeyguardLocked == false) controller.unlocked()
+                    }
+                    android.content.Intent.ACTION_USER_PRESENT -> controller.unlocked()
+                }
+            }
+        }
+        val filter = android.content.IntentFilter().apply {
+            addAction(android.content.Intent.ACTION_SCREEN_OFF)
+            addAction(android.content.Intent.ACTION_SCREEN_ON)
+            addAction(android.content.Intent.ACTION_USER_PRESENT)
+        }
+        context.registerReceiver(receiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
+        onDispose { runCatching { context.unregisterReceiver(receiver) } }
+    }
+    LaunchedEffect(focused, controller.unlockFrost, controller.unlockPending, controller.screenOn) {
+        if (!controller.unlockFrost || !controller.screenOn) return@LaunchedEffect
+        if (controller.unlockPending) {
+            if (focused) {
+                controller.playUnlockReveal(controller.screenWidth, controller.screenHeight)
+            } else {
+                // Unlocked into an app: the frost must not wait for the next time Home is pressed.
+                kotlinx.coroutines.delay(1_800)
+                controller.dropUnlockFrost()
+            }
+            return@LaunchedEffect
+        }
+        if (focused) {
+            // In front without an unlock yet: its broadcast may still be on its way; otherwise this is a return from an app.
+            kotlinx.coroutines.delay(700)
+            if (!controller.unlockPending) controller.dropUnlockFrost()
+        }
+    }
+}

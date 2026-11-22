@@ -108,10 +108,39 @@ internal fun SearchPage(
                 .fadingTop(scroll)
                 // From the bottom: the cards nearest the field show first, the rest are a scroll up away.
                 .verticalScroll(scroll, reverseScrolling = true)
-                .padding(top = 6.dp, bottom = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(bottom = 4.dp),
         ) {
-            for (id in cards) {
+            // 0.15.0 (D188): the cards come in one a frame, the one nearest the field first, each rising into place: the
+            // first frame of the swipe no longer composes the whole page (Med: "it lags"). The column sits on the field,
+            // so a card added above never moves the ones below it. A card with nothing to show takes no room, as before.
+            val revealed = rememberRevealCount(cards.size)
+            for ((i, id) in cards.withIndex()) {
+                if (i < cards.size - revealed) continue
+                StaggerIn(cards.size - 1 - i, Modifier.gapAboveWhenShown(10.dp)) {
+                    SearchCard(id, controller, cards, widgets, env, room, loaded, day, now, suggestions, transition, openApp)
+                }
+            }
+        }
+    }
+}
+
+/** One card of search's page (0.9.3), by its id in Settings → Search. */
+@Composable
+private fun SearchCard(
+    id: String,
+    controller: HomeController,
+    cards: List<String>,
+    widgets: List<HomeItem>,
+    env: PageEnv?,
+    room: Dp,
+    loaded: Boolean,
+    day: StudyDay,
+    now: Long,
+    suggestions: List<AppEntry>,
+    transition: String,
+    openApp: (AppEntry) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 when (id) {
                     // 0.10.2: one calm line; the calendar month (the page's widgets) and the exam countdown one tap away.
                     "glance" -> {
@@ -134,8 +163,6 @@ internal fun SearchPage(
                     "claude" -> ClaudeChips(controller, if (loaded) heroBlock(day, now) else null)
                     "apps" -> if (suggestions.isNotEmpty()) SuggestionRow(controller, suggestions, transition, openApp)
                 }
-            }
-        }
     }
 }
 

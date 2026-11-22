@@ -310,13 +310,26 @@ internal fun KeyboardWallpaperEditor(store: SettingsStore) {
                 if (runCatching { context.startActivity(intent) }.isFailure) message = "Open WM Keyboard › Privacy yourself."
             }) { Text("Open WM Keyboard's privacy") }
         }
+        // 0.15.0 (D189): which theme WM Keyboard has, as it last answered (Med's log: "no theme is called \"Liquid wallpaper
+        // 2\"" at every change, with this step showing nothing).
+        val themesText by store.observe(LauncherSettings.KeyboardWallpaperThemes)
+        val has = remember(themesText) { dev.liquid.launcher.core.data.KeyboardWallpaperThemes.parse(themesText) }
+        val known = themesText.isNotBlank() || last.isNotBlank()
         SetupStep(
-            3, null,
-            "Add both themes, \"${KeyboardWallpaper.themeName(0)}\" and \"${KeyboardWallpaper.themeName(1)}\" (WM Keyboard asks to confirm each). " +
-                "The launcher switches between them, so WM Keyboard reads each new picture. Add them again after you change the theme above.",
+            3, if (has.size == KeyboardWallpaper.SLOTS) true else if (known) false else null,
+            when {
+                has.size == KeyboardWallpaper.SLOTS -> "WM Keyboard has both themes."
+                has.isNotEmpty() -> "WM Keyboard has \"${KeyboardWallpaper.themeName(has.first())}\"; add \"${KeyboardWallpaper.themeName(1 - has.first())}\" too. " +
+                    "WM Keyboard reads a theme's picture when it loads it, so the launcher switches between the two at every wallpaper."
+                known -> "WM Keyboard has neither theme yet: add \"${KeyboardWallpaper.themeName(0)}\" and \"${KeyboardWallpaper.themeName(1)}\" " +
+                    "(WM Keyboard asks to confirm each). Added one twice? Delete the copy in WM Keyboard › Themes: names must be unique."
+                else -> "Add both themes, \"${KeyboardWallpaper.themeName(0)}\" and \"${KeyboardWallpaper.themeName(1)}\" (WM Keyboard asks to confirm each). " +
+                    "The launcher switches between them, so WM Keyboard reads each new picture. Then tap Try it now."
+            } + " Add them again after you change the theme below.",
         ) {
             Row {
                 for (slot in 0 until KeyboardWallpaper.SLOTS) {
+                    if (slot in has) continue
                     OutlinedButton(onClick = {
                         scope.launch {
                             working = true

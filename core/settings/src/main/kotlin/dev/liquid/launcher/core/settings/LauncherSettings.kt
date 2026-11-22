@@ -2007,7 +2007,7 @@ object LauncherSettings {
         key = "keyboard.wallpaper", default = false,
         title = "Your wallpaper behind the keys",
         summary = "WM Keyboard's background becomes the part of your wallpaper the keyboard covers, and changes with every " +
-            "wallpaper. Set it up once below: two themes to add, and two permissions in WM Keyboard",
+            "wallpaper. Set it up once below: one theme to add, and two permissions in WM Keyboard",
         section = "keyboard", keywords = "keyboard background wallpaper picture image follow change wm theme behind keys",
     )
     val KeyboardWallpaperLook = ChoiceSetting(
@@ -2029,6 +2029,14 @@ object LauncherSettings {
     val KeyboardWallpaperLast = TextSetting(
         key = "state.keyboardWallpaperLast", default = "",
         title = "Last keyboard wallpaper hand-over", section = "state", hidden = true,
+    )
+    /**
+     * 0.15.0 (D189): which of the two wallpaper themes WM Keyboard has, as WM Keyboard last answered ("1", "2", "1,2";
+     * empty: not known yet). One is enough now; with both, a change costs one switch instead of two.
+     */
+    val KeyboardWallpaperThemes = TextSetting(
+        key = "state.keyboardWallpaperThemes", default = "",
+        title = "Keyboard wallpaper themes WM Keyboard has", section = "state", hidden = true,
     )
 
     /** 0.11.2: the heights the keyboard opened at lately (px, newest last); search's field waits at the lowest. */
@@ -2142,6 +2150,28 @@ object LauncherSettings {
         key = "wallpaper.transitionMs", default = 520, min = 200, max = 1400, step = 40, unit = "ms",
         title = "Transition length",
         section = "wallpaper", keywords = "wallpaper transition duration speed",
+    )
+    /**
+     * 0.15.0 (D190, Med: "when I open my phone it makes the same animation as when I change the wallpaper, and it starts
+     * from random places").
+     */
+    val WallpaperUnlock = ChoiceSetting(
+        key = "wallpaper.unlock", default = "same",
+        options = listOf(
+            "same" to "The wallpaper's transition (Transition above)",
+            "ripple" to "Ripple",
+            "ink" to "Ink",
+            "shine" to "Shine",
+            "melt" to "Melt",
+            "liquid" to "Liquid",
+            "zoom" to "Zoom",
+            "fade" to "Fade",
+            "off" to "Off",
+        ),
+        title = "When you unlock",
+        summary = "The home screen comes out from under frosted glass as you unlock, starting from a different place " +
+            "each time. It takes the transition's length",
+        section = "wallpaper", keywords = "unlock lock screen wake open phone reveal ripple frost frosted glass animation random start",
     )
     val WallpaperRotation = ChoiceSetting(
         key = "wallpaper.rotation", default = "off",
@@ -2808,9 +2838,9 @@ object LauncherSettings {
         SearchTransition, SearchBounce, SearchSpeed, SearchStretch, SearchFieldHeight, SearchFieldWidth, SearchFieldGap, SearchSelectionEntry,
         SearchFindSettings, SearchFindContacts, SearchFindEvents, SearchFindNotes, SearchFindCards, SearchContactsAsked, SearchField, SearchOpenKeyboard, SearchBlur, SearchDim, SearchHomeScale,
         SearchClaude, SearchClaudeTarget, SearchClipboard, SearchEngine, SearchKeyboardHeight, SearchKeyboardOpenings, WallpaperSheetTall,
-        KeyboardWallpaper, KeyboardWallpaperLook, KeyboardWallpaperSlot, KeyboardWallpaperLast,
+        KeyboardWallpaper, KeyboardWallpaperLook, KeyboardWallpaperSlot, KeyboardWallpaperLast, KeyboardWallpaperThemes,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
-        WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
+        WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs, WallpaperUnlock,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
         BackupAuto, BackupKeep, BackupWallpapers, BackupFolder, BackupLast,
         LayoutWindowLayout, LayoutWindowFrom, LayoutWindowTo, LayoutWindowDays,
