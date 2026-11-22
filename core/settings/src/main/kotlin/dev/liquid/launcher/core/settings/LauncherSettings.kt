@@ -1998,6 +1998,39 @@ object LauncherSettings {
         key = "state.keyboardHeight", default = 0, min = 0, max = 10000,
         title = "Height of the keyboard last time, px", section = "state", hidden = true,
     )
+    /**
+     * 0.13.1 (Med: "a setting I can turn on so that when the wallpaper changes, the background of my keyboard also
+     * changes"): WM Keyboard cannot read the wallpaper's picture on Android 13 and later (only its colours), so the
+     * launcher hands it the part of the wallpaper behind the keyboard, at every change (D180).
+     */
+    val KeyboardWallpaper = BoolSetting(
+        key = "keyboard.wallpaper", default = false,
+        title = "Your wallpaper behind the keys",
+        summary = "WM Keyboard's background becomes the part of your wallpaper the keyboard covers, and changes with every " +
+            "wallpaper. Set it up once below: two themes to add, and two permissions in WM Keyboard",
+        section = "keyboard", keywords = "keyboard background wallpaper picture image follow change wm theme behind keys",
+    )
+    val KeyboardWallpaperLook = ChoiceSetting(
+        key = "keyboard.wallpaperLook", default = "search",
+        options = listOf(
+            "search" to "Like behind search: blurred and dimmed as search shows it, so the keyboard carries it on",
+            "home" to "Sharp, like the home screen (a little darker, for the letters)",
+        ),
+        title = "Look of the wallpaper behind the keys",
+        summary = "Changes the picture at once; nothing to add again in WM Keyboard",
+        section = "keyboard", keywords = "keyboard background blur dim sharp wallpaper search",
+    )
+    /** 0.13.1: which of the two "Liquid wallpaper" themes WM Keyboard shows now (0 or 1); the next picture goes to the other. */
+    val KeyboardWallpaperSlot = IntSetting(
+        key = "state.keyboardWallpaperSlot", default = 0, min = 0, max = 1,
+        title = "Keyboard wallpaper theme in use", section = "state", hidden = true,
+    )
+    /** 0.13.1: the last thing that happened when the keyboard's wallpaper was handed over, for Settings. */
+    val KeyboardWallpaperLast = TextSetting(
+        key = "state.keyboardWallpaperLast", default = "",
+        title = "Last keyboard wallpaper hand-over", section = "state", hidden = true,
+    )
+
     /** 0.11.2: the heights the keyboard opened at lately (px, newest last); search's field waits at the lowest. */
     val SearchKeyboardOpenings = StringListSetting(
         key = "state.keyboardOpenings", default = emptyList(),
@@ -2758,6 +2791,7 @@ object LauncherSettings {
         SearchTransition, SearchBounce, SearchSpeed, SearchStretch, SearchFieldHeight, SearchFieldWidth, SearchFieldGap, SearchSelectionEntry,
         SearchFindSettings, SearchFindContacts, SearchFindEvents, SearchFindNotes, SearchFindCards, SearchContactsAsked, SearchField, SearchOpenKeyboard, SearchBlur, SearchDim, SearchHomeScale,
         SearchClaude, SearchClaudeTarget, SearchClipboard, SearchEngine, SearchKeyboardHeight, SearchKeyboardOpenings, WallpaperSheetTall,
+        KeyboardWallpaper, KeyboardWallpaperLook, KeyboardWallpaperSlot, KeyboardWallpaperLast,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,

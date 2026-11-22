@@ -130,7 +130,11 @@ private fun PageEditors(surface: String, tab: SettingsTab, store: SettingsStore,
         }
         "search" to SettingsTab.LAYOUT -> SearchCardsEditor(store)
         // 0.12.0 (D171, D172): WM Keyboard and the launcher.
-        "keyboard" to SettingsTab.LOOK -> KeyboardThemeEditor(store)
+        "keyboard" to SettingsTab.LOOK -> {
+            // 0.13.1 (D180): the wallpaper behind the keys, then the theme it goes with.
+            KeyboardWallpaperEditor(store)
+            KeyboardThemeEditor(store)
+        }
         "keyboard" to SettingsTab.BEHAVIOUR -> KeyboardModeGuide()
         // 0.11.3 (D170): the arrival's live preview is the real thing: the system's home, then the redirect.
         "redirect" to SettingsTab.LOOK -> {

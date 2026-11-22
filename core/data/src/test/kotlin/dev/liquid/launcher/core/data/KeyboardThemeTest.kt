@@ -76,4 +76,22 @@ class KeyboardThemeTest {
         assertEquals("Liquid-21-Nov.wmtheme.json", KeyboardTheme.fileName("Liquid · 21 Nov"))
         assertEquals("liquid.wmtheme.json", KeyboardTheme.fileName("···"))
     }
+
+    @Test
+    fun aPictureThemeReadsItsPictureByPathAndShowsItAsItIs() {
+        val built = KeyboardTheme.build(doc(), doc(), palette, "Liquid wallpaper 1", 2)
+        val out = KeyboardTheme.withPicture(built, "/storage/emulated/0/Pictures/Liquid Launcher/keyboard-wallpaper-1.jpg")
+        assertEquals("/storage/emulated/0/Pictures/Liquid Launcher/keyboard-wallpaper-1.jpg", out.string("backgroundImage"))
+        assertNull(out.string("backgroundImageBase64"))
+        assertNull(out.element("backgroundPhoto")?.takeIf { it !is kotlinx.serialization.json.JsonNull })
+        // The launcher made the look: WM Keyboard neither blurs it again nor lays the board's colour over it.
+        assertEquals(0f, out.float("backgroundImageBlur"))
+        assertEquals(1f, out.float("backgroundImageOpacity"))
+        assertEquals(0L, (out.color("boardBackground") ?: -1L) ushr 24)
+        assertEquals(1381915L and 0xFFFFFFL, (out.color("boardBackground") ?: 0L) and 0xFFFFFFL)
+        // The keys, the name and the colours that follow the wallpaper stay.
+        assertEquals("Liquid wallpaper 1", out.string("name"))
+        assertEquals(true, out.bool("followWallpaper"))
+        assertEquals(built.color("keyBackground"), out.color("keyBackground"))
+    }
 }

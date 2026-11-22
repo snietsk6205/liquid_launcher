@@ -160,9 +160,11 @@ object SettingsMap {
         ),
         // 0.12.0 (D171, D172): Med's keyboard, WM Keyboard, and the launcher.
         SettingsSurface(
-            "keyboard", "Keyboard", "WM Keyboard: a theme that follows your wallpaper, a mode for search, Liquid from any app",
+            "keyboard", "Keyboard", "WM Keyboard: your wallpaper behind the keys, a theme that follows it, a mode for search, Liquid from any app",
             SettingsEntry.DRAWER, listOf("keyboard"),
             mapOf(
+                // 0.13.1 (D180): the wallpaper behind the keys, above the theme it goes with.
+                K to listOf("keyboard.wallpaper", "keyboard.wallpaperLook"),
                 B to listOf("search.selectionEntry"),
             ),
         ),

@@ -37,6 +37,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -115,14 +116,6 @@ internal fun KeyboardModeGuide() {
     }
 }
 
-/** The base theme: a file chosen in Settings, else the one Med made in WM Keyboard (bundled). */
-private fun baseTheme(context: Context): ThemeDoc? {
-    val own = File(context.filesDir, "keyboard-base.wmtheme.json")
-    val text = if (own.isFile) runCatching { own.readText() }.getOrNull()
-    else runCatching { context.assets.open("wmkeyboard/template.wmtheme.json").bufferedReader().use { it.readText() } }.getOrNull()
-    return text?.let { ThemeDoc.parse(it) }
-}
-
 /** The launcher's keys on Med's own WM Keyboard theme, following the wallpaper: a preview, open, save, share (Look). */
 @Composable
 internal fun KeyboardThemeEditor(store: SettingsStore) {
@@ -138,7 +131,7 @@ internal fun KeyboardThemeEditor(store: SettingsStore) {
         tone?.roles ?: runCatching { WallpaperPalette.fromSeed(ThemedColors.seed(context)) }.getOrNull()
     }
     val name = "Liquid"
-    val base = remember(baseVersion) { baseTheme(context) }
+    val base = remember(baseVersion) { baseKeyboardTheme(context) }
     val doc = remember(palette, base) { base?.let { KeyboardTheme.build(it, ThemeStore.doc(store), palette, name, System.currentTimeMillis()) } }
     val canOpen = remember { WmKeyboard.installed(context) }
 
@@ -230,20 +223,190 @@ internal fun KeyboardThemeEditor(store: SettingsStore) {
     }
 }
 
-/** A small keyboard in the theme's colours, over the wallpaper (blurred as the keyboard blurs it) or its board colour. */
+/**
+ * 0.13.1 (D180): Settings › Keyboard › Look, "Your wallpaper behind the keys": a preview of the picture in the look
+ * chosen with the keys over it, the three things to do once (WM Keyboard's Photos permission, its remote control, the two
+ * themes), each with its state, and a button that does the hand-over now. Shown while the switch above is on.
+ */
 @Composable
-private fun KeyboardPreview(doc: ThemeDoc, wallpaper: androidx.compose.ui.graphics.ImageBitmap?) {
+internal fun KeyboardWallpaperEditor(store: SettingsStore) {
+    val on by store.observe(LauncherSettings.KeyboardWallpaper)
+    if (!on) return
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val look by store.observe(LauncherSettings.KeyboardWallpaperLook)
+    val last by store.observe(LauncherSettings.KeyboardWallpaperLast)
+    val wallpaper by remember { WallpaperStore.get(context) }.image.collectAsState()
+    val installed = remember { WmKeyboard.installed(context) }
+    var canRead by remember { mutableStateOf(KeyboardWallpaper.keyboardCanRead(context)) }
+    var control by remember { mutableStateOf<WmKeyboard.Answer?>(null) }
+    var working by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    // The picture in the look chosen, made the way the hand-over makes it.
+    val picture by androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, wallpaper, look) {
+        value = KeyboardWallpaper.picture(context, store, look)?.asImageBitmap()
+    }
+    // The permissions are given in another app: checked again every second while this card shows.
+    androidx.compose.runtime.LaunchedEffect(installed) {
+        if (!installed) return@LaunchedEffect
+        while (true) {
+            canRead = KeyboardWallpaper.keyboardCanRead(context)
+            control = WmKeyboard.send(context, "LIST_LAYOUTS", timeoutMs = 1_500)
+            kotlinx.coroutines.delay(3_000)
+        }
+    }
+    // Turned on: both pictures are written at once (each theme has its picture from the start). The look changed: the
+    // hand-over, so WM Keyboard shows the new look now.
+    val firstLook = remember { arrayOf<String?>(null) }
+    androidx.compose.runtime.LaunchedEffect(look) {
+        if (firstLook[0] == null || firstLook[0] == look) {
+            firstLook[0] = look
+            KeyboardWallpaper.writeBoth(context, store)?.let { message = it }
+        } else {
+            firstLook[0] = look
+            message = KeyboardWallpaper.follow(context, store, "its look changed")
+        }
+    }
+
+    InfoCard {
+        Text("Your wallpaper behind the keys", style = MaterialTheme.typography.titleMedium)
+        BodyText(
+            "WM Keyboard follows your wallpaper's colours by itself, but Android does not let it read the picture. The " +
+                "launcher hands it the part of your wallpaper the keyboard covers, every time the wallpaper changes.",
+            Modifier.padding(top = 4.dp, bottom = 8.dp),
+        )
+        val base = remember { baseKeyboardTheme(context) }
+        val doc = remember(base, wallpaper) { base?.let { KeyboardTheme.withPicture(KeyboardTheme.build(it, ThemeStore.doc(store), null, "Preview", 0L), "") } }
+        if (doc != null) KeyboardPreview(doc, picture, sharp = true)
+        if (wallpaper == null) BodyText("Your wallpaper now is not the launcher's own: set one in the launcher's wallpaper screen.", Modifier.padding(top = 6.dp))
+        if (!installed) {
+            BodyText("WM Keyboard is not on this phone.", Modifier.padding(top = 8.dp))
+            return@InfoCard
+        }
+
+        Text("Once", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+        SetupStep(
+            1, canRead,
+            if (canRead) "WM Keyboard may read the picture." else "Let WM Keyboard read the picture: its Permissions › Photos and videos › Allow all.",
+        ) {
+            OutlinedButton(onClick = {
+                val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + WmKeyboard.PACKAGE))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching { context.startActivity(intent) }
+            }) { Text("Open WM Keyboard's app info") }
+        }
+        val allowed = control?.ok == true
+        SetupStep(
+            2, allowed,
+            when {
+                allowed -> "The launcher may switch WM Keyboard's theme."
+                control == null -> "Checking whether the launcher may switch WM Keyboard's theme…"
+                else -> "Turn on WM Keyboard › Privacy › Let other apps control the keyboard (and Change the theme under Allowed actions). WM Keyboard says: " + WmKeyboard.describe(control!!)
+            },
+        ) {
+            OutlinedButton(onClick = {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("wmkeyboard://settings/privacy"))
+                    .setPackage(WmKeyboard.PACKAGE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (runCatching { context.startActivity(intent) }.isFailure) message = "Open WM Keyboard › Privacy yourself."
+            }) { Text("Open WM Keyboard's privacy") }
+        }
+        SetupStep(
+            3, null,
+            "Add both themes, \"${KeyboardWallpaper.themeName(0)}\" and \"${KeyboardWallpaper.themeName(1)}\" (WM Keyboard asks to confirm each). " +
+                "The launcher switches between them, so WM Keyboard reads each new picture. Add them again after you change the theme above.",
+        ) {
+            Row {
+                for (slot in 0 until KeyboardWallpaper.SLOTS) {
+                    OutlinedButton(onClick = {
+                        scope.launch {
+                            working = true
+                            val error = KeyboardWallpaper.writeBoth(context, store)
+                            val doc2 = KeyboardWallpaper.theme(context, store, slot)
+                            val file = doc2?.let {
+                                withContext(Dispatchers.IO) {
+                                    runCatching { File(shareDir(context), KeyboardTheme.fileName(KeyboardWallpaper.themeName(slot))).apply { writeText(it.encode()) } }.getOrNull()
+                                }
+                            }
+                            val ok = file != null && openInWmKeyboard(context, file, "application/json")
+                            // WM Keyboard shows a theme once it is added.
+                            if (ok) store.set(LauncherSettings.KeyboardWallpaperSlot, slot)
+                            message = error ?: if (ok) null else "WM Keyboard did not open the theme."
+                            DebugLog.event("Keyboard", "wallpaper behind the keys: \"${KeyboardWallpaper.themeName(slot)}\" " + if (ok) "opened in WM Keyboard" else "not opened")
+                            working = false
+                        }
+                    }, enabled = !working) { Text("Add ${slot + 1}") }
+                    Spacer(Modifier.width(8.dp))
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 10.dp)) {
+            Button(onClick = {
+                scope.launch {
+                    working = true
+                    message = KeyboardWallpaper.follow(context, store, "tried from Settings")
+                    working = false
+                }
+            }, enabled = !working && wallpaper != null) { Text("Try it now") }
+        }
+        val shown = message ?: last.ifBlank { null }
+        shown?.let { BodyText("Last: $it", Modifier.padding(top = 6.dp)) }
+    }
+}
+
+/** One thing to do once: its number, whether it is done ([done]; null: cannot be checked), what to do and its button. */
+@Composable
+private fun SetupStep(number: Int, done: Boolean?, text: String, action: @Composable () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.Top) {
+        Text(
+            when (done) {
+                true -> "✓"
+                false -> "$number"
+                null -> "$number"
+            },
+            style = MaterialTheme.typography.titleSmall,
+            color = if (done == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.width(22.dp),
+        )
+        androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
+            BodyText(text)
+            if (done != true) Box(Modifier.padding(top = 4.dp)) { action() }
+        }
+    }
+}
+
+/**
+ * A small keyboard in the theme's colours, over the wallpaper (blurred as the keyboard blurs it) or its board colour.
+ * 0.13.1: [sharp] draws [wallpaper] as it is (a picture already made in its look) under the board's own colour.
+ */
+@Composable
+private fun KeyboardPreview(doc: ThemeDoc, wallpaper: androidx.compose.ui.graphics.ImageBitmap?, sharp: Boolean = false) {
+    if (sharp) {
+        Box(Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF15171A))) {
+            if (wallpaper != null) Image(wallpaper, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().background(Color(KeyboardTheme.argb(doc, "boardBackground", 0x00000000L))))
+            KeyboardKeys(doc)
+        }
+        return
+    }
     val board = Color(KeyboardTheme.argb(doc, "boardBackground", 0xFF15171AL)).copy(alpha = 1f)
-    val key = Color(KeyboardTheme.argb(doc, "keyBackground", 0x33FFFFFFL))
-    val keyText = Color(KeyboardTheme.argb(doc, "keyText", 0xFFEEEEEEL))
-    val modifier = Color(KeyboardTheme.argb(doc, "modifierKeyBackground", KeyboardTheme.argb(doc, "keyBackground", 0x33FFFFFFL).toLong() and 0xFFFFFFFFL))
-    val enter = Color(KeyboardTheme.argb(doc, "enterKeyBackground", KeyboardTheme.argb(doc, "accent", 0xFF5577FFL).toLong() and 0xFFFFFFFFL))
-    val pill = doc.string("keyShape") == "PILL"
     val blurDp = ((doc.float("backgroundImageBlur") ?: 3f) * 3f).coerceIn(0f, 24f)
     Box(Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(14.dp)).background(board)) {
         if (wallpaper != null) {
             Image(wallpaper, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(blurDp.dp))
         }
+        KeyboardKeys(doc)
+    }
+}
+
+/** The preview's keys, in the theme's colours and shape. */
+@Composable
+private fun KeyboardKeys(doc: ThemeDoc) {
+    val key = Color(KeyboardTheme.argb(doc, "keyBackground", 0x33FFFFFFL))
+    val keyText = Color(KeyboardTheme.argb(doc, "keyText", 0xFFEEEEEEL))
+    val modifier = Color(KeyboardTheme.argb(doc, "modifierKeyBackground", KeyboardTheme.argb(doc, "keyBackground", 0x33FFFFFFL).toLong() and 0xFFFFFFFFL))
+    val enter = Color(KeyboardTheme.argb(doc, "enterKeyBackground", KeyboardTheme.argb(doc, "accent", 0xFF5577FFL).toLong() and 0xFFFFFFFFL))
+    val pill = doc.string("keyShape") == "PILL"
+    run {
         Canvas(Modifier.fillMaxSize().padding(6.dp)) {
             val rows = listOf(10, 9, 9, 5)
             val gap = 4.dp.toPx()

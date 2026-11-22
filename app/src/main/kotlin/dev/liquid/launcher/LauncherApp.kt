@@ -83,6 +83,8 @@ class LauncherApp : Application() {
         }
         data.apps.start()
         watchScreen()
+        // 0.13.1 (D180): the wallpaper behind WM Keyboard's keys follows every wallpaper the launcher shows (when on).
+        dev.liquid.launcher.feature.settings.KeyboardWallpaper.start(this, settings, appScope)
         // A wallpaper set in another app should show: the launcher stops drawing its own copy
         // (it stays in the library), so picture and colours match again.
         appScope.launch {

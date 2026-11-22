@@ -68,6 +68,27 @@ object KeyboardTheme {
             .withBool("followWallpaper", true)
     }
 
+    /**
+     * 0.13.1 (D180): [doc] (a theme from [build]) standing on the picture at [picturePath], a file WM Keyboard reads by its
+     * path (it keeps a path it is given and re-reads the file when it changes; its cache is keyed on the file's time).
+     * The picture carries the look (the launcher blurs and dims it), so WM Keyboard shows it as it is: no blur of its
+     * own, full opacity, and a see-through board, whose colour would otherwise be laid over the picture (WM Keyboard
+     * draws the board's colour on top of a picture, as a scrim). The keys, frost and colours that follow the wallpaper
+     * stay the theme's.
+     */
+    fun withPicture(doc: ThemeDoc, picturePath: String): ThemeDoc {
+        val board = doc.color("boardBackground") ?: 0xFF15171AL
+        return doc.withString("backgroundImage", picturePath)
+            .withString("backgroundImageBase64", null)
+            .withString("backgroundImageLandscape", null).withString("backgroundImageLandscapeBase64", null)
+            .withFloat("backgroundImageOpacity", 1f)
+            .withFloat("backgroundImageBlur", 0f)
+            .withBool("backgroundAnimated", false)
+            .with("backgroundPhoto", null)
+            .with("boardGradient", null)
+            .withColor("boardBackground", board and 0x00FFFFFFL)
+    }
+
     /** 0.12.0's build: [doc] alone, its followed colours written out, optionally with a picture (kept for files made before). */
     fun build(
         doc: ThemeDoc,
