@@ -741,7 +741,9 @@ private suspend fun driveKeyboard(
             // to the keyboard's real height (the share is still): handed back earlier, the system put the keyboard at
             // its full height over a pill still on its way there (CI run 135, a first opening with no picture yet). A
             // second's worth of frames fully up and still is the limit.
-            if (drive.handOver(controller.searchOpen, controller.searchDragging, fullyUp = topped, frames = stillFrames) ||
+            // 0.15.2: "still" also needs the rise's glide to have ended (CI run 136: the glide's first frame repeats its
+            // start, which looked still for two frames, and the keyboard was handed back at 838 px of 920).
+            if (drive.handOver(controller.searchOpen, controller.searchDragging, fullyUp = topped && !controller.keyboardRiseGliding, frames = stillFrames) ||
                 (controller.searchOpen && !moving && toppedFrames > 90)
             ) {
                 driver.finish(true)

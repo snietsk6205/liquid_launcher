@@ -6,6 +6,13 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
+## 0.15.2 — 2026-11-22 (not published on its own)
+
+### Fixed
+- Search: 0.15.1's fix for a keyboard taller than expected was only partial (the keyboard could still be handed back
+  while the pill was gliding up to it, for a moment over the pill). The keyboard is now handed back only once that glide
+  has ended.
+
 ## 0.15.1 — 2026-11-22
 
 ### Fixed

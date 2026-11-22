@@ -1140,6 +1140,9 @@ class HomeController(
 
     private var riseGlide: kotlinx.coroutines.Job? = null
 
+    /** 0.15.2: the rise is gliding to a new height (the keyboard is not handed back meanwhile). */
+    val keyboardRiseGliding: Boolean get() = riseGlide?.isActive == true
+
     /**
      * 0.13.1 (Med: "after I change the wallpaper the pill goes higher than intended the first time"): moves [keyboardRise]
      * to [px] on a short spring without bounce instead of in one frame, so the pill (and the keyboard while the launcher

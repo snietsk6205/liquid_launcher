@@ -1529,3 +1529,12 @@ The old hand-over ("search open and still") had stayed as a fallback and handed 
 glide to 883 px began, so the system put it at its full height over the pill. Now the keyboard is handed back only once
 its share stands still (the glide done), with a second of frames fully up as the limit. On Med's phone the picture's
 height matches the keyboard (933 px), so this showed only when the keyboard's size changed.
+
+**0.15.1** published by run 136 (build 136), every check passed. Its study part: the first search with no keyboard
+picture still ended with "the field ended at 838 px" (of 920) and "the keyboard stayed taller (883 px): the pill rises
+onto it": the rise's glide repeats its start value on its first frame, so the share looked still for two frames and the
+keyboard was handed back as the glide began. **0.15.2** (on the branch, not published: Med's limit of two releases a
+session) waits for the glide itself to have ended (`keyboardRiseGliding`). Next CI run's study part should say "the field
+ended at 920 px" on the first opening and no "stayed taller" line.
+
+**Exact next step:** publish 0.15.2 with the next release; read Med's log for the lines listed above.
