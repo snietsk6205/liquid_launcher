@@ -106,9 +106,10 @@ with this JSON as its description (every part optional; unknown fields are ignor
 | Part | What the launcher does with it |
 |---|---|
 | `exams` | The exam countdown and `!exam`; `"confirmed": false` shows `≈` before the count. Without exams here, the timetable's events named DS, Examen, Partiel or Contrôle are used |
-| `absences` | One tube per module: rate = absent ÷ total, fill = rate ÷ limit; green below 0.5, amber to 0.8, red above; a grey UNVERIFIED badge while `rule_confirmed` is false; only the count while `total` is null |
+| `absences` | Since 0.14.0, numbers only (Med: no meter, no limit): each module's count, used only when the phone has no "present?" answers of its own (those are counted first). The 0.14.0 check-in no longer writes it |
 | `flashcards` | Since 0.12.0: cards (`id`, `module`, `q`, `a`) for the local deck with repeats (below). `flashcard` (one card, as before) still works: it reads as a deck of one |
 | `grades` | The weighted average Σ coef × mark ÷ Σ coef, shown only once every mark has its coefficient |
+| `recommended` | Since 0.14.0: up to three short tasks (strings) Claude recommends for the next days, shown in Today under "Recommended" with a tick kept for the day; the launcher adds the flashcards due and a deadline within two weeks by itself |
 
 When today's event is missing, the latest earlier one (up to the overdue window, 14 days) is used; when that is not
 valid JSON, the local copy kept in Settings → Study companion → launcher-data; when neither, these parts are hidden.
@@ -154,7 +155,19 @@ before; an unknown command shows its name.
 > `\\frac{1}{n}`, `\\mathbb{R}`). Keep questions short enough for a phone (one idea per card). Read the Tasks
 > calendar's notes "flashcard wrong <module>: <question>" and go over those cards with me in the check-in.
 
-### Rules for the evening check-in
+### 0.14.0: the check-in is the start of a study chat (D186)
+
+Med: "no more study tasks in the calendar … the daily check-in should be like: what would you like to study today, it
+considers what I studied in class, then a button takes me to Claude with that context, Claude asks me questions to see
+my progress and for today's lesson, then we study". Since 0.14.0 Today is that screen: today's classes as chips (or
+typed), "Study with Claude" (a 45-minute session on the pill, and the check-in message with the day as context),
+the recommended tasks, the absences as numbers, Quiz me and the note for tonight. The check-in's instructions are in
+`docs/checkin-prompt.md` (to paste where the old ones were, his plan doc's section 9): they create no study blocks and
+no errands, write only today's launcher-data (with `recommended`), never ask about absences, and offer once to delete
+the old system's future blocks. The launcher still reads blocks that exist (the line under the clock, the pill, the
+speed bump and quiet work with them as before); the rules below are for those.
+
+### Rules for the evening check-in (before 0.14.0; still true for blocks that exist)
 
 1. Read the day's events in both calendars. `✓ ` in front of a title = done, `✗ ` = skipped, neither = not done.
    `[x]` lines = finished tasks. The `— launcher:` line carries when it was finished, how many tasks, and focus minutes.

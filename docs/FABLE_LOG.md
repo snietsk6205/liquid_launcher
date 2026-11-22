@@ -1444,3 +1444,35 @@ Branch `claude/confident-planck-nkjqga`, started from `claude/affectionate-sagan
 Keyboard's answer); "search: the keyboard rises with the pill: … taller than the … px it opens at" and "the pill comes
 down onto the keyboard" after a wallpaper change; the "study hub" Frames lines (fewer frames while it stays open, and
 their time).
+
+## Same session, afternoon: 0.14.0, Today as a study kick-off
+
+Brief (in chat, after 0.13.1): two screenshots of Today (timeline, blocks, tasks, sync row, six chips), his check-in
+instructions and a new settings export. He wants the check-in simple and fun ("what would you like to study today",
+considering what he studied in class; a button that takes him to Claude with that context; Claude asks questions to
+see his progress and for today's lesson; then they study), no study blocks in the calendar, no more absence questions,
+recommended tasks, the note for tonight and Quiz me kept, everything else gone; "ask me before you do anything".
+
+**Asked first** (four questions): the Today screen (he chose the kick-off screen), where recommended tasks come from
+(Claude + automatic), absences (keep "present?" on the phone, show them as numbers only: "I don't know where to see
+them"), a timer with "Study with Claude" (yes, 45 minutes). Built as answered: D184 to D186.
+
+**Released:** 0.14.0 by the CI run of the commit "0.14.0 [release]: …" that carries this entry.
+
+**For Med to do once:** paste `docs/checkin-prompt.md` where his old check-in instructions are (his plan doc's
+section 9), and set Settings › Study companion › More › Check-in message to "Study check-in. Read section 9 of my plan
+doc https://claude.ai/artifact/GWFvdSR6uGVM7sVL1RT9JB and follow it." (his current one still says "Evening check-in").
+
+**Known limits**
+- The old system's blocks already in his calendar still show (line, pill) until they pass, or until he lets the new
+  check-in delete them (it asks once).
+- The pill's study circle fills with blocks done: without blocks it stays empty; it still opens Today.
+- Recommended tasks from Claude appear once a check-in writes `recommended` into launcher-data.
+
+**Questions for Med**
+1. Today: is it calm enough now? Anything you miss from before?
+2. Does Claude's first message feel right (short, your classes, one question at a time)?
+3. The study circle on the pill counts blocks, which are gone: turn it into minutes studied today, or remove it?
+
+**Exact next step:** his next log: "Study: session: …" lines, "ask Claude (… characters)" after Study with Claude, and
+the Frames lines of Today ("study hub").

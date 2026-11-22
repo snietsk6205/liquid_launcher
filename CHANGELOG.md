@@ -6,6 +6,37 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
+## 0.14.0 — 2026-11-22
+
+### Changed
+- Today is simple now: one question, "What would you like to study today?", with today's classes as chips (tap what
+  you'll study) or a field to type it, and one big button, **Study with Claude**. It starts a 45-minute study session
+  on the pill and opens Claude with your day as context: today's classes, what you picked, the minutes you studied,
+  your notes, what is recommended and the next exam. Claude then asks what you covered in class and a few questions
+  to see where you are, asks for today's lesson, and you study together. Below it: **Recommended** (up to four), your
+  absences as plain numbers, **Quiz me** and the **note for tonight**. Gone: the timeline, the block cards, the task
+  list, the sync row, the buttons at the top, the other chips and the block button. The header shows the date, the
+  minutes studied today and the next exam counted down.
+- Study sessions: while one runs, the pill counts it down, the line under the clock says "Studying <what>" with a ✓ to
+  finish, and apps tagged distracting wait behind the speed bump, as during a block. It ends by itself after 45 minutes.
+- The check-in is the start of a study chat now: the evening line and the search page's check-in open Claude with the
+  same context. New instructions for Claude are in the repository (docs/checkin-prompt.md): no more study blocks or
+  errands in your calendar, no questions about absences, no five-minute steps.
+- Absences are numbers only, in Today and on the search page: each module's count from your "present?" answers, no
+  meter and no limit.
+- Prompt templates: Quiz me alone by default (Explain, Stuck, Reschedule and Résumé are gone unless you had changed
+  them).
+
+### Added
+- Recommended tasks in Today: Claude writes up to three at the end of each study chat (launcher-data `recommended`),
+  and the launcher adds what it knows itself: the flashcards due and a deadline within two weeks (red within three
+  days). Tick one when it is done (kept for the day); tap one to pick it as what to study; tap the flashcards for the
+  quick review.
+
+### Removed
+- Settings that only shaped the old Today: Blocks in Today, Done and Skip buttons, Tomorrow in Today and Study hub
+  opens. Today always opens at its full height.
+
 ## 0.13.1 — 2026-11-22
 
 ### Added
