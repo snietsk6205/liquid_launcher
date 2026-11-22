@@ -317,6 +317,11 @@ sleep 2
 section "1. App starts"
 adb shell am start -n "$HOME_ACTIVITY" >/dev/null
 if wait_top "$HOME_ACTIVITY" 15; then pass "launcher activity starts"; else fail "launcher activity starts"; fi
+# In every part, before the warm-up (D187): run 131 had it after, and two of its three warm-ups then waited the whole
+# 20 s for the redirect engine's first window event (run 130, in this order: 1 s).
+sleep 4
+look 01-home 30
+idle_frames "home screen"
 
 # Warm-up (0.10.2): run 85 failed checks 2 and 3 twice right after the first start, when the redirect engine had not yet
 # handled a window of the system launcher (its first event after start can come late). Press Home once here and wait
@@ -347,10 +352,6 @@ esac
 # A block may rely on an earlier block of the same part only (APP_LABEL from the drawer, EVENT_ID from 14b).
 
 blk_redirect() {
-section "1b. The home screen at rest"
-look 01-home 30
-idle_frames "home screen"
-
 section "2. Home button while on the launcher returns to the launcher"
 # A freshly booted emulator sometimes shows "Pixel Launcher isn't responding"; that dialog
 # is the emulator's, not ours, so close system dialogs and allow one retry.

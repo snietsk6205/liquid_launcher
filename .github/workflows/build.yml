@@ -166,8 +166,10 @@ jobs:
       # 0.11.2: the system image and a booted emulator's snapshot are kept between runs, so the test boots from the
       # snapshot instead of downloading the image and cold-booting Android each time. The snapshot is saved once the
       # phone is calm (ci/settle.sh): v1 was saved mid first-boot work and v2 after a blind 30 s. Bump the version to
-      # start anew. v4 (D187): the emulator has 4 cores, as many as the runner (the action's default is 2); a snapshot
-      # saved with 2 cores does not load on 4. On a miss each of the three parts boots and saves its own; one is kept.
+      # start anew. On a miss each of the three parts boots and saves its own; one is kept.
+      # cores: 2 on purpose (D187). Run 131 gave the emulator all 4 of the runner's CPUs and everything drew 2 to 3 times
+      # slower (the speed check's drawer at 410 ms a frame instead of 150): with no GPU, swiftshader draws on the same
+      # CPUs. A snapshot only loads with the core count it was saved with, so a change here needs a new key.
       - name: System image cache
         uses: actions/cache@v4
         with:
@@ -181,7 +183,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-34-google_apis-x86_64-v4
+          key: avd-34-google_apis-x86_64-v3
 
       - name: Boot once and save the snapshot (cache miss only)
         if: steps.avd-cache.outputs.cache-hit != 'true'
@@ -191,7 +193,7 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_6
-          cores: 4
+          cores: 2
           force-avd-creation: false
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
@@ -204,7 +206,7 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_6
-          cores: 4
+          cores: 2
           force-avd-creation: false
           disable-animations: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
