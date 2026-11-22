@@ -176,7 +176,7 @@ object SettingsMap {
                 // 0.10.2: what Med looked for first sits on the first tab: the line under the clock and its colour, how the
                 // hub opens and how its blocks show.
                 L to listOf(
-                    "study.enabled", "study.clockLine", "study.lineInk", "study.lineShadow", "study.clockAction", "study.hubOpen", "study.blockCards",
+                    "study.enabled", "study.clockLine", "study.lineAfter", "study.lineInk", "study.lineShadow", "study.clockAction", "study.hubOpen", "study.blockCards",
                     "study.buttonSide", "study.tomorrow", "study.hubSize",
                 ),
                 K to listOf("study.glassTint", "study.hubDim", "study.hubBlur", "study.hubInk"),

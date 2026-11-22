@@ -2184,15 +2184,24 @@ object LauncherSettings {
     val StudyClockLine = ChoiceSetting(
         key = "study.clockLine", default = "block",
         options = listOf(
-            "block" to "Now, next, unmarked, tasks left, then tomorrow",
+            "block" to "What needs you now or next, then tomorrow",
             "today" to "Today only (nothing about tomorrow)",
             "off" to "Nothing",
         ),
         title = "Under the clock",
-        summary = "A line under your clock widget: the block running now with a ring for the time gone; the next block when it starts within the hour; " +
-            "a block that ended without Done or Skip; the next block later; the tasks left; then tomorrow's first block. " +
-            "Tap it for Today. The pill can show the same: add \"Study block\" to its items",
-        section = "study", keywords = "study clock line now current block next glance pill tomorrow unmarked",
+        summary = "A line under your clock widget that never repeats the pill. While the pill counts a focus down: the block's " +
+            "next step with a tick (or what comes after it). Otherwise, the first that applies: when to leave in the morning, " +
+            "\"present?\" after a class, the block running, the class you are in (until when, where), a class or block within " +
+            "the hour, a block to mark, free until the next thing, the tasks left, tomorrow's first block. Tap it for Today",
+        section = "study", keywords = "study clock line now current block next glance pill tomorrow unmarked step focus class room free",
+    )
+    /** 0.13.1 (D181): the quieter second line under the clock. */
+    val StudyLineAfter = BoolSetting(
+        key = "study.lineAfter", default = true,
+        title = "Second line: the rest of the day",
+        summary = "Smaller, under the line: what comes after, the tasks left, and an exam within two weeks (amber, red from " +
+            "three days, in hours)",
+        section = "study", keywords = "study clock line second rest of day then next tasks exam countdown",
     )
     val StudyBlockCards = ChoiceSetting(
         key = "study.blockCards", default = "preview",
@@ -2802,7 +2811,7 @@ object LauncherSettings {
         StudyCommuteLayout, StudyExamLayout, ContextActive, ContextApplied, ContextBase, LayoutTimerUntil, LayoutTimerLayout, LayoutTimerBack,
         StudyQuiet, StudyQuietPeople, StudyQuietEmail, StudyQuietTags, StudyAnnales,
         StudyArrival, StudyHomeWifi, StudyArrivalCharger, StudyShiftLead, StudyLatestEnd, StudyClassCalendars, StudyHeader, StudyCheckin, StudyTemplates,
-        StudyHubSize, StudyHubBounce, StudyClockAction, StudyHubOpen, StudyHubDim, StudyHubBlur, StudyHubInk, StudyLineInk, StudyLineShadow,
+        StudyHubSize, StudyHubBounce, StudyClockAction, StudyHubOpen, StudyHubDim, StudyHubBlur, StudyHubInk, StudyLineInk, StudyLineShadow, StudyLineAfter,
         NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,
         NoticeLayout, NoticeWallpaper, NoticeTags, NoticeRedirect, NoticeUpdate, NoticeStudy, NoticeTask, NoticeInfo,
         GlassQuality, GlassEngine, GlassAuto, GlassCap, GlassFullPercent, GlassTintMode,

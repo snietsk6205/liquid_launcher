@@ -143,3 +143,45 @@ class StudyGlanceMorningTest {
         assertFalse(isWindDown(null, java.time.LocalTime.of(23, 0)))
     }
 }
+
+/** 0.13.1 (D181): the line under the clock, reimagined: never the pill's countdown, the step, the class, free time. */
+class ClockLineTest {
+    private val min = 60_000L
+    private val t0 = 1_800_000_000_000L - 1_800_000_000_000L % (60 * min)
+
+    private fun block(id: Long, startMin: Int, endMin: Int, title: String) =
+        StudyEvent(id, 1, t0 + startMin * min, t0 + endMin * min, false, title)
+
+    private val proba = block(1, 0, 90, "Proba 2: théorèmes de convergence")
+    private val micro = block(2, 105, 150, "Micro: refaire le TD")
+
+    @Test
+    fun whileThePillCountsTheFocusTheLineHoldsTheNextStep() {
+        val withSteps: StudyEvent = proba.copy(description = "[x] Ex. 1-3\n[ ] Ex. 4\n[ ] Read 3.2")
+        val day = StudyDay(blocks = listOf(withSteps, micro))
+        val now = t0 + 30 * min
+        val glance = studyGlance(day, now)
+        val onPill = clockLineMain(glance, day, now, withSteps.key, focusOnPill = true)
+        assertTrue(onPill is ClockLineMain.Own && onPill.main is dev.liquid.launcher.core.data.DayLine.Main.Step)
+        assertEquals("Step 2 of 3 · Ex. 4", ownLineText((onPill as ClockLineMain.Own).main, now))
+        // The pill without its live item: the line says the focus itself, as before.
+        assertEquals(ClockLineMain.Glance(glance!!), clockLineMain(glance, day, now, withSteps.key, focusOnPill = false))
+    }
+
+    @Test
+    fun aClassSaysUntilWhenAndWhereAndALongGapIsFree() {
+        val cls = StudyEvent(5, 9, t0 + 200 * min, t0 + 290 * min, false, "Analyse", location = "Amphi B")
+        val day = StudyDay(blocks = listOf(micro), classes = listOf(cls))
+        // After Micro (ends at 150), nothing until the class at 200: within the hour, the class soon.
+        val soon = clockLineMain(studyGlance(day, t0 + 160 * min), day, t0 + 160 * min, null, focusOnPill = true)
+        assertEquals("Analyse in 40 min · Amphi B", ownLineText((soon as ClockLineMain.Own).main, t0 + 160 * min))
+        // In the class: until when, and where.
+        val inClass = clockLineMain(studyGlance(day, t0 + 230 * min), day, t0 + 230 * min, null, focusOnPill = true)
+        assertTrue((inClass as ClockLineMain.Own).main is dev.liquid.launcher.core.data.DayLine.Main.InClass)
+        assertTrue(ownLineText(inClass.main, t0 + 230 * min).endsWith(" · Amphi B"))
+        // Free time before a class more than an hour away.
+        val early = StudyDay(classes = listOf(cls))
+        val free = clockLineMain(studyGlance(early, t0), early, t0, null, focusOnPill = true)
+        assertTrue(ownLineText((free as ClockLineMain.Own).main, t0).startsWith("Free until "))
+    }
+}

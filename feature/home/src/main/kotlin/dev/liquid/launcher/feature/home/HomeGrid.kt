@@ -471,7 +471,8 @@ internal fun WidgetContent(item: HomeItem, env: PageEnv, controller: HomeControl
         val style = draft ?: saved
         // The study block running now (or next) as a line under the clock, when the companion is on (0.6.3, D92).
         val showStudy by controller.data.settings.derive { get(LauncherSettings.StudyClockLine) != "off" }
-        val glance = if (showStudy) rememberStudyGlance(controller) else null
+        // 0.13.1 (D181): the line reimagined: what needs you now or next (never the pill's countdown), then the rest of the day.
+        val line = if (showStudy) rememberClockLine(controller) else null
         // 0.10.2: by default the line, its ring and its ✓ are in the clock design's own colour (from the wallpaper when
         // the clock takes it from there) with the clock's own shadow; or, as chosen, dark over a light wallpaper and light
         // over a dark one, white, or black, with a soft halo in the opposite tone.
@@ -500,11 +501,16 @@ internal fun WidgetContent(item: HomeItem, env: PageEnv, controller: HomeControl
         // 0.10.2: the Stacked design reads at a glance: the date and the study line above the digits.
         val atAGlance = style.design == "glance"
         val studyLine: @Composable () -> Unit = {
-            if (glance != null) {
-                StudyLine(
-                    glance, controller, lineColor, lineShadow, env.interactive && !env.editMode,
+            if (line != null) {
+                ClockLine(
+                    line, controller, lineColor, lineShadow, env.interactive && !env.editMode,
                     Modifier.padding(horizontal = if (style.plate == "none") 0.dp else 10.dp).padding(bottom = 2.dp),
                     ownColours = followsClock,
+                    align = when (style.align) {
+                        "start" -> Alignment.Start
+                        "end" -> Alignment.End
+                        else -> Alignment.CenterHorizontally
+                    },
                 )
             }
         }

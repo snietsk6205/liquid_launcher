@@ -496,11 +496,12 @@ internal fun BatteryWidget(color: Color, shadow: Shadow?, look: WidgetLook = Wid
 /** The study block now or next on its own, as under the clock (D93); a quiet line when the companion has nothing. */
 @Composable
 internal fun NextBlockWidget(controller: HomeController, color: Color, shadow: Shadow?, interactive: Boolean) {
-    val glance = rememberStudyGlance(controller)
+    // 0.13.1 (D181): the same reimagined line as under the clock.
+    val line = rememberClockLine(controller)
     val loaded by controller.data.study.loaded.collectAsState()
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        if (glance != null) {
-            StudyLine(glance, controller, color, shadow, interactive)
+        if (line != null) {
+            ClockLine(line, controller, color, shadow, interactive)
         } else {
             Text(
                 if (loaded) "Nothing planned" else "Study companion off · tap to switch it on",
