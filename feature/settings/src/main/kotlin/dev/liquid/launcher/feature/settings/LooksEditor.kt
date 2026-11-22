@@ -37,7 +37,7 @@ internal fun LooksEditor(store: SettingsStore) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             for (preset in Looks.presets) {
-                FilterChip(
+                dev.liquid.launcher.core.designsystem.KitChip(
                     selected = preset == current,
                     onClick = { Looks.apply(store, preset) },
                     label = { Text(preset.name) },

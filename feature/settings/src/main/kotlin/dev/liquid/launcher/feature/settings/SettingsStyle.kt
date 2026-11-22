@@ -38,6 +38,9 @@ import androidx.compose.ui.unit.dp
 import dev.liquid.launcher.core.designsystem.LauncherIcon
 import dev.liquid.launcher.core.designsystem.LauncherIcons
 import dev.liquid.launcher.core.settings.SettingsEntry
+import dev.liquid.launcher.core.designsystem.kitFlight
+import dev.liquid.launcher.core.designsystem.kitLoneCard
+import dev.liquid.launcher.core.designsystem.kitStaggerIn
 
 /*
  * 0.15.0 (D191, Med: "copy the design and animations of WM Keyboard's settings"): Settings in WM Keyboard's house style
@@ -108,195 +111,37 @@ internal fun surfaceIcon(id: String, entry: SettingsEntry): Int = when (id) {
     else -> entryIcon(entry)
 }
 
-/** One step of the breadcrumbs: its name, and how deep in the back stack the screen it names is (tap: back there). */
-internal data class Crumb(val label: String, val depth: Int)
-
-/** What the screen being drawn is: its hue, its icon, the way to it, and the key its icon tile flies by. */
-internal data class ScreenInfo(
-    val accent: Color? = null,
-    val icon: Int? = null,
-    val crumbs: List<Crumb> = emptyList(),
-    val flightKey: String? = null,
-)
-
-internal val LocalScreenInfo = staticCompositionLocalOf { ScreenInfo() }
-
-/** Back to the screen [depth] deep (a breadcrumb). */
-internal val LocalBackTo = staticCompositionLocalOf<(Int) -> Unit> { {} }
-
-/** The hue rows on this screen wear: the screen's own, else the theme's primary. */
-@Composable
-internal fun screenAccent(): Color = LocalScreenInfo.current.accent ?: MaterialTheme.colorScheme.primary
-
-/** The background is dark (the theme follows the system). */
-@Composable
-internal fun darkSettings(): Boolean = MaterialTheme.colorScheme.background.luminance() < 0.5f
-
-// ---- icon tiles ----
-
-internal val IconTileSize = 40.dp
-private val IconTileRadius = 13.dp
-
-/**
- * A rounded tile tinted with [accent] behind an icon: WM Keyboard's most recognisable piece. Its glyph takes the accent,
- * a little darker on a light background so it reads.
- */
-@Composable
-internal fun IconTile(icon: Int, accent: Color, modifier: Modifier = Modifier, size: Dp = IconTileSize) {
-    val dark = darkSettings()
-    Box(
-        modifier
-            .size(size)
-            .clip(RoundedCornerShape(IconTileRadius * (size / IconTileSize)))
-            .background(accent.copy(alpha = if (dark) 0.24f else 0.15f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        LauncherIcon(icon, contentDescription = null, tint = if (dark) accent else lerp(accent, Color.Black, 0.28f), size = size * 0.55f)
-    }
-}
-
-// ---- the heading's colours ----
-
-/** The heading at the top of a page (it only warms towards the place's hue) and the bar it leaves when scrolled. */
-internal data class BarTints(val expanded: Color, val collapsed: Color)
+/** 0.15.2 (D193): the kit lives in core/designsystem now (the Theme lab uses it too); these are its names here. */
+internal typealias Crumb = dev.liquid.launcher.core.designsystem.KitCrumb
+internal typealias ScreenInfo = dev.liquid.launcher.core.designsystem.KitScreenInfo
+internal val LocalScreenInfo = dev.liquid.launcher.core.designsystem.LocalKitScreen
+internal val LocalBackTo = dev.liquid.launcher.core.designsystem.LocalKitBackTo
+@OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+internal val LocalSharedScope = dev.liquid.launcher.core.designsystem.LocalKitShared
+internal val LocalNavScope = dev.liquid.launcher.core.designsystem.LocalKitNav
+internal val LocalInGroup = dev.liquid.launcher.core.designsystem.LocalKitInGroup
+internal const val NavTransitionMs = dev.liquid.launcher.core.designsystem.KitNavMs
+internal val NavTransitionEasing = dev.liquid.launcher.core.designsystem.KitNavEasing
 
 @Composable
-internal fun barTints(accent: Color?): BarTints {
-    val surface = MaterialTheme.colorScheme.surface
-    val container = MaterialTheme.colorScheme.surfaceContainer
-    if (accent == null) return BarTints(surface, container)
-    val dark = darkSettings()
-    return BarTints(
-        expanded = lerp(surface, accent, if (dark) 0.07f else 0.05f),
-        collapsed = lerp(container, accent, if (dark) 0.18f else 0.13f),
-    )
-}
+internal fun screenAccent(): Color = dev.liquid.launcher.core.designsystem.kitAccent()
 
-// ---- grouped cards ----
-
-/** The radius at the two ends of a group's stack of cards, and where one card meets the next. */
-private val GroupEndCorner = 24.dp
-private val GroupInnerCorner = 6.dp
-private val GroupGap = 3.dp
-
-/** Rows inside a group draw no card of their own: the group draws them. */
-internal val LocalInGroup = compositionLocalOf { false }
-
-/**
- * Rows stacked into one group, each on its own card (WM Keyboard's GroupCard): the ends of the stack rounded at 24 dp,
- * the cards between at 6 dp, 3 dp apart. A row with nothing to show takes no card and no gap. The cards are drawn by
- * the group itself, from where its rows were placed, so any row (an option, a link, an editor) can be part of one.
- */
 @Composable
-internal fun GroupCards(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    val color = MaterialTheme.colorScheme.surfaceContainer
-    val bounds = remember { ArrayList<Pair<Float, Float>>() }
-    Layout(
-        content = { CompositionLocalProvider(LocalInGroup provides true, content = content) },
-        modifier = modifier
-            .padding16()
-            .drawBehind {
-                val end = GroupEndCorner.toPx()
-                val inner = GroupInnerCorner.toPx()
-                val shown = bounds.filter { it.second > it.first }
-                shown.forEachIndexed { i, (top, bottom) ->
-                    val t = if (i == 0) end else inner
-                    val b = if (i == shown.lastIndex) end else inner
-                    val path = Path().apply {
-                        addRoundRect(
-                            RoundRect(
-                                left = 0f, top = top, right = size.width, bottom = bottom,
-                                topLeftCornerRadius = CornerRadius(t), topRightCornerRadius = CornerRadius(t),
-                                bottomRightCornerRadius = CornerRadius(b), bottomLeftCornerRadius = CornerRadius(b),
-                            ),
-                        )
-                    }
-                    drawPath(path, color)
-                }
-            },
-    ) { measurables, constraints ->
-        val gap = GroupGap.roundToPx()
-        val loose = constraints.copy(minHeight = 0)
-        val placeables = measurables.map { it.measure(loose) }
-        var y = 0
-        val positions = IntArray(placeables.size)
-        var first = true
-        placeables.forEachIndexed { i, p ->
-            if (p.height > 0 && !first) y += gap
-            positions[i] = y
-            if (p.height > 0) {
-                y += p.height
-                first = false
-            }
-        }
-        bounds.clear()
-        placeables.forEachIndexed { i, p -> bounds += positions[i].toFloat() to (positions[i] + p.height).toFloat() }
-        layout(constraints.maxWidth, y) {
-            placeables.forEachIndexed { i, p -> p.place(0, positions[i]) }
-        }
-    }
-}
+internal fun darkSettings(): Boolean = dev.liquid.launcher.core.designsystem.kitDark()
 
-private fun Modifier.padding16(): Modifier = this.padding(horizontal = 16.dp)
-
-/** A card of its own for a row that is not in a group: rounded all round, at the page's margins. */
 @Composable
-internal fun Modifier.loneCard(): Modifier {
-    if (LocalInGroup.current) return this
-    return this
-        .padding(horizontal = 16.dp, vertical = 2.dp)
-        .clip(RoundedCornerShape(GroupEndCorner))
-        .background(MaterialTheme.colorScheme.surfaceContainer)
-}
+internal fun IconTile(icon: Int, accent: Color, modifier: Modifier = Modifier, size: Dp = dev.liquid.launcher.core.designsystem.KitTileSize) =
+    dev.liquid.launcher.core.designsystem.KitTile(icon, accent, modifier, size)
 
-// ---- motion ----
-
-/** A page push's length, and its curve: Material's emphasized decelerate (leaves fast, lands slowly). */
-internal const val NavTransitionMs = 340
-internal val NavTransitionEasing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
-
-@OptIn(ExperimentalSharedTransitionApi::class)
-internal val LocalSharedScope = compositionLocalOf<SharedTransitionScope?> { null }
-internal val LocalNavScope = compositionLocalOf<AnimatedVisibilityScope?> { null }
-
-@OptIn(ExperimentalSharedTransitionApi::class)
-private val FlightBounds = BoundsTransform { _, _ -> tween(NavTransitionMs, easing = FastOutSlowInEasing) }
-
-/**
- * One end of a flight between screens: a row's icon tile and the heading's of the page it opens. Nothing when the screens
- * are not animating (or outside the navigation).
- */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-internal fun Modifier.flight(key: String?): Modifier {
-    if (key == null) return this
-    val shared = LocalSharedScope.current ?: return this
-    val anim = LocalNavScope.current ?: return this
-    return with(shared) {
-        this@flight.sharedElement(rememberSharedContentState(key), anim, boundsTransform = FlightBounds, zIndexInOverlay = 1f)
-    }
-}
+internal fun GroupCards(modifier: Modifier = Modifier, content: @Composable () -> Unit) =
+    dev.liquid.launcher.core.designsystem.KitGroup(modifier, content)
 
-/** How long one row takes to settle in, the beat between two, and how many beats at most (the rest come together). */
-private const val RowInMs = 220
-private const val RowStepMs = 35
-private const val RowMaxSteps = 8
-private val RowRise = 6.dp
-
-/**
- * A row arriving with its page: fades in and rises 6 dp, [index] beats after the first (WM Keyboard's StaggerIn). Read in
- * the draw phase; plays once, when the row is first composed.
- */
 @Composable
-internal fun Modifier.staggerIn(index: Int): Modifier {
-    val shown = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        shown.animateTo(1f, tween(RowInMs, delayMillis = RowStepMs * index.coerceIn(0, RowMaxSteps), easing = FastOutSlowInEasing))
-    }
-    return this.graphicsLayer {
-        val t = shown.value
-        alpha = t
-        translationY = (1f - t) * RowRise.toPx()
-    }
-}
+internal fun Modifier.loneCard(): Modifier = kitLoneCard()
 
+@Composable
+internal fun Modifier.flight(key: String?): Modifier = kitFlight(key)
+
+@Composable
+internal fun Modifier.staggerIn(index: Int): Modifier = kitStaggerIn(index)

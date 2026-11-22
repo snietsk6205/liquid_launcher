@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -343,12 +344,12 @@ private fun TunePanel(
     val real = store.get(s.GlassEngine) == "real"
     Column(
         modifier
-            .background(Color(0xE6101114), RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.97f), RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
             .navigationBarsPadding()
             .padding(top = 12.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Tune the glass", style = benchLabel.copy(fontWeight = FontWeight.Bold, fontSize = 17.sp), modifier = Modifier.weight(1f))
+            Text("Tune the glass", style = panelLabel().copy(fontWeight = FontWeight.Bold, fontSize = 17.sp), modifier = Modifier.weight(1f))
             BenchChip(if (moving) "Pause" else "Move", false) { onMoving(!moving) }
             Spacer(Modifier.width(6.dp))
             BenchChip("Measure", false, onMeasure)
@@ -366,7 +367,7 @@ private fun TunePanel(
                 BenchChip(preset.name, preset == current) { GlassPresets.apply(store, preset) }
             }
         }
-        current?.let { Text(it.about, style = benchLabel.copy(color = Color.White.copy(alpha = 0.7f)), modifier = Modifier.padding(horizontal = 16.dp)) }
+        current?.let { Text(it.about, style = panelLabel().copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)), modifier = Modifier.padding(horizontal = 16.dp)) }
         Column(
             Modifier
                 .fillMaxWidth()
@@ -376,7 +377,7 @@ private fun TunePanel(
         ) {
             if (results.isNotEmpty()) {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
-                    results.forEach { Text(it.line(), style = benchLabel.copy(color = Color.White.copy(alpha = 0.75f))) }
+                    results.forEach { Text(it.line(), style = panelLabel().copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))) }
                 }
             }
             LiveChoice(s.GlassEngine, store)
@@ -403,7 +404,7 @@ private fun TunePanel(
             Text(
                 "These are the overall values (Settings → Liquid glass); a surface with its own values keeps them. " +
                     "The quality tier is set there too.",
-                style = benchLabel.copy(color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp),
+                style = panelLabel().copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), fontSize = 12.sp),
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
@@ -411,17 +412,8 @@ private fun TunePanel(
 }
 
 @Composable
-private fun BenchChip(text: String, selected: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .clip(RoundedCornerShape(50))
-            .background(if (selected) Color.White else Color.White.copy(alpha = 0.12f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-    ) {
-        Text(text, style = benchLabel.copy(color = if (selected) Color.Black else Color.White, fontWeight = FontWeight.Medium))
-    }
-}
+private fun BenchChip(text: String, selected: Boolean, onClick: () -> Unit) =
+    dev.liquid.launcher.core.designsystem.KitChip(selected = selected, onClick = onClick, label = { Text(text) })
 
 /** A slider that writes as it moves, step by step, so the glass above follows the finger. */
 @Composable
@@ -429,10 +421,10 @@ private fun LiveSlider(setting: IntSetting, store: SettingsStore, label: String 
     val value by store.observe(setting)
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = benchLabel, modifier = Modifier.weight(1f))
-            Text("$value${if (setting.unit.isEmpty()) "" else " " + setting.unit}", style = benchLabel.copy(color = Color.White.copy(alpha = 0.7f)))
+            Text(label, style = panelLabel(), modifier = Modifier.weight(1f))
+            Text("$value${if (setting.unit.isEmpty()) "" else " " + setting.unit}", style = panelLabel().copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)))
         }
-        Slider(
+        dev.liquid.launcher.core.designsystem.KitSlide(
             value = value.toFloat(),
             onValueChange = { v ->
                 val steps = ((v - setting.min) / setting.step).roundToInt()
@@ -455,7 +447,7 @@ private fun LiveSwitch(setting: BoolSetting, store: SettingsStore) {
             .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(setting.title, style = benchLabel, modifier = Modifier.weight(1f))
+        Text(setting.title, style = panelLabel(), modifier = Modifier.weight(1f))
         Switch(checked = value, onCheckedChange = { store.set(setting, it) })
     }
 }
@@ -479,3 +471,8 @@ private val TILE_COLORS = listOf(
     Color(0xFFFFFFFF), Color(0xFF212529), Color(0xFFFF6B6B), Color(0xFF4DABF7),
     Color(0xFF69DB7C), Color(0xFFFFD43B), Color(0xFFB197FC),
 )
+
+
+/** 0.15.2 (D193): the tuning panel's text, in the settings kit's colours (the panel is a sheet of the theme now). */
+@Composable
+private fun panelLabel(): TextStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)

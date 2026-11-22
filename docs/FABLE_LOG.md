@@ -1538,3 +1538,24 @@ session) waits for the glide itself to have ended (`keyboardRiseGliding`). Next 
 ended at 920 px" on the first opening and no "stayed taller" line.
 
 **Exact next step:** publish 0.15.2 with the next release; read Med's log for the lines listed above.
+
+## Same session, late: 0.15.2, Med on 0.15.1 (the unlock reveal, the Theme lab)
+
+Med: the settings design "a really good job except a couple of places like the Theme lab, double check"; the unlock
+ripple "doesn't feel the same as when I change the wallpaper, and it is very slow, I want it instant". His log of 23:45 to
+23:50: seven unlocks, each "unlock: the frost leaves (ripple) …" (1080 ms: 800 ms × 1.35), one followed 95 ms later by the
+screen-off redirect's arrival fade; search 30 openings, all "slid in with the pill", the field ending at 950 or 951 px,
+one "taller for a moment (1188 px): the pill stayed" after a wallpaper change (D188 working); the keyboard wallpaper
+switched "Liquid wallpaper 2" then "1" (both themes added).
+
+| # | Point | State | What |
+|---|---|---|---|
+| 1 | Unlock reveal: not like the wallpaper change, slow | Done; on the phone, to see | D192: the wallpaper change's pipeline with a sleeping picture of the home screen, at once, 380 ms, no arrival fade on top. |
+| 2 | Theme lab (and other places) not in the new look | Done | D193: the kit in core/designsystem; the Theme lab rebuilt from it; the glass panel and the last stock chips and sliders. |
+| 3 | 0.15.2's search glide fix | Released with it | See the 0.15.1 addendum. |
+
+**Questions for Med:** is 380 ms right for the unlock (Settings › Wallpaper › Behaviour › Unlock animation length)?
+Does the picture asleep look right (darker and paler), or should it be darker still / blurred?
+
+**Exact next step:** his next log: "unlock: the screen wakes (ripple, 380 ms) from …" without "(no picture of it asleep
+yet…)" most of the time.

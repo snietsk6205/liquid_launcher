@@ -122,11 +122,11 @@ private fun ColorRow(setting: ColorSetting, store: SettingsStore) {
                         }
                     }
                     Text("Hue", style = MaterialTheme.typography.labelMedium)
-                    Slider(value = hue, onValueChange = { hue = it }, valueRange = 0f..360f)
+                    dev.liquid.launcher.core.designsystem.KitSlide(value = hue, onValueChange = { hue = it }, valueRange = 0f..360f)
                     Text("Saturation", style = MaterialTheme.typography.labelMedium)
-                    Slider(value = sat, onValueChange = { sat = it }, valueRange = 0f..1f)
+                    dev.liquid.launcher.core.designsystem.KitSlide(value = sat, onValueChange = { sat = it }, valueRange = 0f..1f)
                     Text("Brightness", style = MaterialTheme.typography.labelMedium)
-                    Slider(value = bright, onValueChange = { bright = it }, valueRange = 0f..1f)
+                    dev.liquid.launcher.core.designsystem.KitSlide(value = bright, onValueChange = { bright = it }, valueRange = 0f..1f)
                     Text(ColorSetting.format(current), style = MaterialTheme.typography.bodyMedium)
                 }
             },
@@ -543,10 +543,6 @@ private fun ChoiceChips(setting: ChoiceSetting, value: String, choose: (String) 
     }
 }
 
-/**
- * WM Keyboard's slider (Material 3 Expressive): a thick rounded track, filled in the place's hue up to a tall handle bar
- * with a gap on each side, and a dot at the far end. Drag or tap anywhere on it.
- */
 @Composable
 internal fun ExpressiveSlider(
     value: Float,
@@ -555,83 +551,4 @@ internal fun ExpressiveSlider(
     valueRange: ClosedFloatingPointRange<Float>,
     enabled: Boolean,
     modifier: Modifier = Modifier,
-) {
-    val accent = screenAccent()
-    val rest = MaterialTheme.colorScheme.secondaryContainer
-    val change by androidx.compose.runtime.rememberUpdatedState(onValueChange)
-    val finish by androidx.compose.runtime.rememberUpdatedState(onValueChangeFinished)
-    val span = (valueRange.endInclusive - valueRange.start).coerceAtLeast(0.0001f)
-    val fraction = ((value - valueRange.start) / span).coerceIn(0f, 1f)
-    val shown by androidx.compose.animation.core.animateFloatAsState(
-        fraction,
-        androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 1400f),
-        label = "slider",
-    )
-    var pressed by remember { mutableStateOf(false) }
-    val handleW by androidx.compose.animation.core.animateDpAsState(if (pressed) 3.dp else 4.dp, label = "sliderHandle")
-    fun at(x: Float, width: Float): Float = valueRange.start + (x / width.coerceAtLeast(1f)).coerceIn(0f, 1f) * span
-    Box(
-        modifier
-            .fillMaxWidth()
-            .height(44.dp)
-            .pointerInput(enabled, valueRange) {
-                if (!enabled) return@pointerInput
-                detectTapGestures(
-                    onPress = {
-                        pressed = true
-                        tryAwaitRelease()
-                        pressed = false
-                    },
-                ) {
-                    change(at(it.x, size.width.toFloat()))
-                    finish()
-                }
-            }
-            .pointerInput(enabled, valueRange) {
-                if (!enabled) return@pointerInput
-                detectHorizontalDragGestures(
-                    onDragStart = { pressed = true; change(at(it.x, size.width.toFloat())) },
-                    onDragEnd = { pressed = false; finish() },
-                    onDragCancel = { pressed = false; finish() },
-                ) { pointer, _ ->
-                    pointer.consume()
-                    change(at(pointer.position.x, size.width.toFloat()))
-                }
-            }
-            .drawBehind {
-                val trackH = 16.dp.toPx()
-                val top = (size.height - trackH) / 2f
-                val gap = 6.dp.toPx()
-                val hw = handleW.toPx()
-                val x = shown * size.width
-                val r = androidx.compose.ui.geometry.CornerRadius(trackH / 2f)
-                val small = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx())
-                val activeEnd = (x - gap - hw / 2f).coerceAtLeast(0f)
-                if (activeEnd > 0f) {
-                    drawRoundRect(
-                        accent.copy(alpha = if (enabled) 1f else 0.4f),
-                        topLeft = androidx.compose.ui.geometry.Offset(0f, top),
-                        size = androidx.compose.ui.geometry.Size(activeEnd, trackH),
-                        cornerRadius = if (activeEnd > trackH) r else small,
-                    )
-                }
-                val restStart = (x + gap + hw / 2f).coerceAtMost(size.width)
-                if (restStart < size.width) {
-                    drawRoundRect(
-                        rest,
-                        topLeft = androidx.compose.ui.geometry.Offset(restStart, top),
-                        size = androidx.compose.ui.geometry.Size(size.width - restStart, trackH),
-                        cornerRadius = r,
-                    )
-                    // The far end's dot.
-                    drawCircle(accent.copy(alpha = 0.8f), radius = 2.dp.toPx(), center = androidx.compose.ui.geometry.Offset(size.width - trackH / 2f, size.height / 2f))
-                }
-                drawRoundRect(
-                    accent,
-                    topLeft = androidx.compose.ui.geometry.Offset(x - hw / 2f, 0f),
-                    size = androidx.compose.ui.geometry.Size(hw, size.height),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(hw / 2f),
-                )
-            },
-    )
-}
+) = dev.liquid.launcher.core.designsystem.KitSlider(value, onValueChange, onValueChangeFinished, valueRange, enabled, modifier)

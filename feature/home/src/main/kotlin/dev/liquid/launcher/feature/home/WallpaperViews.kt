@@ -264,13 +264,15 @@ private fun StripButton(
 }
 
 /**
- * 0.15.0 (D190): the frost over the home screen at the unlock: the wallpaper's blurred copy, a little darker, put up
- * as the screen turns off and cleared from a random point when the phone is unlocked, in the style of the wallpaper's
- * transition (Settings › Wallpaper › When you unlock). Takes no touches: the home screen under it is live.
+ * 0.15.0 (D190), 0.15.3 (D192): over the home screen at the unlock, the home screen asleep (its picture, taken as the
+ * screen turned off: softer, paler and darker), leaving the way a wallpaper change's old screen leaves (the same shaders,
+ * from a random point) while the live screen settles under it. Until the picture is taken, the wallpaper's blurred copy
+ * stands in. Steps aside for the frame its picture is taken in (the screen is off then). Takes no touches.
  */
 @Composable
 internal fun UnlockFrost(controller: HomeController, frost: ImageBitmap?, offset: () -> Float) {
-    if (!controller.unlockFrost) return
+    // Out of the way only while its picture is taken with the screen off (never in a frame anyone sees).
+    if (!controller.unlockFrost || (controller.unlockCapturing && !controller.screenOn)) return
     androidx.compose.foundation.layout.Box(
         Modifier
             .fillMaxSize()
@@ -280,10 +282,15 @@ internal fun UnlockFrost(controller: HomeController, frost: ImageBitmap?, offset
                 }
             },
     ) {
-        if (frost != null) WallpaperImage(image = frost, frame = { null }, offset = offset, modifier = Modifier)
-        androidx.compose.foundation.layout.Box(
-            Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = if (frost != null) 0.22f else 0.55f)),
-        )
+        val shot = controller.unlockShot
+        if (shot != null) {
+            Image(bitmap = shot, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
+        } else {
+            if (frost != null) WallpaperImage(image = frost, frame = { null }, offset = offset, modifier = Modifier)
+            androidx.compose.foundation.layout.Box(
+                Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = if (frost != null) 0.32f else 0.55f)),
+            )
+        }
     }
 }
 
@@ -301,6 +308,7 @@ internal fun UnlockWatch(controller: HomeController, focused: Boolean) {
                     android.content.Intent.ACTION_SCREEN_OFF -> controller.armUnlockReveal()
                     android.content.Intent.ACTION_SCREEN_ON -> {
                         controller.screenOn = true
+                        controller.screenOnAt = android.os.SystemClock.uptimeMillis()
                         // On again before the phone locked (a lock delay): no unlock will come, this is the opening.
                         val keyguard = c.getSystemService(android.app.KeyguardManager::class.java)
                         if (keyguard?.isKeyguardLocked == false) controller.unlocked()
@@ -330,7 +338,15 @@ internal fun UnlockWatch(controller: HomeController, focused: Boolean) {
             return@LaunchedEffect
         }
         if (focused) {
-            // In front without an unlock yet: its broadcast may still be on its way; otherwise this is a return from an app.
+            // 0.15.3 (D192): in front with the phone already unlocked, soon after the screen came on: this is the opening,
+            // at once (up to 0.15.1 it waited for the unlock's broadcast, which can come after the home screen shows).
+            val keyguard = context.getSystemService(android.app.KeyguardManager::class.java)
+            val soon = android.os.SystemClock.uptimeMillis() - controller.screenOnAt < 6_000
+            if (keyguard?.isKeyguardLocked == false && soon) {
+                controller.playUnlockReveal(controller.screenWidth, controller.screenHeight)
+                return@LaunchedEffect
+            }
+            // Its broadcast may still be on its way; otherwise this is a return from an app.
             kotlinx.coroutines.delay(700)
             if (!controller.unlockPending) controller.dropUnlockFrost()
         }

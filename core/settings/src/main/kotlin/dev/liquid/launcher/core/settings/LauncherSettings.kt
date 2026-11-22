@@ -2169,9 +2169,16 @@ object LauncherSettings {
             "off" to "Off",
         ),
         title = "When you unlock",
-        summary = "The home screen comes out from under frosted glass as you unlock, starting from a different place " +
-            "each time. It takes the transition's length",
+        summary = "As you unlock, the home screen wakes the way a wallpaper change looks (a picture of it asleep leaves " +
+            "over it), starting from a different place each time",
         section = "wallpaper", keywords = "unlock lock screen wake open phone reveal ripple frost frosted glass animation random start",
+    )
+    /** 0.15.3 (D192, Med: "it is very slow, I want it instant"): the unlock's own length, short. */
+    val WallpaperUnlockMs = IntSetting(
+        key = "wallpaper.unlockMs", default = 380, min = 150, max = 1200, step = 10, unit = "ms",
+        title = "Unlock animation length",
+        summary = "How long the screen takes to wake when you unlock. Short feels instant",
+        section = "wallpaper", keywords = "unlock animation length duration speed fast instant wake",
     )
     val WallpaperRotation = ChoiceSetting(
         key = "wallpaper.rotation", default = "off",
@@ -2840,7 +2847,7 @@ object LauncherSettings {
         SearchClaude, SearchClaudeTarget, SearchClipboard, SearchEngine, SearchKeyboardHeight, SearchKeyboardOpenings, WallpaperSheetTall,
         KeyboardWallpaper, KeyboardWallpaperLook, KeyboardWallpaperSlot, KeyboardWallpaperLast, KeyboardWallpaperThemes,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
-        WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs, WallpaperUnlock,
+        WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs, WallpaperUnlock, WallpaperUnlockMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
         BackupAuto, BackupKeep, BackupWallpapers, BackupFolder, BackupLast,
         LayoutWindowLayout, LayoutWindowFrom, LayoutWindowTo, LayoutWindowDays,

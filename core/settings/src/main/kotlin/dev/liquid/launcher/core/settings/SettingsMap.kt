@@ -228,7 +228,7 @@ object SettingsMap {
             mapOf(
                 L to listOf("wallpaper.parallax"),
                 K to listOf("wallpaper.homeBlur", "wallpaper.homeDim"),
-                B to listOf("wallpaper.transition", "wallpaper.transitionMs", "wallpaper.unlock", "wallpaper.rotation", "wallpaper.rotationPool", "wallpaper.rotationShuffle"),
+                B to listOf("wallpaper.transition", "wallpaper.transitionMs", "wallpaper.unlock", "wallpaper.unlockMs", "wallpaper.rotation", "wallpaper.rotationPool", "wallpaper.rotationShuffle"),
                 M to listOf("wallpaper.lockToo", "wallpaper.systemWrite", "wallpaper.history"),
             ),
         ),

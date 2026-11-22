@@ -6,7 +6,20 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
-## 0.15.2 — 2026-11-22 (not published on its own)
+## 0.15.2 — 2026-11-22
+
+### Changed
+- When you unlock: the home screen now wakes the way a wallpaper change looks, and at once. A picture of the home screen
+  asleep (softer, paler and darker, taken as the screen turns off) leaves over the live screen in your transition's style,
+  from a random point, while the screen settles under it, exactly as when you change the wallpaper (0.15.1 used a blurred
+  wallpaper, where the ripple's bend could not be seen). It starts the moment the home screen is in front with the phone
+  unlocked (0.15.1 could wait for the unlock's broadcast), takes its own short length, 380 ms (Settings › Wallpaper ›
+  Behaviour › Unlock animation length; 0.15.1 used the transition's 800 ms × 1.35), and the launcher's arrival fade after
+  a redirect no longer plays on top of it.
+- The Theme lab in the new Settings look: its heading with the breadcrumbs, the preview on a card, the four views as one
+  segmented control, the groups and pills as chips, every option on grouped cards with the thick slider and the chips.
+  "Tune the glass" takes the same chips and sliders on a panel in the theme's colours, and the last stock chips and
+  sliders in Settings (letter areas, looks, colours) are the kit's now.
 
 ### Fixed
 - Search: 0.15.1's fix for a keyboard taller than expected was only partial (the keyboard could still be handed back

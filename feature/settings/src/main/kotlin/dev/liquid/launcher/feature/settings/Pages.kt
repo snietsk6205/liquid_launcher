@@ -318,92 +318,16 @@ private fun TabBody(
     }
 }
 
-/**
- * The page's tabs as one segmented control (WM Keyboard's "Auto | Grouped | Separate"): the chosen one under a
- * highlight in the place's hue that slides from tab to tab; a count says how many options of a tab you changed.
- */
 @Composable
-private fun PageTabs(tabs: List<SettingsTab>, selected: SettingsTab, counts: List<Int>, onSelect: (SettingsTab) -> Unit) {
-    val accent = screenAccent()
-    val index = tabs.indexOf(selected).coerceAtLeast(0)
-    val slide by androidx.compose.animation.core.animateFloatAsState(
-        index.toFloat(),
-        androidx.compose.animation.core.spring(dampingRatio = 0.82f, stiffness = 520f),
-        label = "tabHighlight",
-    )
-    val shape = RoundedCornerShape(50)
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .height(44.dp)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape),
-    ) {
-        // The highlight, under the labels.
-        Box(
-            Modifier
-                .fillMaxSize()
-                .padding(3.dp)
-                .drawBehind {
-                    val w = size.width / tabs.size
-                    drawRoundRect(
-                        accent.copy(alpha = 0.22f),
-                        topLeft = androidx.compose.ui.geometry.Offset(w * slide, 0f),
-                        size = androidx.compose.ui.geometry.Size(w, size.height),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2f),
-                    )
-                },
-        )
-        Row(Modifier.fillMaxSize()) {
-            tabs.forEachIndexed { i, t ->
-                val on = t == selected
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clip(shape)
-                        .clickable { onSelect(t) },
-                    contentAlignment = androidx.compose.ui.Alignment.Center,
-                ) {
-                    Text(
-                        if (counts.getOrElse(i) { 0 } > 0) "${t.title} · ${counts[i]}" else t.title,
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = if (on) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium),
-                        color = if (on) (if (darkSettings()) accent else androidx.compose.ui.graphics.lerp(accent, Color.Black, 0.3f)) else MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                    )
-                }
-            }
-        }
-    }
-}
+private fun PageTabs(tabs: List<SettingsTab>, selected: SettingsTab, counts: List<Int>, onSelect: (SettingsTab) -> Unit) =
+    dev.liquid.launcher.core.designsystem.KitSegments(
+        tabs.mapIndexed { i, t -> if (counts.getOrElse(i) { 0 } > 0) "${t.title} · ${counts[i]}" else t.title },
+        tabs.indexOf(selected).coerceAtLeast(0),
+    ) { onSelect(tabs[it]) }
 
-/** A row that folds a group's fine tuning open or closed; its chevron turns. */
 @Composable
-private fun FoldRow(title: String, summary: String, open: Boolean, onToggle: () -> Unit) {
-    val turn by androidx.compose.animation.core.animateFloatAsState(if (open) 90f else 0f, label = "foldChevron")
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onToggle)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-    ) {
-        IconTile(dev.liquid.launcher.core.designsystem.LauncherIcons.Tune, screenAccent())
-        Spacer(Modifier.padding(start = 16.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium))
-            if (summary.isNotEmpty()) Text(summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        dev.liquid.launcher.core.designsystem.LauncherIcon(
-            dev.liquid.launcher.core.designsystem.LauncherIcons.ChevronRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.graphicsLayer { rotationZ = turn },
-        )
-    }
-}
+private fun FoldRow(title: String, summary: String, open: Boolean, onToggle: () -> Unit) =
+    dev.liquid.launcher.core.designsystem.KitFoldRow(title, summary, open, onToggle)
 
 /** A row on a page: greyed with its reason while what it needs is off, lit for a moment when search led to it. */
 @Composable
