@@ -6,6 +6,14 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
+## 0.15.1 — 2026-11-22
+
+### Fixed
+- Search: when the keyboard turned out taller than the launcher expected (the first time, before it has a picture of the
+  keyboard, or after the keyboard's size changed), the keyboard could stand at its full height over the pill for a moment
+  while the pill was still gliding up to it. The keyboard is now handed back to the system only once the pill has reached
+  it.
+
 ## 0.15.0 — 2026-11-22
 
 ### Changed

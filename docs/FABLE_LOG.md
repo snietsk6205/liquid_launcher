@@ -1518,3 +1518,14 @@ still at 0.11.2).
 **Exact next step:** read Med's next log: "search: …" lines for each opening and closing (no "the system took the
 keyboard back" should appear on closings now), "unlock: the frost leaves (…) from …", and "Keyboard: wallpaper behind the
 keys (…)" after he added both themes.
+
+**Released:** 0.15.0 by run 135 (build 135; run 134, the first "0.15.0 [release]" commit, was cancelled by the review
+fixes' push), every check passed: the three emulator parts, then the release. 0.15.1 by the run of the commit
+"0.15.1 [release]: …" that carries this addendum.
+
+**0.15.1:** run 135's study part showed a first search with no keyboard picture yet (the emulator's first guess, 720 px,
+for a keyboard of 883 px): "the field ended at 757 px", then "the keyboard stayed taller (883 px): the pill rises onto it".
+The old hand-over ("search open and still") had stayed as a fallback and handed the keyboard back on the frame the rise's
+glide to 883 px began, so the system put it at its full height over the pill. Now the keyboard is handed back only once
+its share stands still (the glide done), with a second of frames fully up as the limit. On Med's phone the picture's
+height matches the keyboard (933 px), so this showed only when the keyboard's size changed.

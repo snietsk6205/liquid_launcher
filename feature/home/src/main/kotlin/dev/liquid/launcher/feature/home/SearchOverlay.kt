@@ -712,6 +712,7 @@ private suspend fun driveKeyboard(
         var topped = false
         var lastShare = -1f
         var stillFrames = 0
+        var toppedFrames = 0
         while (driver.phase == KeyboardDriver.Phase.Ready) {
             val p = controller.search.value
             if (controller.searchOpen && p >= 0.998f) topped = true
@@ -730,14 +731,18 @@ private suspend fun driveKeyboard(
             frames++
             // Up and no longer moving (the rise's glide to the real height done): it can be handed over.
             stillFrames = if (topped && frames > 2 && kotlin.math.abs(f - lastShare) < 0.0005f) stillFrames + 1 else 0
+            toppedFrames = if (topped) toppedFrames + 1 else 0
             lastShare = f
             androidx.compose.runtime.withFrameNanos { }
             if (driver.phase != KeyboardDriver.Phase.Ready) break
             val moving = controller.search.isRunning || controller.searchDragging
             // 0.15.0 (D188): handed back as soon as it stands fully up (the pill's bounce is only a squash now), so a
-            // swipe closing search soon after never meets a keyboard still held.
+            // swipe closing search soon after never meets a keyboard still held. 0.15.1: only once the rise has glided
+            // to the keyboard's real height (the share is still): handed back earlier, the system put the keyboard at
+            // its full height over a pill still on its way there (CI run 135, a first opening with no picture yet). A
+            // second's worth of frames fully up and still is the limit.
             if (drive.handOver(controller.searchOpen, controller.searchDragging, fullyUp = topped, frames = stillFrames) ||
-                (controller.searchOpen && !moving && controller.search.value >= 0.999f && frames > 2)
+                (controller.searchOpen && !moving && toppedFrames > 90)
             ) {
                 driver.finish(true)
                 controller.keyboardSteady = controller.searchOpen
