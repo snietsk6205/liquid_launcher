@@ -967,6 +967,12 @@ class HomeController(
     val keyboardGuess: Float get() = dev.liquid.launcher.core.common.KeyboardLine.guess(keyboardOpenings, screenHeight)
 
     /**
+     * 0.13.1: the keyboard's height is known from this phone (its picture, or an opening seen), not only the low first
+     * guess: only then is a keyboard that says it is much taller doubted ([dev.liquid.launcher.core.common.KeyboardDrive.believes]).
+     */
+    val keyboardHeightKnown: Boolean get() = KeyboardPicture.height > 0 || keyboardOpenings.any { it > 0 }
+
+    /**
      * Search is counting on the keyboard: from the moment it starts opening until the keyboard is
      * put away while search stays open (then the field follows the keyboard down).
      */

@@ -656,7 +656,7 @@ private suspend fun driveKeyboard(
         val pictured = KeyboardPicture.image != null && controller.keyboardStandInOn
         // 0.13.1: a keyboard that has just rebuilt itself says it is taller than it will be (1188 px for 933 px on Med's
         // phone, the first opening after a wallpaper change): the pill keeps to the height it opens at.
-        val expected = controller.keyboardRise
+        val expected = if (controller.keyboardHeightKnown) controller.keyboardRise else 0f
         val believed = drive.believes(driver.shownPx.toFloat(), expected, drive.TALLER_DP * view.resources.displayMetrics.density)
         DebugLog.event(
             "Home",
