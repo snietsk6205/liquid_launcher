@@ -156,7 +156,7 @@ private fun SettingsApp(
                 LocalSharedScope provides shared,
                 LocalNavScope provides this,
                 LocalScreenInfo provides screenInfo(frame.screen),
-                LocalBackTo provides { depth: Int -> crumbTarget(frame.screen, depth)?.let(backTo) },
+                LocalBackTo provides remember(frame.screen) { { depth: Int -> crumbTarget(frame.screen, depth)?.let(backTo) } },
             ) {
                 ScreenContent(frame.screen, store, wallpaper, window, open, back)
             }

@@ -558,6 +558,8 @@ internal fun ExpressiveSlider(
 ) {
     val accent = screenAccent()
     val rest = MaterialTheme.colorScheme.secondaryContainer
+    val change by androidx.compose.runtime.rememberUpdatedState(onValueChange)
+    val finish by androidx.compose.runtime.rememberUpdatedState(onValueChangeFinished)
     val span = (valueRange.endInclusive - valueRange.start).coerceAtLeast(0.0001f)
     val fraction = ((value - valueRange.start) / span).coerceIn(0f, 1f)
     val shown by androidx.compose.animation.core.animateFloatAsState(
@@ -581,19 +583,19 @@ internal fun ExpressiveSlider(
                         pressed = false
                     },
                 ) {
-                    onValueChange(at(it.x, size.width.toFloat()))
-                    onValueChangeFinished()
+                    change(at(it.x, size.width.toFloat()))
+                    finish()
                 }
             }
             .pointerInput(enabled, valueRange) {
                 if (!enabled) return@pointerInput
                 detectHorizontalDragGestures(
-                    onDragStart = { pressed = true; onValueChange(at(it.x, size.width.toFloat())) },
-                    onDragEnd = { pressed = false; onValueChangeFinished() },
-                    onDragCancel = { pressed = false; onValueChangeFinished() },
-                ) { change, _ ->
-                    change.consume()
-                    onValueChange(at(change.position.x, size.width.toFloat()))
+                    onDragStart = { pressed = true; change(at(it.x, size.width.toFloat())) },
+                    onDragEnd = { pressed = false; finish() },
+                    onDragCancel = { pressed = false; finish() },
+                ) { pointer, _ ->
+                    pointer.consume()
+                    change(at(pointer.position.x, size.width.toFloat()))
                 }
             }
             .drawBehind {

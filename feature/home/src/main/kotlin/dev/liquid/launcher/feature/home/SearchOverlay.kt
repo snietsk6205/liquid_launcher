@@ -614,6 +614,12 @@ private fun SearchKeyboard(controller: HomeController, focus: FocusRequester, wa
                 if (drives) {
                     follow()
                     kotlinx.coroutines.withTimeoutOrNull(2_500) { snapshotFlow { driving.value || following.value }.first { !it } }
+                    // The opening's drive let go of the keyboard without taking it down (the system took it back): the
+                    // keyboard still follows the pill down rather than dropping on the system's own curve.
+                    if (!controller.searchOpen) {
+                        follow()
+                        kotlinx.coroutines.withTimeoutOrNull(2_500) { snapshotFlow { following.value }.first { !it } }
+                    }
                 }
                 if (!controller.searchOpen) focusManager.clearFocus(force = true)
             }
@@ -709,7 +715,8 @@ private suspend fun driveKeyboard(
         while (driver.phase == KeyboardDriver.Phase.Ready) {
             val p = controller.search.value
             if (controller.searchOpen && p >= 0.998f) topped = true
-            if (!controller.searchOpen) topped = false
+            // Closing, or a finger pushing open search away before the keyboard was handed over: it follows search down.
+            if (!controller.searchOpen || controller.searchDragging) topped = false
             val rise = controller.keyboardRise.takeIf { it > 0f } ?: driver.shownPx.toFloat()
             // Where the picture stands now, as a share of the keyboard's own height; fully up once search is (unless its
             // height is doubted: then its top stays on the pill's line). 0.15.0: never past fully up while search bounces.

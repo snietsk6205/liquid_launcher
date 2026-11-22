@@ -1297,6 +1297,9 @@ class HomeController(
     var screenOn by mutableStateOf(true)
     private var unlockJob: kotlinx.coroutines.Job? = null
 
+    /** Which run of the reveal is current: a run cancelled by the screen going off again must not drop the new frost. */
+    private var unlockRun = 0
+
     /** The style the reveal plays in: its own setting, or the wallpaper's transition ("same"); null when off. */
     private fun unlockStyleNow(): String? {
         val chosen = data.settings.get(LauncherSettings.WallpaperUnlock)
@@ -1308,6 +1311,7 @@ class HomeController(
     fun armUnlockReveal() {
         screenOn = false
         val style = unlockStyleNow() ?: return
+        unlockRun++
         unlockJob?.cancel()
         unlockPending = false
         unlockStyle = style
@@ -1332,6 +1336,7 @@ class HomeController(
         unlockOrigin = androidx.compose.ui.geometry.Offset(w * (0.12f + 0.76f * random.nextFloat()), h * (0.16f + 0.7f * random.nextFloat()))
         unlockVariation = WallpaperTransitions.Variation.random(random)
         val style = unlockStyle
+        val run = ++unlockRun
         DebugLog.event("Home", "unlock: the frost leaves ($style) from " + "%.0f, %.0f".format(unlockOrigin?.x, unlockOrigin?.y))
         unlockJob = scope.launch {
             try {
@@ -1344,8 +1349,10 @@ class HomeController(
                     ),
                 )
             } finally {
-                unlockFrost = false
-                unlockOrigin = null
+                if (run == unlockRun) {
+                    unlockFrost = false
+                    unlockOrigin = null
+                }
             }
         }
     }
