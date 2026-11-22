@@ -1235,8 +1235,7 @@ clear_anr
 # 0.6.4: the letter index bends out from under the finger and the bubble sits past the letters. A picture only:
 # the screenshot is taken while a slow swipe holds the right edge of the drawer.
 section "14c. Letter index while held"
-adb shell input keyevent KEYCODE_HOME
-sleep 2.5
+home_and_settle
 adb shell input swipe 540 1500 540 400 450
 wait_screen 14c-drawer "Search apps" 5 || true
 if ! on_screen 14c-drawer "Search apps"; then
@@ -1251,8 +1250,10 @@ sleep 1.6
 peek 14c-index
 wait "$SWIPE_PID" 2>/dev/null
 sleep 1
-adb shell input keyevent KEYCODE_HOME
-sleep 1
+# D187: Home goes through the system launcher and comes back by the redirect, which can land seconds later (run 132:
+# 2.6 s); a Settings page opened before it lands ends up under the launcher (run 132 found the drawer instead of the
+# Letter index page). clear_anr used to take 3 s here and hid this; wait for the launcher instead.
+home_and_settle
 
 # 0.11.1: the letter areas (on by default with the String letters: one area on the right, 84 % across and 45 % down
 # the apps, 120 dp). Settings → Letter index → String; then, in the drawer, a slow swipe that starts inside the area
@@ -1304,8 +1305,7 @@ if AREAS=$(python3 ci/find_text.py "$OUT/14c-areas.xml" "Letter areas" exact bou
 else
   fail "the drawer shows the letter areas"
 fi
-adb shell input keyevent KEYCODE_HOME
-sleep 1
+home_and_settle
 }
 
 blk_widget() {
@@ -1381,8 +1381,8 @@ if tap_text 12b-menu "Widgets" exact; then
 else
   fail "the home menu has a Widgets item"
 fi
-adb shell input keyevent KEYCODE_HOME
-sleep 1
+# Before a Settings page: wait for the launcher's redirect to land first (see the end of 14c).
+home_and_settle
 
 clear_anr
 # The updates screen (in-app updater) opens and offers a check; no network is used here.

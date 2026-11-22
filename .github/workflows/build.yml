@@ -163,13 +163,19 @@ jobs:
       - name: Install screenshot helper
         run: python3 -m pip install --quiet --user pillow || true
 
+      # D187: the same steps drew 2 to 3 times slower on some runners than on others (runs 131 and 132 against 128 and
+      # 130), so each job says what it ran on, to compare timings fairly.
+      - name: Runner CPU
+        run: |
+          echo "$(nproc) CPUs:$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2)"
+
       # 0.11.2: the system image and a booted emulator's snapshot are kept between runs, so the test boots from the
       # snapshot instead of downloading the image and cold-booting Android each time. The snapshot is saved once the
       # phone is calm (ci/settle.sh): v1 was saved mid first-boot work and v2 after a blind 30 s. Bump the version to
       # start anew. On a miss each of the three parts boots and saves its own; one is kept.
-      # cores: 2 on purpose (D187). Run 131 gave the emulator all 4 of the runner's CPUs and everything drew 2 to 3 times
-      # slower (the speed check's drawer at 410 ms a frame instead of 150): with no GPU, swiftshader draws on the same
-      # CPUs. A snapshot only loads with the core count it was saved with, so a change here needs a new key.
+      # cores: 2 on purpose (D187). Run 131 gave the emulator all 4 of the runner's CPUs and it was no faster (the speed
+      # check's drawer at 410 ms a frame, against 343 ms with 2 cores in run 132): with no GPU, swiftshader draws on the
+      # same CPUs. A snapshot only loads with the core count it was saved with, so a change here needs a new key.
       - name: System image cache
         uses: actions/cache@v4
         with:
