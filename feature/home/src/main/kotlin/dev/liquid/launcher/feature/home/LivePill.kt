@@ -194,6 +194,12 @@ internal fun RowScope.LivePillItem(controller: HomeController, config: PillConfi
     }
 
     val context = LocalContext.current
+    // 0.13.1: while the study hub, search or the drawer covers the pill, its seconds wait (they tick by the minute): each
+    // second redrew the home screen under the glass, and so all the glass over it (the hub ran at 100 to 112 ms a frame
+    // in Med's log, 88 to 92 % of them late). A boolean, so the pill does not recompose on every frame of those motions.
+    val covered by androidx.compose.runtime.remember(controller) {
+        androidx.compose.runtime.derivedStateOf { controller.hubAmount > 0.02f || controller.morph() > 0.02f }
+    }
     val inset = (config.heightDp * 0.17f).coerceIn(5f, 12f).dp
     val accentTarget = when (shown) {
         is LiveNow.Focus -> shown.color ?: HomeTheme.accent
@@ -245,7 +251,7 @@ internal fun RowScope.LivePillItem(controller: HomeController, config: PillConfi
                         SizeTransform(clip = false) { _, _ -> spring(dampingRatio = 0.78f, stiffness = MotionScale.stiffness(380f)) }
                 },
                 label = "live",
-            ) { now -> LiveFace(now, color, accent, text, interactive) }
+            ) { now -> LiveFace(now, color, accent, text, interactive, covered) }
             if (badge > 0) {
                 Spacer(Modifier.width(6.dp))
                 CardsBadge(badge, interactive) { controller.openReview() }
@@ -255,13 +261,16 @@ internal fun RowScope.LivePillItem(controller: HomeController, config: PillConfi
 }
 
 @Composable
-private fun LiveFace(now: LiveNow?, color: Color, accent: Color, text: TextStyle, interactive: Boolean) {
+private fun LiveFace(now: LiveNow?, color: Color, accent: Color, text: TextStyle, interactive: Boolean, covered: Boolean = false) {
     when (now) {
         null -> Box(Modifier.size(0.dp))
         is LiveNow.Focus -> Row(verticalAlignment = Alignment.CenterVertically) {
-            val clock by produceState(System.currentTimeMillis()) {
+            // Every second in sight; by the minute while covered ([covered]), and at once again when uncovered.
+            val clock by produceState(System.currentTimeMillis(), covered) {
+                value = System.currentTimeMillis()
                 while (true) {
-                    delay(1000 - System.currentTimeMillis() % 1000 + 5)
+                    val t = System.currentTimeMillis()
+                    delay(if (covered) 60_000 - t % 60_000 + 5 else 1000 - t % 1000 + 5)
                     value = System.currentTimeMillis()
                 }
             }
