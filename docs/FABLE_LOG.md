@@ -1588,3 +1588,7 @@ this release's comments said 0.15.3; they say 0.15.2 (it never got out: run 137 
 **Exact next step:** run 139 ([release], Med said "try again"): 14e should pass with either "as it rose … put away" or
 no such line, 14f and 14g pass, and 0.15.2 is published. Then Med's log: the unlock lines, and no "as it rose" lines
 unless he pressed Back during an opening.
+
+Run 139 published 0.15.2 (LiquidLauncher-0.15.2-build139.apk): all three parts passed; study's first search "the field
+ended at 920 px" with no "stayed taller"; every release logged ": opens"; no "as it rose" line (the Back came after the
+hand-over this time) and no second swipe needed.
