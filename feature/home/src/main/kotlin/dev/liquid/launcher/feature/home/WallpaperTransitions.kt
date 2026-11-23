@@ -79,12 +79,8 @@ internal object WallpaperTransitions {
         uniform shader image;
         uniform float2 size;
         uniform float progress;
-        uniform float2 seed;
-        uniform float3 focus;
         half4 main(float2 p) {
-            float n = clamp((fbm(p / size.y * 5.0 + seed) - 0.12) / 0.72, 0.0, 1.0);
-            // 0.15.0: from a point (the unlock reveal), the clouds open outward from there.
-            if (focus.z > 0.0) n = mix(n, clamp(distance(p, focus.xy) / length(size) * 1.6, 0.0, 1.0), focus.z);
+            float n = clamp((fbm(p / size.y * 5.0) - 0.12) / 0.72, 0.0, 1.0);
             float edge = 0.09;
             float t = progress * (1.0 + edge * 2.0) - edge;
             float a = smoothstep(t - edge, t + edge, n);
@@ -101,17 +97,15 @@ internal object WallpaperTransitions {
         uniform float2 size;
         uniform float progress;
         uniform float density;
-        uniform float2 dir;
         half4 main(float2 p) {
             float2 uv = p / size;
-            // 0.15.0: the direction it sweeps (0.55, -0.45: from the bottom left, as up to 0.14).
-            float s = 0.5 + dot(uv - 0.5, dir);
+            float s = (uv.x * 0.55 + (1.0 - uv.y) * 0.45);
             float w = 0.07;
             float front = mix(-w * 2.0, 1.0 + w * 2.0, progress);
             float a = smoothstep(front - w, front + w, s);
             float z = (s - front) / w * 1.4;
             float sheen = exp(-z * z);
-            float2 q = p + dir * sheen * 22.0 * density;
+            float2 q = p + float2(0.55, -0.45) * sheen * 22.0 * density;
             half4 c = image.eval(q);
             c.rgb += half(sheen * 0.32) * c.a;
             return c * half(a);
@@ -123,13 +117,12 @@ internal object WallpaperTransitions {
         uniform shader image;
         uniform float2 size;
         uniform float progress;
-        uniform float2 seed;
         half4 main(float2 p) {
             float x = p.x / size.x;
-            float speed = 0.35 + 0.65 * noise(float2(x * 14.0 + seed.x, 3.7 + seed.y));
+            float speed = 0.35 + 0.65 * noise(float2(x * 14.0, 3.7));
             float t = clamp(progress * 1.3 - (1.0 - speed) * 0.3, 0.0, 1.0);
             float drop = t * t * size.y * (0.45 + 0.55 * speed);
-            float2 q = float2(p.x + (noise(float2(x * 30.0 + seed.y, p.y / size.y * 4.0)) - 0.5) * 10.0 * t, p.y - drop);
+            float2 q = float2(p.x + (noise(float2(x * 30.0, p.y / size.y * 4.0)) - 0.5) * 10.0 * t, p.y - drop);
             half4 c = q.y < 0.0 ? half4(0.0) : image.eval(q);
             float a = 1.0 - smoothstep(0.45, 1.0, progress * (0.85 + 0.3 * speed));
             return c * half(a);
@@ -169,26 +162,8 @@ internal object WallpaperTransitions {
         )
     }
 
-    /**
-     * 0.15.0 (D190): what makes one run of a style differ from the next (the unlock reveal starts somewhere new each
-     * time): the noise of ink and melt, a point ink opens out from ([focus] 0..1: how much), and the way shine sweeps.
-     * [None] is how a wallpaper or layout change has always looked.
-     */
-    data class Variation(val seed: Offset = Offset.Zero, val focus: Float = 0f, val sweep: Offset = Offset(0.55f, -0.45f)) {
-        companion object {
-            val None = Variation()
-
-            /** A run of its own for the unlock reveal, with [origin] (screen px) where it starts. */
-            fun random(random: kotlin.random.Random = kotlin.random.Random.Default): Variation = Variation(
-                seed = Offset(random.nextFloat() * 97f, random.nextFloat() * 97f),
-                focus = 0.55f,
-                sweep = Offset(if (random.nextBoolean()) 0.55f else -0.55f, if (random.nextBoolean()) 0.45f else -0.45f),
-            )
-        }
-    }
-
     /** The old screen's picture leaving, at progress [p] (0 = all there, 1 = gone). [origin] is where a ripple starts. */
-    fun GraphicsLayerScope.oldScreenLeaving(p: Float, style: String, origin: Offset?, variation: Variation = Variation.None) {
+    fun GraphicsLayerScope.oldScreenLeaving(p: Float, style: String, origin: Offset?) {
         val pc = p.coerceIn(0f, 1f)
         val density = density
         fun shaderStyle(setUp: RuntimeShader.() -> Unit): Boolean {
@@ -211,9 +186,6 @@ internal object WallpaperTransitions {
                 run {
                     setFloatUniform("size", size.width, size.height)
                     setFloatUniform("progress", pc)
-                    setFloatUniform("seed", variation.seed.x, variation.seed.y)
-                    val o = origin ?: Offset(size.width / 2f, size.height / 2f)
-                    setFloatUniform("focus", o.x, o.y, if (origin == null) 0f else variation.focus)
                 }
             }
             "shine" -> shaderStyle {
@@ -221,14 +193,12 @@ internal object WallpaperTransitions {
                     setFloatUniform("size", size.width, size.height)
                     setFloatUniform("progress", pc)
                     setFloatUniform("density", density)
-                    setFloatUniform("dir", variation.sweep.x, variation.sweep.y)
                 }
             }
             "melt" -> shaderStyle {
                 run {
                     setFloatUniform("size", size.width, size.height)
                     setFloatUniform("progress", pc)
-                    setFloatUniform("seed", variation.seed.x, variation.seed.y)
                 }
             }
             "slide" -> {

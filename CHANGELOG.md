@@ -6,6 +6,22 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
+## 0.15.3 — 2026-11-23
+
+### Added
+- Board photos with the launcher's own camera, several in a row. Board (a class's chip in Today, or the pill's and the
+  home menu's) opens a camera inside the launcher on the class of the moment. Take as many photos as you like: each one
+  is saved at once in Pictures/ESSAI/<the class> and flies into the corner while it saves, with the count on it, so the
+  next can be taken straight away. Done (or Back) closes it once every photo is saved, and the home screen says how many
+  there are. The volume keys take photos too; a tap focuses there; two fingers or the presets under the shutter zoom
+  (1×, 2×, 5×, and the wide lens when the phone has one); photos come out upright however you hold the phone. The first
+  time, Android asks for the camera. A camera app, one photo at a time, is still a choice: Settings › Study companion ›
+  More, where the test photo tries the camera you chose.
+
+### Removed
+- The unlock animation (0.15.0 to 0.15.2): it played only once the phone was already open. The home screen no longer
+  plays a wallpaper transition when you unlock, and its two settings (When you unlock, Unlock animation length) are gone.
+
 ## 0.15.2 — 2026-11-22
 
 ### Changed

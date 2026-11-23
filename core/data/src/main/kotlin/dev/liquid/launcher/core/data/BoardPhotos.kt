@@ -55,6 +55,42 @@ object BoardPhotos {
     /** The module as a folder name: letters, digits, spaces, "_" and "-" only; "Notes" when nothing is left. */
     fun folderName(module: String): String = module.replace(Regex("[^\\p{L}\\p{N} _-]"), "").trim().ifEmpty { "Notes" }
 
+    // ---- 0.15.3 (D196, Med: "I take a photo, it saves to its place, then I'm back on the home screen: I can't take
+    // multiple pictures at once"): the launcher's own camera, several photos in a row, each saved at once. ----
+
+    /** The launcher's camera (feature/home), by name, so Settings can open it too. */
+    const val CAMERA_ACTIVITY = "dev.liquid.launcher.feature.home.BoardCameraActivity"
+
+    /** The class the photos are for (its module, made a folder name by the camera). */
+    const val EXTRA_MODULE = "dev.liquid.launcher.extra.MODULE"
+
+    fun cameraIntent(context: Context, module: String): Intent =
+        Intent().setClassName(context, CAMERA_ACTIVITY).putExtra(EXTRA_MODULE, module)
+
+    /** Whether the launcher may use the camera itself (and so whether a camera app may take a photo for it). */
+    fun cameraAllowed(context: Context): Boolean =
+        context.checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    /**
+     * One photo of [module] taken at [now] by the launcher's camera, for MediaStore:
+     * Pictures/ESSAI/<module>/<date>_<module>_<hh-mm-ss>.jpg (the time keeps a series apart).
+     */
+    fun photoValues(module: String, now: Long): ContentValues {
+        val folder = folderName(module)
+        return ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, photoName(module, java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault())))
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/ESSAI/$folder")
+            put(MediaStore.Images.Media.DATE_TAKEN, now)
+        }
+    }
+
+    /** "<date>_<module>_<hh-mm-ss>.jpg", digits plain whatever the phone's language. */
+    fun photoName(module: String, at: java.time.ZonedDateTime): String {
+        val time = String.format(java.util.Locale.ROOT, "%02d-%02d-%02d", at.hour, at.minute, at.second)
+        return "${at.toLocalDate()}_${folderName(module)}_$time.jpg"
+    }
+
     /**
      * The camera apps on the phone, by name: those that take a photo for another app, and since 0.13.0 every other
      * camera too (Med could not pick his: only the first kind was listed).
@@ -87,6 +123,19 @@ object BoardPhotos {
         }
         val pm = context.packageManager
         val chosen = settings.get(LauncherSettings.StudyCameraApp).trim()
+        if (!cameraAllowed(context)) {
+            // 0.15.3 (D196): the launcher declares the camera for its own; until it is allowed, Android refuses to let a
+            // camera app take a photo for it, so the camera app opens as it is and the photo is picked when it closes.
+            val pkg = chosen.takeIf { it.isNotEmpty() && pm.getLaunchIntentForPackage(it) != null }
+            val open = pkg?.let { Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).setPackage(it).takeIf { i -> i.resolveActivity(pm) != null } ?: pm.getLaunchIntentForPackage(it) }
+                ?: Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).takeIf { it.resolveActivity(pm) != null }
+                ?: return null
+            file.delete()
+            val date = java.time.LocalDate.now().toString()
+            settings.set(LauncherSettings.StudyPendingPhoto, encode(Pending(file.path, folder, "${date}_$folder.jpg", now, pick = true)))
+            DebugLog.event("Study", "board photo: ${pkg ?: "the phone's camera"} opened for \"$folder\" (the camera is not allowed for the launcher: the photo is picked when it closes)")
+            return open
+        }
         val withChosen = chosen.takeIf { it.isNotEmpty() }?.let { pkg ->
             Intent(capture).setPackage(pkg).takeIf { it.resolveActivity(pm) != null }
         }

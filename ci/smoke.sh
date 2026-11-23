@@ -11,8 +11,8 @@
 #             widget and the updates screen, 15 and 16 (shaders)
 #   drawer    8b What's new, the drawer, 9c thirty tags, 9d picking (uses 9c's tags), search, the home menu, the
 #             wallpaper screen, edit mode, the Today panel on a fresh install
-#   study     14b to 14g (each uses the test calendar 14b makes), 17 speed check (its study hub step needs the study
-#             companion 14b switches on)
+#   study     14b to 14g (each uses the test calendar 14b makes), 14h the board camera, 17 speed check (its study
+#             hub step needs the study companion 14b switches on)
 set -u
 
 PART=${1:-all}
@@ -1249,6 +1249,26 @@ if [ -n "$EVENT_ID" ]; then
     sleep 1
   fi
 fi
+
+clear_anr
+# 0.15.3 (D196): Board opens the launcher's own camera, several photos in a row. The emulator has none
+# (-camera-back none): the screen opens on the camera's own words for that, and Back closes it.
+section "14h. The board camera"
+adb shell pm grant "$PKG" android.permission.CAMERA 2>/dev/null
+adb shell su 0 am start -n "$PKG/dev.liquid.launcher.feature.home.BoardCameraActivity" --es dev.liquid.launcher.extra.MODULE "Smoke" >/dev/null 2>&1 || true
+wait_screen 14h-camera "with a camera app instead" 12 || true
+peek 14h-camera
+grep "board camera" "$LOG" | tail -3 | sed 's/^/        /'
+if top_activity | grep -q "BoardCameraActivity" && on_screen 14h-camera "with a camera app instead"; then
+  pass "the board camera opens and says there is no camera to use"
+else
+  fail "the board camera opens and says there is no camera to use"
+  texts 14h-camera 20
+fi
+adb shell input keyevent KEYCODE_BACK
+wait_top "MainActivity" 6 || true
+if top_activity | grep -q "BoardCameraActivity"; then fail "Back closes the board camera"; else pass "Back closes the board camera"; fi
+home_and_settle
 }
 
 blk_index() {

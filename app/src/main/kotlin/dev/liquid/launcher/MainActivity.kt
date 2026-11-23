@@ -203,6 +203,14 @@ class MainActivity : ComponentActivity() {
                     android.widget.Toast.makeText(this, "Could not open the camera", android.widget.Toast.LENGTH_SHORT).show()
                 }
             },
+            openBoardCamera = { module ->
+                try {
+                    startActivity(dev.liquid.launcher.core.data.BoardPhotos.cameraIntent(this, module))
+                } catch (e: Exception) {
+                    DebugLog.error("App", "board camera failed: $e")
+                    android.widget.Toast.makeText(this, "Could not open the camera", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            },
             requestLocation = { callback ->
                 if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
                     callback(true)

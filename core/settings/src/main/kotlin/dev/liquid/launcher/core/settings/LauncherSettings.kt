@@ -2151,35 +2151,6 @@ object LauncherSettings {
         title = "Transition length",
         section = "wallpaper", keywords = "wallpaper transition duration speed",
     )
-    /**
-     * 0.15.0 (D190, Med: "when I open my phone it makes the same animation as when I change the wallpaper, and it starts
-     * from random places").
-     */
-    val WallpaperUnlock = ChoiceSetting(
-        key = "wallpaper.unlock", default = "same",
-        options = listOf(
-            "same" to "The wallpaper's transition (Transition above)",
-            "ripple" to "Ripple",
-            "ink" to "Ink",
-            "shine" to "Shine",
-            "melt" to "Melt",
-            "liquid" to "Liquid",
-            "zoom" to "Zoom",
-            "fade" to "Fade",
-            "off" to "Off",
-        ),
-        title = "When you unlock",
-        summary = "As you unlock, the home screen wakes the way a wallpaper change looks (a picture of it asleep leaves " +
-            "over it), starting from a different place each time",
-        section = "wallpaper", keywords = "unlock lock screen wake open phone reveal ripple frost frosted glass animation random start",
-    )
-    /** 0.15.2 (D192, Med: "it is very slow, I want it instant"): the unlock's own length, short. */
-    val WallpaperUnlockMs = IntSetting(
-        key = "wallpaper.unlockMs", default = 380, min = 150, max = 1200, step = 10, unit = "ms",
-        title = "Unlock animation length",
-        summary = "How long the screen takes to wake when you unlock. Short feels instant",
-        section = "wallpaper", keywords = "unlock animation length duration speed fast instant wake",
-    )
     val WallpaperRotation = ChoiceSetting(
         key = "wallpaper.rotation", default = "off",
         options = listOf(
@@ -2319,6 +2290,20 @@ object LauncherSettings {
         title = "Camera for board photos",
         summary = "The app that takes the board photos; empty: the phone's default camera",
         section = "study", keywords = "camera photo board picture app essai class",
+        hidden = true,
+    )
+    /**
+     * 0.15.3 (D196, Med: "I want to be able to take multiple pictures at once"): board photos with the launcher's own
+     * camera (several in a row, each saved at once in the class's folder) or a camera app (one at a time, the app above).
+     * Chosen on the page, with the camera app.
+     */
+    val StudyBoardCamera = ChoiceSetting(
+        key = "study.boardCamera", default = "launcher",
+        options = listOf("launcher" to "The launcher's camera", "app" to "A camera app"),
+        title = "Board photos with",
+        summary = "The launcher's camera takes several photos in a row, each saved at once in the class's folder; a camera " +
+            "app takes one photo at a time",
+        section = "study", keywords = "camera photo board picture several series burst multiple launcher app essai class",
         hidden = true,
     )
     /** 0.11.2: the board photo being taken (BoardPhotos), so a launcher restarted while the camera is open still saves it. */
@@ -2847,11 +2832,11 @@ object LauncherSettings {
         SearchClaude, SearchClaudeTarget, SearchClipboard, SearchEngine, SearchKeyboardHeight, SearchKeyboardOpenings, WallpaperSheetTall,
         KeyboardWallpaper, KeyboardWallpaperLook, KeyboardWallpaperSlot, KeyboardWallpaperLast, KeyboardWallpaperThemes,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
-        WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs, WallpaperUnlock, WallpaperUnlockMs,
+        WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
         BackupAuto, BackupKeep, BackupWallpapers, BackupFolder, BackupLast,
         LayoutWindowLayout, LayoutWindowFrom, LayoutWindowTo, LayoutWindowDays,
-        StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyCameraApp, StudyPendingPhoto, StudyPlanLink, StudyLinkOpener,
+        StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyCameraApp, StudyBoardCamera, StudyPendingPhoto, StudyPlanLink, StudyLinkOpener,
         StudyAttendance, StudyLeaveBy, StudyCommute, StudyRest, StudyWindDown, StudySpeedBump, StudySpeedBumpTags, StudyFeedCalendar, StudyFeedLocal, StudyGlassTint,
         StudyCommuteLayout, StudyExamLayout, ContextActive, ContextApplied, ContextBase, LayoutTimerUntil, LayoutTimerLayout, LayoutTimerBack,
         StudyQuiet, StudyQuietPeople, StudyQuietEmail, StudyQuietTags, StudyAnnales,

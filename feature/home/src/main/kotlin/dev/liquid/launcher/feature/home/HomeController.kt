@@ -13,8 +13,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.pager.PagerState
-import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -574,6 +572,12 @@ class HomeController(
     fun boardPhoto() {
         val now = System.currentTimeMillis()
         val module = classForPhoto(now)?.title?.subject ?: data.study.day.value.current(now)?.title?.subject ?: "Notes"
+        // 0.15.3 (D196): the launcher's own camera, several photos in a row (a camera app when chosen in Settings).
+        if (data.settings.get(LauncherSettings.StudyBoardCamera) != "app") {
+            Haptics.tick(view)
+            callbacks.openBoardCamera(module)
+            return
+        }
         val intent = try {
             dev.liquid.launcher.core.data.BoardPhotos.start(context, data.settings, module, now)
         } catch (e: Exception) {
@@ -1279,166 +1283,6 @@ class HomeController(
 
     /** Where the change was started (the wallpaper tapped in the strip), in screen pixels: a ripple spreads from there. */
     var transitionOrigin: androidx.compose.ui.geometry.Offset? = null
-
-    // ---- 0.15.0 (D190): the unlock reveal (Med: "when I open my phone, the same animation as when I change the
-    // wallpaper, starting from random places"; he chose "frosted, then clear"). 0.15.2 (D192, Med on 0.15.1: "it doesn't
-    // feel the same as when I change the wallpaper, and it is very slow; I want it instant"): the wallpaper change's own
-    // pipeline (a picture of the screen over the live one, the screen settling under it), the picture being the home
-    // screen asleep (taken as the screen turns off), started the moment the home screen is in front, on its own short
-    // length; and the arrival fade after a redirect no longer plays on top of it. ----
-
-    /** The home screen asleep is over the live one: put up as the screen turns off, so it is there on the first frame. */
-    var unlockFrost by mutableStateOf(false)
-        private set
-
-    /** The picture of the home screen asleep (sharp, darker, paler), or null until it is taken (a blurred wallpaper then). */
-    var unlockShot by mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
-        private set
-
-    /** The picture is being taken: the overlay steps aside for that frame (the screen is off). */
-    var unlockCapturing by mutableStateOf(false)
-        private set
-
-    /** The reveal is running (the screen settles under it, as in a wallpaper change). */
-    var unlockPlaying by mutableStateOf(false)
-        private set
-
-    /** How far the picture has gone, 0 (all there) to 1 (gone), in the style [unlockStyle]. */
-    val unlockProgress = Animatable(0f)
-    var unlockStyle by mutableStateOf("ripple")
-        private set
-    var unlockOrigin: androidx.compose.ui.geometry.Offset? = null
-        private set
-    internal var unlockVariation = WallpaperTransitions.Variation.None
-        private set
-
-    /** The unlock came (the keyguard went): the reveal waits for the home screen to be in front, then plays. */
-    var unlockPending by mutableStateOf(false)
-        private set
-
-    /** The screen is on (from the screen's broadcasts; a frost put up while it is off is not dropped meanwhile). */
-    var screenOn by mutableStateOf(true)
-
-    /** When the screen last came on (uptime ms): a home screen in front soon after, with the phone unlocked, is the opening. */
-    var screenOnAt = 0L
-    private var unlockJob: kotlinx.coroutines.Job? = null
-    private var unlockCapture: kotlinx.coroutines.Job? = null
-
-    /** Which run of the reveal is current: a run cancelled by the screen going off again must not drop the new frost. */
-    private var unlockRun = 0
-
-    /** The style the reveal plays in: its own setting, or the wallpaper's transition ("same"); null when off. */
-    private fun unlockStyleNow(): String? {
-        val chosen = data.settings.get(LauncherSettings.WallpaperUnlock)
-        val style = if (chosen == "same") data.settings.get(LauncherSettings.WallpaperTransition) else chosen
-        return style.takeIf { it != "off" && it != "none" }
-    }
-
-    /** The screen turned off: the home screen asleep goes up (unseen), ready for the unlock. */
-    fun armUnlockReveal() {
-        screenOn = false
-        val style = unlockStyleNow() ?: return
-        unlockRun++
-        unlockJob?.cancel()
-        unlockPending = false
-        unlockPlaying = false
-        unlockStyle = style
-        scope.launch { unlockProgress.snapTo(0f) }
-        unlockFrost = true
-        // Its picture: now, and once more after the redirect has brought the home screen up clean (about a second later
-        // on Med's phone). Until the first is ready, the wallpaper's blurred copy stands in.
-        unlockCapture?.cancel()
-        unlockCapture = scope.launch {
-            kotlinx.coroutines.delay(120)
-            takeSleepingShot()
-            kotlinx.coroutines.delay(1_500)
-            if (!screenOn && unlockFrost && !unlockPlaying) takeSleepingShot()
-        }
-    }
-
-    /** The home screen as it is, made asleep: half size (soft), paler and darker. */
-    private suspend fun takeSleepingShot() {
-        val capture = captureHome ?: return
-        if (screenOn) return
-        unlockCapturing = true
-        val shot = try {
-            kotlinx.coroutines.withTimeoutOrNull(1_500) { runCatching { capture() }.getOrNull() }
-        } finally {
-            unlockCapturing = false
-        }
-        // Taken only once the screen was back on (no frames while it was off): it shows the picture over the screen.
-        if (shot == null || screenOn) return
-        val asleep = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            runCatching { sleepy(shot.asAndroidBitmap()) }.getOrNull()
-        } ?: return
-        if (unlockFrost && !unlockPlaying) unlockShot = asleep.asImageBitmap()
-    }
-
-    private fun sleepy(source: android.graphics.Bitmap): android.graphics.Bitmap {
-        val readable = if (source.config == android.graphics.Bitmap.Config.HARDWARE) source.copy(android.graphics.Bitmap.Config.ARGB_8888, false) else source
-        val w = (readable.width / 2).coerceAtLeast(1)
-        val h = (readable.height / 2).coerceAtLeast(1)
-        val out = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
-        val matrix = android.graphics.ColorMatrix().apply {
-            setSaturation(0.55f)
-            postConcat(android.graphics.ColorMatrix().apply { setScale(0.58f, 0.58f, 0.62f, 1f) })
-        }
-        val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
-            colorFilter = android.graphics.ColorMatrixColorFilter(matrix)
-        }
-        android.graphics.Canvas(out).drawBitmap(readable, null, android.graphics.Rect(0, 0, w, h), paint)
-        return out
-    }
-
-    /** The phone was unlocked: the reveal plays once the home screen is in front ([playUnlockReveal]). */
-    fun unlocked() {
-        if (unlockFrost) unlockPending = true
-    }
-
-    /**
-     * The home screen is in front after the unlock: the picture leaves from a random point, in the style chosen, over the
-     * unlock's own length, while the screen settles under it. [w] and [h]: the screen in px.
-     */
-    fun playUnlockReveal(w: Float, h: Float) {
-        if (!unlockFrost || unlockPlaying) return
-        unlockPending = false
-        unlockCapture?.cancel()
-        unlockJob?.cancel()
-        val random = kotlin.random.Random(System.nanoTime())
-        unlockOrigin = androidx.compose.ui.geometry.Offset(w * (0.12f + 0.76f * random.nextFloat()), h * (0.16f + 0.7f * random.nextFloat()))
-        unlockVariation = WallpaperTransitions.Variation.random(random)
-        val style = unlockStyle
-        val run = ++unlockRun
-        val ms = MotionScale.ms(data.settings.get(LauncherSettings.WallpaperUnlockMs))
-        DebugLog.event(
-            "Home",
-            "unlock: the screen wakes ($style, $ms ms) from " + "%.0f, %.0f".format(unlockOrigin?.x, unlockOrigin?.y) +
-                if (unlockShot != null) "" else " (no picture of it asleep yet: the blurred wallpaper)",
-        )
-        unlockPlaying = true
-        unlockJob = scope.launch {
-            try {
-                unlockProgress.snapTo(0f)
-                unlockProgress.animateTo(1f, androidx.compose.animation.core.tween(ms, easing = WallpaperTransitions.easing(style)))
-            } finally {
-                if (run == unlockRun) {
-                    unlockFrost = false
-                    unlockPlaying = false
-                    unlockShot = null
-                    unlockOrigin = null
-                }
-            }
-        }
-    }
-
-    /** The home screen came to the front without an unlock (Home from an app): no frost there. */
-    fun dropUnlockFrost() {
-        if (!unlockFrost || unlockPlaying) return
-        unlockCapture?.cancel()
-        unlockPending = false
-        unlockFrost = false
-        unlockShot = null
-    }
 
     /** The wallpaper strip from the home menu. */
     var wallpaperStrip by mutableStateOf(false)
@@ -2547,6 +2391,8 @@ class HomeCallbacks(
     /** Opens the camera to take a picture into [Uri]; the callback gets whether one was taken (E1). */
     /** 0.11.2: starts the camera with [BoardPhotos]' intent; the answer is handled by the activity. */
     val takePhoto: (android.content.Intent) -> Unit = {},
+    /** 0.15.3 (D196): opens the launcher's board camera for a class (its module). */
+    val openBoardCamera: (String) -> Unit = {},
     /** Asks for location access (Android's condition for reading the Wi-Fi name); the callback gets whether it was given. */
     val requestLocation: ((Boolean) -> Unit) -> Unit = { it(false) },
     /** Shows the system file picker for a font file; the callback gets it or null. */

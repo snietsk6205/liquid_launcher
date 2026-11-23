@@ -228,7 +228,7 @@ object SettingsMap {
             mapOf(
                 L to listOf("wallpaper.parallax"),
                 K to listOf("wallpaper.homeBlur", "wallpaper.homeDim"),
-                B to listOf("wallpaper.transition", "wallpaper.transitionMs", "wallpaper.unlock", "wallpaper.unlockMs", "wallpaper.rotation", "wallpaper.rotationPool", "wallpaper.rotationShuffle"),
+                B to listOf("wallpaper.transition", "wallpaper.transitionMs", "wallpaper.rotation", "wallpaper.rotationPool", "wallpaper.rotationShuffle"),
                 M to listOf("wallpaper.lockToo", "wallpaper.systemWrite", "wallpaper.history"),
             ),
         ),
@@ -305,8 +305,8 @@ object SettingsMap {
             "search page cards order today line calendar month exam countdown timeline widgets claude prompts commands next block apps calm", "search", SettingsTab.LAYOUT),
         Editor("Pill items", "What the pill holds and in what order", "pill items slots icons order search apps claude study live focus music", "pill", SettingsTab.LAYOUT),
         Editor(
-            "Camera for board photos", "The camera app that takes the board photos, and a test photo",
-            "camera photo board picture app essai class test", "study", SettingsTab.MORE,
+            "Camera for board photos", "The launcher's camera (several photos in a row) or a camera app for board photos, and a test photo",
+            "camera photo board picture app essai class test several series multiple burst launcher", "study", SettingsTab.MORE,
         ),
         Editor("Pill study item", "How the pill's study item looks: icon, circle, picture, block name", "pill study item circle pebble ring look", "pill", SettingsTab.LOOK),
         Editor("Home menu items", "The glass pills of the home menu (long press on empty space)", "home menu items pills long press order", "menus", SettingsTab.LAYOUT),

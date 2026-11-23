@@ -1592,3 +1592,29 @@ unless he pressed Back during an opening.
 Run 139 published 0.15.2 (LiquidLauncher-0.15.2-build139.apk): all three parts passed; study's first search "the field
 ended at 920 px" with no "stayed taller"; every release logged ": opens"; no "as it rose" line (the Back came after the
 hand-over this time) and no second swipe needed.
+
+## Same session, 2026-11-23: 0.15.3, Med on 0.15.2 (the unlock, several board photos)
+
+Med: the unlock animation "a complete failure: I see my phone open, then after a bit the animation is done; remove it
+if you want"; "I want to be able to take multiple pictures when I study from the workspace: I take a photo, it saves
+to its right place, then I'm back on the home screen"; recommendations and questions welcome; his diagnostics
+(0.15.2 build 139, 09:48 to 17:49). Asked: how to take several photos (he chose the launcher's own camera) and which of
+four ideas to build (searching the boards' text, flashcards from a photo, a lecture PDF, study time per class): "none
+of the ones you mentioned is good".
+
+His log: no "unlock:" line all day (the reveal never got its moment in front, or it came after the home screen
+showed, as he saw); board photos at 10:59 to 11:00 three in 33 s, one tap each, ~1 s between saving and the next
+camera; search 60 openings all "slid in with the pill", the field ending at 950/951 px, no "as it rose"; frames: the
+speed check's study hub 61-76 % late (sync 34-48 ms, 12 ms with a flat tint), the drawer's letter scrubbing 46-69 %
+late (input and composing 8-13 ms, sync 18-19 ms); the clock caught minutes behind after the launcher was frozen in
+the background (it corrects itself as it starts).
+
+| # | Point | State | What |
+|---|---|---|---|
+| 1 | Unlock animation: a failure, remove | Done | D195: removed, settings gone, the shaders as in 0.14. |
+| 2 | Several board photos at once | Done; on the phone, to see | D196: the launcher's own camera. |
+| 3 | Jank: study hub, drawer letters | Next | From the speed check's numbers above. |
+
+**Exact next step:** CI's smoke run of 0.15.3 (14h: the board camera opens on the camera-less emulator, says so and
+closes); then Med's first series in class: "board camera: ready N ms after opening", "photo N saved … ms after the
+shutter", "closed, N photos".

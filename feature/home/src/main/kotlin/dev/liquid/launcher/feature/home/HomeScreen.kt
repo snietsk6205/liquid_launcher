@@ -122,16 +122,10 @@ class HomeReturnState {
      * progress here, not in an effect, means no frame is drawn with the content fully visible.
      */
     fun onReturn(animate: Boolean, wholeScreen: Boolean = false) {
-        // 0.15.2 (D192): not over the unlock's wake (the screen-off redirect and the unlock itself bring the launcher
-        // back, and its fade ran on top of the reveal).
-        val fades = animate && !unlockHolds()
-        if (fades) progress.floatValue = 0f
-        if (fades && wholeScreen) screen.floatValue = 0f
+        if (animate) progress.floatValue = 0f
+        if (animate && wholeScreen) screen.floatValue = 0f
         tick++
     }
-
-    /** 0.15.2: the unlock's wake is waiting or running, so a return arrives at once. Set by the home screen. */
-    var unlockHolds: () -> Boolean = { false }
 
     /** Home was pressed while the launcher was already in front. */
     fun onHomePressed() {
@@ -380,19 +374,6 @@ private fun HomeScreenBody(
             null
         }
     }
-    // 0.15.0 (D190): the frost the unlock reveal clears: the wallpaper's blurred copy (search's), else one of its own.
-    val unlockOn by store.derive { get(LauncherSettings.WallpaperUnlock) != "off" }
-    val frostWallpaper by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, image, deepWallpaper, unlockOn) {
-        val source = image
-        val deep = deepWallpaper
-        value = when {
-            !unlockOn || source == null -> null
-            deep != null -> deep
-            else -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                dev.liquid.launcher.core.designsystem.WallpaperBlur.blur(source.asAndroidBitmap(), (homeBlurDp + 22) * density1.density).asImageBitmap()
-            }
-        }
-    }
     if (studio != null) {
         // Preview the screen being adjusted.
         LaunchedEffect(studio.surface) {
@@ -494,7 +475,6 @@ private fun HomeScreenBody(
             returnState.request = null
         }
         DisposableEffect(controller, returnState) {
-            returnState.unlockHolds = { controller.unlockFrost }
             returnState.closesWhileAway = { controller.closesWhileAway }
             returnState.appJustStarted = { controller.appJustStarted }
             returnState.onLeft = { controller.tidyAfterLeaving() }
@@ -705,8 +685,6 @@ private fun HomeScreenBody(
                         }
                         // A wallpaper or layout change: the new wallpaper settles in under the old picture (D103).
                         if (controller.transitionShot != null) with(WallpaperTransitions) { newWallpaperArriving(controller.transitionProgress.value, transitionStyle) }
-                        // 0.15.2 (D192): and as the screen wakes at the unlock.
-                        else if (controller.unlockFrost) with(WallpaperTransitions) { newWallpaperArriving(controller.unlockProgress.value, controller.unlockStyle) }
                     }
                 }
             ) {
@@ -833,8 +811,6 @@ private fun HomeScreenBody(
                         scaleY = scale
                         // A wallpaper or layout change: the new pages settle into place (D103).
                         if (controller.transitionShot != null) with(WallpaperTransitions) { newScreenArriving(controller.transitionProgress.value, transitionStyle) }
-                        // 0.15.2 (D192): and as the screen wakes at the unlock.
-                        else if (controller.unlockFrost) with(WallpaperTransitions) { newScreenArriving(controller.unlockProgress.value, controller.unlockStyle) }
                     }
                     .then(if (live) swipes else Modifier)
                     .statusBarsPadding()
@@ -1115,13 +1091,6 @@ private fun HomeScreenBody(
         Presence(controller.layoutWallpaperPick, onClose = { controller.back() }) { id -> ProvideControls(controller, glass, null) { LayoutWallpaperSheet(controller, id, glass, lightBackground, overlayBackdrop) } }
         // W4: "Customise …" after a long press on a surface.
         Presence(controller.customise) { offer -> CustomiseChip(controller, offer, if (lightBackground) Color(0xFF16181C) else Color.White) }
-        if (live) {
-            UnlockFrost(controller, frostWallpaper) {
-                val pages = controller.pager.pageCount
-                if (pages <= 1) 0.5f else (controller.pager.currentPage + controller.pager.currentPageOffsetFraction) / (pages - 1)
-            }
-            UnlockWatch(controller, windowInfo.isWindowFocused)
-        }
         if (live) TransitionOverlay(controller, transitionStyle)
         if (mode == HomeMode.PreviewEffects && touchFx != null) EffectsDemo(touchFx, glass, lightBackground, overlayBackdrop)
         // What a press throws over the screen (0.8.0, D111), above everything it was pressed on.

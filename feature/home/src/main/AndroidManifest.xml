@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 0.15.3 (D196): the board camera. Optional: a phone without one still runs the launcher. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+
+    <application>
+        <!-- 0.15.3 (D196): board photos, several in a row, each saved in Pictures/ESSAI/<class>. -->
+        <activity
+            android:name="dev.liquid.launcher.feature.home.BoardCameraActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
+    </application>
+</manifest>
