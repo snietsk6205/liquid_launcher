@@ -1638,3 +1638,14 @@ crashed at the first tap of Board. Fixed by asking for the decor view first (run
 anticipated …)" after CameraX's 6 s of retries on the camera-less emulator, the message shown, Back closes it). The
 check now waits for the camera to be gone rather than for the home screen (started from the shell, it lands on 14g's
 Settings task).
+
+### Addendum: two skills (Med: "make me a skill with all the liquid design, settings, animations, smoothness and concepts, and one for GitHub saving time")
+
+`.claude/skills/liquid-android/` (SKILL.md + references: design, motion, smoothness, settings, concepts,
+project-setup; `assets/kit/`: Setting/SettingsStore/AppSettings, SettingsKit, Glass + LiquidShader, Motion/Presence,
+PressFeel, Stagger, DebugLog, Notices, FrameMeter, Changelog, shims and icons, as one `liquid.kit` library module that
+compiles on its own against the type-check harness) and `.claude/skills/github-fast-ci/` (SKILL.md + references:
+android, other-stacks, releases, triage; assets: Android/Node/Python workflows, release_notes.py, test_failures.py,
+settle.sh, smoke-lib.sh, find_text.py, describe_ui.py, ascii_shot.py). Both validated and packaged as `.skill`
+files for claude.ai. `tools/typecheck/tc.sh` leaves `.claude/` out. When a session learns something general, add
+it to the matching skill reference too.

@@ -1,0 +1,168 @@
+# Node / web CI with the same rules as the Android one: build + tests on every push, the slow end-to-end stage on
+# "[smoke]" / risky paths / manual runs, a release (and an optional GitHub Pages deploy) only from a "[release]" commit
+# after everything passed. Replace the CHANGE-ME values; delete the e2e or deploy jobs if the project has none.
+name: Build
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Publish a release from this build
+        type: boolean
+        default: false
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  RISKY_PATHS: '^(e2e/|ci/|\.github/workflows/|package-lock\.json)'   # CHANGE-ME
+
+jobs:
+  build:
+    name: Lint, tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.release.outputs.release }}
+      e2e: ${{ steps.e2e.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # The npm cache is keyed on package-lock.json; pnpm: cache: pnpm after pnpm/action-setup.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Read version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Release or only build
+        id: release
+        env:
+          EVENT: ${{ github.event_name }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+          ASKED: ${{ inputs.release }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then release="${ASKED:-false}"
+          elif printf '%s' "$MESSAGE" | grep -qF '[release]'; then release=true
+          else release=false; fi
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+
+      - name: End-to-end test or not
+        id: e2e
+        env:
+          EVENT: ${{ github.event_name }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+          RELEASE: ${{ steps.release.outputs.release }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ] || [ "$RELEASE" = "true" ] || printf '%s' "$MESSAGE" | grep -qF '[smoke]'; then e2e=true
+          elif [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git fetch --no-tags --depth=1 origin "$BEFORE" >/dev/null 2>&1; then e2e=true
+          elif git diff --name-only "$BEFORE" "$AFTER" | grep -qE "$RISKY_PATHS"; then e2e=true
+          else e2e=false; fi
+          echo "e2e=$e2e" >> "$GITHUB_OUTPUT"
+
+      - name: Check the changelog has this version
+        if: steps.release.outputs.release == 'true'
+        run: python3 ci/release_notes.py "${{ steps.version.outputs.version }}" > /dev/null
+
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - run: npm run lint --if-present
+      - run: npm test --if-present
+      - run: npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/                    # CHANGE-ME: the build output folder
+          retention-days: 7
+
+  e2e:
+    name: End-to-end tests
+    needs: build
+    if: needs.build.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      # Browsers are the slow part of Playwright: cache them by Playwright's version.
+      - name: Playwright browsers cache
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('package-lock.json') }}
+      - if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - run: npx playwright test --reporter=line --trace off
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-output
+          path: test-results/
+          retention-days: 7
+
+  release:
+    name: Publish release
+    needs: [build, e2e]
+    if: needs.build.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Release notes from CHANGELOG.md
+        run: python3 ci/release_notes.py "${{ needs.build.outputs.version }}" > notes.md
+      - name: Archive the build
+        run: cd dist && zip -qr "../site-${{ needs.build.outputs.version }}-build${{ github.run_number }}.zip" .
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.build.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          files: site-*.zip
+          body_path: notes.md
+          make_latest: true
+
+  # Optional: a static site on GitHub Pages, deployed by the release (Settings > Pages > Source: GitHub Actions).
+  pages:
+    name: Deploy to GitHub Pages
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deploy
+        uses: actions/deploy-pages@v4
