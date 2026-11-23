@@ -1266,8 +1266,11 @@ else
   texts 14h-camera 20
 fi
 adb shell input keyevent KEYCODE_BACK
-wait_top "MainActivity" 6 || true
-if top_activity | grep -q "BoardCameraActivity"; then fail "Back closes the board camera"; else pass "Back closes the board camera"; fi
+# Started from the shell, the camera opens in the task of a Settings page left by 14g, which Back then shows (from
+# Board it opens over the home screen): what counts is that it is gone.
+camera_gone() { ! top_activity | grep -q "BoardCameraActivity"; }
+wait_until 6 camera_gone || true
+if camera_gone; then pass "Back closes the board camera"; else fail "Back closes the board camera"; fi
 home_and_settle
 }
 

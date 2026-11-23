@@ -1628,3 +1628,13 @@ a time, from the speed check), not a guess.
 **Exact next step:** CI's smoke run of 0.15.3 (14h: the board camera opens on the camera-less emulator, says so and
 closes); then Med's first series in class: "board camera: ready N ms after opening", "photo N saved … ms after the
 shutter", "closed, N photos".
+
+### Addendum: runs 141 and 142
+
+Run 141 (0.15.3, [smoke]) caught a crash in 14h: the board camera died as it opened (`Window.getInsetsController()` in
+`onCreate` before the decor view existed: a null pointer inside PhoneWindow on Android 14). On the phone it would have
+crashed at the first tap of Board. Fixed by asking for the decor view first (run 142: all three parts pass; 14h
+"board camera: opened for "Smoke"", then "The camera could not start (… Device reporting less cameras than
+anticipated …)" after CameraX's 6 s of retries on the camera-less emulator, the message shown, Back closes it). The
+check now waits for the camera to be gone rather than for the home screen (started from the shell, it lands on 14g's
+Settings task).
