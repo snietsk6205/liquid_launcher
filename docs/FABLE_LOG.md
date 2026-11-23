@@ -1613,7 +1613,17 @@ the background (it corrects itself as it starts).
 |---|---|---|---|
 | 1 | Unlock animation: a failure, remove | Done | D195: removed, settings gone, the shaders as in 0.14. |
 | 2 | Several board photos at once | Done; on the phone, to see | D196: the launcher's own camera. |
-| 3 | Jank: study hub, drawer letters | Next | From the speed check's numbers above. |
+| 3 | Jank: study hub, drawer letters | Looked into, not changed | Below: no safe fix without a measurement on the phone. |
+
+Jank, read from the code: the frame meter's "sync" is SYNC + COMMAND_ISSUE, the render thread's own work, off-screen
+layers included. The hub costs 34-48 ms there with any glass (with or without blur, bending, shadows or the theme's
+material) and 12 ms with a flat tint; the drawer's and search's glass cost 12-15 ms. What the hub's glass has and theirs
+has not: it grows out of the pill (its size and corners change every frame), it exports its glass as a layer for the
+controls on it (`sheetSurface(..., exported = layer)`), and the board picture's blurred layer is recorded again whenever
+the size changes, so on every frame of the growth (0.13.1 stopped it on scroll only). The letter area's 8-13 ms of
+input and composing is the list jumping to a letter (a screen of new app cells composed per jump). Neither was changed
+blind: the next step is a measurement (the hub's growth with the exported layer and the board picture turned off one at
+a time, from the speed check), not a guess.
 
 **Exact next step:** CI's smoke run of 0.15.3 (14h: the board camera opens on the camera-less emulator, says so and
 closes); then Med's first series in class: "board camera: ready N ms after opening", "photo N saved … ms after the
