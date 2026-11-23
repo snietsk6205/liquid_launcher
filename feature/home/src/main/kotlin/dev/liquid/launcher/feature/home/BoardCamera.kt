@@ -244,6 +244,9 @@ class BoardCameraActivity : ComponentActivity() {
         window.attributes = window.attributes.apply {
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
+        // The window's root view first: before it exists, asking for the insets controller crashes (CI run 141,
+        // Android 14: PhoneWindow.getInsetsController reads a decor that is not made yet). Asking for it makes it.
+        window.decorView
         window.insetsController?.apply {
             setSystemBarsAppearance(
                 0,
