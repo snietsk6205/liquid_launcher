@@ -224,12 +224,28 @@ object SettingsMap {
         ),
         // ---- Wallpaper and layouts ----
         SettingsSurface(
-            "wallpaper", "Wallpaper", "Blur and dim, parallax, transitions, changing by itself", SettingsEntry.WALLPAPER, listOf("wallpaper"),
+            "wallpaper", "Wallpaper", "Blur and dim, parallax, transitions, changing by itself, the lock screen", SettingsEntry.WALLPAPER, listOf("wallpaper"),
             mapOf(
                 L to listOf("wallpaper.parallax"),
                 K to listOf("wallpaper.homeBlur", "wallpaper.homeDim"),
-                B to listOf("wallpaper.transition", "wallpaper.transitionMs", "wallpaper.rotation", "wallpaper.rotationPool", "wallpaper.rotationShuffle"),
-                M to listOf("wallpaper.lockToo", "wallpaper.systemWrite", "wallpaper.history"),
+                B to listOf(
+                    "wallpaper.transition", "wallpaper.transitionMs", "wallpaper.rotation", "wallpaper.rotationPool", "wallpaper.rotationShuffle",
+                    "wallpaper.rotationMinutes", "wallpaper.rotationTimes",
+                ),
+                M to listOf("wallpaper.lockMode", "wallpaper.systemWrite"),
+            ),
+        ),
+        // 0.16.0: the library's own options, and what each layout keeps of the wallpaper (D202).
+        SettingsSurface(
+            "wallpaperLibrary", "Library", "The order of the pictures and how many recent ones", SettingsEntry.WALLPAPER, listOf("wallpaperLibrary"),
+            mapOf(L to listOf("wallpaper.librarySort"), B to listOf("wallpaper.history")),
+        ),
+        SettingsSurface(
+            "wallpaperLayout", "Per layout", "Each layout's own wallpaper, recents, collection and look; the switch between them", SettingsEntry.WALLPAPER,
+            listOf("wallpaperLayout"),
+            mapOf(
+                K to listOf("wallpaper.homeSaturation", "wallpaper.homeTint", "wallpaper.homeTintAmount"),
+                B to listOf("layouts.ownWallpaper", "layouts.ownRecents", "layouts.ownCollection", "layouts.transition"),
             ),
         ),
         SettingsSurface(

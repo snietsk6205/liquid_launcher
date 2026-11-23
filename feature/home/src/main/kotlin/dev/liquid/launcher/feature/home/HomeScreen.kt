@@ -347,7 +347,12 @@ private fun HomeScreenBody(
     val pictureLook = if (studio != null) studio.shownLook else libraryState.current?.let { id -> libraryState.items.firstOrNull { it.id == id }?.look }
     val homeBlurDp = pictureLook?.blur?.takeIf { it >= 0 } ?: studio?.homeBlur ?: look.homeBlurDp
     val homeDim = pictureLook?.dim?.takeIf { it >= 0 }?.div(100f) ?: (studio?.homeDim?.div(100f)) ?: look.homeDim
-    val saturation = (pictureLook?.saturation ?: 100) / 100f
+    // 0.16.0 (D202): the layout's own colour and tint; a picture's own saturation (not 100 %) comes first.
+    val layoutLook by store.derive { Triple(get(LauncherSettings.WallpaperHomeSaturation), get(LauncherSettings.WallpaperHomeTint), get(LauncherSettings.WallpaperHomeTintAmount)) }
+    val layoutSaturation = studio?.homeSaturation ?: layoutLook.first
+    val saturation = (pictureLook?.saturation?.takeIf { it != 100 } ?: layoutSaturation) / 100f
+    val tintColour = dev.liquid.launcher.core.settings.ColorSetting.parse(studio?.homeTint ?: layoutLook.second)
+    val tintAmount = (studio?.homeTintAmount ?: layoutLook.third) / 100f
     val vignette = (pictureLook?.vignette ?: 0) / 100f
     val searchBlurDp = studio?.searchBlur ?: search.blurDp
     val drawerShown = if (studio != null) drawerConfig.copy(dim = studio.drawerDim / 100f) else drawerConfig
@@ -609,7 +614,8 @@ private fun HomeScreenBody(
             }
         }
     }
-    val transitionStyle by store.derive { get(LauncherSettings.WallpaperTransition) }
+    // 0.16.0: the style of the change running (a layout switch can have its own).
+    val transitionStyle = controller.transitionStyle
     if (live) SystemWallpaperOffsets(controller)
     val touchFx = LocalTouchFx.current
     val touchBase by store.derive { touchFxConfig() }
@@ -765,6 +771,8 @@ private fun HomeScreenBody(
             }
             }
             if (homeDim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = homeDim)))
+            // 0.16.0 (D202): the layout's tint over its wallpaper (inside what the glass bends, like the dim).
+            if (tintColour != null && tintAmount > 0.005f) Box(Modifier.fillMaxSize().background(Color(tintColour).copy(alpha = tintAmount)))
             // W8 (P8): the picture's vignette: its corners darker, the middle as it is.
             if (vignette > 0.01f) {
                 Box(

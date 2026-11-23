@@ -324,6 +324,29 @@ class WallpaperStore private constructor(private val context: Context) {
         source.lastModified().toString()
     }
 
+    /**
+     * 0.16.0 (D203): makes [bitmap] the lock screen's own wallpaper; the home screen's is left as it is. A hand-over like
+     * the home one (MagicOS takes seconds and can bring the system launcher forward), so it runs off the main thread and
+     * counts as the launcher's own write. Returns null or what went wrong.
+     */
+    suspend fun setLockScreen(bitmap: Bitmap): String? = withContext(Dispatchers.IO) {
+        writeLock.lock()
+        val started = android.os.SystemClock.uptimeMillis()
+        WallpaperTones.beginOwnWrite()
+        try {
+            val bytes = java.io.ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it) }.toByteArray()
+            WallpaperManager.getInstance(context).setStream(java.io.ByteArrayInputStream(bytes), null, true, WallpaperManager.FLAG_LOCK)
+            DebugLog.event("Wallpaper", "lock screen wallpaper set (its own picture), took ${android.os.SystemClock.uptimeMillis() - started} ms")
+            null
+        } catch (e: Throwable) {
+            DebugLog.error("Wallpaper", "lock screen wallpaper not set: $e")
+            e.message ?: e.toString()
+        } finally {
+            WallpaperTones.endOwnWrite(context, WallpaperTones.systemId(context), false)
+            writeLock.unlock()
+        }
+    }
+
     /** [show] and [persist] in one go. */
     suspend fun apply(bitmap: Bitmap, lockToo: Boolean, sourceFile: File? = null, system: SystemWrite = SystemWrite.Soon): String? {
         withContext(Dispatchers.Main.immediate) { show(bitmap) }

@@ -117,6 +117,8 @@ data class WallpaperLibraryState(
     val lastRotation: Long = 0,
     /** 0.16.0 (D198): the user's collections, in the order they were made. */
     val collections: List<WallpaperCollection> = emptyList(),
+    /** 0.16.0 (D202): each layout's recent pictures (layout id to library ids, newest first). */
+    val layoutRecents: Map<String, List<String>> = emptyMap(),
 )
 
 /** A picture inside a linked folder, not copied into the library yet. */
@@ -165,6 +167,37 @@ object WallpaperLibraryOps {
 
     fun remove(state: WallpaperLibraryState, id: String): WallpaperLibraryState =
         state.copy(items = state.items.filter { it.id != id }, current = state.current.takeIf { it != id })
+
+    // ---- 0.16.0 (D202): recents per layout ----
+
+    /** [id] becomes the newest of layout [layout]'s recent pictures, which keep at most [keep]. */
+    fun pushRecent(state: WallpaperLibraryState, layout: String, id: String, keep: Int): WallpaperLibraryState {
+        val list = (listOf(id) + state.layoutRecents[layout].orEmpty().filter { it != id }).take(keep.coerceAtLeast(1))
+        return state.copy(layoutRecents = state.layoutRecents + (layout to list))
+    }
+
+    /** Layout [layout]'s recent pictures, newest first; pictures no longer in the library are left out. */
+    fun recentFor(state: WallpaperLibraryState, layout: String): List<WallpaperItem> {
+        val byId = state.items.associateBy { it.id }
+        return state.layoutRecents[layout].orEmpty().mapNotNull { byId[it] }
+    }
+
+    fun forgetFor(state: WallpaperLibraryState, layout: String, ids: Set<String>): WallpaperLibraryState {
+        val list = state.layoutRecents[layout] ?: return state
+        return state.copy(layoutRecents = state.layoutRecents + (layout to list.filter { it !in ids }))
+    }
+
+    /** Layout [layout]'s recents become [ids] (a layout just saved starts with the recents of the moment). */
+    fun setRecents(state: WallpaperLibraryState, layout: String, ids: List<String>): WallpaperLibraryState =
+        state.copy(layoutRecents = state.layoutRecents + (layout to ids))
+
+    /** Every layout of [layouts] without recents of its own starts with today's ([recent], the [keep] newest). */
+    fun seedRecents(state: WallpaperLibraryState, layouts: List<String>, keep: Int): WallpaperLibraryState {
+        val start = recent(state).take(keep).map { it.id }
+        val missing = layouts.filter { it !in state.layoutRecents }
+        if (missing.isEmpty()) return state
+        return state.copy(layoutRecents = state.layoutRecents + missing.associateWith { start })
+    }
 
     // ---- 0.16.0: several at once, collections, sorting and filtering ----
 
@@ -381,6 +414,16 @@ class WallpaperLibrary(
         thumbs.remove(id)
         store.update { WallpaperLibraryOps.remove(it, id) }
     }
+
+    // ---- 0.16.0 (D202): recents per layout ----
+
+    fun pushRecent(layout: String, id: String, keep: Int) = store.update { WallpaperLibraryOps.pushRecent(it, layout, id, keep) }
+
+    fun forgetFor(layout: String, ids: Set<String>) = store.update { WallpaperLibraryOps.forgetFor(it, layout, ids) }
+
+    fun seedRecents(layouts: List<String>, keep: Int) = store.update { WallpaperLibraryOps.seedRecents(it, layouts, keep) }
+
+    fun setRecents(layout: String, ids: List<String>) = store.update { WallpaperLibraryOps.setRecents(it, layout, ids) }
 
     // ---- 0.16.0: several at once, collections, a delete that can be undone ----
 

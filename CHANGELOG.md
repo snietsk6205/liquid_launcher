@@ -22,6 +22,21 @@ Versions marked *not published on its own* were built but came to the phone insi
   wallpaper only once the Undo has gone, so an Undo costs nothing.
 - "Set as Liquid wallpaper" in the share menu (one picture or several), and "Liquid wallpaper" in a gallery's "Set as":
   the pictures go into the library and the wallpaper screen opens with the first one picked.
+- Each layout has its own wallpaper (on by default): a new wallpaper goes to the layout you are in, and switching
+  brings each layout's own back, placed as you placed it there. Your layouts without one got the wallpaper on screen;
+  those with their own kept it.
+- Each layout has its own recent wallpapers (Recent in the library and in the wallpaper strip) and its own collection,
+  named after it: the library opens on it when it has pictures, and All is one tap away. Hold a collection's chip to
+  give it to the layout you are in.
+- Each layout has its own look: colour (less or more than the picture has) and a tint, next to blur and dim, in the
+  wallpaper screen's Blur and dim › Home. A picture's own look still comes first.
+- Automatic wallpaper changes are now per layout and can also come every few minutes or at set times of day, and take
+  their pictures from the layout's collection. They never happen while you look: when the screen turns off, or a
+  moment after you open an app, so the new one is there when you come back.
+- A transition of its own when the layout switches (Settings › Wallpaper and layouts › Per layout; by default the
+  wallpaper's), and a new style for both: Liquid wipe, which grows out of the pill.
+- The lock screen: left alone, the same as the home screen, or a picture of its own (Blur and dim › Lock screen › Its
+  own, then "Use the picture picked for the lock screen").
 
 ### Changed
 - After Place and Done, the picture stays on the screen behind the sheet, with its blur and dim, until you Apply, Cancel
@@ -31,6 +46,12 @@ Versions marked *not published on its own* were built but came to the phone insi
 - The library's first row is Recent, Favourites and All, with your collections and linked folders on the row below.
 - Back in the wallpaper screen goes one step back (the full-screen picture, selecting, placing) before closing it.
 - Tapping the picture already picked keeps it as it is (its placement used to be lost).
+- With a wallpaper per layout, the wallpaper screen's "Only for the layout" switch and the layouts' "Stop switching the
+  wallpaper with it" are gone (every layout keeps its own); turn "Each layout has its own wallpaper" off to share one
+  wallpaper and get both back.
+- "Also on the lock screen" became Lock screen › Same (it was on for you if you had it on).
+- Settings › Wallpaper and layouts has two new pages: Library (the order of the pictures, and Recent wallpapers to show,
+  which moved there from Wallpaper › More) and Per layout. Lock screen is in Wallpaper › More.
 
 ### Fixed
 - Picking a favourite hid its heart: the heart is now on a small dark badge, above the ring.

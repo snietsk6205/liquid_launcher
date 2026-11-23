@@ -27,7 +27,15 @@ data class SavedLayout(
     val wallpaper: String? = null,
     /** The wallpaper library picture that wallpaper was made from, if known. */
     val wallpaperId: String? = null,
+    /** 0.16.0 (D202): how that picture is placed in this layout (the same picture can sit differently in another). */
+    val placement: LayoutPlacement? = null,
+    /** 0.16.0 (D202): this layout's wallpaper collection (its id in the library), when it has one. */
+    val collection: String? = null,
 )
+
+/** 0.16.0 (D202): a layout's placement of its picture: centre, zoom and parallax (as `CropSpec` and `WallpaperItem`). */
+@Serializable
+data class LayoutPlacement(val cx: Float, val cy: Float, val zoom: Float, val parallax: Float = -1f)
 
 @Serializable
 data class LayoutsState(
@@ -77,11 +85,11 @@ class LayoutsRepository(
         return saved
     }
 
-    /** Writes the current home setup into the current layout (keeping its name and wallpaper). */
+    /** Writes the current home setup into the current layout (keeping its name, wallpaper, placement and collection). */
     fun updateCurrent() {
         val state = store.get()
         val current = state.layouts.firstOrNull { it.id == state.current } ?: return
-        val updated = capture(current.id, current.name, current.wallpaper, current.wallpaperId)
+        val updated = current.copy(layout = home.layout.value, settings = settings.exportValues(LauncherSettings.layoutKeys))
         if (updated == current) return
         store.update { s -> s.copy(layouts = s.layouts.map { if (it.id == current.id) updated else it }) }
     }
@@ -142,7 +150,7 @@ class LayoutsRepository(
             file.copyTo(target, overwrite = true)
             target.name
         }
-        val copy = source.copy(id = newId, name = source.name + " copy", wallpaper = wallpaper)
+        val copy = source.copy(id = newId, name = source.name + " copy", wallpaper = wallpaper, wallpaperId = source.wallpaperId.takeIf { wallpaper != null })
         store.update { it.copy(layouts = it.layouts + copy) }
         return copy
     }
@@ -152,17 +160,48 @@ class LayoutsRepository(
         store.update { s -> s.copy(layouts = s.layouts.filter { it.id != id }, current = s.current.takeIf { it != id }) }
     }
 
-    /** Sets or clears a layout's own wallpaper. */
-    fun setWallpaper(id: String, wallpaper: File?, wallpaperId: String? = null) {
+    /** Sets or clears a layout's own wallpaper (0.16.0: with how its picture is placed in it, when known). */
+    fun setWallpaper(id: String, wallpaper: File?, wallpaperId: String? = null, placement: LayoutPlacement? = null) {
         val layout = find(id) ?: return
-        wallpaperFile(layout)?.delete()
         val name = wallpaper?.takeIf { it.exists() }?.let { source ->
             dir.mkdirs()
+            // Written whole, then renamed into place: the layout never points at half a picture.
             val target = File(dir, "$id.png")
-            source.copyTo(target, overwrite = true)
+            val temp = File(dir, "$id.tmp")
+            source.copyTo(temp, overwrite = true)
+            if (!temp.renameTo(target)) {
+                target.delete()
+                temp.renameTo(target)
+            }
             target.name
         }
-        store.update { s -> s.copy(layouts = s.layouts.map { if (it.id == id) it.copy(wallpaper = name, wallpaperId = wallpaperId.takeIf { name != null }) else it }) }
+        if (name == null) wallpaperFile(layout)?.delete()
+        store.update { s ->
+            s.copy(layouts = s.layouts.map {
+                if (it.id == id) it.copy(wallpaper = name, wallpaperId = wallpaperId.takeIf { name != null }, placement = placement.takeIf { name != null }) else it
+            })
+        }
+    }
+
+    /** 0.16.0 (D202): gives layout [id] the wallpaper collection [collection] (null: none). */
+    fun setCollection(id: String, collection: String?) =
+        store.update { s -> s.copy(layouts = s.layouts.map { if (it.id == id) it.copy(collection = collection) else it }) }
+
+    /**
+     * 0.16.0 (D202): settings that became part of each layout (the automatic changes) are written into every layout
+     * saved before, with the values of [values] (today's), where a layout has none of its own; otherwise switching to an
+     * older layout would put them back to their defaults. Returns how many layouts changed.
+     */
+    fun carryInto(values: Map<String, String>): Int {
+        if (values.isEmpty()) return 0
+        var changed = 0
+        store.update { s ->
+            s.copy(layouts = s.layouts.map { layout ->
+                val missing = values.filterKeys { it !in layout.settings }
+                if (missing.isEmpty()) layout else layout.copy(settings = layout.settings + missing).also { changed++ }
+            })
+        }
+        return changed
     }
 
     fun move(from: Int, to: Int) {

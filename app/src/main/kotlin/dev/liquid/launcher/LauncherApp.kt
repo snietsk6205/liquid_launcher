@@ -82,6 +82,8 @@ class LauncherApp : Application() {
             wallpaper.load()
             // Wallpapers of earlier versions (history, current) join the library once.
             data.wallpapers.migrate(wallpaper.legacyHistoryDir, wallpaper.currentFile)
+            // 0.16.0 (D202, D203): each layout's own wallpaper, recents and collection; the lock screen's choice. Once.
+            dev.liquid.launcher.feature.home.Wallpapers.migrate0160(this@LauncherApp, data)
         }
         data.apps.start()
         watchScreen()

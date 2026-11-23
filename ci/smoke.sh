@@ -1584,10 +1584,11 @@ blk_shaders() {
 section "15. Wallpaper transition shaders"
 # 0.7.0: ripple, ink, shine and melt are AGSL shaders compiled when the home screen starts; a shader that does not
 # compile falls back to the liquid fade, so it would never show as a crash. The launcher logs which compiled.
-if grep -q "transition shaders ready: ripple, ink, shine, melt" "$LOG" && ! grep -q "transition shader.*unavailable" "$LOG"; then
-  pass "the four transition shaders compile"
+# 0.16.0: and the liquid wipe out of the pill.
+if grep -q "transition shaders ready: ripple, pill, ink, shine, melt" "$LOG" && ! grep -q "transition shader.*unavailable" "$LOG"; then
+  pass "the five transition shaders compile"
 else
-  fail "the four transition shaders compile"
+  fail "the five transition shaders compile"
   grep -E "transition shader" "$LOG" | tail -6
 fi
 

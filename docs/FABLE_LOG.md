@@ -1689,3 +1689,16 @@ picked picture shrinks away from, on the thick ring. D197 to D201.
 | Undo after Apply | Done | Glass notice with an Undo button, 10 s; the hand-over to MagicOS waits for it. |
 | Flow test | Done | `PickerFlowTest` (6) and `WallpaperLibraryTest` (+7); emulator 11b: 16 pictures shared in, Select, peek, pick, Place, Done, Apply, Undo. |
 | Share target | Done early | Needed by 11b; Part 3 adds the Insular side. |
+
+### Part 2: per layout (checkpoint)
+
+| Point | State | What |
+|---|---|---|
+| Own wallpaper per layout (switch, on) | Done | Apply, strip, Shuffle and automatic changes give the current layout its own copy and placement; migration: layouts without one get the wallpaper on screen. |
+| Own recents (switch, on), how many | Done | `layoutRecents`, kept to "Recent wallpapers to show" (reused, 4 to 40). |
+| Own collection (switch, on) | Done | Made per layout, named after it; the library opens on it when it has pictures; a collection can be given to the layout. |
+| Look per layout | Done | Blur and dim (already per layout), colour and tint (new); a picture's own look first; placement per layout. |
+| Automatic changes | Done | Per layout; every few minutes and at set times; source "this layout's collection"; only at screen off or while away (D204). |
+| Transition on layout switch | Done | Its own setting (default the wallpaper's) and the new Liquid wipe out of the pill. |
+| Lock screen | Done | Left alone / same / its own picture (FLAG_LOCK); the old switch read once. |
+| Migration | Done | Once, logged as "0.16.0: N layout(s): …". |

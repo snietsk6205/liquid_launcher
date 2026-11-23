@@ -170,4 +170,25 @@ class WallpaperLibraryTest {
         assertEquals(3, a.uses)
         assertTrue(a.favourite)
     }
+
+    @Test
+    fun eachLayoutKeepsItsOwnRecents() {
+        var s = WallpaperLibraryState(items = listOf(item("a", lastUsed = 3), item("b", lastUsed = 2), item("c", lastUsed = 1), item("d")))
+        // Every layout starts with today's recents (newest first, as many as kept).
+        s = WallpaperLibraryOps.seedRecents(s, listOf("study", "projects"), keep = 2)
+        assertEquals(listOf("a", "b"), WallpaperLibraryOps.recentFor(s, "study").map { it.id })
+        s = WallpaperLibraryOps.pushRecent(s, "study", "d", keep = 2)
+        assertEquals(listOf("d", "a"), WallpaperLibraryOps.recentFor(s, "study").map { it.id })
+        assertEquals(listOf("a", "b"), WallpaperLibraryOps.recentFor(s, "projects").map { it.id })
+        // Using one again moves it to the front, once.
+        s = WallpaperLibraryOps.pushRecent(s, "study", "a", keep = 2)
+        assertEquals(listOf("a", "d"), WallpaperLibraryOps.recentFor(s, "study").map { it.id })
+        s = WallpaperLibraryOps.forgetFor(s, "study", setOf("a"))
+        assertEquals(listOf("d"), WallpaperLibraryOps.recentFor(s, "study").map { it.id })
+        // Seeding again leaves a layout's own list alone; a deleted picture drops out of the list shown.
+        s = WallpaperLibraryOps.seedRecents(s, listOf("study"), keep = 2)
+        assertEquals(listOf("d"), WallpaperLibraryOps.recentFor(s, "study").map { it.id })
+        s = WallpaperLibraryOps.removeAll(s, setOf("d"))
+        assertTrue(WallpaperLibraryOps.recentFor(s, "study").isEmpty())
+    }
 }

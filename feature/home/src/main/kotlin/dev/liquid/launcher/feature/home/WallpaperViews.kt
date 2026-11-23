@@ -151,7 +151,8 @@ internal fun WallpaperStrip(
     val recentCount = remember { controller.data.settings.get(LauncherSettings.WallpaperHistory) }
     val items = remember(library) {
         val favourites = WallpaperLibraryOps.favourites(library)
-        val recent = WallpaperLibraryOps.recent(library).filter { !it.favourite }.take(recentCount)
+        // 0.16.0 (D202): the current layout's own recents, when each layout has its own.
+        val recent = Wallpapers.recent(controller.data, library).filter { !it.favourite }.take(recentCount)
         favourites + recent
     }
     val color = sheetContentColor(glass, lightBackground)

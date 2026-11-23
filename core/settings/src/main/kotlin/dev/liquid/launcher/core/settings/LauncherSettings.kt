@@ -2097,10 +2097,11 @@ object LauncherSettings {
         title = "Dim on the home screen",
         section = "wallpaper", keywords = "wallpaper dim darken home",
     )
+    /** Up to 0.15.3; 0.16.0 (D203): read once into [WallpaperLockMode] (on: "same"), no longer shown. */
     val WallpaperLockToo = BoolSetting(
         key = "wallpaper.lockToo", default = false,
         title = "Also set it as the lock screen wallpaper",
-        section = "wallpaper", keywords = "wallpaper lock screen",
+        section = "state", keywords = "wallpaper lock screen", hidden = true,
     )
     val WallpaperSystemWrite = ChoiceSetting(
         key = "wallpaper.systemWrite", default = "soon",
@@ -2118,8 +2119,9 @@ object LauncherSettings {
     val WallpaperHistory = IntSetting(
         key = "wallpaper.history", default = 12, min = 4, max = 40, step = 2,
         title = "Recent wallpapers to show",
-        summary = "In the home menu's wallpaper strip and the library. Each picture appears once, however often you used it",
-        section = "wallpaper", keywords = "wallpaper history recent",
+        summary = "In the home menu's wallpaper strip and the library; with a layout's own recents, how many each keeps. Each " +
+            "picture appears once, however often you used it",
+        section = "wallpaperLibrary", keywords = "wallpaper history recent how many keep",
     )
     /** 0.16.0: the order of the wallpaper library's pictures (its "Order and filter" card sets it too). */
     val WallpaperLibrarySort = ChoiceSetting(
@@ -2131,7 +2133,7 @@ object LauncherSettings {
         ),
         title = "Order of the wallpaper library",
         summary = "How the pictures are ordered in the library's lists and collections. Uses are counted from 0.16.0 on",
-        section = "wallpaper", keywords = "wallpaper library sort order newest most used colour",
+        section = "wallpaperLibrary", keywords = "wallpaper library sort order newest most used colour",
     )
     val WallpaperParallax = IntSetting(
         key = "wallpaper.parallax", default = 0, min = 0, max = 50, step = 5, unit = "%",
@@ -2140,20 +2142,23 @@ object LauncherSettings {
             "Each wallpaper can have its own while you place it. 0 keeps it still",
         section = "wallpaper", keywords = "wallpaper parallax scroll pages move slide",
     )
+    /** The transitions a wallpaper or layout change can use (0.16.0: shared by both settings; "pill" is new). */
+    private val transitionStyles = listOf(
+        "liquid" to "Liquid: blurs away as the new screen settles",
+        "ripple" to "Ripple: a wave from the picture you tapped",
+        "pill" to "Liquid wipe: grows out of the pill",
+        "ink" to "Ink: dissolves in soft clouds",
+        "shine" to "Shine: a pane of glass sweeps across",
+        "melt" to "Melt: runs down like paint",
+        "zoom" to "Zoom: you pass through the old screen",
+        "depth" to "Depth: the old one sinks, the new one comes forward",
+        "slide" to "Slide",
+        "fade" to "Cross-fade",
+        "none" to "None",
+    )
     val WallpaperTransition = ChoiceSetting(
         key = "wallpaper.transition", default = "ripple",
-        options = listOf(
-            "liquid" to "Liquid: blurs away as the new screen settles",
-            "ripple" to "Ripple: a wave from the picture you tapped",
-            "ink" to "Ink: dissolves in soft clouds",
-            "shine" to "Shine: a pane of glass sweeps across",
-            "melt" to "Melt: runs down like paint",
-            "zoom" to "Zoom: you pass through the old screen",
-            "depth" to "Depth: the old one sinks, the new one comes forward",
-            "slide" to "Slide",
-            "fade" to "Cross-fade",
-            "none" to "None",
-        ),
+        options = transitionStyles,
         title = "Transition",
         summary = "When the wallpaper or the layout changes: wallpaper, icons and widgets change together. Ripple, ink, shine and melt run on the GPU",
         section = "wallpaper", keywords = "wallpaper transition crossfade fade animation layout switch",
@@ -2169,9 +2174,12 @@ object LauncherSettings {
             "off" to "Off",
             "unlock" to "Every time you unlock",
             "daily" to "Once a day",
+            "interval" to "Every few minutes",
+            "times" to "At set times of day",
         ),
         title = "Change automatically",
-        summary = "A new picture is put in place while the screen is off, so it is ready when you unlock. \"Shuffle wallpaper\" in the home menu changes it now",
+        summary = "A new picture is put in place while the screen is off or while you are in an app, so it is ready when you " +
+            "come back, never while you look. Each layout keeps its own way. \"Shuffle wallpaper\" in the home menu changes it now",
         section = "wallpaper", keywords = "wallpaper rotation automatic change shuffle daily unlock",
     )
     val WallpaperRotationPool = ChoiceSetting(
@@ -2181,6 +2189,7 @@ object LauncherSettings {
             "recent" to "Recently used",
             "all" to "Everything in the library",
             "folders" to "Linked phone folders",
+            "collection" to "This layout's collection",
         ),
         title = "Change between",
         section = "wallpaper", keywords = "wallpaper rotation pool favourites folder",
@@ -2191,6 +2200,87 @@ object LauncherSettings {
         summary = "Off: in order",
         section = "wallpaper", keywords = "wallpaper rotation shuffle random order",
     )
+    /** 0.16.0: "Every few minutes": how many. */
+    val WallpaperRotationMinutes = IntSetting(
+        key = "wallpaper.rotationMinutes", default = 30, min = 5, max = 240, step = 5, unit = "min",
+        title = "Every few minutes: how often",
+        summary = "The next picture comes once this time has passed, at the next moment you are not looking at the home screen",
+        section = "wallpaper", keywords = "wallpaper rotation interval minutes how often",
+    )
+    /** 0.16.0: "At set times of day": when. */
+    val WallpaperRotationTimes = TextSetting(
+        key = "wallpaper.rotationTimes", default = "07:00, 12:00, 18:00, 22:00", placeholder = "07:00, 12:00, 18:00",
+        title = "At set times: when",
+        summary = "Times of day (24 h), separated by commas; the next picture comes after each, when you are not looking",
+        section = "wallpaper", keywords = "wallpaper rotation times of day morning evening schedule",
+    )
+
+    // ---- 0.16.0 (D202): wallpaper per layout (Settings › Wallpaper and layouts › Per layout) ----
+
+    val LayoutsOwnWallpaper = BoolSetting(
+        key = "layouts.ownWallpaper", default = true,
+        title = "Each layout has its own wallpaper",
+        summary = "A new wallpaper goes to the layout you are in, and switching brings each layout's own back. Off: one " +
+            "wallpaper for all (a layout can still keep its own: the wallpaper screen's \"Only for the layout\")",
+        section = "wallpaperLayout", keywords = "layout wallpaper own per layout separate study projects",
+    )
+    val LayoutsOwnRecents = BoolSetting(
+        key = "layouts.ownRecents", default = true,
+        title = "Each layout has its own recent wallpapers",
+        summary = "Recent, in the library and the wallpaper strip, is what you used in the layout you are in. How many: " +
+            "Library › Recent wallpapers to show",
+        section = "wallpaperLayout", keywords = "layout recent wallpapers history per layout",
+    )
+    val LayoutsOwnCollection = BoolSetting(
+        key = "layouts.ownCollection", default = true,
+        title = "Each layout has its own collection",
+        summary = "The library opens on the collection of the layout you are in (All is one tap away). Each layout gets one " +
+            "named after it; hold a collection's chip in the library to give it to the layout you are in",
+        section = "wallpaperLayout", keywords = "layout collection library filter per layout",
+    )
+    val LayoutsTransition = ChoiceSetting(
+        key = "layouts.transition", default = "same",
+        options = listOf("same" to "The one for a new wallpaper") + transitionStyles,
+        title = "When the layout switches",
+        summary = "The transition as you switch layouts. Its length is the wallpaper's (Transition length) and follows the Speed setting",
+        section = "wallpaperLayout", keywords = "layout switch transition liquid wipe pill ripple crossfade",
+    )
+    val WallpaperHomeSaturation = IntSetting(
+        key = "wallpaper.homeSaturation", default = 100, min = 0, max = 200, step = 5, unit = "%",
+        title = "Colour of the wallpaper",
+        summary = "Less or more colour than the picture has (100 %: as it is). Each layout keeps its own; a picture's own look comes first",
+        section = "wallpaperLayout", keywords = "wallpaper saturation colour grey vivid layout look",
+    )
+    val WallpaperHomeTint = ColorSetting(
+        key = "wallpaper.homeTint", default = "", autoLabel = "None",
+        title = "Tint over the wallpaper",
+        summary = "A colour laid over the home wallpaper, as strong as \"Tint strength\". Each layout keeps its own",
+        section = "wallpaperLayout", keywords = "wallpaper tint colour overlay layout look",
+    )
+    val WallpaperHomeTintAmount = IntSetting(
+        key = "wallpaper.homeTintAmount", default = 0, min = 0, max = 60, step = 5, unit = "%",
+        title = "Tint strength",
+        section = "wallpaperLayout", keywords = "wallpaper tint strength amount layout look",
+    )
+
+    // ---- 0.16.0 (D203): the lock screen ----
+
+    val WallpaperLockMode = ChoiceSetting(
+        key = "wallpaper.lockMode", default = "off",
+        options = listOf(
+            "off" to "Left alone (it keeps its own)",
+            "same" to "The same as the home screen",
+            "chosen" to "A picture of its own",
+        ),
+        title = "Lock screen",
+        summary = "What the launcher does with the lock screen's wallpaper. \"A picture of its own\": the picture picked " +
+            "in the wallpaper screen (Blur and dim › Lock screen)",
+        section = "wallpaper", keywords = "wallpaper lock screen same own picture",
+    )
+    /** 0.16.0: the library picture set as the lock screen's own ("chosen"). */
+    val WallpaperLockPicture = TextSetting(key = "wallpaper.lockPicture", default = "", title = "Lock screen picture", section = "state", hidden = true)
+    /** 0.16.0 (D202): per-layout wallpapers, recents and collections were set up once. */
+    val Migrated0160 = BoolSetting(key = "state.migrated0160", default = false, title = "Wallpaper per layout set up", section = "state", hidden = true)
 
     // ---- Study companion ----
 
@@ -2845,7 +2935,9 @@ object LauncherSettings {
         KeyboardWallpaper, KeyboardWallpaperLook, KeyboardWallpaperSlot, KeyboardWallpaperLast, KeyboardWallpaperThemes,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperLibrarySort, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
-        WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
+        WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, WallpaperRotationMinutes, WallpaperRotationTimes, LayoutsAutoSave,
+        LayoutsOwnWallpaper, LayoutsOwnRecents, LayoutsOwnCollection, LayoutsTransition, WallpaperHomeSaturation, WallpaperHomeTint, WallpaperHomeTintAmount,
+        WallpaperLockMode, WallpaperLockPicture, Migrated0160,
         BackupAuto, BackupKeep, BackupWallpapers, BackupFolder, BackupLast,
         LayoutWindowLayout, LayoutWindowFrom, LayoutWindowTo, LayoutWindowDays,
         StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyCameraApp, StudyBoardCamera, StudyPendingPhoto, StudyPlanLink, StudyLinkOpener,
@@ -2878,7 +2970,15 @@ object LauncherSettings {
     val layoutKeys: Set<String> by lazy {
         val sections = setOf("home", "clock", "gestures", "pill", "icons", "homeMenu", "folders", "dock")
         all.filter { it.section in sections }.map { it.key }.toSet() +
-            setOf(WallpaperHomeBlur.key, WallpaperHomeDim.key)
+            setOf(WallpaperHomeBlur.key, WallpaperHomeDim.key) +
+            // 0.16.0 (D202): each layout's own look and its own automatic changes ([rotationLayoutKeys]: carried into
+            // the layouts saved before, once, so switching does not reset them).
+            setOf(WallpaperHomeSaturation.key, WallpaperHomeTint.key, WallpaperHomeTintAmount.key) + rotationLayoutKeys
+    }
+
+    /** 0.16.0 (D202): the automatic changes, part of each layout since 0.16.0 (existing layouts get the values of the day). */
+    val rotationLayoutKeys: Set<String> by lazy {
+        setOf(WallpaperRotation.key, WallpaperRotationPool.key, WallpaperRotationShuffle.key, WallpaperRotationMinutes.key, WallpaperRotationTimes.key)
     }
 
     /** Keys that make up a theme: the Theme section and the glass look (not its quality, which is about this phone). */

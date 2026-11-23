@@ -96,6 +96,7 @@ import dev.liquid.launcher.core.designsystem.WallpaperStore
 import dev.liquid.launcher.core.designsystem.liquidGlass
 import dev.liquid.launcher.core.settings.LauncherSettings
 import dev.liquid.launcher.core.settings.SettingsStore
+import dev.liquid.launcher.core.settings.derive
 import kotlinx.coroutines.launch
 
 /**
@@ -168,7 +169,13 @@ internal class StudioState(store: SettingsStore, currentLook: dev.liquid.launche
     var drawerDim by mutableIntStateOf(store.get(LauncherSettings.DrawerDim))
     var searchBlur by mutableIntStateOf(store.get(LauncherSettings.SearchBlur))
     var searchDim by mutableIntStateOf(store.get(LauncherSettings.SearchDim))
-    var lockToo by mutableStateOf(store.get(LauncherSettings.WallpaperLockToo))
+    /** 0.16.0 (D203): "off", "same" or "chosen" (the lock screen's own picture). */
+    var lockMode by mutableStateOf(store.get(LauncherSettings.WallpaperLockMode))
+
+    /** 0.16.0 (D202): the layout's own look besides blur and dim: colour, and a tint (hex, "" none) with its strength. */
+    var homeSaturation by mutableIntStateOf(store.get(LauncherSettings.WallpaperHomeSaturation))
+    var homeTint by mutableStateOf(store.get(LauncherSettings.WallpaperHomeTint))
+    var homeTintAmount by mutableIntStateOf(store.get(LauncherSettings.WallpaperHomeTintAmount))
 
     /** The look kept with the wallpaper on screen when the screen opened (0.11.1; null: none of its own). */
     val currentLook = currentLook
@@ -326,6 +333,12 @@ internal fun WallpaperStudio(
     val gridHeight = compactGrid + (expandedGrid - compactGrid) * tall.value
     val currentLayout = layouts.layouts.firstOrNull { it.id == layouts.current }
     LaunchedEffect(currentLayout?.id) { state.forLayout = currentLayout?.wallpaper != null }
+    // 0.16.0 (D202): the library opens on the current layout's collection, when it has pictures (All is one tap away).
+    LaunchedEffect(Unit) {
+        if (controller.sharedPick != null) return@LaunchedEffect
+        val mine = Wallpapers.layoutCollection(data) ?: return@LaunchedEffect
+        if (WallpaperLibraryOps.inCollection(data.wallpapers.get(), mine).isNotEmpty()) state.tab = "col:$mine"
+    }
     // 0.16.0: the colour and shape of pictures added before (for sorting and filtering), and deleted pictures whose Undo is long gone.
     LaunchedEffect(Unit) {
         data.wallpapers.describeMissing()
@@ -420,8 +433,10 @@ internal fun WallpaperStudio(
                     state.choosing = state.pick
                 } else {
                     val item = (pick as? WallpaperPick.Library)?.item
-                    val crop = item?.crop ?: CropSpec.Centre
-                    val parallax = item?.parallax?.takeIf { it >= 0f } ?: Wallpapers.defaultParallax(data)
+                    // 0.16.0 (D202): the layout's own picture comes placed as this layout has it.
+                    val placed = item?.let { Wallpapers.layoutPlacement(data, it.id) }
+                    val crop = placed?.first ?: item?.crop ?: CropSpec.Centre
+                    val parallax = placed?.second ?: item?.parallax?.takeIf { it >= 0f } ?: Wallpapers.defaultParallax(data)
                     state.select(pick, source, crop, parallax)
                     state.flow = state.flow.loaded(key)
                 }
@@ -449,7 +464,8 @@ internal fun WallpaperStudio(
             Wallpapers.source(context, data, pick)?.let { source ->
                 state.choosing = pick
                 state.flow = state.flow.tap(key)
-                state.select(pick, source, item.crop, item.parallax.takeIf { it >= 0f } ?: Wallpapers.defaultParallax(data))
+                val placed = Wallpapers.layoutPlacement(data, item.id)
+                state.select(pick, source, placed?.first ?: item.crop, placed?.second ?: item.parallax.takeIf { it >= 0f } ?: Wallpapers.defaultParallax(data))
                 state.flow = state.flow.loaded(key).place()
             }
             state.busy = false
@@ -540,7 +556,7 @@ internal fun WallpaperStudio(
     fun forgetSelected() {
         val ids = selectedIds()
         if (ids.isEmpty()) return
-        data.wallpapers.forget(ids)
+        Wallpapers.forget(data, ids)
         controller.notice(dev.liquid.launcher.core.common.NoticeKind.Info, "${count(ids.size)} taken out of Recent")
     }
 
@@ -610,10 +626,39 @@ internal fun WallpaperStudio(
         }
     }
 
+    /** 0.16.0 (D203): the picture picked (or the current one) becomes the lock screen's own, placed as it is here. */
+    fun setLockPicture() {
+        val source = state.source
+        val crop = state.crop
+        val item = (state.pick as? WallpaperPick.Library)?.item ?: library.current?.takeIf { state.pick == null }?.let { data.wallpapers.find(it) }
+        scope.launch {
+            // The lock screen does not slide with pages: no parallax.
+            val bitmap = if (source != null) store.render(source, crop, 0f)
+            else item?.let { Wallpapers.prepare(context, data, WallpaperPick.Library(it), parallax = 0f)?.bitmap }
+            if (bitmap == null) {
+                controller.toast("Pick a picture first")
+                return@launch
+            }
+            state.lockMode = "chosen"
+            data.settings.set(LauncherSettings.WallpaperLockMode, "chosen")
+            data.settings.set(LauncherSettings.WallpaperLockPicture, item?.id ?: "")
+            controller.notice(dev.liquid.launcher.core.common.NoticeKind.Wallpaper, "Setting the lock screen…", "The phone takes a few seconds")
+            val error = store.setLockScreen(bitmap)
+            controller.notice(
+                dev.liquid.launcher.core.common.NoticeKind.Wallpaper,
+                if (error == null) "Lock screen wallpaper set" else "The lock screen could not be set",
+                error,
+            )
+        }
+    }
+
     /** The looks set here, kept (at once: the screen reads them as soon as the sheet goes). */
     fun saveLooks() {
         val settings = data.settings
-        settings.set(LauncherSettings.WallpaperLockToo, state.lockToo)
+        settings.set(LauncherSettings.WallpaperLockMode, state.lockMode)
+        settings.set(LauncherSettings.WallpaperHomeSaturation, state.homeSaturation)
+        settings.set(LauncherSettings.WallpaperHomeTint, state.homeTint)
+        settings.set(LauncherSettings.WallpaperHomeTintAmount, state.homeTintAmount)
         settings.set(LauncherSettings.WallpaperHomeBlur, state.homeBlur)
         settings.set(LauncherSettings.WallpaperHomeDim, state.homeDim)
         settings.set(LauncherSettings.DrawerHomeBlur, state.drawerBlur)
@@ -635,10 +680,13 @@ internal fun WallpaperStudio(
             saveLooks()
             // W8 (P8): the picture on screen keeps its own look (or goes back to the one for all) when it was edited.
             if (state.lookTouched) data.wallpapers.get().current?.let { data.wallpapers.setLook(it, state.pictureLook) }
-            if (state.forLayout && currentLayout != null && currentLayout.wallpaper == null) {
-                data.layouts.setWallpaper(currentLayout.id, store.currentFile, library.current)
-            } else if (!state.forLayout && currentLayout?.wallpaper != null) {
-                data.layouts.setWallpaper(currentLayout.id, null)
+            // One wallpaper for all (0.16.0: "Each layout has its own wallpaper" off): the layout switch as before.
+            if (Wallpapers.ownLayout(data) == null) {
+                if (state.forLayout && currentLayout != null && currentLayout.wallpaper == null) {
+                    data.layouts.setWallpaper(currentLayout.id, store.currentFile, library.current)
+                } else if (!state.forLayout && currentLayout?.wallpaper != null) {
+                    data.layouts.setWallpaper(currentLayout.id, null)
+                }
             }
             close()
             return
@@ -650,8 +698,9 @@ internal fun WallpaperStudio(
         val parallax = state.parallax
         val look = state.pictureLook
         val lookTouched = state.lookTouched
-        val forLayout = state.forLayout
-        val layoutId = layouts.current
+        // 0.16.0 (D202): the layout that gets it as its own: the current one when each layout has its own, else the
+        // current one when "Only for the layout" is on.
+        val targetLayout = Wallpapers.ownLayout(data) ?: layouts.current?.takeIf { state.forLayout && currentLayout != null }
         dev.liquid.launcher.core.common.ColourTiming.begin("wallpaper screen")
         DebugLog.event("Wallpaper", "apply: " + if (state.flow.shows == PickerFlow.Shows.PLACED) "the placed picture" else "the picture picked")
         controller.transitionOrigin = applyButton.value?.takeIf { it.isAttached }?.boundsInRoot()?.center
@@ -667,7 +716,7 @@ internal fun WallpaperStudio(
                     // Closed meanwhile (Cancel, Back, Home): nothing changes.
                     if (!controller.wallpaperStudio) return@changeScreen null
                     // 0.16.0 (D200): what this replaces, for Undo, before anything is written.
-                    controller.keepForUndo((pick as? WallpaperPick.Library)?.item?.id, if (forLayout) layoutId else null)
+                    controller.keepForUndo((pick as? WallpaperPick.Library)?.item?.id, targetLayout)
                     // A folder's picture joins the library now, so it is the current picture as soon as it shows.
                     val item = when (pick) {
                         is WallpaperPick.Library -> pick.item
@@ -681,7 +730,7 @@ internal fun WallpaperStudio(
             commit = { prepared ->
                 saveLooks()
                 (prepared.pick as? WallpaperPick.Library)?.item?.let { item ->
-                    data.wallpapers.markUsed(item.id, crop, parallax)
+                    Wallpapers.markUsed(data, item.id, crop, parallax)
                     if (lookTouched) data.wallpapers.setLook(item.id, look)
                 }
                 store.show(prepared.bitmap, prepared.tone)
@@ -692,13 +741,10 @@ internal fun WallpaperStudio(
             },
             after = { prepared ->
                 controller.offerWallpaperUndo("New wallpaper")
-                // The files and the system wallpaper once the transition is over, so it never stutters.
-                val error = Wallpapers.persist(context, data, prepared)
-                if (error != null) {
-                    controller.toast("Could not set the wallpaper: $error")
-                } else if (forLayout && layoutId != null) {
-                    data.layouts.setWallpaper(layoutId, store.currentFile, data.wallpapers.get().current)
-                }
+                // The files and the system wallpaper once the transition is over, so it never stutters (its use was
+                // counted as it showed); the layout's own wallpaper with it.
+                val error = Wallpapers.persist(context, data, prepared, layout = targetLayout, markUsed = false)
+                if (error != null) controller.toast("Could not set the wallpaper: $error")
             },
         )
     }
@@ -801,7 +847,7 @@ internal fun WallpaperStudio(
                         newCollection = { state.naming = Naming(null) },
                         gridHeight = gridHeight,
                     )
-                    "look" -> LookPage(state, glass, color)
+                    "look" -> LookPage(state, glass, color, currentLayout?.name, ::setLockPicture)
                     else -> AutoPage(data.settings, color)
                 }
                 if (state.page == "pictures") {
@@ -831,13 +877,14 @@ internal fun WallpaperStudio(
                         }
                     }
                 }
-                if (currentLayout != null && !state.flow.selecting) {
+                val ownWallpapers by data.settings.derive { get(LauncherSettings.LayoutsOwnWallpaper) }
+                if (currentLayout != null && !state.flow.selecting && !ownWallpapers) {
                     ToggleRow("Only for the layout \"${currentLayout.name}\"", state.forLayout, color) { state.forLayout = it }
                 }
                 Spacer(Modifier.height(6.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy((10 * themeGap).dp)) {
                     if (state.flow.selecting && state.page == "pictures") {
-                        val shownIds = remember(library, state.tab, state.sort, state.family, state.shape) { shownItems(state, library).map { PickerFlow.keyOfLibrary(it.id) } }
+                        val shownIds = remember(library, state.tab, state.sort, state.family, state.shape) { shownItems(state, library, data).map { PickerFlow.keyOfLibrary(it.id) } }
                         SheetButton("Select all", color, filled = false, modifier = Modifier.weight(1f)) { state.flow = state.flow.selectAll(shownIds) }
                         SheetButton("Done", color, filled = true, modifier = Modifier.weight(1f)) {
                             state.collectionChooser = false
@@ -934,6 +981,15 @@ internal fun WallpaperStudio(
                         state.collectionMenu = null
                         state.naming = Naming(collection)
                     }
+                    // 0.16.0 (D202): a collection can be given to the layout you are in.
+                    val layout = layouts.current?.let { id -> layouts.layouts.firstOrNull { it.id == id } }
+                    if (layout != null && data.settings.get(LauncherSettings.LayoutsOwnCollection) && layout.collection != collection.id) {
+                        DialogLine("The collection of \"${layout.name}\"") {
+                            state.collectionMenu = null
+                            data.layouts.setCollection(layout.id, collection.id)
+                            controller.notice(dev.liquid.launcher.core.common.NoticeKind.Info, "\"${collection.name}\" is the collection of \"${layout.name}\"")
+                        }
+                    }
                     DialogLine("Remove the collection (its pictures stay)") {
                         state.collectionMenu = null
                         removeCollection(collection)
@@ -948,13 +1004,14 @@ internal fun WallpaperStudio(
 // ---- pictures ----
 
 /** The pictures of the list shown (a tab or a collection), filtered and in the order chosen. Not for a folder. */
-private fun shownItems(state: StudioState, library: dev.liquid.launcher.core.data.WallpaperLibraryState): List<WallpaperItem> {
+private fun shownItems(state: StudioState, library: dev.liquid.launcher.core.data.WallpaperLibraryState, data: dev.liquid.launcher.core.data.LauncherData): List<WallpaperItem> {
     val tab = state.tab
     val base = when {
         tab == "favourites" -> WallpaperLibraryOps.favourites(library)
         tab == "all" -> WallpaperLibraryOps.all(library)
         tab.startsWith("col:") -> WallpaperLibraryOps.inCollection(library, tab.removePrefix("col:"))
-        tab == "recent" -> WallpaperLibraryOps.recent(library)
+        // 0.16.0 (D202): the current layout's own recents, when each layout has its own.
+        tab == "recent" -> Wallpapers.recent(data, library)
         else -> return emptyList()
     }
     return WallpaperLibraryOps.sorted(WallpaperLibraryOps.filtered(base, state.family, state.shape), state.sort, recentList = tab == "recent")
@@ -994,7 +1051,9 @@ private fun PicturesPage(
         Modifier.fillMaxWidth().padding(top = 8.dp).horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp),
     ) {
-        for (collection in library.collections) {
+        // 0.16.0 (D202): the current layout's collection first.
+        val mine = Wallpapers.layoutCollection(data)
+        for (collection in library.collections.sortedBy { if (it.id == mine) 0 else 1 }) {
             TabChip(collection.name, state.tab == "col:" + collection.id, color, onLongClick = { state.collectionMenu = collection }) { state.tab = "col:" + collection.id }
         }
         for (folder in library.folders) TabChip(folder.name, state.tab == folder.uri, color) { state.tab = folder.uri }
@@ -1032,7 +1091,8 @@ private fun PicturesPage(
         if (folder != null) {
             FolderGrid(folder, pickedUri, color, controller, state.grid("folder:" + folder.uri), choose, peek)
         } else {
-            val items = remember(library, state.tab, state.sort, state.family, state.shape) { shownItems(state, library) }
+            val layoutsNow by data.layouts.state.collectAsState()
+            val items = remember(library, layoutsNow.current, state.tab, state.sort, state.family, state.shape) { shownItems(state, library, data) }
             val selecting = state.flow.selecting
             val selection = state.flow.selection
             LazyVerticalGrid(
@@ -1449,14 +1509,19 @@ private fun PlaceBar(state: StudioState, glass: GlassConfig, lightBackground: Bo
 // ---- blur and dim ----
 
 @Composable
-private fun LookPage(state: StudioState, glass: GlassConfig, color: Color) {
+private fun LookPage(state: StudioState, glass: GlassConfig, color: Color, layoutName: String?, setLockPicture: () -> Unit) {
     Segmented(listOf("home" to "Home", "picture" to "This picture", "drawer" to "Drawer", "search" to "Search"), state.surface, color) { state.surface = it }
     Spacer(Modifier.height(8.dp))
     when (state.surface) {
         "home" -> {
+            // 0.16.0 (D202): the home look is the layout's own (blur and dim always were; colour and tint are new).
+            if (layoutName != null) PageLabel("For the layout \"$layoutName\"", color)
             ValueSlider("Blur", state.homeBlur, 0, 40, "dp", color) { state.homeBlur = it }
             ValueSlider("Dim", state.homeDim, 0, 80, "%", color) { state.homeDim = it }
-            if (state.pictureLook != null) PageLabel("This picture has its own look (see \"This picture\")", color)
+            ValueSlider("Colour", state.homeSaturation, 0, 200, "%", color) { state.homeSaturation = it }
+            TintRow(state.homeTint, color) { state.homeTint = it }
+            if (state.homeTint.isNotEmpty()) ValueSlider("Tint", state.homeTintAmount, 0, 60, "%", color) { state.homeTintAmount = it }
+            if (state.pictureLook != null) PageLabel("This picture has its own look (see \"This picture\"), which comes first", color)
         }
         "picture" -> {
             // W8 (P8): a look kept with this picture, used whenever it is the wallpaper.
@@ -1480,7 +1545,36 @@ private fun LookPage(state: StudioState, glass: GlassConfig, color: Color) {
             ValueSlider("Dim", state.searchDim, 0, 90, "%", color) { state.searchDim = it }
         }
     }
-    ToggleRow("Also on the lock screen", state.lockToo, color) { state.lockToo = it }
+    // 0.16.0 (D203): the lock screen left alone, the same as the home screen, or a picture of its own.
+    PageLabel("Lock screen", color)
+    Segmented(listOf("off" to "Left alone", "same" to "Same", "chosen" to "Its own"), state.lockMode, color) { state.lockMode = it }
+    if (state.lockMode == "chosen") {
+        Spacer(Modifier.height(8.dp))
+        SmallChip(LauncherIcons.Lock, "Use the picture picked for the lock screen", color, Modifier.fillMaxWidth()) { setLockPicture() }
+    }
+}
+
+/** 0.16.0 (D202): the tint over the layout's wallpaper: none, or one of a few colours. */
+@Composable
+private fun TintRow(value: String, color: Color, onPick: (String) -> Unit) {
+    val tints = listOf("", "#000000", "#FFFFFF", "#1E88E5", "#8E24AA", "#E53935", "#FB8C00", "#43A047", "#00ACC1")
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Text("Tint", modifier = Modifier.width(44.dp), style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 14.sp))
+        for (hex in tints) {
+            val on = value.equals(hex, ignoreCase = true)
+            val fill = dev.liquid.launcher.core.settings.ColorSetting.parse(hex)?.let { Color(it) }
+            Box(
+                Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(fill ?: color.copy(alpha = 0.08f))
+                    .border(if (on) 2.5.dp else 0.5.dp, color.copy(alpha = if (on) 0.95f else 0.3f), CircleShape)
+                    .clickable { onPick(hex) }
+                    .semantics { contentDescription = if (hex.isEmpty()) "No tint" else "Tint $hex" },
+                contentAlignment = Alignment.Center,
+            ) { if (fill == null) Text("–", style = TextStyle(color = color, fontSize = 12.sp)) }
+        }
+    }
 }
 
 // ---- automatic changes ----

@@ -1293,6 +1293,10 @@ class HomeController(
     /** Where the change was started (the wallpaper tapped in the strip), in screen pixels: a ripple spreads from there. */
     var transitionOrigin: androidx.compose.ui.geometry.Offset? = null
 
+    /** 0.16.0: the style of the change running (a layout switch can have its own, D202); read while it plays. */
+    var transitionStyle by mutableStateOf("ripple")
+        private set
+
     /** The wallpaper strip from the home menu. */
     var wallpaperStrip by mutableStateOf(false)
 
@@ -1306,11 +1310,14 @@ class HomeController(
      * [commit] swaps everything underneath, and the picture melts away. [after] runs once the
      * transition is done (writing files, setting the system wallpaper), so it never stutters.
      */
-    fun <T : Any> changeScreen(prepare: suspend () -> T?, commit: (T) -> Unit, after: suspend (T) -> Unit = {}) {
+    fun <T : Any> changeScreen(prepare: suspend () -> T?, commit: (T) -> Unit, after: suspend (T) -> Unit = {}, style: String? = null) {
         transitionJob?.cancel()
         transitionJob = scope.launch {
             val value = prepare() ?: return@launch
-            val style = data.settings.get(LauncherSettings.WallpaperTransition)
+            val style = style ?: data.settings.get(LauncherSettings.WallpaperTransition)
+            transitionStyle = style
+            // 0.16.0: the liquid wipe grows out of the pill.
+            if (style == "pill") transitionOrigin = pillBounds?.center
             val shot = if (style != "none") runCatching { captureHome?.invoke() }.getOrNull() else null
             transitionProgress.snapTo(0f)
             transitionShot = shot
@@ -1369,9 +1376,11 @@ class HomeController(
             },
             after = { switch ->
                 val bitmap = switch.wallpaper ?: return@changeScreen
-                store.persist(bitmap, data.settings.get(LauncherSettings.WallpaperLockToo), switch.file, Wallpapers.systemWrite(data))
-                switch.wallpaperId?.let { wid -> data.wallpapers.find(wid)?.let { data.wallpapers.markUsed(it.id, null) } }
+                store.persist(bitmap, Wallpapers.lockToo(data), switch.file, Wallpapers.systemWrite(data))
+                switch.wallpaperId?.let { wid -> data.wallpapers.find(wid)?.let { Wallpapers.markUsed(data, it.id, null) } }
             },
+            // 0.16.0 (D202): "When the layout switches" (by default the wallpaper's transition).
+            style = data.settings.get(LauncherSettings.LayoutsTransition).takeIf { it != "same" },
         )
     }
 
@@ -1389,7 +1398,7 @@ class HomeController(
         changeScreen(
             prepare = {
                 val prepared = Wallpapers.prepare(context, data, pick) ?: run { toast("Could not read that picture"); null }
-                if (prepared != null) keepForUndo((pick as? WallpaperPick.Library)?.item?.id, null)
+                if (prepared != null) keepForUndo((pick as? WallpaperPick.Library)?.item?.id, Wallpapers.ownLayout(data))
                 prepared
             },
             commit = { prepared ->
@@ -1507,7 +1516,7 @@ class HomeController(
                 HomeTheme.refreshAccent(context)
             },
             after = { (bitmap, _, _) ->
-                store.persist(bitmap, data.settings.get(LauncherSettings.WallpaperLockToo), undo.file, Wallpapers.systemWrite(data))
+                store.persist(bitmap, Wallpapers.lockToo(data), undo.file, Wallpapers.systemWrite(data))
                 store.releaseSystemWrite()
                 data.wallpapers.undoApply(undo.current, undo.before)
                 val layoutId = undo.layoutId

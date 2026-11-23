@@ -30,6 +30,7 @@ class MainActivity : ComponentActivity() {
     private val frameMeter = FrameMeter()
     private var clock: ClockRefresher? = null
     private var firstStart = true
+    @Volatile
     private var resumed = false
     private var pausedAt = 0L
     private var imageCallback: ((android.net.Uri?) -> Unit)? = null
@@ -387,6 +388,19 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         clock?.onStop()
+        // 0.16.0 (D204): a wallpaper change that came due ("every few minutes", "at set times") happens while the home
+        // screen is away, a moment after an app took over, so it is ready (and never seen happening) when you come back.
+        // Off the main thread (the redirect shares it), as the change at screen off.
+        val app = application as LauncherApp
+        app.appScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            kotlinx.coroutines.delay(AWAY_ROTATION_DELAY_MS)
+            if (resumed) return@launch
+            try {
+                dev.liquid.launcher.feature.home.Wallpapers.rotateIfDue(app, app.data, dev.liquid.launcher.core.data.RotationRules.Moment.AWAY)
+            } catch (e: Throwable) {
+                DebugLog.error("Wallpaper", "automatic change failed: $e")
+            }
+        }
         // Nothing of the launcher is visible any more: close what an app was started from.
         returnState.onLeft()
         (application as LauncherApp).data.widgets.listen(false)
@@ -431,6 +445,9 @@ class MainActivity : ComponentActivity() {
     companion object {
         private var screensCreated = 0
         private const val HOME_PRESS_WINDOW_MS = 1500L
+
+        /** 0.16.0 (D204): how long after the launcher went to the back a due wallpaper change is made (the app opens first). */
+        private const val AWAY_ROTATION_DELAY_MS = 2500L
         private const val REQUEST_WIDGET_SET_UP = 0x5717
 
         /** Extra naming what to open on the home screen: "wallpaper" or "layouts". */
