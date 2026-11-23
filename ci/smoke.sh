@@ -1447,41 +1447,36 @@ section "11b. Wallpaper library: shared pictures, select, peek, pick, Place, Don
 home_and_settle
 PICS="$OUT/pictures"
 python3 ci/make_pictures.py "$PICS" 16 >/dev/null
-adb shell mkdir -p /sdcard/Pictures/LiquidTest >/dev/null 2>&1
-adb push "$PICS"/. /sdcard/Pictures/LiquidTest/ >/dev/null 2>&1
-cat > "$OUT/media.sh" <<'SH'
-content query --uri content://media/external/images/media --projection _id:_display_name --where "_display_name LIKE 'lltest-%'"
+# Shared from the launcher's own file provider (cache/share, as root): run 144 shared media-store pictures through
+# `am start --grant-read-uri-permission`, a grant the launcher could not pass on (it crashed then; it no longer does).
+adb shell rm -rf /data/local/tmp/lltest >/dev/null 2>&1
+adb push "$PICS" /data/local/tmp/lltest >/dev/null 2>&1
+cat > "$OUT/share.sh" <<'SH'
+APP=/data/data/dev.liquid.launcher
+mkdir -p $APP/cache/share
+cp /data/local/tmp/lltest/lltest-*.png $APP/cache/share/
+chown -R $(stat -c %u:%g $APP) $APP/cache/share
+chmod 700 $APP/cache/share
+restorecon -R $APP/cache/share >/dev/null 2>&1
+ls $APP/cache/share | grep -c lltest
 SH
-cat > "$OUT/scan.sh" <<'SH'
-for f in /sdcard/Pictures/LiquidTest/lltest-*.png; do am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file://$f" >/dev/null 2>&1; done
-SH
-adb push "$OUT/media.sh" /data/local/tmp/media.sh >/dev/null 2>&1
-adb push "$OUT/scan.sh" /data/local/tmp/scan.sh >/dev/null 2>&1
-media_ids() { adb shell sh /data/local/tmp/media.sh 2>/dev/null | tr -d '\r' | grep -o '_id=[0-9]*' | cut -d= -f2; }
-IDS=$(media_ids)
-if [ -z "$IDS" ]; then
-  # Files pushed over adb are not always in the media store at once: ask for a scan, then look again.
-  adb shell sh /data/local/tmp/scan.sh
-  has_media() { [ -n "$(media_ids)" ]; }
-  wait_until 15 has_media || true
-  IDS=$(media_ids)
-fi
-COUNT_IDS=$(echo "$IDS" | grep -c . || true)
-echo "      $COUNT_IDS test pictures in the phone's media store"
+adb push "$OUT/share.sh" /data/local/tmp/share.sh >/dev/null 2>&1
+COUNT_IDS=$(adb shell su 0 sh /data/local/tmp/share.sh 2>/dev/null | tr -d '\r' | tail -1)
+echo "      ${COUNT_IDS:-0} test pictures in the launcher's share folder"
 SHARED0=$(grep -c "shared: 1 of 1 picture" "$LOG" || true)
 N=0
 shared_reached() { [ "$(grep -c "shared: 1 of 1 picture" "$LOG" || true)" -ge "$1" ]; }
-for id in $IDS; do
-  adb shell su 0 am start -a android.intent.action.ATTACH_DATA -t image/png -d "content://media/external/images/media/$id" \
-    --grant-read-uri-permission -n "$PKG/.LiquidEntryActivity" >/dev/null 2>&1
+for i in $(seq -w 1 16); do
+  adb shell am start -a android.intent.action.ATTACH_DATA -t image/png -d "content://dev.liquid.launcher.updates/share/lltest-$i.png" \
+    -n "$PKG/.LiquidEntryActivity" >/dev/null 2>&1
   N=$((N + 1))
   wait_until 10 shared_reached $((SHARED0 + N)) || true
 done
 SHARED=$(( $(grep -c "shared: 1 of 1 picture" "$LOG" || true) - SHARED0 ))
-if [ "$COUNT_IDS" -ge 16 ] && [ "$SHARED" -ge 16 ]; then
+if [ "${COUNT_IDS:-0}" -ge 16 ] 2>/dev/null && [ "$SHARED" -ge 16 ]; then
   pass "16 pictures shared to \"Set as Liquid wallpaper\" reach the library"
 else
-  fail "16 pictures shared to \"Set as Liquid wallpaper\" reach the library ($COUNT_IDS in the media store, $SHARED added)"
+  fail "16 pictures shared to \"Set as Liquid wallpaper\" reach the library (${COUNT_IDS:-0} in the share folder, $SHARED added)"
   grep -E "Wallpaper.*(shared|import failed)" "$LOG" | tail -5 | sed 's/^/        /'
 fi
 wait_screen 11b-shared "Wallpaper 1" 8 || true

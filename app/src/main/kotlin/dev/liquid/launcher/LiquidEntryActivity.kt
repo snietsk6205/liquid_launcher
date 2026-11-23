@@ -27,12 +27,18 @@ class LiquidEntryActivity : Activity() {
             DebugLog.event("Wallpaper", "${pictures.size} picture(s) shared to the launcher")
             val clip = android.content.ClipData.newRawUri("pictures", pictures.first())
             pictures.drop(1).forEach { clip.addItem(android.content.ClipData.Item(it)) }
-            startActivity(
-                Intent(this, MainActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    .putExtra(MainActivity.EXTRA_OPEN, MainActivity.OPEN_SHARED_PICTURES)
-                    .also { it.clipData = clip },
-            )
+            val open = Intent(this, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra(MainActivity.EXTRA_OPEN, MainActivity.OPEN_SHARED_PICTURES)
+                .also { it.clipData = clip }
+            try {
+                startActivity(Intent(open).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+            } catch (e: SecurityException) {
+                // The app that shared them gave no read permission the launcher can pass on (run 144 crashed here): the
+                // home screen tries without it and says so plainly when it cannot read them. Never a crash.
+                DebugLog.error("Wallpaper", "shared pictures came without a read permission to pass on: ${e.message}")
+                runCatching { startActivity(open) }
+            }
             finish()
             @Suppress("DEPRECATION")
             overridePendingTransition(0, 0)

@@ -1702,3 +1702,11 @@ picked picture shrinks away from, on the thick ring. D197 to D201.
 | Transition on layout switch | Done | Its own setting (default the wallpaper's) and the new Liquid wipe out of the pill. |
 | Lock screen | Done | Left alone / same / its own picture (FLAG_LOCK); the old switch read once. |
 | Migration | Done | Once, logged as "0.16.0: N layout(s): …". |
+
+Run 144 (checkpoint 1): build, unit tests, the redirect and study parts green; the drawer part caught a crash in 11b.
+The test shared media-store pictures with `am start --grant-read-uri-permission`; the launcher got no read permission it
+could pass on, and `LiquidEntryActivity` crashed handing them to the home screen (`SecurityException: UID 10192 does not
+have permission to content://media/…`), the whole process with it (the redirect too). On the phone any app sharing a
+picture without a grant it may pass on would have done the same. Fixed: the entry catches it, logs it and lets the home
+screen try without the grant ("Could not read that picture" when it cannot); the test now shares pictures from the
+launcher's own file provider.
