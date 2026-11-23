@@ -1165,9 +1165,11 @@ class HomeController(
             return
         }
         riseGlide = scope.launch {
+            // 0.15.2 (D194): over within half a pixel (it then lands exactly): the keyboard is handed back only once the
+            // glide is over, and a spring's last hundredth of a pixel took a third of its time (about 170 ms).
             androidx.compose.animation.core.animate(
                 from, px,
-                animationSpec = spring(dampingRatio = 1f, stiffness = MotionScale.stiffness(650f)),
+                animationSpec = spring(dampingRatio = 1f, stiffness = MotionScale.stiffness(650f), visibilityThreshold = 0.5f),
             ) { value, _ -> if (keyboardRise > 0f) keyboardRise = value }
         }
     }
@@ -1279,7 +1281,7 @@ class HomeController(
     var transitionOrigin: androidx.compose.ui.geometry.Offset? = null
 
     // ---- 0.15.0 (D190): the unlock reveal (Med: "when I open my phone, the same animation as when I change the
-    // wallpaper, starting from random places"; he chose "frosted, then clear"). 0.15.3 (D192, Med on 0.15.1: "it doesn't
+    // wallpaper, starting from random places"; he chose "frosted, then clear"). 0.15.2 (D192, Med on 0.15.1: "it doesn't
     // feel the same as when I change the wallpaper, and it is very slow; I want it instant"): the wallpaper change's own
     // pipeline (a picture of the screen over the live one, the screen settling under it), the picture being the home
     // screen asleep (taken as the screen turns off), started the moment the home screen is in front, on its own short
@@ -1631,7 +1633,7 @@ class HomeController(
             velocityPxPerSec > 800f -> false
             else -> position > OPEN_POINT
         }
-        // 0.15.3: with what the release does, so a log (and the emulator test) can tell a swipe too short and slow apart.
+        // 0.15.2: with what the release does, so a log (and the emulator test) can tell a swipe too short and slow apart.
         DebugLog.event(
             "Home",
             "drawer: released at " + "%.2f".format(position) + ", " + velocityPxPerSec.toInt() + " px/s: " + if (open) "opens" else "closes",

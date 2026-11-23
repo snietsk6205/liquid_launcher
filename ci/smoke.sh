@@ -271,7 +271,7 @@ home_and_settle() {
   sleep 1.5
 }
 
-# open_search : a swipe down the home screen, which opens search. 0.15.3: like the drawer's (06), a fast `input swipe`
+# open_search : a swipe down the home screen, which opens search. 0.15.2: like the drawer's (06), a fast `input swipe`
 # can reach the launcher as two or three points, short and slow, the lift's own move dropped: run 137's arrived as
 # "released at 0.40, 710 px/s", under both the distance and the speed that open search, and 14g failed with search shut.
 # When the launcher's log says the swipe left search shut, a second, slower one. The caller waits for the screen after.
@@ -1141,8 +1141,12 @@ CAL3EOF
   fi
   open_search
   sleep 2
+  # 0.15.2 (D194): this Back can come while the launcher still moves the keyboard up (run 138); either way it puts the
+  # keyboard away and search stays open (up to 0.15.1 the keyboard came straight back, and the Back closing search at
+  # the end of this part only hid it: 14f then found search still open).
   adb shell input keyevent KEYCODE_BACK
   wait_screen 14e-search "Proba 2 · 1 more due today" 6 || true
+  grep "search: as it rose" "$LOG" | tail -1 | sed 's/^/        /'
   if on_screen 14e-search "Proba 2 · 1 more due today"; then pass "search shows the first card due and how many more"; else fail "search shows the first card due and how many more"; fi
   if tap_text 14e-search "Tap to turn it over" exact; then
     wait_screen 14e-question "Lemme de Fatou" 6 || true

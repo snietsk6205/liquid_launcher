@@ -264,7 +264,7 @@ private fun StripButton(
 }
 
 /**
- * 0.15.0 (D190), 0.15.3 (D192): over the home screen at the unlock, the home screen asleep (its picture, taken as the
+ * 0.15.0 (D190), 0.15.2 (D192): over the home screen at the unlock, the home screen asleep (its picture, taken as the
  * screen turned off: softer, paler and darker), leaving the way a wallpaper change's old screen leaves (the same shaders,
  * from a random point) while the live screen settles under it. Until the picture is taken, the wallpaper's blurred copy
  * stands in. Steps aside for the frame its picture is taken in (the screen is off then). Takes no touches.
@@ -338,7 +338,7 @@ internal fun UnlockWatch(controller: HomeController, focused: Boolean) {
             return@LaunchedEffect
         }
         if (focused) {
-            // 0.15.3 (D192): in front with the phone already unlocked, soon after the screen came on: this is the opening,
+            // 0.15.2 (D192): in front with the phone already unlocked, soon after the screen came on: this is the opening,
             // at once (up to 0.15.1 it waited for the unlock's broadcast, which can come after the home screen shows).
             val keyguard = context.getSystemService(android.app.KeyguardManager::class.java)
             val soon = android.os.SystemClock.uptimeMillis() - controller.screenOnAt < 6_000

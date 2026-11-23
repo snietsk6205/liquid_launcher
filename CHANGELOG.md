@@ -24,7 +24,9 @@ Versions marked *not published on its own* were built but came to the phone insi
 ### Fixed
 - Search: 0.15.1's fix for a keyboard taller than expected was only partial (the keyboard could still be handed back
   while the pill was gliding up to it, for a moment over the pill). The keyboard is now handed back only once that glide
-  has ended.
+  has ended, and that glide ends a little sooner (its last fraction of a pixel took about 170 ms).
+- Search: Back pressed while the keyboard is still rising now puts it away, as it does once the keyboard is up. It used
+  to come straight back, so the next Back only hid it again instead of closing search.
 
 ## 0.15.1 — 2026-11-22
 

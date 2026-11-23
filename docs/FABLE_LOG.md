@@ -1570,3 +1570,21 @@ a swipe that only just opened it ("released at 0.33, 869 px/s"). The emulator's 
 a few points and the lift's own move is dropped, as the drawer's swipe did in 0.5.0. So: each release now says what it
 does ("…px/s: opens" / ": closes", drawer and search), and the smoke test's search swipes go through `open_search`,
 which swipes again, slower (450 ms), when the log says the first left search shut.
+
+### Addendum: run 138 (0.15.2's first release run) failed 14f; D194
+
+All of run 138 passed but study's 14f "the pill shows the card still due": its home screen was search's page, still
+open. In 14e the test opens search and presses Back two seconds later to put the keyboard away; this time the launcher
+still held the keyboard then (ready at 23:19:27.152, not yet handed back at 29.048: the emulator's frames are slow, the
+hand-over waits for the glide to end and two still frames), so the Back made the keyboard hide itself and cancelled the
+launcher's control ("the system took the keyboard back while the launcher moved it, 2553 ms after asking"), and the
+fallback asked for the keyboard again the usual way: up again at 30.452 ("it started 3656 ms after search opened, the
+field then at 870 px", on its way down). The Back closing search at the end of 14e then only hid the keyboard. On the
+phone the same happens to a Back pressed in the half second the keyboard rises. D194: a keyboard taken back as it rises,
+search open, is left to the system (away: the field comes down, search stays open; up: it stays), logged "search: as
+it rose, …"; the rise's glide ends within half a pixel, so the hand-over comes about 170 ms sooner. Version labels of
+this release's comments said 0.15.3; they say 0.15.2 (it never got out: run 137 was a smoke run, run 138 failed).
+
+**Exact next step:** run 139 ([release], Med said "try again"): 14e should pass with either "as it rose … put away" or
+no such line, 14f and 14g pass, and 0.15.2 is published. Then Med's log: the unlock lines, and no "as it rose" lines
+unless he pressed Back during an opening.

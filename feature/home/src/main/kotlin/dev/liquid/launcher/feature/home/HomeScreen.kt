@@ -122,7 +122,7 @@ class HomeReturnState {
      * progress here, not in an effect, means no frame is drawn with the content fully visible.
      */
     fun onReturn(animate: Boolean, wholeScreen: Boolean = false) {
-        // 0.15.3 (D192): not over the unlock's wake (the screen-off redirect and the unlock itself bring the launcher
+        // 0.15.2 (D192): not over the unlock's wake (the screen-off redirect and the unlock itself bring the launcher
         // back, and its fade ran on top of the reveal).
         val fades = animate && !unlockHolds()
         if (fades) progress.floatValue = 0f
@@ -130,7 +130,7 @@ class HomeReturnState {
         tick++
     }
 
-    /** 0.15.3: the unlock's wake is waiting or running, so a return arrives at once. Set by the home screen. */
+    /** 0.15.2: the unlock's wake is waiting or running, so a return arrives at once. Set by the home screen. */
     var unlockHolds: () -> Boolean = { false }
 
     /** Home was pressed while the launcher was already in front. */
@@ -705,7 +705,7 @@ private fun HomeScreenBody(
                         }
                         // A wallpaper or layout change: the new wallpaper settles in under the old picture (D103).
                         if (controller.transitionShot != null) with(WallpaperTransitions) { newWallpaperArriving(controller.transitionProgress.value, transitionStyle) }
-                        // 0.15.3 (D192): and as the screen wakes at the unlock.
+                        // 0.15.2 (D192): and as the screen wakes at the unlock.
                         else if (controller.unlockFrost) with(WallpaperTransitions) { newWallpaperArriving(controller.unlockProgress.value, controller.unlockStyle) }
                     }
                 }
@@ -833,7 +833,7 @@ private fun HomeScreenBody(
                         scaleY = scale
                         // A wallpaper or layout change: the new pages settle into place (D103).
                         if (controller.transitionShot != null) with(WallpaperTransitions) { newScreenArriving(controller.transitionProgress.value, transitionStyle) }
-                        // 0.15.3 (D192): and as the screen wakes at the unlock.
+                        // 0.15.2 (D192): and as the screen wakes at the unlock.
                         else if (controller.unlockFrost) with(WallpaperTransitions) { newScreenArriving(controller.unlockProgress.value, controller.unlockStyle) }
                     }
                     .then(if (live) swipes else Modifier)

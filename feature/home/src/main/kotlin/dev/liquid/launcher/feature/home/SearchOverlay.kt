@@ -680,6 +680,36 @@ private suspend fun driveKeyboard(
         )
         if (wanted) usual()
     }
+
+    /**
+     * 0.15.2 (D194): the system took the keyboard back while the launcher moved it up, search open. That is a Back
+     * pressed as it rose (the keyboard puts itself away, as Back does once it is up), or the system showing it its own
+     * way. Its word stands: up to 0.15.1 the keyboard was asked for again the usual way and came straight back, the Back
+     * undone (CI run 138: Back 2.5 s after asking, the keyboard up again 1.4 s later, search left open). Put away, the
+     * field comes down and search stays open, as after a Back with the keyboard up; still up, it stays.
+     */
+    suspend fun takenBack() {
+        controller.keyboardPath = "taken"
+        controller.keyboardDriving = false
+        controller.keyboardStandInOn = false
+        val since = android.os.SystemClock.uptimeMillis() - driver.askedAt
+        // Where the system puts it: away within a second (its own hide animation), or not.
+        val away = kotlinx.coroutines.withTimeoutOrNull(1_000) {
+            while (view.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) != false) {
+                androidx.compose.runtime.withFrameNanos { }
+            }
+            true
+        } == true
+        DebugLog.event(
+            "Home",
+            "search: as it rose, ${driver.cancelReason} ($since ms after asking; ${at()}): " +
+                if (away) "it was put away (Back), the field comes down and search stays open" else "it stays up, shown by the system",
+        )
+        if (away && controller.searchOpen) {
+            controller.expectKeyboard = false
+            controller.stopKeyboardRise()
+        }
+    }
     if (!driver.ask()) {
         fallBack()
         return
@@ -755,7 +785,11 @@ private suspend fun driveKeyboard(
                 break
             }
         }
-        if (driver.phase == KeyboardDriver.Phase.Cancelled) fallBack()
+        if (driver.phase == KeyboardDriver.Phase.Cancelled) {
+            // Taken back with search open and no finger on it: the system's (D194). Closing, or a finger pushing search
+            // away: as before (let go, or the usual way once the finger lets search spring open again).
+            if (controller.searchOpen && !controller.searchDragging) takenBack() else fallBack()
+        }
     } finally {
         // Leaving (search closed, or the field left the screen): the keyboard is handed back where search is going.
         when (driver.phase) {
@@ -963,6 +997,7 @@ private fun KeyboardWatch(controller: HomeController) {
                 val how = when (controller.keyboardPath) {
                     "drive" -> "slid in with the pill"
                     "usual" -> "shown the usual way, the field rode on it"
+                    "taken" -> "shown by the system, which took it from the launcher as it rose"
                     else -> "came by itself"
                 }
                 val after = if (openedAt[0] > 0L && startedAt >= openedAt[0]) "; it started ${startedAt - openedAt[0]} ms after search opened" else "; it started before search was open"

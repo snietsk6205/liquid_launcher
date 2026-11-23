@@ -2173,7 +2173,7 @@ object LauncherSettings {
             "over it), starting from a different place each time",
         section = "wallpaper", keywords = "unlock lock screen wake open phone reveal ripple frost frosted glass animation random start",
     )
-    /** 0.15.3 (D192, Med: "it is very slow, I want it instant"): the unlock's own length, short. */
+    /** 0.15.2 (D192, Med: "it is very slow, I want it instant"): the unlock's own length, short. */
     val WallpaperUnlockMs = IntSetting(
         key = "wallpaper.unlockMs", default = 380, min = 150, max = 1200, step = 10, unit = "ms",
         title = "Unlock animation length",
