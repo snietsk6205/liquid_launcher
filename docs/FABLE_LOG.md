@@ -1649,3 +1649,43 @@ android, other-stacks, releases, triage; assets: Android/Node/Python workflows, 
 settle.sh, smoke-lib.sh, find_text.py, describe_ui.py, ascii_shot.py). Both validated and packaged as `.skill`
 files for claude.ai. `tools/typecheck/tc.sh` leaves `.claude/` out. When a session learns something general, add
 it to the matching skill reference too.
+
+## Session 2026-11-23 (0.16.0): the wallpaper system, Folders and Island, video wallpapers, the liquid calendar
+
+Med asked for five parts in this order, one release at the end and a pushed checkpoint after each part: (1) fix the
+wallpaper library ("tap a wallpaper: its heart disappears; Place, position, Done: the preview disappears and the library
+scrolls back to the top") and improve it (Favourites, sort and filter, a full-screen peek on long press, multi-select,
+Undo for 10 s after Apply); (2) per-layout wallpapers, recents and collections, look per layout, automatic changes,
+a transition when the layout switches, the lock screen; (3) first "the island" (it turned out to mean the Island app),
+now Folders and Island: Insular's files through File Shuttle, folders linked per layout, saved copies; (4) live (video)
+wallpapers; (5) a liquid calendar out of the clock's date, with the ESSAI 2026-27 dates.
+
+**Step 0, the conflict check (before any code).** Fifteen points went to Med; he took the recommendation for all but
+two. "The island" was not part of the launcher: he meant Island (he uses Insular, com.oasisfeng.island.fdroid), so the
+island bar, its swipe and long press were dropped, the dock and pill stay as they are, and Part 3 became "Folders and
+Island". The settings page is "Folders and Island". A second check (linked folders, "+ Photos", the library against
+Insular): "+ Files" next to "+ Photos" (the photo picker cannot see Island); automatic changes keep "saved copies"
+apart from the library; folders are linked once and ticked per layout; whether the folder picker shows Insular's tab and
+keeps access after a restart is to be seen on his phone; Insular may have no File Shuttle at all, so everything must
+also work with ordinary folders (or a folder synced from Insular with Syncthing).
+
+### Part 1: the library (checkpoint)
+
+Why it broke: not a separate destination (Place was already a mode of the same screen and its state already had one
+owner). The lists' scroll position lived inside the sheet, which leaves while a picture is placed, so it came back at the
+top; the preview vanishing at Done was D158 (0.11.1, "change on Apply"); the heart was drawn white in the corner the
+picked picture shrinks away from, on the thick ring. D197 to D201.
+
+| Point | State | What |
+|---|---|---|
+| Scroll kept across Place | Done | `StudioState.grid(key)`: one `LazyGridState` per list, outside the sheet. |
+| Preview stays after Done | Done | `PickerFlow` (core/data, tested): Done keeps the placed picture on screen (finished, blur and dim) until Apply, Cancel or another pick; those fade it back. |
+| Heart above the ring | Done | A dark badge inside the picture, drawn last. |
+| Favourites tab | Done | It existed; the first row is now Recent, Favourites, All. |
+| Sort and filter | Done | Newest, most used (counted from 0.16.0), colour; nine colour families and three shapes (`describeMissing` from thumbnails). |
+| Peek on long press | Done | Full screen with the home screen over it; Pick or Back. |
+| Multi-select | Done | Select: Favourite, Collection, Recent, Delete (Undo 10 s; asks first when wallpaper notices are off). |
+| Collections | Done | One way of grouping (no tags); Favourites counts as one. |
+| Undo after Apply | Done | Glass notice with an Undo button, 10 s; the hand-over to MagicOS waits for it. |
+| Flow test | Done | `PickerFlowTest` (6) and `WallpaperLibraryTest` (+7); emulator 11b: 16 pictures shared in, Select, peek, pick, Place, Done, Apply, Undo. |
+| Share target | Done early | Needed by 11b; Part 3 adds the Insular side. |

@@ -71,6 +71,18 @@
                 <action android:name="dev.liquid.launcher.action.SEARCH" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+            <!-- 0.16.0: pictures shared to the launcher, or "Set as" in a gallery: into the wallpaper library. -->
+            <intent-filter android:label="@string/entry_wallpaper">
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter android:label="@string/entry_wallpaper_set">
+                <action android:name="android.intent.action.ATTACH_DATA" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
         </activity>
         <!-- "Liquid" in the text selection menu; Settings → Search → More can take it away. -->
         <activity-alias

@@ -301,6 +301,15 @@ class HomeController(
 
     var wallpaperStudio by mutableStateOf(false)
 
+    /**
+     * 0.16.0: Back while the wallpaper screen is open goes one step back inside it first (the peek, selecting, placing);
+     * set by the screen. Returns true when it handled Back.
+     */
+    internal var wallpaperStudioBack: (() -> Boolean)? = null
+
+    /** 0.16.0: a picture shared to the launcher ("Set as Liquid wallpaper"), picked by the wallpaper screen as it opens. */
+    var sharedPick by mutableStateOf<dev.liquid.launcher.core.data.WallpaperItem?>(null)
+
     /** The clock gallery, open on one clock widget; the widget draws its draft style meanwhile. */
     var clockStudio by mutableStateOf<ClockStudioState?>(null)
 
@@ -1366,18 +1375,33 @@ class HomeController(
         )
     }
 
-    /** Makes [pick] the wallpaper with the transition (wallpaper strip, shuffle). */
-    fun applyWallpaper(pick: WallpaperPick) {
+    /**
+     * Makes [pick] the wallpaper with the transition (wallpaper strip, shuffle). 0.16.0 (D200): a glass notice offers
+     * Undo for 10 s ([noticeText], with the label's own [noticeDetail] and [noticeAction] as before).
+     */
+    fun applyWallpaper(
+        pick: WallpaperPick,
+        noticeText: String = "New wallpaper",
+        noticeDetail: String? = null,
+        noticeAction: LauncherAction? = null,
+    ) {
         dev.liquid.launcher.core.common.ColourTiming.begin("wallpaper switch")
         changeScreen(
-            prepare = { Wallpapers.prepare(context, data, pick) ?: run { toast("Could not read that picture"); null } },
+            prepare = {
+                val prepared = Wallpapers.prepare(context, data, pick) ?: run { toast("Could not read that picture"); null }
+                if (prepared != null) keepForUndo((pick as? WallpaperPick.Library)?.item?.id, null)
+                prepared
+            },
             commit = { prepared ->
                 WallpaperStore.get(context).show(prepared.bitmap, prepared.tone)
                 IconPaint.now(prepared.palette)
                 HomeTheme.refreshAccent(context)
                 dev.liquid.launcher.core.common.ColourTiming.mark("wallpaper and colours on screen")
             },
-            after = { prepared -> Wallpapers.persist(context, data, prepared)?.let { toast("Could not set the wallpaper: $it") } },
+            after = { prepared ->
+                offerWallpaperUndo(noticeText, noticeDetail, noticeAction)
+                Wallpapers.persist(context, data, prepared)?.let { toast("Could not set the wallpaper: $it") }
+            },
         )
     }
 
@@ -1388,8 +1412,128 @@ class HomeController(
                 notice(dev.liquid.launcher.core.common.NoticeKind.Info, "Nothing to shuffle yet", "Add favourites in the wallpaper screen", LauncherAction.WallpaperStudio)
                 return@launch
             }
-            applyWallpaper(pick)
-            notice(dev.liquid.launcher.core.common.NoticeKind.Wallpaper, "Wallpaper shuffled", "Tap for the wallpaper strip", LauncherAction.Wallpaper)
+            applyWallpaper(pick, "Wallpaper shuffled", "Tap for the wallpaper strip", LauncherAction.Wallpaper)
+        }
+    }
+
+    // ---- 0.16.0 (D200): Undo after a wallpaper change ----
+
+    /** What the last wallpaper change replaced, while its Undo is offered. */
+    private class WallpaperUndo(
+        /** The wallpaper as it was: the finished picture, placement included. */
+        val file: java.io.File,
+        /** The library picture it was made from. */
+        val current: String?,
+        /** The record of the picture the change applied, as it was before (its placement and use count). */
+        val before: dev.liquid.launcher.core.data.WallpaperItem?,
+        /** A layout whose own wallpaper the change replaced, and a copy of that wallpaper (null: it had none). */
+        val layoutId: String?,
+        val layoutFile: java.io.File?,
+        val layoutWallpaperId: String?,
+    ) {
+        /** Uptime when the Undo was offered (0: not yet). */
+        var offeredAt = 0L
+    }
+
+    private var wallpaperUndo: WallpaperUndo? = null
+    private var undoExpiry: kotlinx.coroutines.Job? = null
+
+    /**
+     * Keeps what a wallpaper change is about to replace: the wallpaper as it is now, the library's current picture, the
+     * record of the picture applied ([appliedId]) and, when the change also replaces [layoutId]'s own wallpaper, that one.
+     * Call before anything is written (in the change's prepare step).
+     */
+    internal suspend fun keepForUndo(appliedId: String?, layoutId: String?) {
+        val dir = java.io.File(context.cacheDir, "wallpaper-undo")
+        val file = java.io.File(dir, "wallpaper.jpg")
+        if (!WallpaperStore.get(context).copyCurrent(file)) {
+            wallpaperUndo = null
+            return
+        }
+        val layout = layoutId?.let { data.layouts.find(it) }
+        val layoutCopy = layout?.let { data.layouts.wallpaperFile(it) }?.let { source ->
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { source.copyTo(java.io.File(dir, "layout.jpg"), overwrite = true) }.getOrNull()
+            }
+        }
+        val library = data.wallpapers.get()
+        wallpaperUndo = WallpaperUndo(file, library.current, data.wallpapers.snapshot(appliedId), layout?.id, layoutCopy, layout?.wallpaperId)
+    }
+
+    /**
+     * After a wallpaper change: a glass notice with Undo for [UNDO_MS] (when wallpaper notices show), and the hand-over
+     * to the system waits that long, so an Undo never costs a second one. Call before the new wallpaper is written.
+     */
+    internal fun offerWallpaperUndo(text: String, detail: String? = null, action: LauncherAction? = null) {
+        val undo = wallpaperUndo ?: return
+        val notices = data.settings.noticeConfig()
+        if (!notices.enabled || dev.liquid.launcher.core.common.NoticeKind.Wallpaper.id !in notices.kinds) {
+            wallpaperUndo = null
+            return
+        }
+        undo.offeredAt = android.os.SystemClock.uptimeMillis()
+        val store = WallpaperStore.get(context)
+        store.holdSystemWrite(UNDO_MS)
+        dev.liquid.launcher.core.common.Notices.post(
+            dev.liquid.launcher.core.common.Notice(
+                dev.liquid.launcher.core.common.NoticeKind.Wallpaper, text, detail, action?.encode(),
+                buttonLabel = "Undo", button = { undoWallpaper() }, showMs = UNDO_MS, holds = true,
+            )
+        )
+        undoExpiry?.cancel()
+        undoExpiry = scope.launch {
+            kotlinx.coroutines.delay(UNDO_MS + 1_000)
+            if (wallpaperUndo === undo) wallpaperUndo = null
+            store.releaseSystemWrite()
+        }
+    }
+
+    /** Undo of the last wallpaper change: the wallpaper, its placement and the library's records come back, with the transition. */
+    fun undoWallpaper() {
+        val undo = wallpaperUndo ?: return toast("Too late to undo")
+        wallpaperUndo = null
+        undoExpiry?.cancel()
+        val store = WallpaperStore.get(context)
+        DebugLog.event("Wallpaper", "undo: back to the wallpaper before")
+        changeScreen(
+            prepare = {
+                val bitmap = store.decodeFile(undo.file) ?: return@changeScreen run { toast("Could not bring the wallpaper back"); null }
+                val tone = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { dev.liquid.launcher.core.common.WallpaperTones.fromBitmap(bitmap) }
+                Triple(bitmap, tone, tone?.let { data.paletteFor(it.primary) })
+            },
+            commit = { (bitmap, tone, palette) ->
+                store.show(bitmap, tone)
+                IconPaint.now(palette)
+                HomeTheme.refreshAccent(context)
+            },
+            after = { (bitmap, _, _) ->
+                store.persist(bitmap, data.settings.get(LauncherSettings.WallpaperLockToo), undo.file, Wallpapers.systemWrite(data))
+                store.releaseSystemWrite()
+                data.wallpapers.undoApply(undo.current, undo.before)
+                val layoutId = undo.layoutId
+                if (layoutId != null) {
+                    if (undo.layoutFile != null) data.layouts.setWallpaper(layoutId, undo.layoutFile, undo.layoutWallpaperId)
+                    else data.layouts.setWallpaper(layoutId, null)
+                }
+            },
+        )
+    }
+
+    /**
+     * 0.16.0: pictures shared to "Set as Liquid wallpaper" (or "Set as" in a gallery) go into the library, and the
+     * wallpaper screen opens with the first one picked, ready to Place or Apply.
+     */
+    fun importShared(uris: List<android.net.Uri>) {
+        scope.launch {
+            val items = uris.mapNotNull { data.wallpapers.importUri(it) }
+            DebugLog.event("Wallpaper", "shared: ${items.size} of ${uris.size} picture(s) added to the library")
+            if (items.isEmpty()) {
+                toast("Could not read that picture")
+                return@launch
+            }
+            if (!wallpaperStudio) closeAll(immediately = true)
+            sharedPick = items.first()
+            wallpaperStudio = true
         }
     }
 
@@ -1605,7 +1749,7 @@ class HomeController(
             homeMenu -> homeMenu = false
             wallpaperStrip -> wallpaperStrip = false
             layoutsSheet -> layoutsSheet = false
-            wallpaperStudio -> wallpaperStudio = false
+            wallpaperStudio -> if (wallpaperStudioBack?.invoke() != true) wallpaperStudio = false
             todaySheet -> closeHub()
             widgetPicker -> widgetPicker = false
             clockStudio != null -> closeClockStudio(save = true)
@@ -2357,6 +2501,9 @@ private const val EDGE_DWELL_MS = 650L
 
 /** Past this fraction a released drawer opens. */
 private const val OPEN_POINT = 0.4f
+
+/** 0.16.0 (D200): how long Undo is offered after a wallpaper change (Med: 10 seconds). */
+internal const val UNDO_MS = 10_000L
 
 /** What the home screen asks the activity to do. */
 /** How long after starting an app the drawer, search and menus are closed (its opening animation covers them by then). */

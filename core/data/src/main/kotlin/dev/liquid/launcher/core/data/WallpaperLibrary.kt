@@ -8,6 +8,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import dev.liquid.launcher.core.common.CropSpec
 import dev.liquid.launcher.core.common.DebugLog
@@ -41,9 +42,53 @@ data class WallpaperItem(
     val parallax: Float = -1f,
     /** W8 (P8): this picture's own look on the home screen, or null for the one set for all. */
     val look: WallpaperLook? = null,
+    /** 0.16.0: how many times it was made the wallpaper, for "Most used". Counted from 0.16.0 on. */
+    val uses: Int = 0,
+    /** 0.16.0: its main colour (ARGB, worked out from its thumbnail), for sorting and filtering by colour; null until known. */
+    val colour: Int? = null,
+    /** 0.16.0: its upright width and height (from its thumbnail; only the ratio matters), for the shape filter; 0 until known. */
+    val w: Int = 0,
+    val h: Int = 0,
+    /** 0.16.0 (D198): ids of the collections it is in. Favourites stay [favourite] (shown as the first collection). */
+    val collections: List<String> = emptyList(),
 ) {
     val crop: CropSpec get() = CropSpec(cx, cy, zoom)
+
+    /** Its colour and shape are known (see [WallpaperLibrary.describeMissing]). */
+    val described: Boolean get() = colour != null && w > 0 && h > 0
 }
+
+/** 0.16.0 (D198): a named group of library pictures (a picture can be in several). */
+@Serializable
+data class WallpaperCollection(val id: String, val name: String, val created: Long = 0)
+
+/** 0.16.0: how the library's pictures are ordered. */
+enum class LibrarySort(val id: String, val label: String) {
+    /** Recent: last used first; elsewhere: last added first. */
+    NEWEST("newest", "Newest"),
+    USED("used", "Most used"),
+    COLOUR("colour", "Colour");
+
+    companion object {
+        fun of(id: String): LibrarySort = entries.firstOrNull { it.id == id } ?: NEWEST
+    }
+}
+
+/** 0.16.0: the colour a picture is filtered by: eight hues and the greys (black, white and washed-out pictures). */
+enum class ColourFamily(val label: String, val swatch: Int) {
+    RED("Red", 0xFFE53935.toInt()),
+    ORANGE("Orange", 0xFFFB8C00.toInt()),
+    YELLOW("Yellow", 0xFFFDD835.toInt()),
+    GREEN("Green", 0xFF43A047.toInt()),
+    TEAL("Teal", 0xFF00ACC1.toInt()),
+    BLUE("Blue", 0xFF1E88E5.toInt()),
+    PURPLE("Purple", 0xFF8E24AA.toInt()),
+    PINK("Pink", 0xFFD81B60.toInt()),
+    GREY("Grey", 0xFF9E9E9E.toInt()),
+}
+
+/** 0.16.0: the shape filter. */
+enum class PictureShape(val label: String) { PORTRAIT("Portrait"), LANDSCAPE("Landscape"), SQUARE("Square") }
 
 /**
  * W8 (P8): how one picture sits on the home screen: its blur and dim (-1: as set for all), its saturation (100 is the
@@ -70,6 +115,8 @@ data class WallpaperLibraryState(
     /** Automatic changes: where in the pool the last one was, and when (ms). */
     val rotationIndex: Int = -1,
     val lastRotation: Long = 0,
+    /** 0.16.0 (D198): the user's collections, in the order they were made. */
+    val collections: List<WallpaperCollection> = emptyList(),
 )
 
 /** A picture inside a linked folder, not copied into the library yet. */
@@ -95,6 +142,7 @@ object WallpaperLibraryOps {
         items = state.items.map { item ->
             if (item.id != id) item else item.copy(
                 lastUsed = now,
+                uses = item.uses + 1,
                 cx = crop?.cx ?: item.cx,
                 cy = crop?.cy ?: item.cy,
                 zoom = crop?.zoom ?: item.zoom,
@@ -117,6 +165,128 @@ object WallpaperLibraryOps {
 
     fun remove(state: WallpaperLibraryState, id: String): WallpaperLibraryState =
         state.copy(items = state.items.filter { it.id != id }, current = state.current.takeIf { it != id })
+
+    // ---- 0.16.0: several at once, collections, sorting and filtering ----
+
+    fun setFavourite(state: WallpaperLibraryState, ids: Set<String>, on: Boolean): WallpaperLibraryState =
+        state.copy(items = state.items.map { if (it.id in ids) it.copy(favourite = on) else it })
+
+    fun forget(state: WallpaperLibraryState, ids: Set<String>): WallpaperLibraryState =
+        state.copy(items = state.items.map { if (it.id in ids) it.copy(lastUsed = 0) else it })
+
+    fun removeAll(state: WallpaperLibraryState, ids: Set<String>): WallpaperLibraryState =
+        state.copy(items = state.items.filter { it.id !in ids }, current = state.current.takeIf { it !in ids })
+
+    /** Puts back pictures [removeAll] took out (Undo), where they were, and the current one if it was among them. */
+    fun restore(state: WallpaperLibraryState, items: List<WallpaperItem>, current: String?): WallpaperLibraryState {
+        val known = state.items.map { it.id }.toSet()
+        val back = items.filter { it.id !in known }
+        return state.copy(
+            items = state.items + back,
+            current = if (state.current == null && current != null && items.any { it.id == current }) current else state.current,
+        )
+    }
+
+    /** Puts one picture's record back as it was before an Apply (its placement, use count and look), for Undo. */
+    fun restoreItem(state: WallpaperLibraryState, before: WallpaperItem): WallpaperLibraryState =
+        state.copy(items = state.items.map { if (it.id == before.id) before.copy(favourite = it.favourite, collections = it.collections) else it })
+
+    fun addCollection(state: WallpaperLibraryState, collection: WallpaperCollection): WallpaperLibraryState =
+        if (state.collections.any { it.id == collection.id }) state else state.copy(collections = state.collections + collection)
+
+    fun renameCollection(state: WallpaperLibraryState, id: String, name: String): WallpaperLibraryState =
+        state.copy(collections = state.collections.map { if (it.id == id) it.copy(name = name) else it })
+
+    /** Removes a collection; its pictures stay in the library. */
+    fun removeCollection(state: WallpaperLibraryState, id: String): WallpaperLibraryState = state.copy(
+        collections = state.collections.filter { it.id != id },
+        items = state.items.map { if (id in it.collections) it.copy(collections = it.collections - id) else it },
+    )
+
+    fun addToCollection(state: WallpaperLibraryState, ids: Set<String>, collection: String): WallpaperLibraryState =
+        if (state.collections.none { it.id == collection }) state
+        else state.copy(items = state.items.map { if (it.id in ids && collection !in it.collections) it.copy(collections = it.collections + collection) else it })
+
+    fun removeFromCollection(state: WallpaperLibraryState, ids: Set<String>, collection: String): WallpaperLibraryState =
+        state.copy(items = state.items.map { if (it.id in ids && collection in it.collections) it.copy(collections = it.collections - collection) else it })
+
+    /** The pictures of a collection, last added to the library first. */
+    fun inCollection(state: WallpaperLibraryState, collection: String): List<WallpaperItem> =
+        state.items.filter { collection in it.collections }.sortedByDescending { it.added }
+
+    /** Records what [WallpaperLibrary.describeMissing] worked out for one picture. */
+    fun describe(state: WallpaperLibraryState, id: String, colour: Int, w: Int, h: Int): WallpaperLibraryState =
+        state.copy(items = state.items.map { if (it.id == id) it.copy(colour = colour, w = w, h = h) else it })
+
+    /**
+     * [items] in the order [sort] asks for. [recentList]: the list is "Recent", whose newest is the last used. Colour goes
+     * round the hues from red, the greys after them, pictures not described yet last.
+     */
+    fun sorted(items: List<WallpaperItem>, sort: LibrarySort, recentList: Boolean = false): List<WallpaperItem> = when (sort) {
+        LibrarySort.NEWEST -> if (recentList) items.sortedByDescending { it.lastUsed } else items.sortedByDescending { it.added }
+        LibrarySort.USED -> items.sortedWith(compareByDescending<WallpaperItem> { it.uses }.thenByDescending { it.lastUsed }.thenByDescending { it.added })
+        LibrarySort.COLOUR -> items.sortedWith(compareBy<WallpaperItem> { item -> item.colour?.let { colourKey(it) } ?: Float.MAX_VALUE }.thenByDescending { it.added })
+    }
+
+    /** Keeps the pictures of [family] and [shape] (null: any). Pictures not described yet only pass when both are null. */
+    fun filtered(items: List<WallpaperItem>, family: ColourFamily?, shape: PictureShape?): List<WallpaperItem> {
+        if (family == null && shape == null) return items
+        return items.filter { item ->
+            (family == null || item.colour?.let { familyOf(it) } == family) &&
+                (shape == null || shapeOf(item.w, item.h) == shape)
+        }
+    }
+
+    /** The colour family of [argb]: a grey when it is washed out or very dark, else the hue's. */
+    fun familyOf(argb: Int): ColourFamily {
+        val (hue, saturation, value) = hsv(argb)
+        if (saturation < 0.2f || value < 0.16f) return ColourFamily.GREY
+        return when {
+            hue < 15f || hue >= 345f -> ColourFamily.RED
+            hue < 45f -> ColourFamily.ORANGE
+            hue < 70f -> ColourFamily.YELLOW
+            hue < 160f -> ColourFamily.GREEN
+            hue < 200f -> ColourFamily.TEAL
+            hue < 255f -> ColourFamily.BLUE
+            hue < 290f -> ColourFamily.PURPLE
+            else -> ColourFamily.PINK
+        }
+    }
+
+    fun shapeOf(w: Int, h: Int): PictureShape? {
+        if (w <= 0 || h <= 0) return null
+        val ratio = w.toFloat() / h
+        return when {
+            ratio > 1.05f -> PictureShape.LANDSCAPE
+            ratio < 0.95f -> PictureShape.PORTRAIT
+            else -> PictureShape.SQUARE
+        }
+    }
+
+    /** Where a colour goes when sorting by colour: hues from red (0..360, starting 15° before red), greys after (by lightness). */
+    private fun colourKey(argb: Int): Float {
+        val (hue, _, value) = hsv(argb)
+        if (familyOf(argb) == ColourFamily.GREY) return 1000f + (1f - value)
+        return (hue + 15f) % 360f
+    }
+
+    /** Hue (0..360), saturation and value (0..1) of an ARGB colour. */
+    private fun hsv(argb: Int): Triple<Float, Float, Float> {
+        val r = ((argb shr 16) and 0xFF) / 255f
+        val g = ((argb shr 8) and 0xFF) / 255f
+        val b = (argb and 0xFF) / 255f
+        val max = maxOf(r, g, b)
+        val min = minOf(r, g, b)
+        val d = max - min
+        val hue = when {
+            d == 0f -> 0f
+            max == r -> 60f * (((g - b) / d) % 6f)
+            max == g -> 60f * (((b - r) / d) + 2f)
+            else -> 60f * (((r - g) / d) + 4f)
+        }.let { if (it < 0f) it + 360f else it }
+        val saturation = if (max == 0f) 0f else d / max
+        return Triple(hue, saturation, max)
+    }
 
     /**
      * The next picture of [pool] for an automatic change: in order, or at random without
@@ -211,6 +381,113 @@ class WallpaperLibrary(
         thumbs.remove(id)
         store.update { WallpaperLibraryOps.remove(it, id) }
     }
+
+    // ---- 0.16.0: several at once, collections, a delete that can be undone ----
+
+    fun setFavourite(ids: Set<String>, on: Boolean) = store.update { WallpaperLibraryOps.setFavourite(it, ids, on) }
+
+    fun forget(ids: Set<String>) = store.update { WallpaperLibraryOps.forget(it, ids) }
+
+    /** Makes a new collection and returns it. */
+    fun addCollection(name: String): WallpaperCollection {
+        val now = System.currentTimeMillis()
+        val collection = WallpaperCollection("c" + now.toString(36) + (0..999).random().toString(36), name.trim().ifEmpty { "Collection" }, now)
+        store.update { WallpaperLibraryOps.addCollection(it, collection) }
+        DebugLog.event("Wallpaper", "collection made: \"${collection.name}\"")
+        return collection
+    }
+
+    fun renameCollection(id: String, name: String) = store.update { WallpaperLibraryOps.renameCollection(it, id, name.trim().ifEmpty { "Collection" }) }
+
+    fun removeCollection(id: String) = store.update { WallpaperLibraryOps.removeCollection(it, id) }
+
+    fun addToCollection(ids: Set<String>, collection: String) = store.update { WallpaperLibraryOps.addToCollection(it, ids, collection) }
+
+    fun removeFromCollection(ids: Set<String>, collection: String) = store.update { WallpaperLibraryOps.removeFromCollection(it, ids, collection) }
+
+    /** Pictures taken out of the library and kept aside until their Undo has gone ([delete], [restore], [purge]). */
+    class Deleted internal constructor(val items: List<WallpaperItem>, internal val current: String?, internal val at: Long)
+
+    /**
+     * Takes [ids] out of the library. Their files wait in the cache (not in backups) until [purge], so [restore] can put
+     * everything back; the current wallpaper on screen is not touched.
+     */
+    fun delete(ids: Set<String>): Deleted? {
+        val state = store.get()
+        val items = state.items.filter { it.id in ids }
+        if (items.isEmpty()) return null
+        trashDir.mkdirs()
+        val now = System.currentTimeMillis()
+        for (item in items) {
+            val file = fileOf(item)
+            val kept = File(trashDir, item.file)
+            if (file.exists() && !file.renameTo(kept)) {
+                runCatching { file.copyTo(kept, overwrite = true); file.delete() }
+            }
+            // Dated now: [purge] counts from the delete, not from when the picture was added.
+            kept.setLastModified(now)
+        }
+        store.update { WallpaperLibraryOps.removeAll(it, ids) }
+        DebugLog.event("Wallpaper", "${items.size} picture(s) taken out of the library (Undo for a while)")
+        return Deleted(items, state.current, System.currentTimeMillis())
+    }
+
+    /** Undo of [delete]: the files and records come back as they were. */
+    fun restore(deleted: Deleted) {
+        dir.mkdirs()
+        for (item in deleted.items) {
+            val kept = File(trashDir, item.file)
+            if (kept.exists() && !kept.renameTo(fileOf(item))) runCatching { kept.copyTo(fileOf(item), overwrite = true); kept.delete() }
+        }
+        val back = deleted.items.filter { fileOf(it).exists() }
+        store.update { WallpaperLibraryOps.restore(it, back, deleted.current) }
+        DebugLog.event("Wallpaper", "${back.size} picture(s) put back in the library")
+    }
+
+    /** Deletes for good the pictures [delete] kept aside more than [olderThanMs] ago (all of them with 0). */
+    fun purge(olderThanMs: Long = 0) {
+        val limit = System.currentTimeMillis() - olderThanMs
+        trashDir.listFiles()?.filter { it.lastModified() <= limit || olderThanMs == 0L }?.forEach { file ->
+            File(thumbDir, file.nameWithoutExtension + ".jpg").delete()
+            thumbs.remove(file.nameWithoutExtension)
+            file.delete()
+        }
+    }
+
+    /** The record of a picture as it is now, before an Apply changes it (for its Undo). */
+    fun snapshot(id: String?): WallpaperItem? = id?.let { find(it) }
+
+    /** Undo of an Apply: [current] is the current picture again and [before] gets back its placement and use count. */
+    fun undoApply(current: String?, before: WallpaperItem?) = store.update { state ->
+        val restored = before?.let { WallpaperLibraryOps.restoreItem(state, it) } ?: state
+        restored.copy(current = current?.takeIf { id -> restored.items.any { it.id == id } })
+    }
+
+    /**
+     * Works out the colour and shape of pictures that do not have them yet (from their thumbnails, off the main thread),
+     * for sorting and filtering. Pictures added before 0.16.0 get them the first time the library opens.
+     */
+    suspend fun describeMissing(limit: Int = 400) = withContext(Dispatchers.Default) {
+        val missing = store.get().items.filter { !it.described }.take(limit)
+        if (missing.isEmpty()) return@withContext
+        val found = HashMap<String, Triple<Int, Int, Int>>()
+        for (item in missing) {
+            val thumb = thumbnail(item)?.asAndroidBitmap() ?: continue
+            val colour = try {
+                android.app.WallpaperColors.fromBitmap(thumb).primaryColor.toArgb()
+            } catch (e: Throwable) {
+                null
+            } ?: continue
+            found[item.id] = Triple(colour, thumb.width, thumb.height)
+        }
+        if (found.isEmpty()) return@withContext
+        store.update { state ->
+            found.entries.fold(state) { s, (id, d) -> WallpaperLibraryOps.describe(s, id, d.first, d.second, d.third) }
+        }
+        DebugLog.event("Wallpaper", "colour and shape worked out for ${found.size} picture(s)")
+    }
+
+    private val trashDir: File get() = File(thumbDir.parentFile, "wallpaper-trash")
 
     fun setRotation(index: Int, at: Long) = store.update { it.copy(rotationIndex = index, lastRotation = at) }
 

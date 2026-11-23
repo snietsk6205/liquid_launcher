@@ -30,7 +30,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -75,8 +78,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
 import dev.liquid.launcher.core.common.CropSpec
+import dev.liquid.launcher.core.common.DebugLog
 import dev.liquid.launcher.core.common.Frame
+import dev.liquid.launcher.core.data.ColourFamily
 import dev.liquid.launcher.core.data.FolderImage
+import dev.liquid.launcher.core.data.LibrarySort
+import dev.liquid.launcher.core.data.PickerFlow
+import dev.liquid.launcher.core.data.PictureShape
+import dev.liquid.launcher.core.data.WallpaperCollection
 import dev.liquid.launcher.core.data.LinkedFolder
 import dev.liquid.launcher.core.data.WallpaperItem
 import dev.liquid.launcher.core.data.WallpaperLibraryOps
@@ -91,12 +100,16 @@ import kotlinx.coroutines.launch
 
 /**
  * What the wallpaper screen is trying out. The home screen draws its looks (blur, dim) instead of the saved ones while
- * the screen is open, so they are seen on the real thing. A picture picked here is not: since 0.11.1 the screen keeps
- * the current wallpaper until Apply, which ripples to the new one (full screen before that only while placing it).
+ * the screen is open, so they are seen on the real thing. A picture picked here is not shown on the screen until it is
+ * placed: since 0.11.1 the screen keeps the current wallpaper until Apply, which ripples to the new one; since 0.16.0
+ * (D197) a picture placed and Done stays on the screen behind the sheet until Apply, Cancel or another pick.
  */
 @Stable
 internal class StudioState(store: SettingsStore, currentLook: dev.liquid.launcher.core.data.WallpaperLook?) {
-    /** The picture picked, or null for the current wallpaper. */
+    /** 0.16.0 (D197): the screen's steps (pick, place, Done, Apply, the peek, selecting) as plain, tested data. */
+    var flow by mutableStateOf(PickerFlow())
+
+    /** The picture picked (loaded for placing and Apply), or null for the current wallpaper. */
     var pick by mutableStateOf<WallpaperPick?>(null)
 
     /** 0.11.1: the picture tapped last, ringed at once while it loads (then it is [pick]). */
@@ -111,6 +124,9 @@ internal class StudioState(store: SettingsStore, currentLook: dev.liquid.launche
     /** The wallpaper as it will be applied (placed and rendered), once ready. */
     var rendered by mutableStateOf<Bitmap?>(null)
 
+    /** [rendered] as the home screen draws it: the preview after Done (0.16.0). */
+    var renderedImage by mutableStateOf<ImageBitmap?>(null)
+
     /** The picture, placement and parallax [rendered] was made from (0.10.4): a picture picked with the transition arrives rendered. */
     var renderedKey: Any? = null
 
@@ -119,11 +135,21 @@ internal class StudioState(store: SettingsStore, currentLook: dev.liquid.launche
     var palette: Pair<Int, Int>? = null
 
     /** Placing mode: pinch and drag on the screen. */
-    var adjusting by mutableStateOf(false)
+    val adjusting: Boolean get() = flow.placing
 
-    /** 0.11.1: 1 while placing, then down to 0: the placed picture fades back into the wallpaper on screen. */
-    val placeShown = Animatable(0f)
-    var placeLeaving by mutableStateOf(false)
+    /** 0.16.0: a picture that stopped showing (a preview that ended, the peek), fading back into the wallpaper. */
+    var fade by mutableStateOf<FadeOut?>(null)
+    val fadeAlpha = Animatable(0f)
+
+    /** 0.16.0: the screen is going (Cancel after a preview): the sheet sinks while the preview fades back. */
+    var leaving by mutableStateOf(false)
+
+    /** 0.16.0: the picture peeked at (long press): its thumbnail at once, then the whole picture, with its own placement. */
+    var peekImage by mutableStateOf<ImageBitmap?>(null)
+    var peekCrop by mutableStateOf(CropSpec.Centre)
+    var peekParallax by mutableFloatStateOf(0f)
+    var peekLook: dev.liquid.launcher.core.data.WallpaperLook? = null
+    var peekPick: WallpaperPick? = null
 
     /** A short slide across the pages to show the parallax, or null to follow the pages. */
     var sweep by mutableStateOf<Float?>(null)
@@ -131,7 +157,7 @@ internal class StudioState(store: SettingsStore, currentLook: dev.liquid.launche
     /** "pictures", "look" or "auto". */
     var page by mutableStateOf("pictures")
 
-    /** "recent", "favourites", "all" or a linked folder's uri. */
+    /** "recent", "favourites", "all", "col:<collection id>" or a linked folder's uri. */
     var tab by mutableStateOf("recent")
 
     /** "home", "drawer" or "search": which screen the preview shows. */
@@ -161,14 +187,40 @@ internal class StudioState(store: SettingsStore, currentLook: dev.liquid.launche
         lookTouched = true
     }
 
-    /** The picture's own look on the screen: the current wallpaper's until a look is edited here (0.11.1). */
-    val shownLook: dev.liquid.launcher.core.data.WallpaperLook? get() = if (pick == null || lookTouched) pictureLook else currentLook
+    /**
+     * The look on the screen: the current wallpaper's until a look is edited here (0.11.1); a picture placed or peeked at
+     * shows with its own (0.16.0).
+     */
+    val shownLook: dev.liquid.launcher.core.data.WallpaperLook?
+        get() = when (flow.shows) {
+            PickerFlow.Shows.PEEK -> peekLook
+            PickerFlow.Shows.PLACING, PickerFlow.Shows.PLACED -> pictureLook
+            PickerFlow.Shows.CURRENT -> if (pick == null || lookTouched) pictureLook else currentLook
+        }
     var forLayout by mutableStateOf(false)
     var busy by mutableStateOf(false)
 
     /** Controls hidden to look at the whole screen. */
     var peek by mutableStateOf(false)
-    var holding by mutableStateOf<WallpaperItem?>(null)
+
+    /** 0.16.0 (D197): each list's scroll position, kept here so it survives the sheet stepping aside while placing. */
+    private val grids = HashMap<String, LazyGridState>()
+
+    fun grid(key: String): LazyGridState = grids.getOrPut(key) { LazyGridState() }
+
+    /** 0.16.0: the order of the pictures (remembered), the colour and shape filters (for this visit), and their card. */
+    var sort by mutableStateOf(LibrarySort.of(store.get(LauncherSettings.WallpaperLibrarySort)))
+    var family by mutableStateOf<ColourFamily?>(null)
+    var shape by mutableStateOf<PictureShape?>(null)
+    var sortCard by mutableStateOf(false)
+
+    /** 0.16.0 (D198): the row of collections to add the selected pictures to; a collection being named or changed. */
+    var collectionChooser by mutableStateOf(false)
+    var naming by mutableStateOf<Naming?>(null)
+    var collectionMenu by mutableStateOf<WallpaperCollection?>(null)
+
+    /** How many pictures a delete is about to take away, while it asks first (no Undo without wallpaper notices). */
+    var confirmDelete by mutableStateOf<Int?>(null)
 
     fun select(pick: WallpaperPick, source: Bitmap, crop: CropSpec, parallax: Float) {
         // A library picture brings its own look with it.
@@ -182,8 +234,25 @@ internal class StudioState(store: SettingsStore, currentLook: dev.liquid.launche
         this.crop = crop
         this.parallax = parallax
         rendered = null
+        renderedImage = null
+        renderedKey = null
         tone = null
         palette = null
+    }
+
+    /** No picture picked any more (it was deleted): the screen goes back to the current wallpaper. */
+    fun clearPick() {
+        pick = null
+        choosing = null
+        source = null
+        sourceImage = null
+        rendered = null
+        renderedImage = null
+        renderedKey = null
+        tone = null
+        palette = null
+        pictureLook = currentLook
+        lookTouched = false
     }
 
     /** The part of the picture the wallpaper canvas covers, for a screen of [w] × [h]. */
@@ -192,8 +261,35 @@ internal class StudioState(store: SettingsStore, currentLook: dev.liquid.launche
         return crop.frame(src.width, src.height, w * (1f + parallax), h)
     }
 
-    /** True while the home screen draws the picked picture instead of the wallpaper: only while placing it (0.11.1). */
-    val drawsSource: Boolean get() = sourceImage != null && adjusting
+    /** The part of the peeked picture that shows, with its own placement. */
+    fun peekFrame(w: Float, h: Float): Frame? {
+        val image = peekImage ?: return null
+        return peekCrop.frame(image.width, image.height, w * (1f + peekParallax), h)
+    }
+
+    /**
+     * True while the home screen draws the picked picture instead of the wallpaper: while placing it, and after Done
+     * until its finished picture is ready ([shownImage] takes over then, blur and all).
+     */
+    val drawsSource: Boolean
+        get() = sourceImage != null && (flow.shows == PickerFlow.Shows.PLACING || (flow.shows == PickerFlow.Shows.PLACED && renderedImage == null))
+
+    /** True while the home screen draws the picture peeked at (long press). */
+    val drawsPeek: Boolean get() = flow.shows == PickerFlow.Shows.PEEK && peekImage != null
+
+    /** 0.16.0 (D197): the placed picture, finished, standing in for the wallpaper after Done (until Apply, Cancel, another pick). */
+    val shownImage: ImageBitmap? get() = if (flow.shows == PickerFlow.Shows.PLACED) renderedImage else null
+}
+
+/** 0.16.0: a picture fading back into the wallpaper; [frame] null: a finished wallpaper (it slides with the pages). */
+internal class FadeOut(val image: ImageBitmap, val frame: ((Float, Float) -> Frame?)?)
+
+/** 0.16.0 (D198): a collection being named: a new one ([collection] null, then [then] gets it) or one renamed. */
+internal class Naming(val collection: WallpaperCollection?, val then: ((WallpaperCollection) -> Unit)? = null)
+
+private fun keyOf(pick: WallpaperPick): String = when (pick) {
+    is WallpaperPick.Library -> PickerFlow.keyOfLibrary(pick.item.id)
+    is WallpaperPick.External -> PickerFlow.keyOfUri(pick.uri.toString())
 }
 
 /** The wallpaper screen: a glass sheet over the live home screen. */
@@ -212,7 +308,8 @@ internal fun WallpaperStudio(
     val layouts by data.layouts.state.collectAsState()
     val scope = rememberCoroutineScope()
     val color = sheetContentColor(glass, lightBackground)
-    val toggled = animateFloatAsState(if (state.peek || state.adjusting) 0f else 1f, label = "sheet")
+    // 0.16.0: the sheet steps aside while a picture is placed or peeked at, and sinks as the screen goes after a preview.
+    val toggled = animateFloatAsState(if (state.peek || state.flow.sheetAside || state.leaving) 0f else 1f, label = "sheet")
     // Rises in like the other glass sheets when the screen opens.
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
@@ -229,6 +326,11 @@ internal fun WallpaperStudio(
     val gridHeight = compactGrid + (expandedGrid - compactGrid) * tall.value
     val currentLayout = layouts.layouts.firstOrNull { it.id == layouts.current }
     LaunchedEffect(currentLayout?.id) { state.forLayout = currentLayout?.wallpaper != null }
+    // 0.16.0: the colour and shape of pictures added before (for sorting and filtering), and deleted pictures whose Undo is long gone.
+    LaunchedEffect(Unit) {
+        data.wallpapers.describeMissing()
+        data.wallpapers.purge(olderThanMs = 10 * 60_000L)
+    }
 
     fun close() {
         controller.wallpaperStudio = false
@@ -239,6 +341,7 @@ internal fun WallpaperStudio(
         onDispose {
             if (controller.drawer.value > 0f) controller.closeDrawer()
             IconPaint.endPreview(controller.scope)
+            controller.wallpaperStudioBack = null
         }
     }
     // The placed picture is rendered once it stops moving, with its colours, so Apply has nothing left to wait for.
@@ -251,35 +354,60 @@ internal fun WallpaperStudio(
         dev.liquid.launcher.core.common.ColourTiming.mark("picture placed")
         // Colours now, before Apply (0.11.1: kept for Apply; the icons on screen keep the current wallpaper's).
         val tone = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { dev.liquid.launcher.core.common.WallpaperTones.fromBitmap(bitmap) }
-        // All four together (0.11.1): Apply takes the render only when its key matches, so the key may not run ahead of it.
+        // All together (0.11.1): Apply takes the render only when its key matches, so the key may not run ahead of it.
         state.tone = tone
         state.palette = tone?.let { data.paletteFor(it.primary) }
         state.rendered = bitmap
+        state.renderedImage = bitmap.asImageBitmap()
         state.renderedKey = key
         dev.liquid.launcher.core.common.ColourTiming.mark("palette ready for Apply")
     }
-    // After placing, the placed picture fades back into the wallpaper on screen instead of vanishing (0.11.1).
-    LaunchedEffect(state.adjusting) {
-        if (state.adjusting) {
-            state.placeLeaving = false
-            state.placeShown.snapTo(1f)
-        } else if (state.placeShown.value > 0f) {
-            state.placeLeaving = true
+
+    /** 0.16.0: what stopped showing fades back into the wallpaper instead of vanishing in one frame. */
+    fun fadeOut(image: ImageBitmap?, frame: ((Float, Float) -> Frame?)?) {
+        if (image == null) return
+        state.fade = FadeOut(image, frame)
+        scope.launch {
+            state.fadeAlpha.snapTo(1f)
             try {
-                state.placeShown.animateTo(0f, androidx.compose.animation.core.tween(MotionScale.ms(420)))
+                state.fadeAlpha.animateTo(0f, tween(MotionScale.ms(420)))
             } finally {
-                state.placeLeaving = false
+                if (state.fade?.image === image) state.fade = null
             }
+        }
+    }
+
+    /** The preview of a placed picture ends (another pick, Cancel): it fades back into the current wallpaper. */
+    fun endPreview() {
+        val shows = state.flow.shows
+        if (shows != PickerFlow.Shows.PLACED && shows != PickerFlow.Shows.PLACING) return
+        val finished = state.renderedImage
+        if (finished != null && shows == PickerFlow.Shows.PLACED) {
+            fadeOut(finished, null)
+        } else {
+            val src = state.source ?: return
+            val crop = state.crop
+            val parallax = state.parallax
+            fadeOut(state.sourceImage) { w, h -> crop.frame(src.width, src.height, w * (1f + parallax), h) }
         }
     }
 
     /**
      * 0.11.1 (Med): a picture you tap is only picked. It is ringed in the sheet at once and loaded for placing and Apply;
      * the screen keeps the current wallpaper until Apply, which ripples to the new one from the Apply button. (0.10.4
-     * to 0.11.0 changed the screen as soon as a picture was tapped.)
+     * to 0.11.0 changed the screen as soon as a picture was tapped.) 0.16.0: while selecting, a tap chooses the picture
+     * instead; tapping the picture already picked keeps it as it is, placement included.
      */
     var chooseJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     fun choose(pick: WallpaperPick) {
+        val key = keyOf(pick)
+        if (state.flow.selecting) {
+            if (pick is WallpaperPick.Library) state.flow = state.flow.toggle(key)
+            return
+        }
+        if (key == state.flow.chosen && key == state.flow.loaded) return
+        endPreview()
+        state.flow = state.flow.tap(key)
         state.choosing = pick
         chooseJob?.cancel()
         chooseJob = scope.launch {
@@ -288,12 +416,14 @@ internal fun WallpaperStudio(
                 val source = Wallpapers.source(context, data, pick)
                 if (source == null) {
                     controller.toast("Could not read that picture")
+                    state.flow = state.flow.failed(key)
                     state.choosing = state.pick
                 } else {
                     val item = (pick as? WallpaperPick.Library)?.item
                     val crop = item?.crop ?: CropSpec.Centre
                     val parallax = item?.parallax?.takeIf { it >= 0f } ?: Wallpapers.defaultParallax(data)
                     state.select(pick, source, crop, parallax)
+                    state.flow = state.flow.loaded(key)
                 }
             } finally {
                 state.busy = false
@@ -302,8 +432,9 @@ internal fun WallpaperStudio(
     }
 
     fun placeCurrent() {
-        if (state.source != null) {
-            state.adjusting = true
+        if (state.flow.waiting) return
+        if (state.source != null && state.flow.applies != null) {
+            state.flow = state.flow.place()
             return
         }
         val item = library.current?.let { data.wallpapers.find(it) }
@@ -313,13 +444,147 @@ internal fun WallpaperStudio(
         }
         scope.launch {
             state.busy = true
-            Wallpapers.source(context, data, WallpaperPick.Library(item))?.let { source ->
-                state.choosing = WallpaperPick.Library(item)
-                state.select(WallpaperPick.Library(item), source, item.crop, item.parallax.takeIf { it >= 0f } ?: Wallpapers.defaultParallax(data))
-                state.adjusting = true
+            val pick = WallpaperPick.Library(item)
+            val key = keyOf(pick)
+            Wallpapers.source(context, data, pick)?.let { source ->
+                state.choosing = pick
+                state.flow = state.flow.tap(key)
+                state.select(pick, source, item.crop, item.parallax.takeIf { it >= 0f } ?: Wallpapers.defaultParallax(data))
+                state.flow = state.flow.loaded(key).place()
             }
             state.busy = false
         }
+    }
+
+    /** Cancel: a picture placed on the screen fades back into the current wallpaper as the sheet goes (0.16.0). */
+    fun cancel() {
+        if (state.flow.shows == PickerFlow.Shows.PLACED || state.flow.shows == PickerFlow.Shows.PLACING) {
+            endPreview()
+            state.flow = state.flow.cancel()
+            state.leaving = true
+            scope.launch {
+                kotlinx.coroutines.delay(MotionScale.ms(420).toLong())
+                close()
+            }
+        } else {
+            close()
+        }
+    }
+
+    /** 0.16.0: a long press shows the picture full screen with the home screen over it; the sheet steps aside. */
+    fun peekAt(pick: WallpaperPick) {
+        val key = keyOf(pick)
+        val item = (pick as? WallpaperPick.Library)?.item
+        state.peekPick = pick
+        state.peekCrop = item?.crop ?: CropSpec.Centre
+        state.peekParallax = item?.parallax?.takeIf { it >= 0f } ?: Wallpapers.defaultParallax(data)
+        state.peekLook = item?.look
+        scope.launch {
+            // The thumbnail at once (it is cached), the whole picture as soon as it is decoded.
+            val thumb = when (pick) {
+                is WallpaperPick.Library -> data.wallpapers.thumbnail(pick.item)
+                is WallpaperPick.External -> data.wallpapers.thumbnail(pick.uri)
+            }
+            state.peekImage = thumb
+            state.flow = state.flow.peek(key)
+            DebugLog.event("Wallpaper", "peek at a picture (long press)")
+            val full = Wallpapers.source(context, data, pick)
+            if (full != null && state.flow.peeking == key) state.peekImage = full.asImageBitmap()
+        }
+    }
+
+    fun endPeek() {
+        if (state.flow.peeking == null) return
+        val image = state.peekImage
+        val crop = state.peekCrop
+        val parallax = state.peekParallax
+        state.flow = state.flow.endPeek()
+        if (image != null) fadeOut(image) { w, h -> crop.frame(image.width, image.height, w * (1f + parallax), h) }
+        state.peekImage = null
+    }
+
+    /** The peek's "Pick": the picture peeked at becomes the pick. */
+    fun pickPeeked() {
+        val pick = state.peekPick ?: return endPeek()
+        endPeek()
+        choose(pick)
+    }
+
+    // ---- several pictures at once (0.16.0) ----
+
+    fun selectedIds(): Set<String> = state.flow.selection.mapNotNull { PickerFlow.libraryId(it) }.toSet()
+
+    fun count(n: Int) = if (n == 1) "1 picture" else "$n pictures"
+
+    fun favouriteSelected() {
+        val ids = selectedIds()
+        if (ids.isEmpty()) return
+        val on = !ids.all { data.wallpapers.find(it)?.favourite == true }
+        data.wallpapers.setFavourite(ids, on)
+        controller.notice(dev.liquid.launcher.core.common.NoticeKind.Info, if (on) "${count(ids.size)} added to Favourites" else "${count(ids.size)} taken out of Favourites")
+    }
+
+    fun addSelectedTo(collection: WallpaperCollection?) {
+        val ids = selectedIds()
+        if (ids.isEmpty()) return
+        state.collectionChooser = false
+        if (collection == null) {
+            data.wallpapers.setFavourite(ids, true)
+            controller.notice(dev.liquid.launcher.core.common.NoticeKind.Info, "${count(ids.size)} added to Favourites")
+        } else {
+            data.wallpapers.addToCollection(ids, collection.id)
+            controller.notice(dev.liquid.launcher.core.common.NoticeKind.Info, "${count(ids.size)} added to \"${collection.name}\"")
+        }
+    }
+
+    fun forgetSelected() {
+        val ids = selectedIds()
+        if (ids.isEmpty()) return
+        data.wallpapers.forget(ids)
+        controller.notice(dev.liquid.launcher.core.common.NoticeKind.Info, "${count(ids.size)} taken out of Recent")
+    }
+
+    /**
+     * Takes the selected pictures out of the library; a glass notice offers Undo for 10 s (the files wait meanwhile).
+     * With wallpaper notices turned off there would be no Undo, so it asks first.
+     */
+    fun deleteSelected(confirmed: Boolean = false) {
+        val ids = selectedIds()
+        if (ids.isEmpty()) return
+        val notices = data.settings.noticeConfig()
+        val undoShows = notices.enabled && dev.liquid.launcher.core.common.NoticeKind.Wallpaper.id in notices.kinds
+        if (!undoShows && !confirmed) {
+            state.confirmDelete = ids.size
+            return
+        }
+        val keys = ids.map { PickerFlow.keyOfLibrary(it) }.toSet()
+        if (state.flow.loaded in keys || state.flow.chosen in keys) {
+            endPreview()
+            state.clearPick()
+        }
+        state.flow = state.flow.without(keys).endSelecting()
+        val deleted = data.wallpapers.delete(ids) ?: return
+        if (!undoShows) {
+            data.wallpapers.purge()
+            return
+        }
+        dev.liquid.launcher.core.common.Notices.post(
+            dev.liquid.launcher.core.common.Notice(
+                dev.liquid.launcher.core.common.NoticeKind.Wallpaper,
+                "${count(deleted.items.size)} deleted",
+                buttonLabel = "Undo",
+                button = { data.wallpapers.restore(deleted) },
+                showMs = UNDO_MS,
+                holds = true,
+            )
+        )
+    }
+
+    /** Takes a collection away (its pictures stay in the library). */
+    fun removeCollection(collection: WallpaperCollection) {
+        data.wallpapers.removeCollection(collection.id)
+        if (state.tab == "col:" + collection.id) state.tab = "all"
+        controller.notice(dev.liquid.launcher.core.common.NoticeKind.Info, "Collection \"${collection.name}\" removed", "Its pictures stay in the library")
     }
 
     fun addPhotos() {
@@ -332,6 +597,7 @@ internal fun WallpaperStudio(
                 state.tab = "all"
                 added.firstOrNull()?.let { choose(WallpaperPick.Library(it)) }
                 if (added.size > 1) controller.toast("${added.size} pictures added to your library")
+                data.wallpapers.describeMissing()
             }
         }
     }
@@ -361,7 +627,7 @@ internal fun WallpaperStudio(
 
     fun apply() {
         // Still loading the picture last tapped: Apply waits for it (the button says "Working…").
-        if (state.busy || (state.choosing != null && state.choosing != state.pick)) return
+        if (state.busy || state.flow.waiting) return
         val pick = state.pick
         val source = state.source
         if (pick == null || source == null) {
@@ -377,9 +643,9 @@ internal fun WallpaperStudio(
             close()
             return
         }
-        // 0.11.1 (Med): the screen kept the current wallpaper until now. The new one is ready (rendered with its colours
-        // when it was picked or placed), so the transition starts at once: a picture of the screen as it is, sheet and
-        // all, ripples away from the Apply button over the new wallpaper, its icon colours and looks.
+        // 0.11.1 (Med): the screen kept the current wallpaper until now (0.16.0: or showed the placed picture). The new one
+        // is ready (rendered with its colours when it was picked or placed), so the transition starts at once: a picture of
+        // the screen as it is, sheet and all, ripples away from the Apply button over the new wallpaper and its colours.
         val crop = state.crop
         val parallax = state.parallax
         val look = state.pictureLook
@@ -387,6 +653,7 @@ internal fun WallpaperStudio(
         val forLayout = state.forLayout
         val layoutId = layouts.current
         dev.liquid.launcher.core.common.ColourTiming.begin("wallpaper screen")
+        DebugLog.event("Wallpaper", "apply: " + if (state.flow.shows == PickerFlow.Shows.PLACED) "the placed picture" else "the picture picked")
         controller.transitionOrigin = applyButton.value?.takeIf { it.isAttached }?.boundsInRoot()?.center
         controller.changeScreen(
             prepare = {
@@ -399,6 +666,8 @@ internal fun WallpaperStudio(
                     val palette = (if (ready != null) state.palette else null) ?: tone?.let { data.paletteFor(it.primary) }
                     // Closed meanwhile (Cancel, Back, Home): nothing changes.
                     if (!controller.wallpaperStudio) return@changeScreen null
+                    // 0.16.0 (D200): what this replaces, for Undo, before anything is written.
+                    controller.keepForUndo((pick as? WallpaperPick.Library)?.item?.id, if (forLayout) layoutId else null)
                     // A folder's picture joins the library now, so it is the current picture as soon as it shows.
                     val item = when (pick) {
                         is WallpaperPick.Library -> pick.item
@@ -422,6 +691,7 @@ internal fun WallpaperStudio(
                 close()
             },
             after = { prepared ->
+                controller.offerWallpaperUndo("New wallpaper")
                 // The files and the system wallpaper once the transition is over, so it never stutters.
                 val error = Wallpapers.persist(context, data, prepared)
                 if (error != null) {
@@ -433,12 +703,47 @@ internal fun WallpaperStudio(
         )
     }
 
+    // 0.16.0: Back goes one step back inside the screen first (cards, the peek, selecting, placing), then closes it.
+    androidx.compose.runtime.SideEffect {
+        controller.wallpaperStudioBack = {
+            val back = state.flow.back()
+            when {
+                state.confirmDelete != null -> state.confirmDelete = null
+                state.naming != null -> state.naming = null
+                state.collectionMenu != null -> state.collectionMenu = null
+                state.collectionChooser -> state.collectionChooser = false
+                state.sortCard -> state.sortCard = false
+                state.flow.peeking != null -> endPeek()
+                back != null -> state.flow = back
+                state.peek -> state.peek = false
+                else -> cancel()
+            }
+            true
+        }
+    }
+
+    // 0.16.0: a picture shared to "Set as Liquid wallpaper" is picked as the screen opens (or while it is open).
+    LaunchedEffect(controller.sharedPick) {
+        val item = controller.sharedPick ?: return@LaunchedEffect
+        controller.sharedPick = null
+        state.flow = state.flow.endSelecting()
+        state.page = "pictures"
+        state.tab = "all"
+        state.grid("tab:all").scrollToItem(0)
+        choose(WallpaperPick.Library(item))
+    }
+
     Box(Modifier.fillMaxSize()) {
-        if (state.adjusting) {
-            PlaceLayer(state, controller)
-        } else {
+        when {
+            state.adjusting -> PlaceLayer(state, controller)
+            // 0.16.0: the peek ends with a tap anywhere.
+            state.flow.peeking != null -> Box(
+                Modifier
+                    .fillMaxSize()
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { endPeek() }
+            )
             // Tapping the preview hides or shows the controls.
-            Box(
+            else -> Box(
                 Modifier
                     .fillMaxSize()
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { state.peek = !state.peek }
@@ -449,6 +754,12 @@ internal fun WallpaperStudio(
         Presence(if (state.adjusting) Unit else null) {
             Box(Modifier.fillMaxSize()) {
                 PlaceBar(state, glass, lightBackground, backdrop, color, Modifier.align(Alignment.BottomCenter))
+            }
+        }
+        // 0.16.0: the peek's own bar: back, or pick the picture peeked at.
+        Presence(if (state.flow.peeking != null) Unit else null) {
+            Box(Modifier.fillMaxSize()) {
+                PeekBar(glass, lightBackground, backdrop, color, canPick = !state.flow.selecting, Modifier.align(Alignment.BottomCenter), ::endPeek, ::pickPeeked)
             }
         }
         val sheetShape = RoundedCornerShape(32.dp)
@@ -481,40 +792,69 @@ internal fun WallpaperStudio(
                 ) { state.page = it }
                 Spacer(Modifier.height(12.dp))
                 when (state.page) {
-                    "pictures" -> PicturesPage(state, library, color, controller, { choose(it) }, ::addPhotos, ::linkFolder, gridHeight)
+                    "pictures" -> PicturesPage(
+                        state, library, color, controller,
+                        choose = { choose(it) },
+                        peek = { peekAt(it) },
+                        addPhotos = ::addPhotos,
+                        linkFolder = ::linkFolder,
+                        newCollection = { state.naming = Naming(null) },
+                        gridHeight = gridHeight,
+                    )
                     "look" -> LookPage(state, glass, color)
                     else -> AutoPage(data.settings, color)
                 }
                 if (state.page == "pictures") {
                     Spacer(Modifier.height(10.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy((8 * themeGap).dp)) {
-                        SmallChip(LauncherIcons.Crop, "Place", color, Modifier.weight(1f)) { placeCurrent() }
-                        val pickedItem = (state.pick as? WallpaperPick.Library)?.item?.let { data.wallpapers.find(it.id) }
-                            ?: library.current?.takeIf { state.pick == null }?.let { data.wallpapers.find(it) }
-                        if (pickedItem != null) {
-                            SmallChip(
-                                if (pickedItem.favourite) LauncherIcons.Heart else LauncherIcons.HeartOutline,
-                                if (pickedItem.favourite) "Favourite" else "Add to favourites",
-                                color, Modifier.weight(1.3f),
-                            ) { data.wallpapers.setFavourite(pickedItem.id, !pickedItem.favourite) }
+                    if (state.flow.selecting) {
+                        PictureSelectionBar(
+                            state, library, color,
+                            onFavourite = ::favouriteSelected,
+                            onCollection = { state.collectionChooser = !state.collectionChooser },
+                            onForget = ::forgetSelected,
+                            onDelete = { deleteSelected() },
+                            onAddTo = ::addSelectedTo,
+                            onNewCollection = { state.naming = Naming(null) { c -> addSelectedTo(c) } },
+                        )
+                    } else {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy((8 * themeGap).dp)) {
+                            SmallChip(LauncherIcons.Crop, "Place", color, Modifier.weight(1f)) { placeCurrent() }
+                            val pickedItem = (state.pick as? WallpaperPick.Library)?.item?.let { data.wallpapers.find(it.id) }
+                                ?: library.current?.takeIf { state.pick == null }?.let { data.wallpapers.find(it) }
+                            if (pickedItem != null) {
+                                SmallChip(
+                                    if (pickedItem.favourite) LauncherIcons.Heart else LauncherIcons.HeartOutline,
+                                    if (pickedItem.favourite) "Favourite" else "Add to favourites",
+                                    color, Modifier.weight(1.3f),
+                                ) { data.wallpapers.setFavourite(pickedItem.id, !pickedItem.favourite) }
+                            }
                         }
                     }
                 }
-                if (currentLayout != null) {
+                if (currentLayout != null && !state.flow.selecting) {
                     ToggleRow("Only for the layout \"${currentLayout.name}\"", state.forLayout, color) { state.forLayout = it }
                 }
                 Spacer(Modifier.height(6.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy((10 * themeGap).dp)) {
-                    SheetButton("Cancel", color, filled = false, modifier = Modifier.weight(1f)) { close() }
-                    SheetButton(
-                        if (state.busy) "Working…" else "Apply", color, filled = true,
-                        modifier = Modifier.weight(1f).onPlaced { applyButton.value = it },
-                    ) { apply() }
+                    if (state.flow.selecting && state.page == "pictures") {
+                        val shownIds = remember(library, state.tab, state.sort, state.family, state.shape) { shownItems(state, library).map { PickerFlow.keyOfLibrary(it.id) } }
+                        SheetButton("Select all", color, filled = false, modifier = Modifier.weight(1f)) { state.flow = state.flow.selectAll(shownIds) }
+                        SheetButton("Done", color, filled = true, modifier = Modifier.weight(1f)) {
+                            state.collectionChooser = false
+                            state.flow = state.flow.endSelecting()
+                        }
+                    } else {
+                        SheetButton("Cancel", color, filled = false, modifier = Modifier.weight(1f)) { cancel() }
+                        SheetButton(
+                            if (state.busy) "Working…" else "Apply", color, filled = true,
+                            modifier = Modifier.weight(1f).onPlaced { applyButton.value = it },
+                        ) { apply() }
+                    }
                 }
             }
         }
         // 0.11.1: it pops in and out like the other small glass parts (it appeared and vanished in one frame).
-        Presence(if (state.peek && !state.adjusting) Unit else null) {
+        Presence(if (state.peek && !state.adjusting && state.flow.peeking == null) Unit else null) {
             val pop = remember { Animatable(0f) }
             LaunchedEffect(Unit) { pop.animateTo(1f, Motion.pop()) }
             Box(Modifier.fillMaxSize()) {
@@ -539,35 +879,88 @@ internal fun WallpaperStudio(
         }
     }
 
-    state.holding?.let { item ->
+    // 0.16.0 (D198): naming a new collection, renaming one, or taking one away.
+    state.naming?.let { naming ->
+        var text by remember(naming) { mutableStateOf(naming.collection?.name ?: "") }
         AlertDialog(
-            onDismissRequest = { state.holding = null },
-            title = { Text("Wallpaper") },
+            onDismissRequest = { state.naming = null },
+            title = { Text(if (naming.collection == null) "New collection" else "Rename collection") },
             text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    DialogLine(if (item.favourite) "Remove from favourites" else "Add to favourites") {
-                        data.wallpapers.setFavourite(item.id, !item.favourite)
-                        state.holding = null
+                androidx.compose.material3.OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it.take(40) },
+                    singleLine = true,
+                    placeholder = { Text("For example Study or Projects") },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val name = text.trim()
+                    state.naming = null
+                    if (name.isEmpty()) return@TextButton
+                    val existing = naming.collection
+                    if (existing == null) {
+                        val made = data.wallpapers.addCollection(name)
+                        naming.then?.invoke(made) ?: run { state.tab = "col:" + made.id }
+                    } else {
+                        data.wallpapers.renameCollection(existing.id, name)
                     }
-                    if (item.lastUsed > 0) {
-                        DialogLine("Remove from recent") {
-                            data.wallpapers.forget(item.id)
-                            state.holding = null
-                        }
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { state.naming = null }) { Text("Cancel") } },
+        )
+    }
+    state.confirmDelete?.let { n ->
+        AlertDialog(
+            onDismissRequest = { state.confirmDelete = null },
+            title = { Text(if (n == 1) "Delete 1 picture?" else "Delete $n pictures?") },
+            text = { Text("They leave the library for good (wallpaper notices are off, so there is no Undo). Pictures in linked folders stay on the phone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.confirmDelete = null
+                    deleteSelected(confirmed = true)
+                }) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { state.confirmDelete = null }) { Text("Cancel") } },
+        )
+    }
+    state.collectionMenu?.let { collection ->
+        AlertDialog(
+            onDismissRequest = { state.collectionMenu = null },
+            title = { Text(collection.name) },
+            text = {
+                Column {
+                    DialogLine("Rename") {
+                        state.collectionMenu = null
+                        state.naming = Naming(collection)
                     }
-                    DialogLine("Delete from the library") {
-                        data.wallpapers.remove(item.id)
-                        state.holding = null
+                    DialogLine("Remove the collection (its pictures stay)") {
+                        state.collectionMenu = null
+                        removeCollection(collection)
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { state.holding = null }) { Text("Close") } },
+            confirmButton = { TextButton(onClick = { state.collectionMenu = null }) { Text("Close") } },
         )
     }
 }
 
 // ---- pictures ----
 
+/** The pictures of the list shown (a tab or a collection), filtered and in the order chosen. Not for a folder. */
+private fun shownItems(state: StudioState, library: dev.liquid.launcher.core.data.WallpaperLibraryState): List<WallpaperItem> {
+    val tab = state.tab
+    val base = when {
+        tab == "favourites" -> WallpaperLibraryOps.favourites(library)
+        tab == "all" -> WallpaperLibraryOps.all(library)
+        tab.startsWith("col:") -> WallpaperLibraryOps.inCollection(library, tab.removePrefix("col:"))
+        tab == "recent" -> WallpaperLibraryOps.recent(library)
+        else -> return emptyList()
+    }
+    return WallpaperLibraryOps.sorted(WallpaperLibraryOps.filtered(base, state.family, state.shape), state.sort, recentList = tab == "recent")
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PicturesPage(
     state: StudioState,
@@ -575,18 +968,41 @@ private fun PicturesPage(
     color: Color,
     controller: HomeController,
     choose: (WallpaperPick) -> Unit,
+    peek: (WallpaperPick) -> Unit,
     addPhotos: () -> Unit,
     linkFolder: () -> Unit,
+    newCollection: () -> Unit,
     gridHeight: androidx.compose.ui.unit.Dp,
 ) {
     val data = controller.data
-    // Where to look: recent (each picture once), favourites, everything, then each linked folder.
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp)) {
-        TabChip("Recent", state.tab == "recent", color) { state.tab = "recent" }
-        TabChip("Favourites", state.tab == "favourites", color) { state.tab = "favourites" }
-        TabChip("All", state.tab == "all", color) { state.tab = "all" }
+    // 0.16.0: the three lists first, easy to see, with the order and filter card and Select on the right.
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp)) {
+            TabChip("Recent", state.tab == "recent", color) { state.tab = "recent" }
+            TabChip("Favourites", state.tab == "favourites", color) { state.tab = "favourites" }
+            TabChip("All", state.tab == "all", color) { state.tab = "all" }
+        }
+        val filtering = state.family != null || state.shape != null || state.sort != LibrarySort.NEWEST
+        IconChip(LauncherIcons.Sort, "Order and filter", state.sortCard || filtering, color) { state.sortCard = !state.sortCard }
+        IconChip(LauncherIcons.CheckCircle, "Select", state.flow.selecting, color) {
+            state.flow = if (state.flow.selecting) state.flow.endSelecting() else state.flow.startSelecting()
+            state.collectionChooser = false
+        }
+    }
+    // Collections (0.16.0, D198), then the linked folders, then making either.
+    Row(
+        Modifier.fillMaxWidth().padding(top = 8.dp).horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp),
+    ) {
+        for (collection in library.collections) {
+            TabChip(collection.name, state.tab == "col:" + collection.id, color, onLongClick = { state.collectionMenu = collection }) { state.tab = "col:" + collection.id }
+        }
         for (folder in library.folders) TabChip(folder.name, state.tab == folder.uri, color) { state.tab = folder.uri }
+        TabChip("+ Collection", false, color) { newCollection() }
         TabChip("+ Folder", false, color) { linkFolder() }
+    }
+    androidx.compose.animation.AnimatedVisibility(state.sortCard) {
+        SortCard(state, color, data.settings)
     }
     val folder = library.folders.firstOrNull { it.uri == state.tab }
     if (folder != null) {
@@ -608,44 +1024,184 @@ private fun PicturesPage(
     }
     Spacer(Modifier.height(10.dp))
     // 0.11.1: the picture tapped is ringed at once, while it loads; with none tapped, the current wallpaper.
-    val shownPick = state.choosing ?: state.pick
-    val pickedId = (shownPick as? WallpaperPick.Library)?.item?.id ?: library.current.takeIf { shownPick == null }
-    val pickedUri = (shownPick as? WallpaperPick.External)?.uri
+    val shownKey = state.flow.chosen
+    val pickedId = PickerFlow.libraryId(shownKey) ?: library.current.takeIf { shownKey == null }
+    val pickedUri = shownKey?.takeIf { it.startsWith("uri:") }?.removePrefix("uri:")
     // 0.10.4: taller (two rows and a bit; it was one and a half), and the sheet's handle pulls it up further.
     Box(Modifier.fillMaxWidth().height(if (folder != null) gridHeight - 44.dp else gridHeight)) {
         if (folder != null) {
-            FolderGrid(folder, pickedUri, color, controller, choose)
+            FolderGrid(folder, pickedUri, color, controller, state.grid("folder:" + folder.uri), choose, peek)
         } else {
-            val items = remember(library, state.tab) {
-                when (state.tab) {
-                    "favourites" -> WallpaperLibraryOps.favourites(library)
-                    "all" -> WallpaperLibraryOps.all(library)
-                    else -> WallpaperLibraryOps.recent(library)
-                }
-            }
+            val items = remember(library, state.tab, state.sort, state.family, state.shape) { shownItems(state, library) }
+            val selecting = state.flow.selecting
+            val selection = state.flow.selection
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
+                // 0.16.0 (D197): the list keeps its place while a picture is placed (the sheet steps aside and comes back).
+                state = state.grid("tab:" + state.tab),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item(key = "add") { AddThumb(color, addPhotos) }
-                items(items, key = { it.id }) { item ->
-                    LibraryThumb(item, item.id == pickedId, color, controller, onHold = { state.holding = item }) { choose(WallpaperPick.Library(item)) }
+                itemsIndexed(items, key = { _, it -> it.id }) { index, item ->
+                    val key = PickerFlow.keyOfLibrary(item.id)
+                    LibraryThumb(
+                        item, index, item.id == pickedId && !selecting, if (selecting) key in selection else null, color, controller,
+                        onHold = { peek(WallpaperPick.Library(item)) },
+                    ) { choose(WallpaperPick.Library(item)) }
                 }
             }
-            if (items.isEmpty() && state.tab != "recent") {
-                Text(
-                    if (state.tab == "favourites") "Hold a picture, or use the heart below, to make it a favourite." else "Add photos with +, or link a folder.",
-                    modifier = Modifier.align(Alignment.Center).padding(top = 60.dp),
-                    style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.75f), fontSize = 13.sp),
-                )
+            if (items.isEmpty()) {
+                val filtered = state.family != null || state.shape != null
+                val text = when {
+                    filtered -> "No picture here matches the filter. \"Order and filter\" above clears it."
+                    state.tab == "favourites" -> "Select pictures, or use the heart below, to make them favourites."
+                    state.tab.startsWith("col:") -> "Select pictures and add them to this collection."
+                    state.tab == "recent" -> null
+                    else -> "Add photos with +, or link a folder."
+                }
+                if (text != null) {
+                    Text(
+                        text,
+                        modifier = Modifier.align(Alignment.Center).padding(top = 60.dp, start = 12.dp, end = 12.dp),
+                        style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.75f), fontSize = 13.sp),
+                    )
+                }
             }
         }
     }
 }
 
+/** 0.16.0: order (newest, most used, colour) and the colour and shape filters. */
 @Composable
-private fun FolderGrid(folder: LinkedFolder, picked: android.net.Uri?, color: Color, controller: HomeController, choose: (WallpaperPick) -> Unit) {
+private fun SortCard(state: StudioState, color: Color, settings: SettingsStore) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(color.copy(alpha = 0.07f))
+            .padding(12.dp),
+    ) {
+        PageLabel("Order", color)
+        Segmented(LibrarySort.entries.map { it.id to it.label }, state.sort.id, color) { id ->
+            state.sort = LibrarySort.of(id)
+            settings.set(LauncherSettings.WallpaperLibrarySort, id)
+        }
+        PageLabel("Colour", color)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            for (family in ColourFamily.entries) {
+                val on = state.family == family
+                Box(
+                    Modifier
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(Color(family.swatch))
+                        .border(if (on) 2.5.dp else 0.5.dp, color.copy(alpha = if (on) 0.95f else 0.3f), CircleShape)
+                        .clickable { state.family = if (on) null else family }
+                        .semantics { contentDescription = family.label + if (on) ", chosen" else "" },
+                )
+            }
+        }
+        PageLabel("Shape", color)
+        Segmented(
+            listOf("any" to "Any") + PictureShape.entries.map { it.name to it.label },
+            state.shape?.name ?: "any", color,
+        ) { id -> state.shape = PictureShape.entries.firstOrNull { it.name == id } }
+        if (state.family != null || state.shape != null) {
+            Spacer(Modifier.height(8.dp))
+            TabChip("Clear the filter", false, color) {
+                state.family = null
+                state.shape = null
+            }
+        }
+    }
+}
+
+/** 0.16.0: what can be done with the pictures selected. */
+@Composable
+private fun PictureSelectionBar(
+    state: StudioState,
+    library: dev.liquid.launcher.core.data.WallpaperLibraryState,
+    color: Color,
+    onFavourite: () -> Unit,
+    onCollection: () -> Unit,
+    onForget: () -> Unit,
+    onDelete: () -> Unit,
+    onAddTo: (WallpaperCollection?) -> Unit,
+    onNewCollection: () -> Unit,
+) {
+    val n = state.flow.selection.size
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            if (n == 0) "Tap pictures to select them" else if (n == 1) "1 picture selected" else "$n pictures selected",
+            modifier = Modifier.padding(bottom = 8.dp),
+            style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 13.sp, fontWeight = FontWeight.Medium),
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp)) {
+            SmallChip(LauncherIcons.Heart, "Favourite", color, Modifier.weight(1f)) { onFavourite() }
+            SmallChip(LauncherIcons.Layers, "Collection", color, Modifier.weight(1f)) { onCollection() }
+            SmallChip(LauncherIcons.Recents, "Recent", color, Modifier.weight(0.9f)) { onForget() }
+            SmallChip(LauncherIcons.Delete, "Delete", color, Modifier.weight(0.9f)) { onDelete() }
+        }
+        androidx.compose.animation.AnimatedVisibility(state.collectionChooser) {
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy((6 * themeGap).dp),
+            ) {
+                TabChip("Favourites", false, color) { onAddTo(null) }
+                for (collection in library.collections) TabChip(collection.name, false, color) { onAddTo(collection) }
+                TabChip("+ New collection", false, color) { onNewCollection() }
+            }
+        }
+    }
+}
+
+/** 0.16.0: the peek's bar, low in thumb reach: back to the library, or pick the picture. */
+@Composable
+private fun PeekBar(
+    glass: GlassConfig,
+    lightBackground: Boolean,
+    backdrop: Backdrop,
+    color: Color,
+    canPick: Boolean,
+    modifier: Modifier,
+    onBack: () -> Unit,
+    onPick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(28.dp)
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, Motion.enter()) }
+    Row(
+        modifier
+            .navigationBarsPadding()
+            .padding(12.dp)
+            .graphicsLayer {
+                val p = appear.value
+                alpha = p.coerceIn(0f, 1f)
+                translationY = (1f - p) * 40.dp.toPx()
+            }
+            .liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground))
+            .clip(shape)
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy((10 * themeGap).dp),
+    ) {
+        SheetButton("Back", color, filled = false, modifier = Modifier.weight(1f)) { onBack() }
+        if (canPick) SheetButton("Pick", color, filled = true, modifier = Modifier.weight(1f)) { onPick() }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FolderGrid(
+    folder: LinkedFolder,
+    picked: String?,
+    color: Color,
+    controller: HomeController,
+    grid: LazyGridState,
+    choose: (WallpaperPick) -> Unit,
+    peek: (WallpaperPick) -> Unit,
+) {
     val images by produceState<List<FolderImage>?>(null, folder.uri, folder.deep) {
         value = null
         value = controller.data.wallpapers.folderImages(folder)
@@ -661,34 +1217,61 @@ private fun FolderGrid(folder: LinkedFolder, picked: android.net.Uri?, color: Co
     }
     LazyVerticalGrid(
         columns = GridCells.Fixed(4),
+        state = grid,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items(list, key = { it.uri.toString() }) { image ->
+        itemsIndexed(list, key = { _, it -> it.uri.toString() }) { index, image ->
             val thumb by produceState<ImageBitmap?>(null, image.uri) { value = controller.data.wallpapers.thumbnail(image.uri) }
-            Thumb(thumb, image.uri == picked, color, onHold = null) { choose(WallpaperPick.External(image.uri, folder.name)) }
+            val pick = WallpaperPick.External(image.uri, folder.name)
+            Thumb(
+                thumb, image.uri.toString() == picked, null, false, color, "Folder picture ${index + 1}",
+                onHold = { peek(pick) },
+            ) { choose(pick) }
         }
     }
 }
 
 @Composable
-private fun LibraryThumb(item: WallpaperItem, selected: Boolean, color: Color, controller: HomeController, onHold: () -> Unit, onClick: () -> Unit) {
+private fun LibraryThumb(
+    item: WallpaperItem,
+    index: Int,
+    picked: Boolean,
+    /** Null when not selecting; else whether this one is selected. */
+    selected: Boolean?,
+    color: Color,
+    controller: HomeController,
+    onHold: () -> Unit,
+    onClick: () -> Unit,
+) {
     val thumb by produceState<ImageBitmap?>(null, item.id) { value = controller.data.wallpapers.thumbnail(item) }
-    Box {
-        Thumb(thumb, selected, color, onHold, onClick)
-        if (item.favourite) {
-            LauncherIcon(LauncherIcons.Heart, contentDescription = "Favourite", tint = Color.White, size = 13.dp, modifier = Modifier.align(Alignment.TopEnd).padding(5.dp))
-        }
+    // Read by the emulator test and by TalkBack: which picture, and whether it is a favourite, picked or selected.
+    val description = buildString {
+        append("Wallpaper ").append(index + 1)
+        if (item.favourite) append(", favourite")
+        if (picked) append(", picked")
+        if (selected == true) append(", selected")
     }
+    Thumb(thumb, picked, selected, item.favourite, color, description, onHold, onClick)
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Thumb(image: ImageBitmap?, selected: Boolean, color: Color, onHold: (() -> Unit)?, onClick: () -> Unit) {
+private fun Thumb(
+    image: ImageBitmap?,
+    picked: Boolean,
+    /** Null when not selecting; else whether this one is selected. */
+    selected: Boolean?,
+    favourite: Boolean,
+    color: Color,
+    description: String,
+    onHold: (() -> Unit)?,
+    onClick: () -> Unit,
+) {
     val shape = RoundedCornerShape(12.dp)
     // 0.11.1: picking is the change you see here: the ring thickens, the picture settles in a little and a check pops in.
-    val picked by androidx.compose.animation.core.animateFloatAsState(
-        if (selected) 1f else 0f,
+    val ring by androidx.compose.animation.core.animateFloatAsState(
+        if (picked || selected == true) 1f else 0f,
         androidx.compose.animation.core.spring(dampingRatio = 0.68f, stiffness = MotionScale.stiffness(520f)),
         label = "picked",
     )
@@ -702,13 +1285,14 @@ private fun Thumb(image: ImageBitmap?, selected: Boolean, color: Color, onHold: 
             .aspectRatio(0.56f)
             .clip(shape)
             .background(color.copy(alpha = 0.1f))
-            .combinedClickable(onClick = onClick, onLongClick = onHold),
+            .combinedClickable(onClick = onClick, onLongClick = onHold)
+            .semantics { contentDescription = description },
     ) {
         if (image != null) {
             Image(
                 image, contentDescription = null, contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize().graphicsLayer {
-                    val s = 1f - 0.07f * picked.coerceIn(0f, 1.2f)
+                    val s = 1f - 0.07f * ring.coerceIn(0f, 1.2f)
                     scaleX = s
                     scaleY = s
                     alpha = loaded
@@ -720,22 +1304,54 @@ private fun Thumb(image: ImageBitmap?, selected: Boolean, color: Color, onHold: 
         Box(
             Modifier
                 .matchParentSize()
-                .border((0.5f + 1.7f * picked.coerceIn(0f, 1f)).dp, color.copy(alpha = 0.25f + 0.7f * picked.coerceIn(0f, 1f)), shape),
+                .border((0.5f + 1.7f * ring.coerceIn(0f, 1f)).dp, color.copy(alpha = 0.25f + 0.7f * ring.coerceIn(0f, 1f)), shape),
         )
-        if (picked > 0.01f) {
+        if (selected != null) {
+            // 0.16.0: selecting: an empty circle, a filled check once chosen.
+            Box(Modifier.align(Alignment.TopStart).padding(6.dp)) {
+                if (selected) ThemeCheck(true, color, 18.dp)
+                else Box(Modifier.size(18.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.25f)).border(1.5.dp, Color.White.copy(alpha = 0.9f), CircleShape))
+            }
+        } else if (ring > 0.01f) {
             Box(
                 Modifier
                     .align(Alignment.TopStart)
                     .padding(6.dp)
                     .graphicsLayer {
-                        val p = picked.coerceIn(0f, 1.15f)
+                        val p = ring.coerceIn(0f, 1.15f)
                         alpha = p.coerceAtMost(1f)
                         scaleX = 0.5f + 0.5f * p
                         scaleY = 0.5f + 0.5f * p
                     },
             ) { ThemeCheck(true, color, 18.dp) }
         }
+        if (favourite) {
+            // 0.16.0 (Med: the heart vanished when a picture was picked): on a dark badge, inside the picture, above the ring.
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(7.dp)
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.42f)),
+                contentAlignment = Alignment.Center,
+            ) { LauncherIcon(LauncherIcons.Heart, contentDescription = null, tint = Color.White, size = 12.dp) }
+        }
     }
+}
+
+/** 0.16.0: a round icon button of the library's header (order and filter, select); filled while on. */
+@Composable
+private fun IconChip(icon: Int, label: String, on: Boolean, color: Color, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .background(color.copy(alpha = if (on) 0.22f else 0.08f))
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) { LauncherIcon(icon, contentDescription = null, tint = color, size = 18.dp) }
 }
 
 @Composable
@@ -822,7 +1438,10 @@ private fun PlaceBar(state: StudioState, glass: GlassConfig, lightBackground: Bo
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy((10 * themeGap).dp)) {
             SheetButton("Reset", color, filled = false, modifier = Modifier.weight(1f)) { state.crop = CropSpec.Centre }
-            SheetButton("Done", color, filled = true, modifier = Modifier.weight(1f)) { state.adjusting = false }
+            SheetButton("Done", color, filled = true, modifier = Modifier.weight(1f)) {
+                state.flow = state.flow.done()
+                DebugLog.event("Wallpaper", "placed: the picture stays on the screen until Apply, Cancel or another pick")
+            }
         }
     }
 }
@@ -935,10 +1554,11 @@ internal fun Segmented(options: List<Pair<String, String>>, selected: String, co
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TabChip(label: String, on: Boolean, color: Color, onClick: () -> Unit) {
+private fun TabChip(label: String, on: Boolean, color: Color, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     if (LocalControls.current?.theme != null) {
-        ThemeChip(label, on, height = 32.dp, onClick = onClick)
+        ThemeChip(label, on, height = 32.dp, onLongClick = onLongClick, onClick = onClick)
         return
     }
     Box(
@@ -946,7 +1566,7 @@ private fun TabChip(label: String, on: Boolean, color: Color, onClick: () -> Uni
             .height(32.dp)
             .clip(RoundedCornerShape(50))
             .background(color.copy(alpha = if (on) 0.22f else 0.06f))
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center,
     ) {

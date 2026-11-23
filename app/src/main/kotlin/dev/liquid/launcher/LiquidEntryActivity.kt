@@ -19,6 +19,25 @@ import dev.liquid.launcher.core.common.DebugLog
 class LiquidEntryActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 0.16.0: pictures shared to "Set as Liquid wallpaper" (or "Set as" in a gallery) go to the wallpaper library. This
+        // activity has no window and must finish at once, so the home screen copies them in; the read permission goes
+        // with them (ClipData carries it for each picture).
+        val pictures = pictures(intent)
+        if (pictures.isNotEmpty()) {
+            DebugLog.event("Wallpaper", "${pictures.size} picture(s) shared to the launcher")
+            val clip = android.content.ClipData.newRawUri("pictures", pictures.first())
+            pictures.drop(1).forEach { clip.addItem(android.content.ClipData.Item(it)) }
+            startActivity(
+                Intent(this, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    .putExtra(MainActivity.EXTRA_OPEN, MainActivity.OPEN_SHARED_PICTURES)
+                    .also { it.clipData = clip },
+            )
+            finish()
+            @Suppress("DEPRECATION")
+            overridePendingTransition(0, 0)
+            return
+        }
         val (text, ask, from) = read(intent)
         if (!text.isNullOrBlank()) {
             DebugLog.event("Search", "text from $from (${text.length} characters)${if (ask) ", to ask Claude" else ""}")
@@ -33,6 +52,18 @@ class LiquidEntryActivity : Activity() {
         finish()
         @Suppress("DEPRECATION")
         overridePendingTransition(0, 0)
+    }
+
+    /** The pictures of a share (one or several) or of "Set as"; none for text. */
+    private fun pictures(intent: Intent?): List<android.net.Uri> {
+        if (intent == null) return emptyList()
+        val picture = intent.type?.startsWith("image/") == true
+        return when (intent.action) {
+            Intent.ACTION_SEND -> if (picture) listOfNotNull(intent.getParcelableExtra(Intent.EXTRA_STREAM, android.net.Uri::class.java)) else emptyList()
+            Intent.ACTION_SEND_MULTIPLE -> if (picture) intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, android.net.Uri::class.java).orEmpty() else emptyList()
+            Intent.ACTION_ATTACH_DATA -> listOfNotNull(intent.data)
+            else -> emptyList()
+        }
     }
 
     private fun read(intent: Intent?): Triple<String?, Boolean, String> = when (intent?.action) {

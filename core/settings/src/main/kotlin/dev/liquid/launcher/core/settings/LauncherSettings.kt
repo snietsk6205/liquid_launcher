@@ -2121,6 +2121,18 @@ object LauncherSettings {
         summary = "In the home menu's wallpaper strip and the library. Each picture appears once, however often you used it",
         section = "wallpaper", keywords = "wallpaper history recent",
     )
+    /** 0.16.0: the order of the wallpaper library's pictures (its "Order and filter" card sets it too). */
+    val WallpaperLibrarySort = ChoiceSetting(
+        key = "wallpaper.librarySort", default = "newest",
+        options = listOf(
+            "newest" to "Newest first (in Recent: last used first)",
+            "used" to "Most used first",
+            "colour" to "By colour",
+        ),
+        title = "Order of the wallpaper library",
+        summary = "How the pictures are ordered in the library's lists and collections. Uses are counted from 0.16.0 on",
+        section = "wallpaper", keywords = "wallpaper library sort order newest most used colour",
+    )
     val WallpaperParallax = IntSetting(
         key = "wallpaper.parallax", default = 0, min = 0, max = 50, step = 5, unit = "%",
         title = "Parallax for new wallpapers",
@@ -2832,7 +2844,7 @@ object LauncherSettings {
         SearchClaude, SearchClaudeTarget, SearchClipboard, SearchEngine, SearchKeyboardHeight, SearchKeyboardOpenings, WallpaperSheetTall,
         KeyboardWallpaper, KeyboardWallpaperLook, KeyboardWallpaperSlot, KeyboardWallpaperLast, KeyboardWallpaperThemes,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
-        WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
+        WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperLibrarySort, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
         BackupAuto, BackupKeep, BackupWallpapers, BackupFolder, BackupLast,
         LayoutWindowLayout, LayoutWindowFrom, LayoutWindowTo, LayoutWindowDays,

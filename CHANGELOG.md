@@ -6,6 +6,36 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
+## 0.16.0 — 2026-11-23
+
+### Added
+- The wallpaper library sorts and filters. "Order and filter" (the arrows next to Recent, Favourites and All) puts the
+  pictures newest first, most used first or by colour, and filters them by colour (nine swatches) and by shape
+  (portrait, landscape, square). The order is remembered; uses are counted from this version on.
+- Collections of wallpapers: "+ Collection" in the library makes one, Select adds pictures to it, its chip opens it, and
+  holding its chip renames it or takes it away (its pictures stay). Favourites counts as one.
+- Select (the check button next to the order): tap several pictures, then make them favourites, add them to a
+  collection, take them out of Recent, or delete them. A delete can be undone for 10 seconds.
+- A long press on a picture shows it full screen with your home screen over it. Pick picks it; Back or a tap goes back.
+- Undo after a new wallpaper: for 10 seconds a glass notice offers Undo (after Apply in the wallpaper screen, a picture
+  from the wallpaper strip, or Shuffle) and brings back the wallpaper before, with its placement. The phone gets the new
+  wallpaper only once the Undo has gone, so an Undo costs nothing.
+- "Set as Liquid wallpaper" in the share menu (one picture or several), and "Liquid wallpaper" in a gallery's "Set as":
+  the pictures go into the library and the wallpaper screen opens with the first one picked.
+
+### Changed
+- After Place and Done, the picture stays on the screen behind the sheet, with its blur and dim, until you Apply, Cancel
+  or pick another one (it used to fade back to the old wallpaper at Done). Cancel fades it back.
+- A long press on a picture in the library now shows it full screen; its old menu (favourite, remove from recent,
+  delete) is in Select.
+- The library's first row is Recent, Favourites and All, with your collections and linked folders on the row below.
+- Back in the wallpaper screen goes one step back (the full-screen picture, selecting, placing) before closing it.
+- Tapping the picture already picked keeps it as it is (its placement used to be lost).
+
+### Fixed
+- Picking a favourite hid its heart: the heart is now on a small dark badge, above the ring.
+- After Place and Done, the library jumped back to the top: each list now keeps its place.
+
 ## 0.15.3 — 2026-11-23
 
 ### Added

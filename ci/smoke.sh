@@ -10,16 +10,16 @@
 #   redirect  1 to 7b (redirect, recents, screen off, Settings, glass benchmark), 14c letter index, 12b another app's
 #             widget and the updates screen, 15 and 16 (shaders)
 #   drawer    8b What's new, the drawer, 9c thirty tags, 9d picking (uses 9c's tags), search, the home menu, the
-#             wallpaper screen, edit mode, the Today panel on a fresh install
+#             wallpaper screen, edit mode, the Today panel on a fresh install; 11b the wallpaper library (0.16.0)
 #   study     14b to 14g (each uses the test calendar 14b makes), 14h the board camera, 17 speed check (its study
 #             hub step needs the study companion 14b switches on)
 set -u
 
 PART=${1:-all}
 case "$PART" in
-  all)      BLOCKS="redirect settings drawer study index widget shaders speed" ;;
+  all)      BLOCKS="redirect settings drawer library study index widget shaders speed" ;;
   redirect) BLOCKS="redirect settings index widget shaders" ;;
-  drawer)   BLOCKS="drawer" ;;
+  drawer)   BLOCKS="drawer library" ;;
   study)    BLOCKS="study speed" ;;
   *) echo "smoke.sh: unknown part '$PART' (all, redirect, drawer or study)"; exit 2 ;;
 esac
@@ -1435,6 +1435,148 @@ wait_top "SettingsActivity" 8 || true
 wait_screen 13-updates "Check for updates" 10 exact || true
 if on_screen 13-updates "Check for updates" exact; then pass "updates screen shows the check button"; else fail "updates screen shows the check button"; fi
 adb shell input keyevent KEYCODE_BACK
+sleep 1
+}
+
+blk_library() {
+clear_anr
+# 0.16.0 (D197, D198, D200): the wallpaper library. Pictures shared in ("Set as" in a gallery), selecting several, the
+# peek, and the flow Med saw break in 0.15.3: pick, Place, Done, Apply. The list must keep its place while the picture is
+# placed, a picked favourite must keep its heart, the placed picture stays until Apply, and Apply offers Undo.
+section "11b. Wallpaper library: shared pictures, select, peek, pick, Place, Done, Apply, Undo"
+home_and_settle
+PICS="$OUT/pictures"
+python3 ci/make_pictures.py "$PICS" 16 >/dev/null
+adb shell mkdir -p /sdcard/Pictures/LiquidTest >/dev/null 2>&1
+adb push "$PICS"/. /sdcard/Pictures/LiquidTest/ >/dev/null 2>&1
+cat > "$OUT/media.sh" <<'SH'
+content query --uri content://media/external/images/media --projection _id:_display_name --where "_display_name LIKE 'lltest-%'"
+SH
+cat > "$OUT/scan.sh" <<'SH'
+for f in /sdcard/Pictures/LiquidTest/lltest-*.png; do am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file://$f" >/dev/null 2>&1; done
+SH
+adb push "$OUT/media.sh" /data/local/tmp/media.sh >/dev/null 2>&1
+adb push "$OUT/scan.sh" /data/local/tmp/scan.sh >/dev/null 2>&1
+media_ids() { adb shell sh /data/local/tmp/media.sh 2>/dev/null | tr -d '\r' | grep -o '_id=[0-9]*' | cut -d= -f2; }
+IDS=$(media_ids)
+if [ -z "$IDS" ]; then
+  # Files pushed over adb are not always in the media store at once: ask for a scan, then look again.
+  adb shell sh /data/local/tmp/scan.sh
+  has_media() { [ -n "$(media_ids)" ]; }
+  wait_until 15 has_media || true
+  IDS=$(media_ids)
+fi
+COUNT_IDS=$(echo "$IDS" | grep -c . || true)
+echo "      $COUNT_IDS test pictures in the phone's media store"
+SHARED0=$(grep -c "shared: 1 of 1 picture" "$LOG" || true)
+N=0
+shared_reached() { [ "$(grep -c "shared: 1 of 1 picture" "$LOG" || true)" -ge "$1" ]; }
+for id in $IDS; do
+  adb shell su 0 am start -a android.intent.action.ATTACH_DATA -t image/png -d "content://media/external/images/media/$id" \
+    --grant-read-uri-permission -n "$PKG/.LiquidEntryActivity" >/dev/null 2>&1
+  N=$((N + 1))
+  wait_until 10 shared_reached $((SHARED0 + N)) || true
+done
+SHARED=$(( $(grep -c "shared: 1 of 1 picture" "$LOG" || true) - SHARED0 ))
+if [ "$COUNT_IDS" -ge 16 ] && [ "$SHARED" -ge 16 ]; then
+  pass "16 pictures shared to \"Set as Liquid wallpaper\" reach the library"
+else
+  fail "16 pictures shared to \"Set as Liquid wallpaper\" reach the library ($COUNT_IDS in the media store, $SHARED added)"
+  grep -E "Wallpaper.*(shared|import failed)" "$LOG" | tail -5 | sed 's/^/        /'
+fi
+wait_screen 11b-shared "Wallpaper 1" 8 || true
+# The last shared picture is picked: Apply it, so there is a wallpaper to go back to with Undo later.
+wait_gone 11b-shared "Working" 8 || true
+APPLY0=$(grep -c "apply: " "$LOG" || true)
+if tap_text 11b-shared "Apply" exact; then
+  applied() { [ "$(grep -c "apply: " "$LOG" || true)" -gt "$APPLY0" ]; }
+  wait_until 10 applied || true
+fi
+wait_gone 11b-shared "Apply" 8 exact || true
+sleep 1
+# Back into the library from the home menu's strip.
+adb shell am start -n "$HOME_ACTIVITY" --es dev.liquid.launcher.OPEN wallpaper >/dev/null 2>&1
+wait_screen 11b-strip "Library and more" 8 exact || true
+tap_text 11b-strip "Library and more" exact || true
+wait_screen 11b-lib "Apply" 8 exact || true
+tap_text 11b-lib "All" exact || true
+wait_screen 11b-all "Wallpaper 16" 6 || true
+# Down to the end of the list: two slow drags, so it moves as far as the finger and no further.
+POS=$(python3 ci/find_text.py "$OUT/11b-all.xml" "Wallpaper 5" bounds) || POS=""
+if [ -n "$POS" ]; then
+  set -- $POS
+  X=$(( ($1 + $3) / 2 )); Y1=$(( $4 - 10 )); Y0=$(( $2 - ($4 - $2) - 40 ))
+  [ "$Y0" -lt 100 ] && Y0=100
+  adb shell input swipe "$X" "$Y1" "$X" "$Y0" 900
+  sleep 0.6
+  adb shell input swipe "$X" "$Y1" "$X" "$Y0" 900
+fi
+wait_screen 11b-down "Wallpaper 16" 6 || true
+peek 11b-down
+# Several at once: Select, one picture, Favourite, Done.
+if tap_text 11b-down "Select" exact; then
+  wait_screen 11b-select "Tap pictures to select them" 6 || true
+  tap_text 11b-select "Wallpaper 14" || true
+  wait_screen 11b-selected "1 picture selected" 6 || true
+  tap_text 11b-selected "Favourite" exact || true
+  sleep 0.6
+  dump 11b-faved
+  tap_text 11b-faved "Done" exact || true
+fi
+wait_screen 11b-fav "Wallpaper 14, favourite" 6 || true
+if on_screen 11b-fav "Wallpaper 14, favourite"; then pass "Select: several pictures at once (one made a favourite)"; else fail "Select: several pictures at once (one made a favourite)"; look 11b-fav 30; fi
+# The peek: a long press shows the picture full screen, the sheet steps aside; Back brings it back.
+PEEK0=$(grep -c "peek at a picture" "$LOG" || true)
+POS=$(python3 ci/find_text.py "$OUT/11b-fav.xml" "Wallpaper 13") || POS=""
+if [ -n "$POS" ]; then adb shell input swipe $POS $POS 900; fi
+wait_screen 11b-peek "Pick" 6 exact || true
+if on_screen 11b-peek "Pick" exact && ! on_screen 11b-peek "Apply" exact && [ "$(grep -c "peek at a picture" "$LOG" || true)" -gt "$PEEK0" ]; then
+  pass "a long press peeks at a picture full screen"
+else
+  fail "a long press peeks at a picture full screen"
+  look 11b-peek 20
+fi
+tap_text 11b-peek "Back" exact || adb shell input keyevent KEYCODE_BACK
+wait_screen 11b-back "Apply" 6 exact || true
+# Pick the favourite: its heart stays (0.15.3: it vanished under the ring).
+tap_text 11b-back "Wallpaper 14" || true
+wait_screen 11b-picked "Wallpaper 14, favourite, picked" 6 || true
+if on_screen 11b-picked "Wallpaper 14, favourite, picked"; then pass "a picked favourite keeps its heart"; else fail "a picked favourite keeps its heart"; look 11b-picked 30; fi
+wait_gone 11b-picked "Working" 8 || true
+# Place, move it a little, Done: the list is where it was and the placed picture stays on the screen.
+if tap_text 11b-picked "Place" exact; then
+  wait_screen 11b-place "Pinch and drag to place the picture" 6 || true
+  adb shell input swipe 540 900 700 900 500
+  sleep 0.5
+  dump 11b-place
+  tap_text 11b-place "Done" exact || true
+  wait_log "placed: the picture stays on the screen" 6
+  wait_screen 11b-done "Apply" 6 exact || true
+  if on_screen 11b-done "Wallpaper 14, favourite, picked"; then
+    pass "after Place and Done the library is where it was, the picture still picked"
+  else
+    fail "after Place and Done the library is where it was, the picture still picked"
+    look 11b-done 30
+  fi
+  if grep -q "placed: the picture stays on the screen" "$LOG"; then pass "Done keeps the placed picture on the screen"; else fail "Done keeps the placed picture on the screen"; fi
+  # Apply: the placed picture, with Undo offered for 10 s.
+  APPLY0=$(grep -c "apply: the placed picture" "$LOG" || true)
+  tap_text 11b-done "Apply" exact || true
+  wait_screen 11b-applied "Undo" 8 exact || true
+  if [ "$(grep -c "apply: the placed picture" "$LOG" || true)" -gt "$APPLY0" ] && on_screen 11b-applied "Undo" exact; then
+    pass "Apply sets the placed picture and offers Undo"
+    tap_text 11b-applied "Undo" exact || true
+    wait_log "undo: back to the wallpaper before" 8
+    if grep -q "undo: back to the wallpaper before" "$LOG"; then pass "Undo brings the wallpaper before back"; else fail "Undo brings the wallpaper before back"; fi
+  else
+    fail "Apply sets the placed picture and offers Undo"
+    look 11b-applied 20
+    grep -E "Wallpaper" "$LOG" | tail -8 | sed 's/^/        /'
+  fi
+else
+  fail "the wallpaper screen has Place"
+fi
+adb shell input keyevent KEYCODE_HOME
 sleep 1
 }
 

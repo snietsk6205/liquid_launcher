@@ -281,6 +281,7 @@ class MainActivity : ComponentActivity() {
         }
 
         intent?.let { takeSearchText(it) }
+        intent?.let { takeSharedPictures(it) }
         intent?.getStringExtra(EXTRA_OPEN)?.let { returnState.request = it }
 
         val lastCrash = java.io.File(filesDir, "last-crash.txt")
@@ -296,6 +297,7 @@ class MainActivity : ComponentActivity() {
         overridePendingTransition(0, 0)
         // Settings asked to open something here (the wallpaper screen): not a Home press.
         takeSearchText(intent)
+        takeSharedPictures(intent)
         intent.getStringExtra(EXTRA_OPEN)?.let {
             returnState.request = it
             return
@@ -397,6 +399,13 @@ class MainActivity : ComponentActivity() {
         returnState.searchAsk = intent.getBooleanExtra(LiquidEntryActivity.EXTRA_ASK, false)
     }
 
+    /** 0.16.0: pictures handed over by [LiquidEntryActivity] for the wallpaper library ("shared pictures" request). */
+    private fun takeSharedPictures(intent: Intent) {
+        if (intent.getStringExtra(EXTRA_OPEN) != OPEN_SHARED_PICTURES) return
+        val clip = intent.clipData ?: return
+        returnState.sharedPictures = (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
+    }
+
     /** 0.12.0: "Liquid" in the text selection menu follows its setting (Settings → Search → More). */
     private fun applySelectionEntry() {
         val wanted = (application as LauncherApp).settings.get(LauncherSettings.SearchSelectionEntry)
@@ -426,6 +435,9 @@ class MainActivity : ComponentActivity() {
 
         /** Extra naming what to open on the home screen: "wallpaper" or "layouts". */
         const val EXTRA_OPEN = "dev.liquid.launcher.OPEN"
+
+        /** 0.16.0: [EXTRA_OPEN] for pictures shared to the launcher (in the intent's ClipData). */
+        const val OPEN_SHARED_PICTURES = "sharedPictures"
     }
 
     private fun applyExcludeFromRecents() {

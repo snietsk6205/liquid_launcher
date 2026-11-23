@@ -139,6 +139,9 @@ class HomeReturnState {
     var searchText: String? = null
     var searchAsk = false
 
+    /** 0.16.0: the pictures of a "sharedPictures" request (shared to "Set as Liquid wallpaper"). */
+    var sharedPictures: List<android.net.Uri>? = null
+
     /**
      * Asked by the activity as it is paused: is something showing that will be closed while the
      * launcher is away (drawer, search, a menu)? Set by the home screen.
@@ -337,7 +340,8 @@ private fun HomeScreenBody(
             null
         }
     }
-    val image = savedImage
+    // 0.16.0 (D197): a picture placed in the wallpaper screen stands in for the wallpaper after Done, blur and all.
+    val image = studio?.shownImage ?: savedImage
     // W8 (P8): the picture's own look, when it has one, over the one set for all.
     val libraryState by data.wallpapers.state.collectAsState()
     val pictureLook = if (studio != null) studio.shownLook else libraryState.current?.let { id -> libraryState.items.firstOrNull { it.id == id }?.look }
@@ -349,16 +353,19 @@ private fun HomeScreenBody(
     val drawerShown = if (studio != null) drawerConfig.copy(dim = studio.drawerDim / 100f) else drawerConfig
     val motionShown = if (studio != null) motion.copy(homeBlurDp = studio.drawerBlur) else motion
     val density1 = LocalDensity.current
-    val blurredWallpaper by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, image, homeBlurDp) {
+    // 0.16.0: kept with the picture it was made from, so a new wallpaper (or the placed preview) never shows the old
+    // one's blur for the moment its own is being made: it shows sharp until then.
+    val blurredPair by produceState<Pair<androidx.compose.ui.graphics.ImageBitmap, androidx.compose.ui.graphics.ImageBitmap>?>(null, image, homeBlurDp) {
         val source = image
         value = if (source != null && homeBlurDp > 0) {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                dev.liquid.launcher.core.designsystem.WallpaperBlur.blur(source.asAndroidBitmap(), homeBlurDp * density1.density).asImageBitmap()
+                source to dev.liquid.launcher.core.designsystem.WallpaperBlur.blur(source.asAndroidBitmap(), homeBlurDp * density1.density).asImageBitmap()
             }
         } else {
             null
         }
     }
+    val blurredWallpaper = blurredPair?.takeIf { it.first === image && homeBlurDp > 0 }?.second
     // The blur behind the drawer and behind search: a blurred copy of the wallpaper, made once,
     // that fades in over the sharp one. Costs two textured quads per frame. Up to 0.5.0 the whole
     // home screen went through a live blur whose radius changed every frame, the most expensive
@@ -462,6 +469,11 @@ private fun HomeScreenBody(
                 }
                 // 0.11.2: Settings → Diagnostics → Speed check.
                 "speedCheck" -> controller.runSpeedCheck()
+                // 0.16.0: pictures shared to "Set as Liquid wallpaper": into the library, then the wallpaper screen.
+                "sharedPictures" -> returnState.sharedPictures?.let { uris ->
+                    returnState.sharedPictures = null
+                    controller.importShared(uris)
+                }
                 // 0.12.0 (D171): text from another app, the text selection menu or the keyboard.
                 "search" -> returnState.searchText?.let { text ->
                     returnState.searchText = null
@@ -671,8 +683,9 @@ private fun HomeScreenBody(
                       renderEffect = if (radius >= 0.5f) BlurEffect(radius, radius, TileMode.Clamp) else null
                   }
           ) {
-            val placing = studio?.takeIf { it.drawsSource }
-            val shownWallpaper = placing?.sourceImage ?: blurredWallpaper ?: image
+            // While a picture is placed, or peeked at with a long press (0.16.0), the home screen draws it as it is.
+            val placing = studio?.takeIf { it.drawsSource || it.drawsPeek }
+            val shownWallpaper = placing?.let { if (it.drawsPeek) it.peekImage else it.sourceImage } ?: blurredWallpaper ?: image
             // The wallpaper takes part in the drawer transition (it drifts and grows a little).
             Box(
                 Modifier.fillMaxSize().graphicsLayer {
@@ -691,7 +704,10 @@ private fun HomeScreenBody(
             if (shownWallpaper != null) {
                 WallpaperImage(
                     image = shownWallpaper,
-                    frame = if (placing != null) ({ placing.frame(controller.screenWidth, controller.screenHeight) }) else ({ null }),
+                    frame = if (placing != null) ({
+                        if (placing.drawsPeek) placing.peekFrame(controller.screenWidth, controller.screenHeight)
+                        else placing.frame(controller.screenWidth, controller.screenHeight)
+                    }) else ({ null }),
                     offset = {
                         studio?.sweep ?: run {
                             val pages = controller.pager.pageCount
@@ -701,21 +717,20 @@ private fun HomeScreenBody(
                     modifier = Modifier.layerBackdrop(wallpaperBackdrop),
                     filter = { controller.wallpaperFilter(saturation) },
                 )
-                // 0.11.1: after placing, the placed picture fades back into the wallpaper (Apply then ripples to it).
-                val leaving = studio?.takeIf { it.placeLeaving && !it.adjusting }
-                val leavingImage = leaving?.sourceImage
-                if (leaving != null && leavingImage != null) {
+                // 0.16.0: a picture that stopped showing (a placed preview that ended, the peek) fades back into the wallpaper.
+                val fading = studio?.fade
+                if (studio != null && fading != null) {
                     WallpaperImage(
-                        image = leavingImage,
-                        frame = { leaving.frame(controller.screenWidth, controller.screenHeight) },
+                        image = fading.image,
+                        frame = { fading.frame?.invoke(controller.screenWidth, controller.screenHeight) },
                         offset = {
-                            leaving.sweep ?: run {
+                            studio.sweep ?: run {
                                 val pages = controller.pager.pageCount
                                 if (pages <= 1) 0.5f else (controller.pager.currentPage + controller.pager.currentPageOffsetFraction) / (pages - 1)
                             }
                         },
                         modifier = Modifier,
-                        alpha = { leaving.placeShown.value },
+                        alpha = { studio.fadeAlpha.value },
                     )
                 }
                 val deep = deepWallpaper

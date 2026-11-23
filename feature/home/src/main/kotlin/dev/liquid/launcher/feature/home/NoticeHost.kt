@@ -118,11 +118,12 @@ internal fun NoticeHost(controller: HomeController, glass: GlassConfig, lightBac
                 notice = next
                 shown.animateTo(1f, Motion.pop())
                 var visibleFor = 0
-                while (visibleFor < current.durationMs) {
+                val showFor = next.showMs ?: current.durationMs.toLong()
+                while (visibleFor < showFor) {
                     delay(80)
                     visibleFor += 80
-                    // Something newer is waiting, or the user tapped it away.
-                    if ((Notices.hasWaiting && visibleFor >= 600) || notice == null) break
+                    // Something newer is waiting (unless this one holds its time, D200), or the user tapped it away.
+                    if ((Notices.hasWaiting && visibleFor >= 600 && !next.holds) || notice == null) break
                 }
                 shown.animateTo(0f, Motion.exit())
                 notice = null
@@ -200,6 +201,24 @@ internal fun NoticeHost(controller: HomeController, glass: GlassConfig, lightBac
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                }
+            }
+            // 0.16.0 (D200): a button of its own inside the label ("Undo"), apart from the label's own action.
+            val label = showing.buttonLabel
+            val run = showing.button
+            if (label != null && run != null) {
+                Spacer(Modifier.width(12.dp))
+                Box(
+                    Modifier
+                        .clip(shape)
+                        .background(color.copy(alpha = 0.16f), shape)
+                        .clickable {
+                            run()
+                            notice = null
+                        }
+                        .padding(horizontal = 12.dp, vertical = 5.dp),
+                ) {
+                    Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 14.sp, fontWeight = FontWeight.Bold, shadow = shadow))
                 }
             }
         }
