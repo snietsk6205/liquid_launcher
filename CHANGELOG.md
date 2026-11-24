@@ -6,7 +6,7 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
-## 0.16.0 — 2026-11-23
+## 0.16.0 — 2026-11-24
 
 ### Added
 - The wallpaper library sorts and filters. "Order and filter" (the arrows next to Recent, Favourites and All) puts the

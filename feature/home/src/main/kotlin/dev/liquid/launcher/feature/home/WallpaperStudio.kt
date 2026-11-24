@@ -813,13 +813,15 @@ internal fun WallpaperStudio(
     // 0.16.0: a picture shared to "Set as Liquid wallpaper" is picked as the screen opens (or while it is open).
     LaunchedEffect(controller.sharedPick) {
         val item = controller.sharedPick ?: return@LaunchedEffect
-        controller.sharedPick = null
         DebugLog.event("Wallpaper", "picked what was shared: " + (item.video?.kind ?: "picture"))
         state.flow = state.flow.endSelecting()
         state.page = "pictures"
         state.tab = "all"
-        state.grid("tab:all").scrollToItem(0)
+        // Picked before anything waits (run 150): clearing sharedPick restarts this effect, and a shared video's re-encode
+        // question held the list's scroll long enough for the restart to cancel the pick, so Apply had nothing to apply.
         choose(WallpaperPick.Library(item))
+        scope.launch { state.grid("tab:all").scrollToItem(0) }
+        controller.sharedPick = null
     }
 
     Box(Modifier.fillMaxSize()) {

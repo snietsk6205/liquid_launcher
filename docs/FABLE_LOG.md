@@ -1783,3 +1783,10 @@ question was still closing, so "Apply" was never tapped (the log has no apply at
 prints the screen when it is missing; the wallpaper screen logs what was shared and picked, and an Apply without a new
 picture. Same commit: the frame meter's labels for the calendar (D215), the Hijri check, smaller days on the compact
 size, a summary for every calendar option.
+
+Run 150: everything green but the video check, and the calendar's check 18 fully green (the Hijri tables are there on
+Android: "Hijri today: 14 Jumada al-Akhira 1448"). The video check's new diagnostics showed a real bug: a shared video
+was picked ("picked what was shared: video") and Apply then found nothing to apply ("apply: no new picture, only the
+looks"). The wallpaper screen cleared the share before picking it; that restarts its effect, and while the re-encode
+question showed, the list's scroll waited long enough for the restart to cancel the pick (pictures, without the
+question, won the race). It now picks first. Sharing a video would have done nothing on the phone.
