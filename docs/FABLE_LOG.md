@@ -1710,3 +1710,16 @@ have permission to content://media/…`), the whole process with it (the redirec
 picture without a grant it may pass on would have done the same. Fixed: the entry catches it, logs it and lets the home
 screen try without the grant ("Could not read that picture" when it cannot); the test now shares pictures from the
 launcher's own file provider.
+
+### Part 3: Folders and Island (checkpoint)
+
+| Point | State | What |
+|---|---|---|
+| Island's storage through File Shuttle | Done, to test on the phone | "+ Files" and "+ Folder" use Android's picker; its Work tab is the way in when File Shuttle exists. Whether the folder picker shows the tab and keeps the access after a restart is logged ("folder linked: … (work profile, Island; access kept / until the phone restarts)"). |
+| Detect Insular, don't assume File Shuttle | Done | By package (Insular first, then Island); the how-to says what to do when the tab never shows (an ordinary folder, or Syncthing). |
+| Folders per layout | Done | Hold a folder's chip; none chosen = all; the automatic changes follow. |
+| Always copy what is applied | Done | Hand picks join the library (as before); automatic ones are saved copies (D206). |
+| Island paused | Done | "Island is paused, showing saved copies"; read again on the profile broadcasts. |
+| File Shuttle off and Android refuses | Done | The folder says what happened in plain words; the how-to has the ways in. |
+| Share from apps inside Island | Built, to see on the phone | "Set as Liquid wallpaper" is declared for pictures; whether it shows in Insular's apps depends on what Insular lets cross profiles. |
+| Strip: folders' newest | Done | From the remembered list, read again in the background. |

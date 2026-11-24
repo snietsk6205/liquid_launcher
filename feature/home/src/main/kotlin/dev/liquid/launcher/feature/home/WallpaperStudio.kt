@@ -226,6 +226,10 @@ internal class StudioState(store: SettingsStore, currentLook: dev.liquid.launche
     var naming by mutableStateOf<Naming?>(null)
     var collectionMenu by mutableStateOf<WallpaperCollection?>(null)
 
+    /** 0.16.0 (D205): a linked folder's menu (which layouts use it, sub-folders, unlink), and the Island how-to. */
+    var folderMenu by mutableStateOf<dev.liquid.launcher.core.data.LinkedFolder?>(null)
+    var islandHelp by mutableStateOf(false)
+
     /** How many pictures a delete is about to take away, while it asks first (no Undo without wallpaper notices). */
     var confirmDelete by mutableStateOf<Int?>(null)
 
@@ -618,11 +622,43 @@ internal fun WallpaperStudio(
         }
     }
 
+    /** 0.16.0 (D205): "+ Files": Android's file picker, whose Work tab reaches Island's or Insular's files (File Shuttle). */
+    fun addFiles() {
+        controller.pickFiles { uris ->
+            if (uris.isEmpty()) return@pickFiles
+            scope.launch {
+                state.busy = true
+                val island = uris.count { dev.liquid.launcher.core.data.ProfileUris.isOtherProfile(it.authority) }
+                val added = uris.mapNotNull { data.wallpapers.importUri(it) }
+                state.busy = false
+                DebugLog.event("Wallpaper", "+ Files: ${added.size} of ${uris.size} picture(s) added" + if (island > 0) ", $island from the work profile (Island)" else "")
+                if (added.isEmpty()) {
+                    controller.notice(dev.liquid.launcher.core.common.NoticeKind.Wallpaper, "Those pictures could not be read", if (island > 0) "Island may be paused" else null)
+                    return@launch
+                }
+                state.tab = "all"
+                choose(WallpaperPick.Library(added.first()))
+                if (added.size > 1) controller.toast("${added.size} pictures added to your library")
+                data.wallpapers.describeMissing()
+            }
+        }
+    }
+
     fun linkFolder() {
         controller.pickFolder { uri ->
             if (uri == null) return@pickFolder
             val folder = data.wallpapers.addFolder(uri)
-            if (folder == null) controller.toast("That folder could not be opened") else state.tab = folder.uri
+            if (folder == null) {
+                controller.toast("That folder could not be opened")
+                return@pickFolder
+            }
+            state.tab = folder.uri
+            // 0.16.0 (D205): what Android allowed, in plain words (learned on the phone for Island's folders).
+            when {
+                folder.island && !folder.kept -> controller.notice(dev.liquid.launcher.core.common.NoticeKind.Wallpaper, "Linked from Island, until the phone restarts", "Android does not keep this folder's access: link it again then")
+                !folder.kept -> controller.notice(dev.liquid.launcher.core.common.NoticeKind.Wallpaper, "Linked until the phone restarts", "Android does not keep this folder's access: link it again then")
+                folder.island -> controller.notice(dev.liquid.launcher.core.common.NoticeKind.Wallpaper, "Linked from Island", "Pictures you use are copied in, so they stay while Island is paused")
+            }
         }
     }
 
@@ -717,9 +753,10 @@ internal fun WallpaperStudio(
                     if (!controller.wallpaperStudio) return@changeScreen null
                     // 0.16.0 (D200): what this replaces, for Undo, before anything is written.
                     controller.keepForUndo((pick as? WallpaperPick.Library)?.item?.id, targetLayout)
-                    // A folder's picture joins the library now, so it is the current picture as soon as it shows.
+                    // A folder's picture joins the library now, so it is the current picture as soon as it shows (0.16.0: a
+                    // saved copy picked by hand joins it too, D206).
                     val item = when (pick) {
-                        is WallpaperPick.Library -> pick.item
+                        is WallpaperPick.Library -> pick.item.also { if (it.saved) data.wallpapers.promote(it.id) }
                         is WallpaperPick.External -> data.wallpapers.importUri(pick.uri, pick.folder)
                     }
                     PreparedWallpaper(bitmap, item?.let { WallpaperPick.Library(it) } ?: pick, crop, parallax, tone, palette)
@@ -754,6 +791,8 @@ internal fun WallpaperStudio(
         controller.wallpaperStudioBack = {
             val back = state.flow.back()
             when {
+                state.islandHelp -> state.islandHelp = false
+                state.folderMenu != null -> state.folderMenu = null
                 state.confirmDelete != null -> state.confirmDelete = null
                 state.naming != null -> state.naming = null
                 state.collectionMenu != null -> state.collectionMenu = null
@@ -843,6 +882,7 @@ internal fun WallpaperStudio(
                         choose = { choose(it) },
                         peek = { peekAt(it) },
                         addPhotos = ::addPhotos,
+                        addFiles = ::addFiles,
                         linkFolder = ::linkFolder,
                         newCollection = { state.naming = Naming(null) },
                         gridHeight = gridHeight,
@@ -971,6 +1011,57 @@ internal fun WallpaperStudio(
             dismissButton = { TextButton(onClick = { state.confirmDelete = null }) { Text("Cancel") } },
         )
     }
+    state.folderMenu?.let { folder ->
+        val layout = layouts.current?.let { id -> layouts.layouts.firstOrNull { it.id == id } }
+        AlertDialog(
+            onDismissRequest = { state.folderMenu = null },
+            title = { Text(folder.name) },
+            text = {
+                Column {
+                    // 0.16.0 (D205): which layouts use the folder (none chosen: every layout, as before).
+                    if (layout != null) {
+                        val chosen = layout.folders
+                        val uses = chosen == null || folder.uri in chosen
+                        DialogLine(if (uses) "Used by \"${layout.name}\": tap to stop" else "Not used by \"${layout.name}\": tap to use it") {
+                            val all = library.folders.map { it.uri }
+                            val now = (chosen ?: all).toMutableList()
+                            if (uses) now.remove(folder.uri) else now.add(folder.uri)
+                            // Every folder chosen is the same as none chosen: all of them, as before.
+                            data.layouts.setFolders(layout.id, now.takeIf { it.toSet() != all.toSet() })
+                            state.folderMenu = null
+                        }
+                    }
+                    DialogLine(if (folder.deep) "Sub-folders: shown (tap to hide)" else "Sub-folders: hidden (tap to show)") {
+                        data.wallpapers.setFolderDeep(folder.uri, !folder.deep)
+                        state.folderMenu = null
+                    }
+                    DialogLine("Unlink the folder (its pictures stay on the phone)") {
+                        data.wallpapers.removeFolder(folder.uri)
+                        if (state.tab == folder.uri) state.tab = "recent"
+                        state.folderMenu = null
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { state.folderMenu = null }) { Text("Close") } },
+        )
+    }
+    if (state.islandHelp) {
+        val app = remember { dev.liquid.launcher.core.data.IslandProfile.appName(context) ?: "Island" }
+        AlertDialog(
+            onDismissRequest = { state.islandHelp = false },
+            title = { Text("$app's pictures") },
+            text = {
+                Text(
+                    "\"+ Files\" and \"+ Folder\" open Android's file picker. If $app has File Shuttle and it is on, the picker shows a " +
+                        "Work tab next to Personal: pick there. Pictures you use are copied into the launcher, so the wallpaper stays " +
+                        "while $app is paused.\n\nIf the Work tab never shows (some versions of Insular have no File Shuttle), keep your " +
+                        "wallpapers in an ordinary folder, or sync a folder from $app to the phone with Syncthing, and link that folder. " +
+                        "Hold a folder's chip to choose which layouts use it.",
+                )
+            },
+            confirmButton = { TextButton(onClick = { state.islandHelp = false }) { Text("Got it") } },
+        )
+    }
     state.collectionMenu?.let { collection ->
         AlertDialog(
             onDismissRequest = { state.collectionMenu = null },
@@ -1027,6 +1118,7 @@ private fun PicturesPage(
     choose: (WallpaperPick) -> Unit,
     peek: (WallpaperPick) -> Unit,
     addPhotos: () -> Unit,
+    addFiles: () -> Unit,
     linkFolder: () -> Unit,
     newCollection: () -> Unit,
     gridHeight: androidx.compose.ui.unit.Dp,
@@ -1056,9 +1148,13 @@ private fun PicturesPage(
         for (collection in library.collections.sortedBy { if (it.id == mine) 0 else 1 }) {
             TabChip(collection.name, state.tab == "col:" + collection.id, color, onLongClick = { state.collectionMenu = collection }) { state.tab = "col:" + collection.id }
         }
-        for (folder in library.folders) TabChip(folder.name, state.tab == folder.uri, color) { state.tab = folder.uri }
+        for (folder in library.folders) {
+            TabChip(if (folder.island) "${folder.name} (Island)" else folder.name, state.tab == folder.uri, color, onLongClick = { state.folderMenu = folder }) { state.tab = folder.uri }
+        }
         TabChip("+ Collection", false, color) { newCollection() }
         TabChip("+ Folder", false, color) { linkFolder() }
+        val islandApp = remember { dev.liquid.launcher.core.data.IslandProfile.appName(controller.context) }
+        if (islandApp != null) TabChip("$islandApp's pictures?", false, color) { state.islandHelp = true }
     }
     androidx.compose.animation.AnimatedVisibility(state.sortCard) {
         SortCard(state, color, data.settings)
@@ -1089,7 +1185,7 @@ private fun PicturesPage(
     // 0.10.4: taller (two rows and a bit; it was one and a half), and the sheet's handle pulls it up further.
     Box(Modifier.fillMaxWidth().height(if (folder != null) gridHeight - 44.dp else gridHeight)) {
         if (folder != null) {
-            FolderGrid(folder, pickedUri, color, controller, state.grid("folder:" + folder.uri), choose, peek)
+            FolderGrid(folder, pickedUri, color, controller, state.grid("folder:" + folder.uri), choose, peek, library)
         } else {
             val layoutsNow by data.layouts.state.collectAsState()
             val items = remember(library, layoutsNow.current, state.tab, state.sort, state.family, state.shape) { shownItems(state, library, data) }
@@ -1102,7 +1198,9 @@ private fun PicturesPage(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item(key = "add") { AddThumb(color, addPhotos) }
+                item(key = "add") { AddThumb(color, LauncherIcons.Add, "Photos", addPhotos) }
+                // 0.16.0 (D205): Android's file picker (its Work tab: Island's and Insular's files, with File Shuttle).
+                item(key = "files") { AddThumb(color, LauncherIcons.Folder, "Files", addFiles) }
                 itemsIndexed(items, key = { _, it -> it.id }) { index, item ->
                     val key = PickerFlow.keyOfLibrary(item.id)
                     LibraryThumb(
@@ -1261,16 +1359,52 @@ private fun FolderGrid(
     grid: LazyGridState,
     choose: (WallpaperPick) -> Unit,
     peek: (WallpaperPick) -> Unit,
+    library: dev.liquid.launcher.core.data.WallpaperLibraryState,
 ) {
-    val images by produceState<List<FolderImage>?>(null, folder.uri, folder.deep) {
+    // 0.16.0 (D205): read again when Island's work profile is paused, back or unlocked.
+    val profileTick by dev.liquid.launcher.core.data.IslandProfile.changes.collectAsState()
+    val read by produceState<dev.liquid.launcher.core.data.FolderRead?>(null, folder.uri, folder.deep, profileTick) {
         value = null
-        value = controller.data.wallpapers.folderImages(folder)
+        value = controller.data.wallpapers.readFolder(folder)
     }
-    val list = images
-    if (list == null) {
+    val result = read
+    if (result == null) {
         Text("Reading the folder…", style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.75f), fontSize = 13.sp))
         return
     }
+    if (result.unreachable) {
+        // Never an error: what is kept of it (pictures used from it, saved copies) and why the rest is not there now.
+        val paused = folder.island && dev.liquid.launcher.core.data.IslandProfile.paused(controller.context)
+        val kept = remember(library, folder.name) { library.items.filter { it.folder == folder.name }.sortedByDescending { maxOf(it.lastUsed, it.added) } }
+        Column {
+            Text(
+                when {
+                    paused -> "Island is paused, showing saved copies."
+                    folder.island -> "Island's folder cannot be read now (Island locked or File Shuttle off?), showing saved copies."
+                    !folder.kept -> "Android no longer gives access to this folder (it lasts until a restart): link it again with + Folder."
+                    else -> "This folder cannot be read now (moved, or its storage is gone): link it again with + Folder if it moved."
+                },
+                modifier = Modifier.padding(bottom = 8.dp),
+                style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.85f), fontSize = 13.sp),
+            )
+            if (kept.isEmpty()) {
+                Text("No picture of it was used yet, so none is kept.", style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.7f), fontSize = 12.sp))
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(4),
+                    state = grid,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    itemsIndexed(kept, key = { _, it -> it.id }) { index, item ->
+                        LibraryThumb(item, index, false, null, color, controller, onHold = { peek(WallpaperPick.Library(item)) }) { choose(WallpaperPick.Library(item)) }
+                    }
+                }
+            }
+        }
+        return
+    }
+    val list = result.images
     if (list.isEmpty()) {
         Text(if (folder.deep) "No pictures in this folder or its sub-folders." else "No pictures in this folder. \"Sub-folders\" above also looks inside its folders.", style = TextStyle(fontFamily = HomeTheme.font, color = color.copy(alpha = 0.75f), fontSize = 13.sp))
         return
@@ -1415,7 +1549,7 @@ private fun IconChip(icon: Int, label: String, on: Boolean, color: Color, onClic
 }
 
 @Composable
-private fun AddThumb(color: Color, onClick: () -> Unit) {
+private fun AddThumb(color: Color, icon: Int, label: String, onClick: () -> Unit) {
     val shape = RoundedCornerShape(12.dp)
     Column(
         Modifier
@@ -1428,8 +1562,8 @@ private fun AddThumb(color: Color, onClick: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        LauncherIcon(LauncherIcons.Add, contentDescription = null, tint = color, size = 22.dp)
-        Text("Photos", style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 11.sp))
+        LauncherIcon(icon, contentDescription = null, tint = color, size = 22.dp)
+        Text(label, style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 11.sp))
     }
 }
 

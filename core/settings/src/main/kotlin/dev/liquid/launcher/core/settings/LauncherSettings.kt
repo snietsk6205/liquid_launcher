@@ -2263,6 +2263,21 @@ object LauncherSettings {
         section = "wallpaperLayout", keywords = "wallpaper tint strength amount layout look",
     )
 
+    // ---- 0.16.0 (D205): folders and Island (Settings › Wallpaper and layouts › Folders and Island) ----
+
+    val WallpaperStripFolders = BoolSetting(
+        key = "wallpaper.stripFolders", default = true,
+        title = "Newest pictures of your folders in the wallpaper strip",
+        summary = "After your favourites and recent ones, the newest pictures of the folders the layout uses (Island's too); " +
+            "shown from what was last seen there, so the strip opens at once",
+        section = "wallpaperFolders", keywords = "wallpaper strip folders newest island insular",
+    )
+    val WallpaperStripFolderCount = IntSetting(
+        key = "wallpaper.stripFolderCount", default = 6, min = 3, max = 12, step = 1,
+        title = "How many from the folders",
+        section = "wallpaperFolders", keywords = "wallpaper strip folders how many newest",
+    )
+
     // ---- 0.16.0 (D203): the lock screen ----
 
     val WallpaperLockMode = ChoiceSetting(
@@ -2937,7 +2952,7 @@ object LauncherSettings {
         WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperLibrarySort, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, WallpaperRotationMinutes, WallpaperRotationTimes, LayoutsAutoSave,
         LayoutsOwnWallpaper, LayoutsOwnRecents, LayoutsOwnCollection, LayoutsTransition, WallpaperHomeSaturation, WallpaperHomeTint, WallpaperHomeTintAmount,
-        WallpaperLockMode, WallpaperLockPicture, Migrated0160,
+        WallpaperLockMode, WallpaperLockPicture, Migrated0160, WallpaperStripFolders, WallpaperStripFolderCount,
         BackupAuto, BackupKeep, BackupWallpapers, BackupFolder, BackupLast,
         LayoutWindowLayout, LayoutWindowFrom, LayoutWindowTo, LayoutWindowDays,
         StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyCameraApp, StudyBoardCamera, StudyPendingPhoto, StudyPlanLink, StudyLinkOpener,

@@ -198,15 +198,19 @@ object Wallpapers {
     ): String? {
         val store = WallpaperStore.get(context)
         val error = store.persist(prepared.bitmap, lockToo(data), system = system)
+        // A folder's picture picked by hand joins the library; one an automatic change used is kept as a saved copy
+        // (0.16.0, D206: until then it was not kept at all), so recents, the layouts and Undo work while its folder cannot
+        // be read (Island paused).
         val item = when (val pick = prepared.pick) {
-            is WallpaperPick.Library -> pick.item
-            is WallpaperPick.External -> if (keepFolderPicture) data.wallpapers.importUri(pick.uri, pick.folder) else null
+            is WallpaperPick.Library -> pick.item.also { if (it.saved && keepFolderPicture) data.wallpapers.promote(it.id) }
+            is WallpaperPick.External -> data.wallpapers.importUri(pick.uri, pick.folder, saved = !keepFolderPicture)
         }
         if (item != null) {
             if (markUsed) markUsed(data, item.id, prepared.crop, prepared.parallax)
         } else {
             data.wallpapers.clearCurrent()
         }
+        pruneSaved(data)
         if (error == null && layout != null) {
             data.layouts.setWallpaper(layout, store.currentFile, item?.id, placementOf(prepared.crop, prepared.parallax))
         }
@@ -214,6 +218,19 @@ object Wallpapers {
     }
 
     fun placementOf(crop: CropSpec, parallax: Float) = dev.liquid.launcher.core.data.LayoutPlacement(crop.cx, crop.cy, crop.zoom, parallax)
+
+    /** 0.16.0 (D206): saved copies no layout's recents, the recents shown, the current picture or a layout needs, deleted. */
+    fun pruneSaved(data: LauncherData) {
+        val layouts = data.layouts.state.value.layouts.mapNotNull { it.wallpaperId }.toSet()
+        data.wallpapers.pruneSaved(data.settings.get(LauncherSettings.WallpaperHistory), layouts)
+    }
+
+    /** 0.16.0 (D205): the linked folders the current layout uses (all of them when it chose none, as before). */
+    fun layoutFolders(data: LauncherData): List<dev.liquid.launcher.core.data.LinkedFolder> {
+        val all = data.wallpapers.get().folders
+        val chosen = data.layouts.state.value.current?.let { data.layouts.find(it) }?.folders ?: return all
+        return all.filter { it.uri in chosen }.ifEmpty { all }
+    }
 
     /** The pictures automatic changes and "Shuffle" choose from. */
     suspend fun pool(data: LauncherData): List<WallpaperPick> {
@@ -224,8 +241,12 @@ object Wallpapers {
             // 0.16.0 (D202): the pictures of the current layout's collection (none: its favourites, as before).
             "collection" -> layoutCollection(data)?.let { WallpaperLibraryOps.inCollection(state, it) }?.takeIf { it.isNotEmpty() }
                 ?: WallpaperLibraryOps.favourites(state)
-            "folders" -> return state.folders.flatMap { folder ->
-                data.wallpapers.folderImages(folder).map { WallpaperPick.External(it.uri, folder.name) }
+            // 0.16.0 (D205): the folders the current layout uses; a folder that cannot be read (Island paused) gives
+            // its saved copies and the library's pictures from it instead.
+            "folders" -> return layoutFolders(data).flatMap { folder ->
+                val read = data.wallpapers.readFolder(folder)
+                if (!read.unreachable) read.images.map { WallpaperPick.External(it.uri, folder.name) }
+                else state.items.filter { it.folder == folder.name }.map { WallpaperPick.Library(it) }
             }
             else -> WallpaperLibraryOps.favourites(state)
         }

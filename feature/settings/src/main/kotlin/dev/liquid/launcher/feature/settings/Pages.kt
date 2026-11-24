@@ -133,6 +133,7 @@ private val editorTabs: Map<String, Set<SettingsTab>> = mapOf(
     "effects" to setOf(SettingsTab.LOOK),
     "buttons" to setOf(SettingsTab.LOOK),
     "wallpaper" to setOf(SettingsTab.LOOK),
+    "wallpaperFolders" to setOf(SettingsTab.MORE),
     "study" to setOf(SettingsTab.LAYOUT, SettingsTab.MORE),
     "layouts" to setOf(SettingsTab.LAYOUT),
     "backup" to setOf(SettingsTab.BEHAVIOUR, SettingsTab.MORE),
@@ -189,6 +190,7 @@ private fun PageEditors(surface: String, tab: SettingsTab, store: SettingsStore,
             "Every option of your WM Keyboard theme on every button, chip, pill, sheet and menu, with a live preview, presets, import and export",
         ) { open(Screen.ThemeLab) }
         "wallpaper" to SettingsTab.LOOK -> WallpaperEditor()
+        "wallpaperFolders" to SettingsTab.MORE -> IslandEditor()
         "study" to SettingsTab.LAYOUT -> StudyEditor(store)
         "study" to SettingsTab.MORE -> CameraAppEditor(store)
         "layouts" to SettingsTab.LAYOUT -> LayoutsAndBackupEditor()

@@ -37,6 +37,19 @@ Versions marked *not published on its own* were built but came to the phone insi
   wallpaper's), and a new style for both: Liquid wipe, which grows out of the pill.
 - The lock screen: left alone, the same as the home screen, or a picture of its own (Blur and dim › Lock screen › Its
   own, then "Use the picture picked for the lock screen").
+- Pictures from Island or Insular: "+ Files" (next to "+ Photos") and "+ Folder" open Android's file picker; where
+  Insular has File Shuttle and it is on, its Work tab reaches the work profile's pictures. Folders from there show
+  "(Island)". If the Work tab never shows, keep the wallpapers in an ordinary folder or one synced from Insular with
+  Syncthing: Settings › Wallpaper and layouts › Folders and Island explains it, and the library's "Insular's pictures?"
+  chip too.
+- Each layout can use its own linked folders: hold a folder's chip in the library to choose (none chosen: every
+  layout uses all of them, as before). Automatic changes "from folders" use the layout's folders.
+- The wallpaper strip shows the newest pictures of your folders after your favourites and recent ones (Island's too),
+  at once, from what was last seen there (Settings › Wallpaper and layouts › Folders and Island).
+- Every picture applied is kept in the launcher: one an automatic change takes from a folder is kept as a saved copy
+  (not in All, not in backups, deleted once no recent list needs it), so the wallpaper, recents and Undo keep working
+  while Island is frozen, paused or locked. Then a folder of it says "Island is paused, showing saved copies" and shows
+  them, and it is read again as soon as Island is back.
 
 ### Changed
 - After Place and Done, the picture stays on the screen behind the sheet, with its blur and dim, until you Apply, Cancel

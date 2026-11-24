@@ -1270,6 +1270,7 @@ class HomeController(
     internal val pickImage: ((android.net.Uri?) -> Unit) -> Unit get() = callbacks.pickImage
     internal val pickImages: ((List<android.net.Uri>) -> Unit) -> Unit get() = callbacks.pickImages
     internal val pickFolder: ((android.net.Uri?) -> Unit) -> Unit get() = callbacks.pickFolder
+    internal val pickFiles: ((List<android.net.Uri>) -> Unit) -> Unit get() = callbacks.pickFiles
     internal val pickFont: ((android.net.Uri?) -> Unit) -> Unit get() = callbacks.pickFont
 
     /** The finger let go after sliding: run the item under it, if any. */
@@ -2542,6 +2543,11 @@ class HomeCallbacks(
     val pickImages: ((List<android.net.Uri>) -> Unit) -> Unit = { it(emptyList()) },
     /** Shows the system folder picker; the callback gets the folder or null. */
     val pickFolder: ((android.net.Uri?) -> Unit) -> Unit = { it(null) },
+    /**
+     * 0.16.0 (D205): Android's file picker for several pictures (its Work tab reaches Island's or Insular's files when File
+     * Shuttle is on); the callback gets them (maybe none).
+     */
+    val pickFiles: ((List<android.net.Uri>) -> Unit) -> Unit = { it(emptyList()) },
     /** Asks for calendar access (read and write); the callback gets whether reading was granted. */
     val requestCalendar: ((Boolean) -> Unit) -> Unit = { it(false) },
     /** Opens the camera to take a picture into [Uri]; the callback gets whether one was taken (E1). */

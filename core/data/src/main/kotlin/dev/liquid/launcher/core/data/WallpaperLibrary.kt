@@ -51,6 +51,12 @@ data class WallpaperItem(
     val h: Int = 0,
     /** 0.16.0 (D198): ids of the collections it is in. Favourites stay [favourite] (shown as the first collection). */
     val collections: List<String> = emptyList(),
+    /**
+     * 0.16.0 (D206): a saved copy: a folder's picture an automatic change applied, kept (outside the library's folder, out
+     * of backups, not in All) so recents, the layouts and Undo work while its folder cannot be read (Island paused). Picked
+     * by hand, made a favourite or put in a collection, it joins the library.
+     */
+    val saved: Boolean = false,
 ) {
     val crop: CropSpec get() = CropSpec(cx, cy, zoom)
 
@@ -104,7 +110,20 @@ data class LinkedFolder(
     val name: String,
     /** Also show the pictures in its sub-folders. */
     val deep: Boolean = false,
+    /** 0.16.0 (D205): the folder is in the work profile (Island, Insular), reached through the system picker's Work tab. */
+    val island: Boolean = false,
+    /** 0.16.0 (D205): Android keeps the access across restarts (false: only until the phone restarts; link it again then). */
+    val kept: Boolean = true,
+    /** 0.16.0 (D205): its newest pictures as last read, for the wallpaper strip and while the folder cannot be read. */
+    val newest: List<RememberedImage> = emptyList(),
 )
+
+/** 0.16.0 (D205): a picture of a linked folder as last seen there. */
+@Serializable
+data class RememberedImage(val uri: String, val name: String = "", val modified: Long = 0)
+
+/** 0.16.0 (D205): what reading a linked folder gave: its pictures, or why it could not be read (Island paused, access gone). */
+data class FolderRead(val images: List<FolderImage>, val unreachable: Boolean = false, val reason: String? = null)
 
 @Serializable
 data class WallpaperLibraryState(
@@ -135,10 +154,10 @@ object WallpaperLibraryOps {
         state.items.filter { it.lastUsed > 0 }.sortedByDescending { it.lastUsed }
 
     fun favourites(state: WallpaperLibraryState): List<WallpaperItem> =
-        state.items.filter { it.favourite }.sortedByDescending { maxOf(it.lastUsed, it.added) }
+        state.items.filter { it.favourite && !it.saved }.sortedByDescending { maxOf(it.lastUsed, it.added) }
 
-    /** Everything, newest addition first. */
-    fun all(state: WallpaperLibraryState): List<WallpaperItem> = state.items.sortedByDescending { it.added }
+    /** Everything, newest addition first (0.16.0: saved copies of automatic changes are not part of it, D206). */
+    fun all(state: WallpaperLibraryState): List<WallpaperItem> = state.items.filter { !it.saved }.sortedByDescending { it.added }
 
     fun markUsed(state: WallpaperLibraryState, id: String, now: Long, crop: CropSpec?, parallax: Float? = null): WallpaperLibraryState = state.copy(
         items = state.items.map { item ->
@@ -245,7 +264,23 @@ object WallpaperLibraryOps {
 
     /** The pictures of a collection, last added to the library first. */
     fun inCollection(state: WallpaperLibraryState, collection: String): List<WallpaperItem> =
-        state.items.filter { collection in it.collections }.sortedByDescending { it.added }
+        state.items.filter { collection in it.collections && !it.saved }.sortedByDescending { it.added }
+
+    /**
+     * 0.16.0 (D206): the saved copies no one needs any more: not in a layout's recents, not among the [keepRecent] newest
+     * recents, not the current picture and not in [keep] (layouts' own pictures).
+     */
+    fun savedToDrop(state: WallpaperLibraryState, keepRecent: Int, keep: Set<String>): Set<String> {
+        val needed = HashSet<String>(keep)
+        state.current?.let { needed += it }
+        state.layoutRecents.values.forEach { needed += it }
+        recent(state).take(keepRecent).forEach { needed += it.id }
+        return state.items.filter { it.saved && it.id !in needed }.map { it.id }.toSet()
+    }
+
+    /** A saved copy picked by hand, made a favourite or put in a collection joins the library (D206). */
+    fun promote(state: WallpaperLibraryState, id: String): WallpaperLibraryState =
+        state.copy(items = state.items.map { if (it.id == id && it.saved) it.copy(saved = false) else it })
 
     /** Records what [WallpaperLibrary.describeMissing] worked out for one picture. */
     fun describe(state: WallpaperLibraryState, id: String, colour: Int, w: Int, h: Int): WallpaperLibraryState =
@@ -359,17 +394,47 @@ class WallpaperLibrary(
 
     fun find(id: String): WallpaperItem? = store.get().items.firstOrNull { it.id == id }
 
-    fun fileOf(item: WallpaperItem): File = File(dir, item.file)
+    /** 0.16.0 (D206): where saved copies live: next to the library's folder, not in it (so backups leave them out). */
+    private val savedDir: File = File(dir.parentFile?.parentFile ?: dir, "wallpaper-saved")
 
-    /** Copies the picture at [uri] into the library (once: the same picture is found again by its bytes). */
-    suspend fun importUri(uri: Uri, folder: String? = null): WallpaperItem? = withContext(Dispatchers.IO) {
+    fun fileOf(item: WallpaperItem): File = File(if (item.saved) savedDir else dir, item.file)
+
+    /**
+     * Copies the picture at [uri] into the library (once: the same picture is found again by its bytes). 0.16.0 (D206):
+     * with [saved], as a saved copy (an automatic change from a folder) unless the library has it already.
+     */
+    suspend fun importUri(uri: Uri, folder: String? = null, saved: Boolean = false): WallpaperItem? = withContext(Dispatchers.IO) {
         try {
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@withContext null
-            importBytes(bytes, extensionOf(context.contentResolver.getType(uri)), folder)
+            importBytes(bytes, extensionOf(context.contentResolver.getType(uri)), folder, saved)
         } catch (e: Throwable) {
             DebugLog.error("Wallpaper", "import failed: $e")
             null
         }
+    }
+
+    /** 0.16.0 (D206): a saved copy joins the library (picked by hand, a favourite, a collection): its file moves in. */
+    fun promote(id: String) {
+        val item = find(id)?.takeIf { it.saved } ?: return
+        val from = File(savedDir, item.file)
+        dir.mkdirs()
+        val to = File(dir, item.file)
+        if (from.exists() && !from.renameTo(to)) runCatching { from.copyTo(to, overwrite = true); from.delete() }
+        store.update { WallpaperLibraryOps.promote(it, id) }
+        DebugLog.event("Wallpaper", "a saved copy joined the library")
+    }
+
+    /** 0.16.0 (D206): deletes the saved copies no one needs any more ([WallpaperLibraryOps.savedToDrop]). */
+    fun pruneSaved(keepRecent: Int, keep: Set<String>) {
+        val drop = WallpaperLibraryOps.savedToDrop(store.get(), keepRecent, keep)
+        if (drop.isEmpty()) return
+        for (id in drop) {
+            find(id)?.let { fileOf(it).delete() }
+            File(thumbDir, "$id.jpg").delete()
+            thumbs.remove(id)
+        }
+        store.update { WallpaperLibraryOps.removeAll(it, drop) }
+        DebugLog.event("Wallpaper", "${drop.size} saved cop${if (drop.size == 1) "y" else "ies"} no longer needed, deleted")
     }
 
     /** Copies a picture file (an older wallpaper, a layout's) into the library. */
@@ -386,22 +451,36 @@ class WallpaperLibrary(
         }
     }
 
-    private fun importBytes(bytes: ByteArray, extension: String, folder: String?): WallpaperItem? {
+    private fun importBytes(bytes: ByteArray, extension: String, folder: String?, saved: Boolean = false): WallpaperItem? {
         val id = WallpaperLibraryOps.idOf(bytes)
-        find(id)?.let { return it }
-        dir.mkdirs()
+        find(id)?.let { existing ->
+            // Imported by hand while only a saved copy was kept: it joins the library.
+            if (existing.saved && !saved) promote(id)
+            return find(id)
+        }
+        val target = if (saved) savedDir else dir
+        target.mkdirs()
         val name = "$id.$extension"
-        File(dir, name).writeBytes(bytes)
-        val item = WallpaperItem(id = id, file = name, added = System.currentTimeMillis(), folder = folder)
+        // Written whole, then renamed into place.
+        val temp = File(target, "$name.tmp")
+        temp.writeBytes(bytes)
+        if (!temp.renameTo(File(target, name))) {
+            File(target, name).delete()
+            temp.renameTo(File(target, name))
+        }
+        val item = WallpaperItem(id = id, file = name, added = System.currentTimeMillis(), folder = folder, saved = saved)
         store.update { WallpaperLibraryOps.add(it, item) }
-        DebugLog.event("Wallpaper", "added to the library: $name (${bytes.size / 1024} KB)")
+        DebugLog.event("Wallpaper", (if (saved) "saved copy kept: " else "added to the library: ") + "$name (${bytes.size / 1024} KB)")
         return item
     }
 
     fun markUsed(id: String, crop: CropSpec?, parallax: Float? = null) =
         store.update { WallpaperLibraryOps.markUsed(it, id, System.currentTimeMillis(), crop, parallax) }
 
-    fun setFavourite(id: String, on: Boolean) = store.update { WallpaperLibraryOps.setFavourite(it, id, on) }
+    fun setFavourite(id: String, on: Boolean) {
+        if (on) promote(id)
+        store.update { WallpaperLibraryOps.setFavourite(it, id, on) }
+    }
 
     fun setLook(id: String, look: WallpaperLook?) = store.update { WallpaperLibraryOps.setLook(it, id, look) }
 
@@ -427,7 +506,11 @@ class WallpaperLibrary(
 
     // ---- 0.16.0: several at once, collections, a delete that can be undone ----
 
-    fun setFavourite(ids: Set<String>, on: Boolean) = store.update { WallpaperLibraryOps.setFavourite(it, ids, on) }
+    fun setFavourite(ids: Set<String>, on: Boolean) {
+        // 0.16.0 (D206): a saved copy made a favourite joins the library.
+        if (on) ids.forEach { promote(it) }
+        store.update { WallpaperLibraryOps.setFavourite(it, ids, on) }
+    }
 
     fun forget(ids: Set<String>) = store.update { WallpaperLibraryOps.forget(it, ids) }
 
@@ -444,7 +527,10 @@ class WallpaperLibrary(
 
     fun removeCollection(id: String) = store.update { WallpaperLibraryOps.removeCollection(it, id) }
 
-    fun addToCollection(ids: Set<String>, collection: String) = store.update { WallpaperLibraryOps.addToCollection(it, ids, collection) }
+    fun addToCollection(ids: Set<String>, collection: String) {
+        ids.forEach { promote(it) }
+        store.update { WallpaperLibraryOps.addToCollection(it, ids, collection) }
+    }
 
     fun removeFromCollection(ids: Set<String>, collection: String) = store.update { WallpaperLibraryOps.removeFromCollection(it, ids, collection) }
 
@@ -538,16 +624,31 @@ class WallpaperLibrary(
 
     // ---- linked folders ----
 
-    /** Links a folder picked with the system's folder picker; keeps read access across restarts. */
-    fun addFolder(uri: Uri): LinkedFolder? = try {
-        context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        val name = DocumentsContract.getTreeDocumentId(uri).substringAfterLast(':').substringAfterLast('/').ifBlank { "Folder" }
-        val folder = LinkedFolder(uri.toString(), name)
-        store.update { s -> if (s.folders.any { it.uri == folder.uri }) s else s.copy(folders = s.folders + folder) }
-        folder
-    } catch (e: Throwable) {
-        DebugLog.error("Wallpaper", "linking a folder failed: $e")
-        null
+    /**
+     * Links a folder picked with the system's folder picker and keeps read access across restarts. 0.16.0 (D205): a
+     * folder of the work profile (Island, Insular: the picker's Work tab) is marked so; when Android will not keep the
+     * access across restarts it is still linked while it can be read ([LinkedFolder.kept] false). Everything is logged:
+     * whether Android lets another profile's folder be kept is learned on the phone.
+     */
+    fun addFolder(uri: Uri): LinkedFolder? {
+        val island = ProfileUris.isOtherProfile(uri.authority)
+        val kept = try {
+            context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            true
+        } catch (e: Throwable) {
+            DebugLog.error("Wallpaper", "folder access not kept by Android (${if (island) "work profile" else "this phone"}): $e")
+            false
+        }
+        return try {
+            val name = DocumentsContract.getTreeDocumentId(uri).substringAfterLast(':').substringAfterLast('/').ifBlank { "Folder" }
+            val folder = LinkedFolder(uri.toString(), name, island = island, kept = kept)
+            store.update { s -> if (s.folders.any { it.uri == folder.uri }) s else s.copy(folders = s.folders + folder) }
+            DebugLog.event("Wallpaper", "folder linked: \"$name\" (${if (island) "work profile, Island" else "this phone"}; access ${if (kept) "kept" else "until the phone restarts"})")
+            folder
+        } catch (e: Throwable) {
+            DebugLog.error("Wallpaper", "linking a folder failed: $e")
+            null
+        }
     }
 
     fun removeFolder(uri: String) {
@@ -563,11 +664,31 @@ class WallpaperLibrary(
     fun setFolderDeep(uri: String, deep: Boolean) =
         store.update { s -> s.copy(folders = s.folders.map { if (it.uri == uri) it.copy(deep = deep) else it }) }
 
+    /** The pictures in a linked folder, newest first (an empty list when it cannot be read; see [readFolder]). */
+    suspend fun folderImages(folder: LinkedFolder): List<FolderImage> = readFolder(folder).images
+
+    /**
+     * 0.16.0 (D205): reads a linked folder: its pictures, newest first, or why it cannot be read (Island paused, access
+     * gone). A good read is remembered ([LinkedFolder.newest]) for the wallpaper strip and for when it cannot be read.
+     */
+    suspend fun readFolder(folder: LinkedFolder): FolderRead {
+        val result = readFolderNow(folder)
+        if (result.unreachable) {
+            DebugLog.event("Wallpaper", "folder \"${folder.name}\" cannot be read (${if (folder.island) "work profile" else "this phone"}): ${result.reason}")
+            return FolderRead(emptyList(), unreachable = true, reason = result.reason)
+        }
+        val newest = result.images.take(REMEMBERED).map { RememberedImage(it.uri.toString(), it.name, it.modified) }
+        if (newest != folder.newest) {
+            store.update { s -> s.copy(folders = s.folders.map { if (it.uri == folder.uri) it.copy(newest = newest) else it }) }
+        }
+        return FolderRead(result.images)
+    }
+
     /**
      * The pictures in a linked folder, newest first; with [LinkedFolder.deep] also those in its
      * sub-folders (at most [MAX_FOLDER_DEPTH] levels down and [MAX_FOLDER_IMAGES] pictures).
      */
-    suspend fun folderImages(folder: LinkedFolder): List<FolderImage> = withContext(Dispatchers.IO) {
+    private suspend fun readFolderNow(folder: LinkedFolder): FolderRead = withContext(Dispatchers.IO) {
         try {
             val tree = Uri.parse(folder.uri)
             val columns = arrayOf(
@@ -580,10 +701,15 @@ class WallpaperLibrary(
             // Folders still to read, with how deep they are.
             val queue = ArrayDeque<Pair<String, Int>>()
             queue.addLast(DocumentsContract.getTreeDocumentId(tree) to 0)
+            var first = true
             while (queue.isNotEmpty() && result.size < MAX_FOLDER_IMAGES) {
                 val (documentId, depth) = queue.removeFirst()
                 val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, documentId)
-                context.contentResolver.query(children, columns, null, null, null)?.use { c ->
+                val cursor = context.contentResolver.query(children, columns, null, null, null)
+                // The folder itself gave nothing back: its provider is not there (Island paused, the profile stopped).
+                if (cursor == null && first) return@withContext FolderRead(emptyList(), unreachable = true, reason = "no answer from the folder's storage")
+                first = false
+                cursor?.use { c ->
                     while (c.moveToNext() && result.size < MAX_FOLDER_IMAGES) {
                         val mime = c.getString(2) ?: continue
                         if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
@@ -595,10 +721,9 @@ class WallpaperLibrary(
                     }
                 }
             }
-            result.sortedByDescending { it.modified }
+            FolderRead(result.sortedByDescending { it.modified })
         } catch (e: Throwable) {
-            DebugLog.error("Wallpaper", "reading folder ${folder.name} failed: $e")
-            emptyList()
+            FolderRead(emptyList(), unreachable = true, reason = e.javaClass.simpleName + ": " + (e.message ?: ""))
         }
     }
 
@@ -620,7 +745,13 @@ class WallpaperLibrary(
         val key = uri.toString()
         thumbs.get(key)?.let { return it }
         return withContext(Dispatchers.IO) {
-            decodeSmall(ImageDecoder.createSource(context.contentResolver, uri))?.asImageBitmap()?.also { thumbs.put(key, it) }
+            // 0.16.0 (D205): kept on disk, so a folder's pictures still show while it cannot be read (Island paused).
+            val cached = File(thumbDir, "u_" + WallpaperLibraryOps.idOf(key.toByteArray()) + ".jpg")
+            val bitmap = if (cached.exists()) BitmapFactory.decodeFile(cached.path) else decodeSmall(ImageDecoder.createSource(context.contentResolver, uri))?.also { small ->
+                thumbDir.mkdirs()
+                runCatching { cached.outputStream().use { small.compress(Bitmap.CompressFormat.JPEG, 85, it) } }
+            }
+            bitmap?.asImageBitmap()?.also { thumbs.put(key, it) }
         }
     }
 
@@ -664,5 +795,8 @@ class WallpaperLibrary(
         const val THUMB_PX = 280
         const val MAX_FOLDER_DEPTH = 6
         const val MAX_FOLDER_IMAGES = 3000
+
+        /** 0.16.0 (D205): how many of a folder's newest pictures are remembered. */
+        const val REMEMBERED = 12
     }
 }

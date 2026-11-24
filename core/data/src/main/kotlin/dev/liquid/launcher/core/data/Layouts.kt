@@ -31,6 +31,8 @@ data class SavedLayout(
     val placement: LayoutPlacement? = null,
     /** 0.16.0 (D202): this layout's wallpaper collection (its id in the library), when it has one. */
     val collection: String? = null,
+    /** 0.16.0 (D205): the linked folders this layout uses (their uris); null: all of them, as before. */
+    val folders: List<String>? = null,
 )
 
 /** 0.16.0 (D202): a layout's placement of its picture: centre, zoom and parallax (as `CropSpec` and `WallpaperItem`). */
@@ -182,6 +184,10 @@ class LayoutsRepository(
             })
         }
     }
+
+    /** 0.16.0 (D205): the linked folders layout [id] uses (null or empty: all of them). */
+    fun setFolders(id: String, folders: List<String>?) =
+        store.update { s -> s.copy(layouts = s.layouts.map { if (it.id == id) it.copy(folders = folders?.takeIf { f -> f.isNotEmpty() }) else it }) }
 
     /** 0.16.0 (D202): gives layout [id] the wallpaper collection [collection] (null: none). */
     fun setCollection(id: String, collection: String?) =

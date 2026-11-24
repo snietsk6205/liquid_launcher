@@ -249,6 +249,11 @@ object SettingsMap {
             ),
         ),
         SettingsSurface(
+            "wallpaperFolders", "Folders and Island", "Linked folders, Island's and Insular's pictures, and what the wallpaper strip shows of them",
+            SettingsEntry.WALLPAPER, listOf("wallpaperFolders"),
+            mapOf(B to listOf("wallpaper.stripFolders", "wallpaper.stripFolderCount")),
+        ),
+        SettingsSurface(
             "layouts", "Layouts", "Home setups to switch between, each with its wallpaper; export and import them", SettingsEntry.WALLPAPER, listOf("layouts"),
             mapOf(B to listOf("layouts.autoSave", "layouts.windowFrom", "layouts.windowTo", "layouts.windowDays")),
         ),
@@ -331,6 +336,10 @@ object SettingsMap {
         Editor(
             "Letter areas", "Circles over the apps where a swipe starts the letters: add as many as you want, each with its edge, place and size",
             "letter areas circle zone add position place size left right edge swipe letters", "index", SettingsTab.LAYOUT,
+        ),
+        Editor(
+            "Island and Insular", "Pictures from Island's or Insular's work profile: what the launcher sees, and how to reach them (File Shuttle, or a folder synced with Syncthing)",
+            "island insular work profile file shuttle syncthing folder pictures paused", "wallpaperFolders", SettingsTab.MORE,
         ),
         Editor("Theme lab", "Every option of your WM Keyboard theme on every button, chip, pill, sheet and menu, with presets (Before 0.10.2)",
             "theme lab keyboard wm colours colors pills search bar tint material accent blueberry preset before", "buttons", SettingsTab.LOOK),

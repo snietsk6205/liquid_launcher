@@ -191,4 +191,26 @@ class WallpaperLibraryTest {
         s = WallpaperLibraryOps.removeAll(s, setOf("d"))
         assertTrue(WallpaperLibraryOps.recentFor(s, "study").isEmpty())
     }
+
+    @Test
+    fun savedCopiesStayOutOfTheListsAndGoWhenNoOneNeedsThem() {
+        var s = WallpaperLibraryState(
+            items = listOf(
+                item("lib", added = 1),
+                item("kept", lastUsed = 9).copy(saved = true),
+                item("old", lastUsed = 1).copy(saved = true),
+                item("layout").copy(saved = true),
+            ),
+            layoutRecents = mapOf("study" to listOf("kept")),
+        )
+        // Not in All, Favourites or collections; in Recent while used.
+        assertEquals(listOf("lib"), WallpaperLibraryOps.all(s).map { it.id })
+        assertEquals(listOf("kept", "old"), WallpaperLibraryOps.recent(s).map { it.id })
+        // "kept" is in a layout's recents, "layout" is a layout's own picture; "old" is only an old recent beyond the 1 kept.
+        assertEquals(setOf("old"), WallpaperLibraryOps.savedToDrop(s, keepRecent = 1, keep = setOf("layout")))
+        // Picked by hand: it joins the library.
+        s = WallpaperLibraryOps.promote(s, "old")
+        assertEquals(setOf("lib", "old"), WallpaperLibraryOps.all(s).map { it.id }.toSet())
+        assertTrue(WallpaperLibraryOps.savedToDrop(s, keepRecent = 1, keep = setOf("layout")).isEmpty())
+    }
 }

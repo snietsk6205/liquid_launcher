@@ -16,6 +16,7 @@ class ActivityResultContracts private constructor() {
     open class GetContent : ActivityResultContract<String, Uri?>()
     open class OpenDocument : ActivityResultContract<Array<String>, Uri?>()
     open class OpenDocumentTree : ActivityResultContract<Uri?, Uri?>()
+    open class OpenMultipleDocuments : ActivityResultContract<Array<String>, List<Uri>>()
     open class CreateDocument(mimeType: String) : ActivityResultContract<String, Uri?>()
     open class PickVisualMedia : ActivityResultContract<PickVisualMediaRequest, Uri?>() {
         sealed interface VisualMediaType

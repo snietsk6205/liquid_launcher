@@ -122,6 +122,24 @@ class LauncherApp : Application() {
             }
         }
         registerReceiver(receiver, android.content.IntentFilter(android.content.Intent.ACTION_SCREEN_OFF))
+        // 0.16.0 (D205): Island's or Insular's work profile paused, back or unlocked: folders of it are read again.
+        val profile = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+                when (intent.action) {
+                    android.content.Intent.ACTION_MANAGED_PROFILE_AVAILABLE -> dev.liquid.launcher.core.data.IslandProfile.changed("back (not paused)")
+                    android.content.Intent.ACTION_MANAGED_PROFILE_UNAVAILABLE -> dev.liquid.launcher.core.data.IslandProfile.changed("paused")
+                    android.content.Intent.ACTION_MANAGED_PROFILE_UNLOCKED -> dev.liquid.launcher.core.data.IslandProfile.changed("unlocked")
+                }
+            }
+        }
+        registerReceiver(
+            profile,
+            android.content.IntentFilter().apply {
+                addAction(android.content.Intent.ACTION_MANAGED_PROFILE_AVAILABLE)
+                addAction(android.content.Intent.ACTION_MANAGED_PROFILE_UNAVAILABLE)
+                addAction(android.content.Intent.ACTION_MANAGED_PROFILE_UNLOCKED)
+            },
+        )
     }
 
     /** No crash reporting service: the last crash is written to a file the debug log can show. */

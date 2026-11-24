@@ -43,6 +43,12 @@ class MainActivity : ComponentActivity() {
         imagesCallback?.invoke(uris)
         imagesCallback = null
     }
+    // 0.16.0 (D205): "+ Files": Android's file picker (its Work tab reaches Island's or Insular's files when File Shuttle is on).
+    private var filesCallback: ((List<android.net.Uri>) -> Unit)? = null
+    private val pickDocuments = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        filesCallback?.invoke(uris)
+        filesCallback = null
+    }
     private var folderCallback: ((android.net.Uri?) -> Unit)? = null
     private val pickTree = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
         folderCallback?.invoke(uri)
@@ -257,6 +263,15 @@ class MainActivity : ComponentActivity() {
                     DebugLog.error("Widgets", "the widget's set-up screen failed: $e")
                     widgetSetUpCallback = null
                     callback(true)
+                }
+            },
+            pickFiles = { callback ->
+                filesCallback = callback
+                try {
+                    pickDocuments.launch(arrayOf("image/*"))
+                } catch (e: Exception) {
+                    filesCallback = null
+                    callback(emptyList())
                 }
             },
             pickFolder = { callback ->
