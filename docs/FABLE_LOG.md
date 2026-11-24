@@ -1790,3 +1790,10 @@ was picked ("picked what was shared: video") and Apply then found nothing to app
 looks"). The wallpaper screen cleared the share before picking it; that restarts its effect, and while the re-encode
 question showed, the list's scroll waited long enough for the restart to cancel the pick (pictures, without the
 question, won the race). It now picks first. Sharing a video would have done nothing on the phone.
+
+Run 151: the video check is green now (the shared video plays, its glass is measured: "the glass bending it: 76 % of
+49 frames late (worst 266 ms)" on the emulator, which draws in software and says nothing about the phone, and it rests
+when the home screen is away), the calendar and redirect parts too. The library check 11b, green in runs 145 to 150,
+lost one tap: the emulator drew the home screen at 284 ms a frame and the tap on "Library and more" landed where the
+button was while the strip was still rising (the strip was still there afterwards; nothing else was logged). The check
+now lets the strip settle and taps again from a fresh dump when the wallpaper screen does not come.

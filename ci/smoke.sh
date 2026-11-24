@@ -1493,8 +1493,16 @@ sleep 1
 # Back into the library from the home menu's strip.
 adb shell am start -n "$HOME_ACTIVITY" --es dev.liquid.launcher.OPEN wallpaper >/dev/null 2>&1
 wait_screen 11b-strip "Library and more" 8 exact || true
-tap_text 11b-strip "Library and more" exact || true
-wait_screen 11b-lib "Apply" 8 exact || true
+# Run 151 (284 ms a frame): the tap landed where the button was in the dump while the strip was still rising, and
+# missed. Let it settle, tap again from a fresh dump if the wallpaper screen did not come.
+sleep 1.5
+for try in 1 2; do
+  dump 11b-strip
+  tap_text 11b-strip "Library and more" exact || true
+  wait_screen 11b-lib "Apply" 8 exact || true
+  if on_screen 11b-lib "Apply" exact; then break; fi
+  note "the wallpaper screen did not open from the strip (try $try)"
+done
 tap_text 11b-lib "All" exact || true
 wait_screen 11b-all "Wallpaper 16" 6 || true
 # Down to the end of the list: two slow drags, so it moves as far as the finger and no further.
