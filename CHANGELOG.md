@@ -62,6 +62,32 @@ Versions marked *not published on its own* were built but came to the phone insi
   (not in All, not in backups, deleted once no recent list needs it), so the wallpaper, recents and Undo keep working
   while Island is frozen, paused or locked. Then a folder of it says "Island is paused, showing saved copies" and shows
   them, and it is read again as soon as Island is back.
+- The liquid calendar: tap the date on a clock and the calendar grows out of it on liquid glass. Pull it down anywhere
+  (it follows your finger) or press Back, and it shrinks back into the date. The clock's date is off by default: turn it
+  on in Settings › Home › Clock, or in a clock's own Customise sheet.
+- Four views, one tap apart at its top: the month, a week strip, the agenda (the coming days, with the school year's
+  countdowns above) and the year as a heatmap (a day darker with more events; a tap opens it in the month). The day you
+  tap wears a liquid blob that flows from day to day, and its agenda shows under the month or the week.
+- Your phone's events, as dots or colour bars. The calendar asks once, the first time it opens, to read your calendars
+  (only to read them). Choose which calendars it shows and the colour of each in Settings › Calendar › Calendar › More.
+  Quick add (+) opens your calendar app's new event screen on the day picked; tapping an event opens it there; the
+  calendar is still open when you come back.
+- The school year: ESSAI 2026–27 is built in, from the winter break (about 26 December) to Délib SC on 25 June, and
+  marked as indicative. In the calendar, a school date moves a day earlier or later, is deleted (with Undo) or pinned;
+  in Settings › Calendar › Holidays and school year › More you edit, add or delete them, and bring back the built-in
+  ones. A pinned date's countdown ("DS P2 in 5 days") shows on the line under the clock, even with the study line off;
+  on the day of the exam already shown there, the two become one ("DS P2 · Analyse in 5 d"). School dates are never
+  counted as exams (the exam-week layout and the search page's exam card are unchanged).
+- Holidays in Tunisia on their days, in the agenda and in the year. The Islamic ones follow the moon, so they show with
+  ≈: when Tunisia announces the day, tap the holiday and move it a day earlier or later (or hide it), or move them all
+  (Islamic dates moved by). An optional Hijri date line (off) shows the Islamic date of the day picked.
+- Its options (Settings › Calendar): size (a compact card under the date, a half sheet or the whole screen), the view it
+  opens on, the week from Monday, week numbers, density, the glass tier, corners, how today stands out (filled, a ring,
+  the number in the accent colour or a glow), the dim behind it and its bounce. The page's preview is the calendar
+  itself, opening over your home screen.
+- The Calendar widget can use the calendar's settings (Settings › Calendar › Calendar widget): its marks, today, week
+  numbers, holidays, school year and chosen calendars. It keeps its own card, corners and colour, and a tap on one of its
+  days still opens your calendar app. Off (as it comes), the widget has its own options on that page.
 
 ### Changed
 - After Place and Done, the picture stays on the screen behind the sheet, with its blur and dim, until you Apply, Cancel
@@ -79,6 +105,13 @@ Versions marked *not published on its own* were built but came to the phone insi
   show, which moved there from Wallpaper › More), Per layout, Folders and Island, and Video. Lock screen is in
   Wallpaper › More.
 - "+ Files" also takes videos; the share menu's "Set as Liquid wallpaper" takes videos too.
+- A tap on a clock's date opens the calendar at once. A double tap on the rest of the clock still opens Today with the
+  note ready, and the pill's date still opens your phone's calendar app.
+- The Calendar widget starts the week on Monday (Settings › Calendar › Week starts on Monday; off for your phone
+  language's first day). Its month is drawn by the calendar's own component now; with its own options left as they
+  come it looks as before.
+- Settings has an eighth entry, Calendar, after Study, with three pages: Calendar, Holidays and school year, and
+  Calendar widget.
 
 ### Fixed
 - Picking a favourite hid its heart: the heart is now on a small dark badge, above the ring.

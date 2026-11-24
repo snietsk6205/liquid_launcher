@@ -1,18 +1,19 @@
 package dev.liquid.launcher.core.settings
 
 /*
- * W4 (0.10.1): where every option lives. Settings has seven entries; each holds pages, one per surface of the
+ * W4 (0.10.1): where every option lives. Settings has seven entries (eight since 0.16.0: Calendar); each holds pages, one per surface of the
  * launcher (the pill, the dock, the drawer…), and a page shows its options in up to four tabs (Layout, Look,
  * Behaviour, More) under its live preview. The storage keys of 0.9 are unchanged, so nothing is reset; the
  * sections of 0.9 still open the page that took their options ([forSection]), so links and gestures that open a
  * section keep working.
  */
 
-/** The seven entries of the first settings screen. */
+/** The entries of the first settings screen (0.16.0: Calendar is the eighth). */
 enum class SettingsEntry(val title: String, val summary: String) {
     HOME("Home", "Grid, pill, dock, folders, clock, menus and gestures"),
     DRAWER("Drawer and search", "The app drawer, its tabs and tags, the letter index and search"),
     STUDY("Study", "Blocks and tasks from your calendar, the hub, quiet, arrival home and Claude"),
+    CALENDAR("Calendar", "The calendar from the clock's date: views, look, your calendars, holidays and the school year"),
     LOOK("Look", "The Theme lab, colours and fonts, icons, liquid glass and buttons"),
     WALLPAPER("Wallpaper and layouts", "Your wallpapers, blur and dim, changing by themselves; layouts and backup"),
     MOTION("Motion and feel", "Animations, haptics, press and touch effects, the moving wallpaper, notices"),
@@ -59,7 +60,7 @@ data class SettingInfo(
     val values: String,
     /** "layout" (saved with each home layout), "phone" (this phone's facts) or "launcher". */
     val scope: String,
-    /** "key" (on) or "key=a|b": what must hold for this option to matter. */
+    /** "key" (on), "!key" (off) or "key=a|b": what must hold for this option to matter. */
     val dependsOn: String?,
     /** "basic" or "advanced". */
     val level: String,
@@ -191,6 +192,25 @@ object SettingsMap {
                     "study.linkOpener", "study.header", "study.checkin", "study.templates",
                 ),
             ),
+        ),
+        // ---- Calendar (0.16.0, D209–D212) ----
+        SettingsSurface(
+            "calendar", "Calendar", "What grows out of the clock's date: its size, views, the week, the days and the glass", SettingsEntry.CALENDAR,
+            listOf("calendar"),
+            mapOf(
+                L to listOf("calendar.size", "calendar.view", "calendar.mondayFirst", "calendar.weekNumbers", "calendar.density"),
+                K to listOf("calendar.glass", "calendar.corner", "calendar.today", "calendar.marks", "calendar.hijri", "calendar.dim"),
+                B to listOf("calendar.bounce"),
+            ),
+        ),
+        SettingsSurface(
+            "calendarDays", "Holidays and school year", "Tunisia's holidays, the Islamic dates, your school year and its countdowns",
+            SettingsEntry.CALENDAR, listOf("calendarDays"),
+            mapOf(L to listOf("calendar.holidays", "calendar.school"), B to listOf("calendar.hijriShift")),
+        ),
+        SettingsSurface(
+            "calendarWidget", "Calendar widget", "The same settings as the calendar, or its own", SettingsEntry.CALENDAR, listOf("calendarWidget"),
+            mapOf(L to listOf("calendar.shareWidget"), K to listOf("calendar.widget.*")),
         ),
         // ---- Look ----
         SettingsSurface(
@@ -350,6 +370,18 @@ object SettingsMap {
             "Island and Insular", "Pictures from Island's or Insular's work profile: what the launcher sees, and how to reach them (File Shuttle, or a folder synced with Syncthing)",
             "island insular work profile file shuttle syncthing folder pictures paused", "wallpaperFolders", SettingsTab.MORE,
         ),
+        Editor(
+            "Calendars and colours", "Which of the phone's calendars the calendar shows, and the colour of each",
+            "calendar calendars accounts hide show colour color events", "calendar", SettingsTab.MORE,
+        ),
+        Editor(
+            "School year", "Your school's dates (ESSAI 2026–27 built in, indicative): edit, move, delete, add, pin a countdown under the clock",
+            "school year essai dates exams ds revision period retakes deliberation countdown pin clock edit delete add indicative", "calendarDays", SettingsTab.MORE,
+        ),
+        Editor(
+            "Holidays set by hand", "Islamic holidays moved to the announced date, and holidays hidden; put them back",
+            "holidays moved hidden aid eid mouled islamic reset tunisia", "calendarDays", SettingsTab.MORE,
+        ),
         Editor("Theme lab", "Every option of your WM Keyboard theme on every button, chip, pill, sheet and menu, with presets (Before 0.10.2)",
             "theme lab keyboard wm colours colors pills search bar tint material accent blueberry preset before", "buttons", SettingsTab.LOOK),
     )
@@ -435,6 +467,7 @@ object SettingsMap {
                 else -> "launcher"
             },
             dependsOn = SettingDependencies.parents[setting.key]?.key
+                ?: SettingDependencies.offParents[setting.key]?.let { "!" + it.key }
                 ?: SettingDependencies.choiceParents[setting.key]?.let { (choice, values) -> "${choice.key}=${values.joinToString("|")}" },
             level = if (LauncherSettings.isAdvanced(setting)) "advanced" else "basic",
             keywords = setting.keywords,

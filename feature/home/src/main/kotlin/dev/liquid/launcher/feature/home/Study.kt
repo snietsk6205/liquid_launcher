@@ -1090,10 +1090,14 @@ private fun clockLineScope(main: ClockLineMain?, now: Long): Pair<Set<String>, L
     }
 }
 
-/** The line under the clock now, or null when the companion is off, cannot read the calendar, or has nothing to say. */
+/**
+ * The line under the clock now, or null when the companion is off, cannot read the calendar, or has nothing to say.
+ * 0.16.0 (D209): with [withPinned] (the clock's line), a countdown pinned from the school year joins its facts, merged
+ * with the exam of the same day; it shows even while the study line is off ([withStudy] false) or not loaded yet.
+ */
 @Composable
-internal fun rememberClockLine(controller: HomeController): ClockLineState? {
-    val glance = rememberStudyGlance(controller)
+internal fun rememberClockLine(controller: HomeController, withStudy: Boolean = true, withPinned: Boolean = false): ClockLineState? {
+    val glance = if (withStudy) rememberStudyGlance(controller) else null
     val study = controller.data.study
     val loaded by study.loaded.collectAsState()
     val day by study.day.collectAsState()
@@ -1104,17 +1108,23 @@ internal fun rememberClockLine(controller: HomeController): ClockLineState? {
     val focusOnPill by controller.data.settings.derive {
         get(LauncherSettings.PillEnabled) && "live" in get(LauncherSettings.PillSlots) && get(LauncherSettings.PillLiveFocus)
     }
-    return remember(glance, loaded, day, focus, tick, withAfter, focusOnPill) {
-        if (!loaded) return@remember null
+    val schoolText by controller.data.settings.derive { if (withPinned) get(LauncherSettings.CalendarSchoolYear) else null }
+    val pinned = remember(schoolText, tick) {
+        schoolText?.let { dev.liquid.launcher.core.data.SchoolYear.pinnedFact(dev.liquid.launcher.core.data.SchoolYear.parse(it), java.time.LocalDate.now()) }
+    }
+    return remember(glance, loaded, day, focus, tick, withAfter, focusOnPill, withStudy, pinned) {
+        if (!withStudy || !loaded) {
+            return@remember pinned?.let { ClockLineState(null, listOf(DayLine.Fact("school", it.text, it.tone))) }
+        }
         val now = System.currentTimeMillis()
         val main = clockLineMain(glance, day, now, focus?.eventKey, focusOnPill, focus)
         val facts = if (withAfter) {
             val (shown, from) = clockLineScope(main, now)
             val tasksShown = (main as? ClockLineMain.Glance)?.glance is StudyGlance.Tasks
             // With nothing on the main line, one fact takes its place.
-            DayLine.facts(day, now, from, shown, tasksShown, ::time, max = if (main == null) 1 else 2)
+            DayLine.facts(day, now, from, shown, tasksShown, ::time, max = if (main == null) 1 else 2, pinned = pinned)
         } else {
-            emptyList()
+            listOfNotNull(pinned?.let { DayLine.Fact("school", it.text, it.tone) })
         }
         if (main == null && facts.isEmpty()) null else ClockLineState(main, facts)
     }
@@ -1189,7 +1199,8 @@ internal fun ClockLine(
                 }
             }
         }
-        if (state.facts.isNotEmpty()) ClockLineFacts(state.facts, controller, color, shadow, interactive, big = main == null)
+        // A tap opens Today, as before; with the companion off (only a pinned countdown to say) it does nothing.
+        if (state.facts.isNotEmpty()) ClockLineFacts(state.facts, controller, color, shadow, interactive && controller.data.study.enabled, big = main == null)
     }
 }
 

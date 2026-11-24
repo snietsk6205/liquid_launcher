@@ -41,8 +41,14 @@ object DayLine {
     /** How a fact on the second line is coloured: plain, soon (amber), urgent (red). */
     enum class Tone { Plain, Soon, Urgent }
 
-    /** One fact on the second line; [kind] tells them apart ("then", "tasks", "exam"). */
+    /** One fact on the second line; [kind] tells them apart ("then", "tasks", "exam", "school"). */
     data class Fact(val kind: String, val text: String, val tone: Tone = Tone.Plain)
+
+    /**
+     * 0.16.0 (D209): a countdown pinned from the school year: the [day] it is about, its words ("DS P2 in 5 days"), its
+     * [label] ("DS P2", for merging) and colour.
+     */
+    data class Pinned(val day: java.time.LocalDate, val text: String, val label: String, val tone: Tone = Tone.Plain)
 
     /** Within this many minutes, a class or block is "soon" (the main line counts down to it). */
     const val SOON_MINUTES = 60
@@ -103,6 +109,9 @@ object DayLine {
      * what comes after [from] (the end of what the main line is about, or now) other than the events in [shown], the
      * tasks left (unless the main line is about them, [tasksShown]), an exam within [EXAM_DAYS] (amber; "≈" when its
      * date is not confirmed). [time] writes a clock time as the launcher does.
+     *
+     * 0.16.0 (D209): a countdown [pinned] from the school year comes right after an urgent exam; on the day of the exam
+     * the line already shows, the two are one fact ("DS P2 · Analyse in 5 d"). [zone] tells the exam's day.
      */
     fun facts(
         day: StudyDay,
@@ -112,17 +121,30 @@ object DayLine {
         tasksShown: Boolean,
         time: (Long) -> String,
         max: Int = 2,
+        pinned: Pinned? = null,
+        zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
     ): List<Fact> {
-        val out = ArrayList<Fact>(3)
+        val out = ArrayList<Fact>(4)
         val exam = day.exams.firstOrNull { it.begin > now }
-        val examFact = exam?.let { e ->
+        var examFact = exam?.let { e ->
             val days = (e.begin - now) / DAY
             if (days > EXAM_DAYS) return@let null
             val about = if (e.key in day.unconfirmedExams) "≈" else ""
             val left = if (days <= URGENT_DAYS) "${((e.begin - now) / 3_600_000L).coerceAtLeast(1)} h" else "$days d"
             Fact("exam", e.title.text.ifBlank { e.rawTitle } + " in " + about + left, if (days <= URGENT_DAYS) Tone.Urgent else Tone.Soon)
         }
+        var school = pinned?.let { Fact("school", it.text, it.tone) }
+        if (pinned != null && exam != null && examFact != null) {
+            // The calendar's all-day events are stored at UTC midnight; launcher-data's exams at 8:00 of their day.
+            val utcMidnight = exam.allDay && exam.begin % DAY == 0L
+            val examDay = java.time.Instant.ofEpochMilli(exam.begin).atZone(if (utcMidnight) java.time.ZoneOffset.UTC else zone).toLocalDate()
+            if (examDay == pinned.day) {
+                school = Fact("exam", pinned.label + " · " + examFact.text, examFact.tone)
+                examFact = null
+            }
+        }
         if (examFact?.tone == Tone.Urgent) out += examFact
+        if (school != null) out += school
         upcoming(day, from - 1).firstOrNull { it.key !in shown }?.let { next ->
             out += Fact("then", "then " + next.title.subject.ifBlank { next.rawTitle } + " " + time(next.begin))
         }

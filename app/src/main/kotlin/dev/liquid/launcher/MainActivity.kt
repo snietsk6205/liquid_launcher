@@ -202,6 +202,21 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             },
+            // 0.16.0 (D209): the calendar from the clock's date only reads; it asks for nothing more.
+            requestCalendarRead = { callback ->
+                if (checkSelfPermission(android.Manifest.permission.READ_CALENDAR) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    callback(true)
+                } else {
+                    calendarCallback = callback
+                    try {
+                        askCalendar.launch(arrayOf(android.Manifest.permission.READ_CALENDAR))
+                    } catch (e: Exception) {
+                        DebugLog.error("App", "calendar permission request failed: $e")
+                        calendarCallback = null
+                        callback(false)
+                    }
+                }
+            },
             takePhoto = { intent ->
                 try {
                     takePhotoLauncher.launch(intent)

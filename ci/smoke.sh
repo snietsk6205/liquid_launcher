@@ -11,16 +11,17 @@
 #             widget and the updates screen, 15 and 16 (shaders)
 #   drawer    8b What's new, the drawer, 9c thirty tags, 9d picking (uses 9c's tags), search, the home menu, the
 #             wallpaper screen, edit mode, the Today panel on a fresh install; 11b the wallpaper library (0.16.0)
-#   study     14b to 14g (each uses the test calendar 14b makes), 14h the board camera, 17 speed check (its study
-#             hub step needs the study companion 14b switches on)
+#   study     14b to 14g (each uses the test calendar 14b makes), 14h the board camera, 18 the calendar from the
+#             clock's date (0.16.0; shows 14b's events), 17 speed check (its study hub step needs the study companion
+#             14b switches on)
 set -u
 
 PART=${1:-all}
 case "$PART" in
-  all)      BLOCKS="redirect settings drawer library study index widget shaders speed" ;;
+  all)      BLOCKS="redirect settings drawer library study calendar index widget shaders speed" ;;
   redirect) BLOCKS="redirect settings index widget shaders" ;;
   drawer)   BLOCKS="drawer library" ;;
-  study)    BLOCKS="study speed" ;;
+  study)    BLOCKS="study calendar speed" ;;
   *) echo "smoke.sh: unknown part '$PART' (all, redirect, drawer or study)"; exit 2 ;;
 esac
 
@@ -1617,6 +1618,95 @@ wait_until 8 resting || true
 if resting; then pass "the video rests while the home screen is away"; else fail "the video rests while the home screen is away"; fi
 adb shell input keyevent KEYCODE_HOME
 sleep 1
+}
+
+# date_pos <dump> : the centre of the clock's date ("Tuesday 24 November", the clock's default format).
+date_pos() {
+  python3 - "$OUT/$1.xml" <<'PY'
+import re, sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    sys.exit(1)
+days = "Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday"
+for n in root.iter("node"):
+    text = (n.get("text") or "").strip()
+    if re.fullmatch(r"(%s) \d{1,2} [A-Z][a-z]+" % days, text):
+        m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", n.get("bounds", ""))
+        if m:
+            l, t, r, b = map(int, m.groups())
+            if r > l and b > t:
+                print((l + r) // 2, (t + b) // 2)
+                sys.exit(0)
+sys.exit(1)
+PY
+}
+
+blk_calendar() {
+clear_anr
+# 0.16.0 (D209–D212): the liquid calendar grows out of the clock's date. The date is off on a fresh install: switch it on
+# (Settings › Home › Clock), tap the date on the home screen, look at the four views and close it with Back. In the study
+# part 14b's test calendar is there, so today's agenda shows its block.
+section "18. The calendar from the clock's date: views, the school year, Back"
+adb shell pm grant "$PKG" android.permission.READ_CALENDAR 2>/dev/null
+switch_date() {
+  adb shell am start --activity-clear-task -n "$SETTINGS_ACTIVITY" --es screen page:clock:layout >/dev/null
+  wait_top "SettingsActivity" 8 || true
+  wait_screen 18-settings "Show the date" 8 exact || true
+  tap_text 18-settings "Show the date" exact || note "no \"Show the date\" switch on the clock's page"
+  sleep 1
+  adb shell am start -n "$HOME_ACTIVITY" >/dev/null
+  wait_top "$HOME_ACTIVITY" 8 || true
+  sleep 2
+  dump 18-home
+}
+switch_date
+# A tap switches it: if an earlier block had it on already, this one switched it off.
+date_pos 18-home >/dev/null || switch_date
+OPENED0=$(grep -c "Calendar: opened from the clock's date" "$LOG" || true)
+calendar_opened() { [ "$(grep -c "Calendar: opened from the clock's date" "$LOG" || true)" -gt "$OPENED0" ]; }
+if DATE=$(date_pos 18-home); then
+  adb shell input tap $DATE
+  wait_until 8 calendar_opened || true
+  wait_screen 18-month "Agenda view" 8 || true
+  peek 18-month
+  if calendar_opened && on_screen 18-month "Month view, shown"; then pass "a tap on the clock's date opens the calendar on the month"; else fail "a tap on the clock's date opens the calendar on the month"; python3 ci/describe_ui.py "$OUT/18-month.xml" 30 | sed 's/^/        /'; fi
+  if [ -n "${EVENT_ID:-}" ]; then
+    if on_screen 18-month "Proba 2 smoke block"; then pass "today's agenda shows the phone's events"; else fail "today's agenda shows the phone's events"; fi
+  else
+    note "no test calendar (no root): the events in the agenda are not checked"
+  fi
+  idle_frames "calendar"
+  tap_text 18-month "Agenda view" exact || tap_text 18-month "Agenda view" || true
+  wait_screen 18-agenda "DS P2 in" 8 || true
+  peek 18-agenda
+  if on_screen 18-agenda "DS P2 in"; then pass "the agenda counts down to the built-in school dates"; else fail "the agenda counts down to the built-in school dates"; python3 ci/describe_ui.py "$OUT/18-agenda.xml" 30 | sed 's/^/        /'; fi
+  YEAR0=$(grep -c "Calendar: year " "$LOG" || true)
+  tap_text 18-agenda "Year view" exact || tap_text 18-agenda "Year view" || true
+  wait_screen 18-year "more events" 8 || true
+  peek 18-year
+  year_read() { [ "$(grep -c "Calendar: year " "$LOG" || true)" -gt "$YEAR0" ]; }
+  wait_until 6 year_read || true
+  if on_screen 18-year "more events" && year_read; then
+    pass "the year view draws the heatmap from the phone's events"
+    grep "Calendar: year " "$LOG" | tail -1 | sed 's/^/        /'
+  else
+    fail "the year view draws the heatmap from the phone's events"
+  fi
+  tap_text 18-year "Week view" exact || tap_text 18-year "Week view" || true
+  wait_screen 18-week "Previous week" 8 || true
+  if on_screen 18-week "Previous week"; then pass "the week strip shows"; else fail "the week strip shows"; fi
+  CLOSED0=$(grep -c "Calendar: closed" "$LOG" || true)
+  adb shell input keyevent KEYCODE_BACK
+  calendar_closed() { [ "$(grep -c "Calendar: closed" "$LOG" || true)" -gt "$CLOSED0" ]; }
+  wait_until 6 calendar_closed || true
+  wait_gone 18-closed "Agenda view" 6 || true
+  if calendar_closed && ! on_screen 18-closed "Agenda view"; then pass "Back shrinks the calendar back into the date"; else fail "Back shrinks the calendar back into the date"; fi
+else
+  fail "the clock shows its date once \"Show the date\" is on"
+  python3 ci/describe_ui.py "$OUT/18-home.xml" 30 | sed 's/^/        /'
+fi
 }
 
 blk_shaders() {

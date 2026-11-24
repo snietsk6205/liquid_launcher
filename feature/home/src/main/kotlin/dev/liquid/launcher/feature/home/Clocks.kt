@@ -33,6 +33,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -444,6 +452,74 @@ fun ClockFace(
 /** Designs that place the date themselves: minimal under the time, tall above in bold, glance in its line above. */
 private val OwnDate = setOf("minimal", "tall", "glance")
 
+// ---- 0.16.0 (D209): the clock's date opens the calendar ----
+
+/**
+ * What a tap on a clock's date does, given where the date is (root px): set by the live home screen's clock widget (not
+ * while editing, in previews or the clock gallery). Null there: the date is only text. Built for one opener today; the
+ * calendar takes others ([CalendarOpener]).
+ */
+internal val LocalClockDateTap = androidx.compose.runtime.staticCompositionLocalOf<((androidx.compose.ui.geometry.Rect) -> Unit)?> { null }
+
+/** The date's tap target: the area that takes the tap, and the text the calendar grows out of. */
+internal class ClockDateTarget(private val open: (androidx.compose.ui.geometry.Rect) -> Unit) {
+    var textBounds: androidx.compose.ui.geometry.Rect? = null
+    var areaBounds: androidx.compose.ui.geometry.Rect? = null
+
+    fun fire() {
+        (textBounds ?: areaBounds)?.let(open)
+    }
+}
+
+/** The date's target, or null when a tap on the date does nothing here. */
+@Composable
+internal fun rememberClockDateTarget(): ClockDateTarget? {
+    val tap = LocalClockDateTap.current ?: return null
+    val latest = androidx.compose.runtime.rememberUpdatedState(tap)
+    return remember { ClockDateTarget { r -> latest.value(r) } }
+}
+
+/**
+ * The area that takes a tap on the date: a quick tap opens the calendar at once (Med: no wait for a second tap; the rest
+ * of the clock keeps its double tap). A long press or a swipe is left to the clock and the pages.
+ */
+internal fun Modifier.clockDateArea(target: ClockDateTarget?): Modifier = if (target == null) this else this
+    .onGloballyPositioned { target.areaBounds = it.boundsInRoot() }
+    .semantics {
+        onClick(label = "Open the calendar") {
+            target.fire()
+            true
+        }
+    }
+    .pointerInput(target) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                var moved = Offset.Zero
+                var result: androidx.compose.ui.input.pointer.PointerInputChange? = null
+                while (result == null) {
+                    val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                    if (change.isConsumed) break
+                    if (!change.pressed) {
+                        result = change
+                        break
+                    }
+                    moved += change.positionChange()
+                    if (moved.getDistance() > viewConfiguration.touchSlop) break
+                }
+                result
+            }
+            if (up != null) {
+                up.consume()
+                target.fire()
+            }
+        }
+    }
+
+/** The text the calendar grows out of and shrinks back into. */
+internal fun Modifier.clockDateText(target: ClockDateTarget?): Modifier =
+    if (target == null) this else onGloballyPositioned { target.textBounds = it.boundsInRoot() }
+
 private fun minOfLuminance(a: Int, b: Int): Int =
     if (androidx.core.graphics.ColorUtils.calculateLuminance(a) < androidx.core.graphics.ColorUtils.calculateLuminance(b)) a else b
 
@@ -617,9 +693,11 @@ private fun TallFace(style: ClockStyle, ink: ClockInk, time: LocalTime, now: Lon
     Column(horizontalAlignment = horizontal, verticalArrangement = Arrangement.Center) {
         if (date != null) {
             val dateSize = fitSize(date, ink, width * 0.8f, height * dateShare * 0.8f, 100)
+            val target = rememberClockDateTarget()
             Text(
                 date, maxLines = 1,
                 style = ink.style(minOf(dateSize.value, size.value * 0.16f).sp).copy(fontWeight = FontWeight.Bold, letterSpacing = 0.04.em),
+                modifier = Modifier.clockDateArea(target).clockDateText(target),
             )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -675,15 +753,24 @@ private fun MinimalFace(style: ClockStyle, ink: ClockInk, time: LocalTime, now: 
     val dateSize = fitSize(date, ink, width, height * 0.26f, 100)
     Column(horizontalAlignment = horizontal, verticalArrangement = Arrangement.Center) {
         Changing(hours(style, time) + style.separator.ifEmpty { ":" } + minutes(time), style, ink.style(size))
-        Text(date, style = ink.style(minOf(dateSize.value, size.value * 0.42f).sp, ink.secondary), maxLines = 1)
+        val target = rememberClockDateTarget()
+        Text(
+            date, style = ink.style(minOf(dateSize.value, size.value * 0.42f).sp, ink.secondary), maxLines = 1,
+            modifier = Modifier.clockDateArea(target).clockDateText(target),
+        )
     }
 }
 
 @Composable
 private fun DateLine(date: String, ink: ClockInk, width: Dp, height: Dp) {
     val size = fitSize(date, ink, width * 0.9f, height * 0.8f, 100)
-    Box(Modifier.size(width, height), contentAlignment = Alignment.Center) {
-        Text(date, style = ink.style(size, ink.primary.copy(alpha = ink.primary.alpha * 0.85f)).copy(fontWeight = FontWeight.Normal), maxLines = 1, textAlign = TextAlign.Center)
+    // 0.16.0 (D209): the whole band of the date takes the tap; the calendar grows out of the text itself.
+    val target = rememberClockDateTarget()
+    Box(Modifier.size(width, height).clockDateArea(target), contentAlignment = Alignment.Center) {
+        Text(
+            date, style = ink.style(size, ink.primary.copy(alpha = ink.primary.alpha * 0.85f)).copy(fontWeight = FontWeight.Normal), maxLines = 1,
+            textAlign = TextAlign.Center, modifier = Modifier.clockDateText(target),
+        )
     }
 }
 

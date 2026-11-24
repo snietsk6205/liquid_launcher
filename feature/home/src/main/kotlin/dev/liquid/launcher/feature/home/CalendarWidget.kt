@@ -70,12 +70,15 @@ import java.util.Locale
 internal data class CalEvent(val id: Long, val title: String, val begin: Long, val end: Long, val allDay: Boolean, val color: Int)
 
 /** A month of the calendar widget: the colours of the events on each day, and the next events from now. */
-internal data class CalMonth(val month: YearMonth, val days: Map<Int, List<Int>>, val next: List<CalEvent>, val allowed: Boolean)
+internal data class CalMonth(val month: YearMonth, val days: Map<LocalDate, List<Int>>, val next: List<CalEvent>, val allowed: Boolean)
 
 private fun canRead(context: Context) = context.checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
 
-/** Reads [month] and the next two weeks from the phone's visible calendars. */
-private fun readMonth(context: Context, month: YearMonth, now: Long): CalMonth {
+/**
+ * Reads [month] and the next two weeks from the phone's visible calendars. 0.16.0: without the calendars [hidden] (and
+ * in the [colours] chosen) when the widget shares the calendar's settings; both empty otherwise, as before.
+ */
+private fun readMonth(context: Context, month: YearMonth, now: Long, hidden: Set<Long> = emptySet(), colours: Map<Long, Int> = emptyMap()): CalMonth {
     if (!canRead(context)) return CalMonth(month, emptyMap(), emptyList(), allowed = false)
     val zone = ZoneId.systemDefault()
     val start = month.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
@@ -86,24 +89,27 @@ private fun readMonth(context: Context, month: YearMonth, now: Long): CalMonth {
         ContentUris.appendId(it, from)
         ContentUris.appendId(it, to)
     }.build()
-    val days = HashMap<Int, MutableList<Int>>()
+    val days = HashMap<LocalDate, MutableList<Int>>()
     val next = ArrayList<CalEvent>()
     val projection = arrayOf(
         CalendarContract.Instances.EVENT_ID, CalendarContract.Instances.TITLE, CalendarContract.Instances.BEGIN,
         CalendarContract.Instances.END, CalendarContract.Instances.ALL_DAY, CalendarContract.Instances.DISPLAY_COLOR,
+        CalendarContract.Instances.CALENDAR_ID,
     )
     runCatching {
         context.contentResolver.query(uri, projection, "${CalendarContract.Instances.VISIBLE} = 1", null, "${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
             while (c.moveToNext()) {
+                val calendar = c.getLong(6)
+                if (calendar in hidden) continue
                 val allDay = c.getInt(4) == 1
-                val event = CalEvent(c.getLong(0), c.getString(1).orEmpty().ifBlank { "(No title)" }, c.getLong(2), c.getLong(3), allDay, c.getInt(5))
+                val event = CalEvent(c.getLong(0), c.getString(1).orEmpty().ifBlank { "(No title)" }, c.getLong(2), c.getLong(3), allDay, colours[calendar] ?: c.getInt(5))
                 // All-day events are stored at UTC midnight.
                 val dayZone = if (allDay) ZoneOffset.UTC else zone
                 var day = Instant.ofEpochMilli(event.begin).atZone(dayZone).toLocalDate()
                 val last = Instant.ofEpochMilli((event.end - 1).coerceAtLeast(event.begin)).atZone(dayZone).toLocalDate()
                 var guard = 0
                 while (!day.isAfter(last) && guard++ < 42) {
-                    if (YearMonth.from(day) == month) days.getOrPut(day.dayOfMonth) { ArrayList() }.let { if (it.size < 3) it.add(event.color) }
+                    if (YearMonth.from(day) == month) days.getOrPut(day) { ArrayList() }.let { if (it.size < 3) it.add(event.color) }
                     day = day.plusDays(1)
                 }
                 if (event.end > now && next.size < 4) next.add(event)
@@ -116,7 +122,8 @@ private fun readMonth(context: Context, month: YearMonth, now: Long): CalMonth {
 /**
  * The calendar on liquid glass (0.8.1, D117): the month with today lit and a dot for each event,
  * swipe-free month arrows, and the next events below when there is room. On a short widget, today
- * and the next events only. Fits on a page or on the search screen.
+ * and the next events only. Fits on a page or on the search screen. 0.16.0 (D211): its month is the
+ * calendar's own component ([MonthDays]).
  */
 @Composable
 internal fun CalendarWidget(item: HomeItem, env: PageEnv, controller: HomeController) {
@@ -126,9 +133,15 @@ internal fun CalendarWidget(item: HomeItem, env: PageEnv, controller: HomeContro
     var offset by remember(item.id) { mutableIntStateOf(0) }
     var allowedTick by remember { mutableIntStateOf(0) }
     val month = YearMonth.from(today).plusMonths(offset.toLong())
+    // 0.16.0 (D211): the month is the calendar's component, drawn with the widget's own look, or the calendar's when it
+    // shares it (Settings › Calendar › Calendar widget). A tap on a day still opens the calendar app.
+    val store = controller.data.settings
+    val calLook by store.derive { calendarLook(widget = true) }
+    val notesKey by store.derive { get(dev.liquid.launcher.core.settings.LauncherSettings.CalendarSchoolYear) + "|" + get(dev.liquid.launcher.core.settings.LauncherSettings.CalendarHolidayChanges) }
+    val notes = remember(calLook, notesKey, month) { dayNotes(store, calLook, month.atDay(1), month.atEndOfMonth()) }
     // Read again every quarter of an hour, when the month changes or once the calendar may be read.
-    val data by produceState<CalMonth?>(null, month, tick / 900_000, allowedTick) {
-        value = withContext(Dispatchers.IO) { readMonth(context, month, System.currentTimeMillis()) }
+    val data by produceState<CalMonth?>(null, month, tick / 900_000, allowedTick, calLook.hidden, calLook.colours) {
+        value = withContext(Dispatchers.IO) { readMonth(context, month, System.currentTimeMillis(), calLook.hidden, calLook.colours) }
     }
     // P7 (0.9.23): this widget's own options (its Customise sheet in edit mode): card, corners, colour, parts.
     val look = WidgetLook.of(item)
@@ -192,7 +205,11 @@ internal fun CalendarWidget(item: HomeItem, env: PageEnv, controller: HomeContro
                         modifier = Modifier.fillMaxWidth().weight(1f),
                         label = "month",
                     ) { m ->
-                        MonthGrid(m, today, shown?.takeIf { it.month == m }, color, live, controller)
+                        MonthDays(
+                            m, today, calLook, shown?.takeIf { it.month == m }?.days.orEmpty(), if (m == month) notes else emptyMap(), color,
+                            selected = null, onDay = if (live) { day -> controller.start(dayIntent(day)) } else null,
+                            modifier = Modifier.fillMaxSize(),
+                        )
                     }
                     if (roomy) {
                         Spacer(Modifier.height(8.dp))
@@ -249,77 +266,6 @@ private fun Arrow(color: Color, live: Boolean, back: Boolean, onClick: () -> Uni
             LauncherIcons.ChevronRight, contentDescription = if (back) "Previous month" else "Next month", tint = color, size = 18.dp,
             modifier = Modifier.graphicsLayer { rotationZ = if (back) 180f else 0f },
         )
-    }
-}
-
-@Composable
-private fun MonthGrid(month: YearMonth, today: LocalDate, data: CalMonth?, color: Color, live: Boolean, controller: HomeController) {
-    val first = WeekFields.of(Locale.getDefault()).firstDayOfWeek
-    val lead = (month.atDay(1).dayOfWeek.value - first.value + 7) % 7
-    val cells = lead + month.lengthOfMonth()
-    val weeks = (cells + 6) / 7
-    Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth()) {
-            for (i in 0 until 7) {
-                Text(
-                    first.plus(i.toLong()).getDisplayName(DayStyle.NARROW, Locale.getDefault()),
-                    style = text(color.copy(alpha = 0.55f), 11f, FontWeight.Medium),
-                    modifier = Modifier.weight(1f).padding(bottom = 2.dp),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                )
-            }
-        }
-        for (w in 0 until weeks) {
-            Row(Modifier.fillMaxWidth().weight(1f)) {
-                for (d in 0 until 7) {
-                    val day = w * 7 + d - lead + 1
-                    Box(Modifier.weight(1f).fillMaxSize(), contentAlignment = Alignment.Center) {
-                        if (day in 1..month.lengthOfMonth()) {
-                            DayCell(month.atDay(day), day == today.dayOfMonth && month == YearMonth.from(today), data?.days?.get(day).orEmpty(), color, live, controller)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DayCell(date: LocalDate, isToday: Boolean, dots: List<Int>, color: Color, live: Boolean, controller: HomeController) {
-    // Today swells in like a drop when the widget appears or the day changes.
-    val lit by animateFloatAsState(if (isToday) 1f else 0f, spring(dampingRatio = 0.5f, stiffness = MotionScale.stiffness(300f)), label = "today")
-    val past = date.isBefore(LocalDate.now())
-    Box(
-        Modifier
-            .fillMaxSize()
-            .then(if (live) Modifier.squishClickable { controller.start(dayIntent(date)) } else Modifier),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            Modifier
-                .fillMaxSize(0.82f)
-                .aspectRatio(1f)
-                .graphicsLayer {
-                    scaleX = lit
-                    scaleY = lit
-                    alpha = lit.coerceIn(0f, 1f)
-                }
-                .background(HomeTheme.accent.copy(alpha = 0.88f), CircleShape),
-        )
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                date.dayOfMonth.toString(),
-                style = text(
-                    if (isToday) readableOn(HomeTheme.accent) else color.copy(alpha = if (past) 0.5f else 0.95f),
-                    13f, if (isToday) FontWeight.Bold else FontWeight.Normal,
-                ),
-            )
-            Row(Modifier.height(5.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-                for (c in dots) {
-                    Box(Modifier.size(4.dp).background(if (isToday) readableOn(HomeTheme.accent) else Color(c).copy(alpha = 1f), CircleShape))
-                }
-            }
-        }
     }
 }
 

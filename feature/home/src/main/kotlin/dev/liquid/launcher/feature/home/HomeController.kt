@@ -179,7 +179,7 @@ class HomeController(
     val drawerOpen: Boolean get() = drawer.targetValue > 0.5f || drawer.value > 0.01f
     val anyOverlay: Boolean get() = drawerOpen || searchOpen || menu != null || editMode || renaming != null || tagging != null ||
         iconPicking != null || swipeEditing != null || openFolder != null || homeMenu || wallpaperStudio || layoutsSheet || savingLayout ||
-        wallpaperStrip || clockStudio != null || todaySheet || widgetPicker || speedBump != null || reviewSheet != null
+        wallpaperStrip || clockStudio != null || todaySheet || widgetPicker || speedBump != null || reviewSheet != null || calendarOpen
 
     // ---- home menu, wallpaper, layouts ----
 
@@ -455,6 +455,118 @@ class HomeController(
         if (!data.study.loaded.value) data.study.refresh()
         data.study.requestSync()
         openHub(from)
+    }
+
+    // ---- 0.16.0 (D209): the calendar that grows out of the clock's date ----
+
+    /** The calendar is open (or opening); [calendar] follows it, and the finger while it is pulled down. */
+    var calendarOpen by mutableStateOf(false)
+
+    /** 0 = closed (the date it grew from), 1 = open; a little over 1 while the spring overshoots. */
+    val calendar = Animatable(0f)
+    val calendarAmount: Float get() = calendar.value.coerceIn(0f, 1f)
+
+    /** What opened it, and where it grows from and shrinks back into. */
+    var calendarOpener: CalendarOpener? = null
+
+    /** What the calendar shows (its view, the day picked, the month and year shown); kept while it is closed. */
+    val calendarUi = CalendarUi()
+
+    /** Finger travel in px between closed and open, from its last layout. */
+    var calendarTravel = 1f
+
+    /** An app opened from the calendar (an event, Quick add): it is still open on coming back. */
+    var calendarKeep = false
+
+    private var calendarDragPos: Float? = null
+    val calendarDragging: Boolean get() = calendarDragPos != null
+
+    private fun calendarSpring(opening: Boolean): androidx.compose.animation.core.SpringSpec<Float> {
+        val bounce = data.settings.get(LauncherSettings.CalendarBounce) / 100f
+        return spring(
+            dampingRatio = if (opening) (1f - 0.5f * bounce).coerceIn(0.45f, 1f) else 1f,
+            stiffness = MotionScale.stiffness(if (opening) 380f else 500f),
+            visibilityThreshold = 0.001f,
+        )
+    }
+
+    /**
+     * Opens the calendar, growing out of [opener]'s bounds (today only the clock's date; D209 keeps the door open for
+     * others). [velocity] in openings per second, so an interrupted close hands its momentum on. The first time it opens
+     * it asks to read the phone's calendars (only to read; once).
+     */
+    fun openCalendar(opener: CalendarOpener, velocity: Float? = null, ask: Boolean = true) {
+        if (drawerOpen) closeDrawer(immediately = true)
+        if (searchOpen || search.value > 0f) closeSearch(immediately = true)
+        if (todaySheet || hub.value > 0f) closeHub(immediately = true)
+        homeMenu = false
+        menu = null
+        openFolder = null
+        wallpaperStrip = false
+        val fresh = !calendarOpen && calendar.value < 0.05f
+        calendarOpener = opener
+        calendarDragPos = null
+        if (fresh) {
+            val first = data.settings.get(LauncherSettings.CalendarView).let { if (it == "last") data.settings.get(LauncherSettings.CalendarLastView) else it }
+            calendarUi.reset(first)
+            DebugLog.event("Calendar", "opened from the ${opener.name} on ${calendarUi.view}")
+            // [ask] is false for the settings' preview, which must not use up the one time it asks.
+            if (ask && !dev.liquid.launcher.core.data.PhoneCalendars.canRead(context) && !data.settings.get(LauncherSettings.CalendarAsked)) {
+                data.settings.set(LauncherSettings.CalendarAsked, true)
+                callbacks.requestCalendarRead { granted ->
+                    DebugLog.event("Calendar", if (granted) "may read the calendars" else "may not read the calendars")
+                    calendarUi.allowedTick++
+                }
+            }
+        }
+        calendarOpen = true
+        Haptics.tick(view)
+        scope.launch { calendar.animateTo(1f, calendarSpring(opening = true), initialVelocity = velocity ?: calendar.velocity) }
+    }
+
+    /** Shrinks the calendar back into what opened it. */
+    fun closeCalendar(immediately: Boolean = false, velocity: Float? = null) {
+        if (!calendarOpen && calendar.value <= 0f) return
+        calendarDragPos = null
+        if (calendarOpen) {
+            data.settings.set(LauncherSettings.CalendarLastView, calendarUi.view)
+            DebugLog.event("Calendar", "closed")
+        }
+        calendarOpen = false
+        calendarKeep = false
+        scope.launch {
+            if (immediately) calendar.snapTo(0f) else calendar.animateTo(0f, calendarSpring(opening = false), initialVelocity = velocity ?: calendar.velocity)
+        }
+    }
+
+    /** Moves the calendar by [deltaPx] of finger travel (down closes). Returns the px it used, for nested scrolling. */
+    fun dragCalendarBy(deltaPx: Float): Float {
+        val travel = calendarTravel.coerceAtLeast(1f)
+        val before = calendarDragPos ?: calendar.value.coerceIn(0f, 1f)
+        val next = (before - deltaPx / travel).coerceIn(0f, 1f)
+        if (next == before) return 0f
+        calendarDragPos = next
+        scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { calendar.snapTo(next) }
+        return (before - next) * travel
+    }
+
+    /** Finger released while pulling the calendar: open or close by position and speed (px per second, down positive). */
+    fun settleCalendar(velocityPxPerSec: Float) {
+        val position = calendarDragPos ?: calendar.value
+        val velocity = (-velocityPxPerSec / calendarTravel.coerceAtLeast(1f)).coerceIn(-12f, 12f)
+        val open = when {
+            velocityPxPerSec > 900f -> false
+            velocityPxPerSec < -900f -> true
+            else -> position > 0.55f
+        }
+        val opener = calendarOpener
+        if (open && opener != null) openCalendar(opener, velocity, ask = false) else closeCalendar(velocity = velocity)
+    }
+
+    /** Opens [intent] from the calendar (an event, Quick add): the calendar is still there on coming back. */
+    fun startFromCalendar(intent: Intent) {
+        calendarKeep = true
+        start(intent)
     }
 
     // ---- Claude from the study companion (0.9.1, D1–D2) ----
@@ -1695,6 +1807,12 @@ class HomeController(
     /** Asks for the calendar (the Calendar widget), then runs [then] if it may be read. */
     fun askCalendar(then: () -> Unit) = callbacks.requestCalendar { granted -> if (granted) then() }
 
+    /** 0.16.0 (D209): asks only to read the calendars; [then] runs with whatever the answer was. */
+    fun askCalendarRead(then: () -> Unit) = callbacks.requestCalendarRead { granted ->
+        DebugLog.event("Calendar", if (granted) "may read the calendars" else "may not read the calendars")
+        then()
+    }
+
     fun openSearch(velocity: Float = Float.NaN) {
         menu = null
         searchDragPosition = null
@@ -1762,6 +1880,7 @@ class HomeController(
         layoutsSheet = false
         wallpaperStudio = false
         if (todaySheet || hub.value > 0f) closeHub(immediately)
+        if (calendarOpen || calendar.value > 0f) closeCalendar(immediately)
         widgetPicker = false
         if (clockStudio != null) closeClockStudio(save = true)
         menu = null
@@ -1782,6 +1901,7 @@ class HomeController(
             selection != null -> endSelecting()
             speedBump != null -> speedBump = null
             reviewSheet != null -> reviewSheet = null
+            calendarOpen -> closeCalendar()
             renaming != null -> renaming = null
             tagging != null -> tagging = null
             iconPicking != null -> iconPicking = null
@@ -2013,6 +2133,8 @@ class HomeController(
         menu = null
         tagSheet = false
         if (todaySheet || hub.value > 0f) closeHub(immediately = true)
+        // 0.16.0: an event or Quick add opened from the calendar comes back to the calendar.
+        if (!calendarKeep && (calendarOpen || calendar.value > 0f)) closeCalendar(immediately = true)
         if (searchOpen || search.value > 0f) closeSearch(immediately = true)
         if (drawerOpen && data.settings.get(LauncherSettings.DrawerCloseOnLaunch)) closeDrawer(immediately = true)
         hideKeyboard()
@@ -2581,6 +2703,8 @@ class HomeCallbacks(
      * Shuttle is on); the callback gets them (maybe none).
      */
     val pickFiles: ((List<android.net.Uri>) -> Unit) -> Unit = { it(emptyList()) },
+    /** 0.16.0 (D209): asks only to read the calendars (the calendar from the clock's date); the callback gets the answer. */
+    val requestCalendarRead: ((Boolean) -> Unit) -> Unit = { it(false) },
     /** Asks for calendar access (read and write); the callback gets whether reading was granted. */
     val requestCalendar: ((Boolean) -> Unit) -> Unit = { it(false) },
     /** Opens the camera to take a picture into [Uri]; the callback gets whether one was taken (E1). */

@@ -50,6 +50,9 @@ object LauncherSettings {
         val Exclusions = SettingsSection("exclusions", "Exclusions and safety", "When not to redirect, loop guard", "Redirect")
         val Handover = SettingsSection("handover", "Hand-over", "How the launcher appears after a redirect", "Redirect")
         val Log = SettingsSection("log", "Debug log", "What is recorded", "Redirect")
+        val Calendar = SettingsSection("calendar", "Calendar", "What grows out of the clock's date: size, views, the week, days and glass", "Calendar")
+        val CalendarDays = SettingsSection("calendarDays", "Holidays and school year", "Tunisia's holidays, the Islamic dates and your school year", "Calendar")
+        val CalendarWidget = SettingsSection("calendarWidget", "Calendar widget", "The calendar's settings, or its own", "Calendar")
 
         // In the order the settings app lists them; sections with the same group sit under one heading.
         val all = listOf(
@@ -59,6 +62,7 @@ object LauncherSettings {
             Motion, Notices,
             Layouts, Backup,
             Study,
+            Calendar, CalendarDays, CalendarWidget,
             Redirect, Detection, Exclusions, Handover, Log,
         )
     }
@@ -2336,6 +2340,166 @@ object LauncherSettings {
     /** 0.16.0 (D207): the share of late frames measured while the glass bent a video ("" not measured yet). */
     val VideoMeasured = TextSetting(key = "state.videoMeasured", default = "", title = "Video glass measured", section = "state", hidden = true)
 
+    // ---- 0.16.0 (D209–D212): the calendar that grows out of the clock's date (Settings › Calendar) ----
+
+    val CalendarSize = ChoiceSetting(
+        key = "calendar.size", default = "half",
+        options = listOf(
+            "compact" to "Compact: a card under the date",
+            "half" to "Half sheet: the lower half of the screen",
+            "full" to "Full: the whole screen",
+        ),
+        title = "Size",
+        summary = "How much of the screen the calendar takes when it grows out of the clock's date",
+        section = "calendar", keywords = "calendar size compact half sheet full screen pop-up popup",
+    )
+    val CalendarView = ChoiceSetting(
+        key = "calendar.view", default = "month",
+        options = listOf("month" to "Month", "week" to "Week strip", "agenda" to "Agenda", "year" to "Year", "last" to "The one you left it on"),
+        title = "Opens on",
+        summary = "The view it shows first; the tabs at its top switch between them",
+        section = "calendar", keywords = "calendar view month week strip agenda year heatmap default open",
+    )
+    val CalendarMondayFirst = BoolSetting(
+        key = "calendar.mondayFirst", default = true,
+        title = "Week starts on Monday",
+        summary = "Off: on your phone language's first day. The Calendar widget follows this too",
+        section = "calendar", keywords = "calendar week start monday sunday first day widget",
+    )
+    val CalendarWeekNumbers = BoolSetting(
+        key = "calendar.weekNumbers", default = false,
+        title = "Week numbers",
+        summary = "The week of the year (ISO) beside each week of the month and over the week strip",
+        section = "calendar", keywords = "calendar week numbers iso",
+    )
+    val CalendarDensity = ChoiceSetting(
+        key = "calendar.density", default = "normal",
+        options = listOf("compact" to "Compact", "normal" to "Normal", "roomy" to "Roomy"),
+        title = "Density",
+        summary = "How much room the days and the agenda's rows take",
+        section = "calendar", keywords = "calendar density compact roomy spacing rows size",
+    )
+    val CalendarGlass = ChoiceSetting(
+        key = "calendar.glass", default = "auto",
+        options = listOf(
+            "auto" to "Like the launcher's sheets",
+            "full" to "Liquid glass: bends what is behind it",
+            "frosted" to "Frosted: blur and tint",
+            "tint" to "Tint only: no blur, lightest on the battery",
+        ),
+        title = "Glass",
+        summary = "The glass tier of the calendar's surface",
+        section = "calendar", keywords = "calendar glass tier liquid frosted tint blur refraction",
+    )
+    val CalendarCorner = IntSetting(
+        key = "calendar.corner", default = 30, min = 8, max = 44, step = 2, unit = "dp",
+        title = "Corners",
+        section = "calendar", keywords = "calendar corners radius round shape",
+    )
+    val CalendarToday = ChoiceSetting(
+        key = "calendar.today", default = "filled",
+        options = listOf("filled" to "A filled circle", "ring" to "A ring", "text" to "Its number in the accent colour", "glow" to "A soft glow"),
+        title = "Today",
+        summary = "How today stands out; the day you pick wears the liquid blob",
+        section = "calendar", keywords = "calendar today highlight style circle ring glow accent",
+    )
+    val CalendarMarks = ChoiceSetting(
+        key = "calendar.marks", default = "dots",
+        options = listOf("dots" to "Dots in each event's colour", "bars" to "Colour bars"),
+        title = "Events on a day",
+        summary = "What a day with events shows under its number",
+        section = "calendar", keywords = "calendar events marks dots bars colour color",
+    )
+    val CalendarHijri = BoolSetting(
+        key = "calendar.hijri", default = false,
+        title = "Hijri date line",
+        summary = "The Islamic date of the day you pick, under its name (≈: Tunisia follows the moon)",
+        section = "calendar", keywords = "calendar hijri islamic date line ramadan moon",
+    )
+    val CalendarDim = IntSetting(
+        key = "calendar.dim", default = 25, min = 0, max = 70, step = 5, unit = "%",
+        title = "Dim behind it",
+        section = "calendar", keywords = "calendar dim darken background behind",
+    )
+    val CalendarBounce = IntSetting(
+        key = "calendar.bounce", default = 40, min = 0, max = 100, step = 10, unit = "%",
+        title = "Bounce as it opens",
+        summary = "0: it settles without overshooting. It always follows your finger when you pull it down",
+        section = "calendar", keywords = "calendar bounce spring open motion",
+    )
+    /** Ids of the phone's calendars the calendar leaves out (Calendars and colours). */
+    val CalendarHidden = StringListSetting(
+        key = "calendar.hidden", default = emptyList(),
+        title = "Calendars left out", section = "calendar", hidden = true,
+    )
+    /** "id=#RRGGBB": a calendar shown in a colour of your own (Calendars and colours). */
+    val CalendarColours = StringListSetting(
+        key = "calendar.colours", default = emptyList(),
+        title = "Colours of calendars", section = "calendar", hidden = true,
+    )
+
+    val CalendarHolidays = BoolSetting(
+        key = "calendar.holidays", default = true,
+        title = "Holidays in Tunisia",
+        summary = "Public holidays on their days, in the agenda and in the year; the Islamic ones with ≈ until you set their date",
+        section = "calendarDays", keywords = "calendar holidays tunisia public aid eid mouled hijri new year revolution",
+    )
+    val CalendarSchool = BoolSetting(
+        key = "calendar.school", default = true,
+        title = "School year",
+        summary = "Your ESSAI dates (indicative) on their days, in the agenda and in the year",
+        section = "calendarDays", keywords = "calendar school year essai exams ds revision period dates countdown",
+    )
+    val CalendarHijriShift = IntSetting(
+        key = "calendar.hijriShift", default = 0, min = -2, max = 2, step = 1, unit = "days",
+        title = "Islamic dates moved by",
+        summary = "When Tunisia's dates differ from the Umm al-Qura tables: the Islamic holidays and the Hijri line follow",
+        section = "calendarDays", keywords = "calendar hijri islamic shift adjust days moon aid ramadan",
+    )
+    /** The school year as JSON (SchoolYear in core/data); empty: the built-in ESSAI 2026–27 dates. */
+    val CalendarSchoolYear = TextSetting(key = "calendar.schoolYear", default = "", title = "School year", section = "calendarDays", hidden = true)
+    /** Holidays moved or hidden by hand (TunisiaHolidays in core/data), as JSON. */
+    val CalendarHolidayChanges = TextSetting(key = "calendar.holidayChanges", default = "", title = "Holidays set by hand", section = "calendarDays", hidden = true)
+
+    val CalendarShareWidget = BoolSetting(
+        key = "calendar.shareWidget", default = false,
+        title = "The Calendar widget uses the calendar's settings",
+        summary = "On: its marks, today, week numbers, holidays, school year and chosen calendars come from the calendar. It keeps " +
+            "its own card, corners and colour, and a tap on a day still opens your calendar app. Off: the options below",
+        section = "calendarWidget", keywords = "calendar widget share same settings separate own",
+    )
+    val CalendarWidgetMarks = ChoiceSetting(
+        key = "calendar.widget.marks", default = "dots", options = CalendarMarks.options,
+        title = "Widget: events on a day",
+        section = "calendarWidget", keywords = "calendar widget events marks dots bars",
+    )
+    val CalendarWidgetToday = ChoiceSetting(
+        key = "calendar.widget.today", default = "filled", options = CalendarToday.options,
+        title = "Widget: today",
+        section = "calendarWidget", keywords = "calendar widget today highlight circle ring glow",
+    )
+    val CalendarWidgetWeekNumbers = BoolSetting(
+        key = "calendar.widget.weekNumbers", default = false,
+        title = "Widget: week numbers",
+        section = "calendarWidget", keywords = "calendar widget week numbers",
+    )
+    val CalendarWidgetHolidays = BoolSetting(
+        key = "calendar.widget.holidays", default = false,
+        title = "Widget: holidays in Tunisia",
+        section = "calendarWidget", keywords = "calendar widget holidays tunisia",
+    )
+    val CalendarWidgetSchool = BoolSetting(
+        key = "calendar.widget.school", default = false,
+        title = "Widget: school year",
+        section = "calendarWidget", keywords = "calendar widget school year essai exams",
+    )
+
+    /** 0.16.0 (D209): the calendar asked for the phone's calendars once, the first time it opened. */
+    val CalendarAsked = BoolSetting(key = "state.calendarAsked", default = false, title = "Calendar asked to read events", section = "state", hidden = true)
+
+    /** The calendar's view when it closed ("Opens on: the one you left it on"). */
+    val CalendarLastView = TextSetting(key = "state.calendarLastView", default = "month", title = "Calendar's last view", section = "state", hidden = true)
+
     // ---- 0.16.0 (D203): the lock screen ----
 
     val WallpaperLockMode = ChoiceSetting(
@@ -3012,6 +3176,11 @@ object LauncherSettings {
         LayoutsOwnWallpaper, LayoutsOwnRecents, LayoutsOwnCollection, LayoutsTransition, WallpaperHomeSaturation, WallpaperHomeTint, WallpaperHomeTintAmount,
         WallpaperLockMode, WallpaperLockPicture, Migrated0160, WallpaperStripFolders, WallpaperStripFolderCount,
         VideoGlass, VideoStillSeconds, VideoPauseSaver, VideoPauseBelow, VideoOnlyCharging, VideoReencode, VideoMaxHeight, VideoMaxFps, VideoMeasured,
+        CalendarSize, CalendarView, CalendarMondayFirst, CalendarWeekNumbers, CalendarDensity, CalendarGlass, CalendarCorner, CalendarToday,
+        CalendarMarks, CalendarHijri, CalendarDim, CalendarBounce, CalendarHidden, CalendarColours,
+        CalendarHolidays, CalendarSchool, CalendarHijriShift, CalendarSchoolYear, CalendarHolidayChanges,
+        CalendarShareWidget, CalendarWidgetMarks, CalendarWidgetToday, CalendarWidgetWeekNumbers, CalendarWidgetHolidays, CalendarWidgetSchool,
+        CalendarAsked, CalendarLastView,
         BackupAuto, BackupKeep, BackupWallpapers, BackupFolder, BackupLast,
         LayoutWindowLayout, LayoutWindowFrom, LayoutWindowTo, LayoutWindowDays,
         StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyCameraApp, StudyBoardCamera, StudyPendingPhoto, StudyPlanLink, StudyLinkOpener,
@@ -3090,6 +3259,7 @@ object LauncherSettings {
             ThemedIconsWhere, ThemedIconsUncovered, ThemedIconsPacks, ThemedIconsColors, ThemedIconsStyle, IconMask,
             GlassAuto, WallpaperSystemWrite, WallpaperHistory, WallpaperTransitionMs,
             NoticeDuration, NoticeIcons, TagFilterKeep, StudyOverdueDays, StudyClaudeApp,
+            CalendarDim, CalendarHijriShift,
         ).map { it.key }.toSet() + glassSurfaces.flatMap { it.settings }.map { it.key }
     }
 

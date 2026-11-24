@@ -82,4 +82,24 @@ class DayLineTest {
         val far = exam.copy(begin = t0 + 40L * 24 * 60 * min)
         assertEquals(emptyList<DayLine.Fact>(), DayLine.facts(StudyDay(blocks = listOf(algo), exams = listOf(far)), t0 + 410 * min, from = algo.end, shown = setOf(algo.key), tasksShown = false, time = time))
     }
+
+    @Test
+    fun aPinnedSchoolCountdownComesEarlyAndMergesWithTheExamOfItsDay() {
+        val utc = java.time.ZoneOffset.UTC
+        val exam = event(9, "DS Analyse", 9 * 24 * 60, 9 * 24 * 60 + 120)
+        val task = StudyEvent(7, 2, t0, t0 + 24 * 60 * min, true, "Scolarité: relevé")
+        val day = StudyDay(blocks = listOf(projectR, algo), classes = listOf(proba), tasks = listOf(task), exams = listOf(exam))
+        val examDay = java.time.Instant.ofEpochMilli(exam.begin).atZone(utc).toLocalDate()
+        // Another day: the countdown comes before what follows, and the exam waits for room.
+        val other = DayLine.Pinned(examDay.plusDays(20), "Période 3 in 29 days", "Période 3")
+        val facts = DayLine.facts(day, t0 + 30 * min, from = projectR.end, shown = setOf(projectR.key), tasksShown = false, time = time, pinned = other, zone = utc)
+        assertEquals(listOf("Période 3 in 29 days", "then Probabilités T+240"), facts.map { it.text })
+        // The exam's own day: one fact, in the exam's colour, in the countdown's place.
+        val same = DayLine.Pinned(examDay, "DS P2 in 9 days", "DS P2")
+        val merged = DayLine.facts(day, t0 + 30 * min, from = projectR.end, shown = setOf(projectR.key), tasksShown = false, time = time, max = 3, pinned = same, zone = utc)
+        assertEquals(listOf("DS P2 · DS Analyse in 8 d", "then Probabilités T+240", "1 task left"), merged.map { it.text })
+        assertEquals(DayLine.Tone.Soon, merged[0].tone)
+        // With nothing on the main line (room for one fact), the countdown is it.
+        assertEquals(listOf("Période 3 in 29 days"), DayLine.facts(day, t0 + 30 * min, from = projectR.end, shown = setOf(projectR.key), tasksShown = false, time = time, max = 1, pinned = other, zone = utc).map { it.text })
+    }
 }

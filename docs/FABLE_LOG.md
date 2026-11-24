@@ -1744,3 +1744,31 @@ was, the picture still picked" (Med's bug), Done keeps the placed picture on the
 | GIF, animated WebP | Done | Forward only, at their own pace (no speed). |
 | Pause off home and with the screen off | Done | Window focus, screen broadcasts. |
 | Measure; still frame when too costly | Done; numbers from the phone | D208: "Frames: video wallpaper, the glass …" lines in Med's log. |
+
+Run 147 (checkpoint 4) stopped at compiling: the library thumbnail's description smart-cast another module's property
+(`item.video`), which the one-pass local check accepts and Gradle does not. Fixed in run 148 (green), and the local
+module lint now flags the pattern (D214). Run 148 changed no `ci/` file, so its emulator parts did not run: the video
+check 11c runs with checkpoint 5.
+
+### Part 5: the liquid calendar (checkpoint)
+
+| Point | State | What |
+|---|---|---|
+| Tap the clock's date | Done | Every design that shows the date (above, below, Minimal, Tall, Stacked's line); a quick tap opens it at once, the long press and the rest of the clock's gestures unchanged (D209). The date is off by default: on in Settings › Home › Clock or a clock's Customise. |
+| Grows out of the date, spring, interruptible | Done; to measure on the phone | Shared bounds from the date text; width first, then height; bounce setting; a tap mid-close reopens from where it is. |
+| Closes into the date on Back or a pull down, following the finger | Done | Also from the top of a list (nested scrolling), and a tap outside. |
+| Other openers later | Ready | `CalendarOpener` (sealed); only `ClockDate` today. |
+| Views: month, week strip, agenda, year heatmap | Done | Tabs at the top; month and week swipe sideways; the year's day opens in the month. |
+| Liquid blob on the day picked | Done; to measure on the phone | Two springs and a waist, one path, redrawn without recomposing (D211). |
+| Events, READ_CALENDAR asked once | Done | Read-only request the first time it opens; "Show my events" asks again; never from the settings preview. |
+| Dots or colour bars; calendars and colours | Done | Settings › Calendar › Calendar (Look; More: Calendars and colours). |
+| A day's agenda | Done | Holidays, school dates (with their actions), events (open in the calendar app). |
+| Quick add | Done | `ACTION_INSERT` on the day picked (next hour today, else 9:00); the calendar stays open across it. |
+| ESSAI 2026-27, editable, deletable, indicative | Done | 14 built-in dates in the settings store (D212); in the calendar: pin, a day earlier or later, delete with Undo; in Settings: edit, add, delete, bring back. |
+| Countdowns, pinned under the clock | Done | Merged with the exam of the same day; shown even with the study line off; never an exam. |
+| Options | Done | Monday first (on, both), week numbers, size (compact, half sheet, full), glass tier, corners, density, today's highlight, dim, bounce. |
+| Holidays (Tunisia) | Done | Decree 2021-223 plus the Islamic ones from the Umm al-Qura tables, ≈, movable and hideable, all movable together (D210). |
+| Hijri date line | Done | Off by default; follows the shift. |
+| One component with the widget; share switch | Done | `MonthDays`; the widget keeps its look and its tap to the calendar app unless it shares (off by default, D211). |
+| Calendar settings entry | Done | Eighth entry, three pages, live preview (D213). |
+| Tests | Done | `SchoolYearTest` (4), `HolidaysTest` (3), `DayLineTest` (+1), `SettingsMapTest` (+1, eight entries), `CalendarLookTest` (3, home module, CI only); emulator 18: the date opens it on the month with 14b's event in today's agenda, idle frames, the agenda's "DS P2 in …", the year heatmap read from the calendar (its time in the log), the week strip, Back closes it. |

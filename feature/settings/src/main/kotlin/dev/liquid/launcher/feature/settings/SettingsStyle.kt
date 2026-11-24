@@ -63,6 +63,7 @@ internal fun entryAccent(entry: SettingsEntry): Color = when (entry) {
     SettingsEntry.HOME -> Color(0xFF42A5F5)
     SettingsEntry.DRAWER -> Color(0xFF5C6BC0)
     SettingsEntry.STUDY -> Color(0xFF66BB6A)
+    SettingsEntry.CALENDAR -> Color(0xFFFFA726)
     SettingsEntry.LOOK -> Color(0xFFEC407A)
     SettingsEntry.WALLPAPER -> Color(0xFF00ACC1)
     SettingsEntry.MOTION -> Color(0xFF7E57C2)
@@ -73,6 +74,7 @@ internal fun entryIcon(entry: SettingsEntry): Int = when (entry) {
     SettingsEntry.HOME -> LauncherIcons.Home
     SettingsEntry.DRAWER -> LauncherIcons.Apps
     SettingsEntry.STUDY -> LauncherIcons.School
+    SettingsEntry.CALENDAR -> LauncherIcons.Calendar
     SettingsEntry.LOOK -> LauncherIcons.Palette
     SettingsEntry.WALLPAPER -> LauncherIcons.Image
     SettingsEntry.MOTION -> LauncherIcons.Sparkle
@@ -94,6 +96,9 @@ internal fun surfaceIcon(id: String, entry: SettingsEntry): Int = when (id) {
     "search" -> LauncherIcons.Search
     "keyboard" -> LauncherIcons.Code
     "study" -> LauncherIcons.School
+    "calendar" -> LauncherIcons.Calendar
+    "calendarDays" -> LauncherIcons.Pin
+    "calendarWidget" -> LauncherIcons.Widgets
     "theme" -> LauncherIcons.Palette
     "icons" -> LauncherIcons.Star
     "glass" -> LauncherIcons.Layers

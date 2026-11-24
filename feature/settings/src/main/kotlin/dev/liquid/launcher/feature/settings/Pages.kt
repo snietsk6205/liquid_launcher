@@ -55,7 +55,7 @@ import dev.liquid.launcher.core.settings.SettingsTab
 import kotlinx.coroutines.delay
 
 /*
- * W4 (0.10.1): Settings in seven entries, each a list of pages; a page is one surface of the launcher with its
+ * W4 (0.10.1): Settings in seven entries (eight since 0.16.0), each a list of pages; a page is one surface of the launcher with its
  * live preview fixed at the top and its options in tabs (Layout, Look, Behaviour, More). Search and "Recently
  * changed" open the page on the option's tab and light the option up.
  */
@@ -134,6 +134,8 @@ private val editorTabs: Map<String, Set<SettingsTab>> = mapOf(
     "buttons" to setOf(SettingsTab.LOOK),
     "wallpaper" to setOf(SettingsTab.LOOK),
     "wallpaperFolders" to setOf(SettingsTab.MORE),
+    "calendar" to setOf(SettingsTab.MORE),
+    "calendarDays" to setOf(SettingsTab.MORE),
     "study" to setOf(SettingsTab.LAYOUT, SettingsTab.MORE),
     "layouts" to setOf(SettingsTab.LAYOUT),
     "backup" to setOf(SettingsTab.BEHAVIOUR, SettingsTab.MORE),
@@ -191,6 +193,12 @@ private fun PageEditors(surface: String, tab: SettingsTab, store: SettingsStore,
         ) { open(Screen.ThemeLab) }
         "wallpaper" to SettingsTab.LOOK -> WallpaperEditor()
         "wallpaperFolders" to SettingsTab.MORE -> IslandEditor()
+        // 0.16.0 (D209–D211): the calendar's lists.
+        "calendar" to SettingsTab.MORE -> CalendarsEditor(store)
+        "calendarDays" to SettingsTab.MORE -> {
+            SchoolYearEditor(store)
+            HolidayChangesEditor(store)
+        }
         "study" to SettingsTab.LAYOUT -> StudyEditor(store)
         "study" to SettingsTab.MORE -> CameraAppEditor(store)
         "layouts" to SettingsTab.LAYOUT -> LayoutsAndBackupEditor()

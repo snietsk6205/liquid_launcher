@@ -217,7 +217,7 @@ private fun pageEnv(env: PageEnv, page: dev.liquid.launcher.core.data.HomePage):
 private fun savedImageKey(wallpaper: WallpaperStore): Any? = wallpaper.image.collectAsState().value
 
 /** How the home screen is shown: the real thing, or a miniature inside the settings app. */
-enum class HomeMode { Live, Preview, PreviewDrawer, PreviewDrawerMotion, PreviewDrawerIndex, PreviewMenu, PreviewHomeMenu, PreviewToday, PreviewSearch, PreviewEffects }
+enum class HomeMode { Live, Preview, PreviewDrawer, PreviewDrawerMotion, PreviewDrawerIndex, PreviewMenu, PreviewHomeMenu, PreviewToday, PreviewSearch, PreviewEffects, PreviewCalendar }
 
 @Composable
 fun HomeScreen(
@@ -687,7 +687,8 @@ private fun HomeScreenBody(
         // point is to preview the screen behind them (clock, widget options, wallpaper) leave it sharp.
         val windowBlurDp = LocalControls.current?.theme?.windowBlurDp ?: 0
         val sheetOpen = controller.layoutsSheet || controller.tagging != null || controller.wallpaperStrip || controller.widgetPicker ||
-            controller.todaySheet || controller.homeMenu || controller.menu != null || controller.openFolder != null || controller.reviewSheet != null
+            controller.todaySheet || controller.homeMenu || controller.menu != null || controller.openFolder != null || controller.reviewSheet != null ||
+            controller.calendarOpen
         val sheetBlur by androidx.compose.animation.core.animateFloatAsState(
             if (windowBlurDp > 0 && sheetOpen) 1f else 0f,
             androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = MotionScale.stiffness(420f)),
@@ -1108,6 +1109,20 @@ private fun HomeScreenBody(
         if ((live || mode == HomeMode.PreviewToday) && hubShown) {
             StudyHub(glass, lightBackground, overlayBackdrop, controller)
         }
+        // 0.16.0 (D209): the calendar, grown out of the clock's date; in Settings › Calendar, open over the preview and
+        // grown again when its size, corners or bounce change, so the setting is seen doing what it says.
+        if (mode == HomeMode.PreviewCalendar) {
+            val replay by store.derive { Triple(get(LauncherSettings.CalendarSize), get(LauncherSettings.CalendarBounce), get(LauncherSettings.CalendarCorner)) }
+            LaunchedEffect(replay) {
+                controller.closeCalendar(immediately = true)
+                kotlinx.coroutines.delay(160)
+                controller.openCalendar(CalendarOpener.ClockDate("preview", null), ask = false)
+            }
+        }
+        val calendarShown by remember { derivedStateOf { controller.calendarOpen || controller.calendar.value > 0.001f } }
+        if ((live || mode == HomeMode.PreviewCalendar) && calendarShown) {
+            LiquidCalendar(glass, lightBackground, overlayBackdrop, controller)
+        }
         // C1: a distracting app asked for during a block waits here.
         Presence(
             controller.speedBump.takeIf { live },
@@ -1364,6 +1379,7 @@ internal fun openScreenName(c: HomeController): String = when {
     c.wallpaperStudio -> "wallpaper screen"
     c.clockStudio != null -> "clock gallery"
     c.hub.value > 0.5f -> "study hub"
+    c.calendar.value > 0.5f -> "calendar"
     c.tagSheet -> "tag list"
     c.openFolder != null -> "folder"
     c.searchOpen || c.search.value > 0.5f -> "search"
