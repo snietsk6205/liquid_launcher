@@ -1468,7 +1468,7 @@ private fun LibraryThumb(
     val description = buildString {
         append("Wallpaper ").append(index + 1)
         // 0.16.0 (D207): a video or an animated picture.
-        if (item.video != null) append(if (item.video.kind == "video") ", video" else ", animated")
+        item.video?.let { append(if (it.kind == "video") ", video" else ", animated") }
         if (item.favourite) append(", favourite")
         if (picked) append(", picked")
         if (selected == true) append(", selected")
