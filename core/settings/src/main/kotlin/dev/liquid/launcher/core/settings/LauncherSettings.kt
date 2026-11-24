@@ -2394,6 +2394,7 @@ object LauncherSettings {
     val CalendarCorner = IntSetting(
         key = "calendar.corner", default = 30, min = 8, max = 44, step = 2, unit = "dp",
         title = "Corners",
+        summary = "How round the calendar's corners are once it is open",
         section = "calendar", keywords = "calendar corners radius round shape",
     )
     val CalendarToday = ChoiceSetting(
@@ -2419,6 +2420,7 @@ object LauncherSettings {
     val CalendarDim = IntSetting(
         key = "calendar.dim", default = 25, min = 0, max = 70, step = 5, unit = "%",
         title = "Dim behind it",
+        summary = "How much the home screen darkens behind the calendar",
         section = "calendar", keywords = "calendar dim darken background behind",
     )
     val CalendarBounce = IntSetting(
@@ -2471,26 +2473,31 @@ object LauncherSettings {
     val CalendarWidgetMarks = ChoiceSetting(
         key = "calendar.widget.marks", default = "dots", options = CalendarMarks.options,
         title = "Widget: events on a day",
+        summary = "What a day with events shows on the widget",
         section = "calendarWidget", keywords = "calendar widget events marks dots bars",
     )
     val CalendarWidgetToday = ChoiceSetting(
         key = "calendar.widget.today", default = "filled", options = CalendarToday.options,
         title = "Widget: today",
+        summary = "How today stands out on the widget",
         section = "calendarWidget", keywords = "calendar widget today highlight circle ring glow",
     )
     val CalendarWidgetWeekNumbers = BoolSetting(
         key = "calendar.widget.weekNumbers", default = false,
         title = "Widget: week numbers",
+        summary = "The week of the year beside each week of the widget's month",
         section = "calendarWidget", keywords = "calendar widget week numbers",
     )
     val CalendarWidgetHolidays = BoolSetting(
         key = "calendar.widget.holidays", default = false,
         title = "Widget: holidays in Tunisia",
+        summary = "Tunisia's holidays coloured on the widget's days",
         section = "calendarWidget", keywords = "calendar widget holidays tunisia",
     )
     val CalendarWidgetSchool = BoolSetting(
         key = "calendar.widget.school", default = false,
         title = "Widget: school year",
+        summary = "Your school dates marked on the widget's days",
         section = "calendarWidget", keywords = "calendar widget school year essai exams",
     )
 

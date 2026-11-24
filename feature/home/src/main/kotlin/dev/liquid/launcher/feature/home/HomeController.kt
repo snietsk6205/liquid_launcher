@@ -478,7 +478,8 @@ class HomeController(
     /** An app opened from the calendar (an event, Quick add): it is still open on coming back. */
     var calendarKeep = false
 
-    private var calendarDragPos: Float? = null
+    // Observed (not a plain field) so the frame meter can tell the frames that follow the finger apart.
+    private var calendarDragPos by mutableStateOf<Float?>(null)
     val calendarDragging: Boolean get() = calendarDragPos != null
 
     private fun calendarSpring(opening: Boolean): androidx.compose.animation.core.SpringSpec<Float> {
@@ -510,6 +511,9 @@ class HomeController(
             val first = data.settings.get(LauncherSettings.CalendarView).let { if (it == "last") data.settings.get(LauncherSettings.CalendarLastView) else it }
             calendarUi.reset(first)
             DebugLog.event("Calendar", "opened from the ${opener.name} on ${calendarUi.view}")
+            // The Islamic holidays and the Hijri line come from the phone's own Hijri tables: say whether it has them.
+            val hijri = dev.liquid.launcher.core.data.Hijri.of(java.time.LocalDate.now(), data.settings.get(LauncherSettings.CalendarHijriShift))
+            DebugLog.event("Calendar", hijri?.let { "Hijri today: " + dev.liquid.launcher.core.data.Hijri.format(it) } ?: "no Hijri tables on this phone: no Islamic holidays")
             // [ask] is false for the settings' preview, which must not use up the one time it asks.
             if (ask && !dev.liquid.launcher.core.data.PhoneCalendars.canRead(context) && !data.settings.get(LauncherSettings.CalendarAsked)) {
                 data.settings.set(LauncherSettings.CalendarAsked, true)

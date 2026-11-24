@@ -1378,8 +1378,9 @@ fun wallpaperIsLight(context: Context): Boolean = dev.liquid.launcher.core.data.
 internal fun openScreenName(c: HomeController): String = when {
     c.wallpaperStudio -> "wallpaper screen"
     c.clockStudio != null -> "clock gallery"
+    // 0.16.0: the calendar from its first frame to its last, so its growing and shrinking count as the calendar's.
+    c.calendarOpen || c.calendar.value > 0.01f -> "calendar"
     c.hub.value > 0.5f -> "study hub"
-    c.calendar.value > 0.5f -> "calendar"
     c.tagSheet -> "tag list"
     c.openFolder != null -> "folder"
     c.searchOpen || c.search.value > 0.5f -> "search"

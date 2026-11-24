@@ -1594,15 +1594,21 @@ else
   fail "adding a video asks whether to re-encode it"
 fi
 wait_gone 11c-ask "Working" 8 || true
-dump 11c-studio
+# Run 149: one dump taken while the question was still closing had no "Apply" in it, and the tap never happened. Wait
+# for the button itself, and say what was on the screen when it is not there.
+wait_screen 11c-studio "Apply" 10 exact || true
 APPLY0=$(grep -c "apply: " "$LOG" || true)
-tap_text 11c-studio "Apply" exact || true
+if ! tap_text 11c-studio "Apply" exact; then
+  note "no Apply button in the wallpaper screen after the video was shared"
+  peek 11c-studio
+  python3 ci/describe_ui.py "$OUT/11c-studio.xml" 30 | sed 's/^/        /'
+fi
 wait_log "video wallpaper: first frame drawn" 20
 if grep -q "video wallpaper: first frame drawn" "$LOG" && grep -q "video wallpaper: playing" "$LOG"; then
   pass "the video wallpaper plays on the home screen"
 else
   fail "the video wallpaper plays on the home screen"
-  grep -E "video wallpaper" "$LOG" | tail -6 | sed 's/^/        /'
+  grep -E "video wallpaper|Wallpaper: (apply|shared|picked)" "$LOG" | tail -8 | sed 's/^/        /'
 fi
 wait_log "Frames: video wallpaper" 20
 if grep -q "Frames: video wallpaper" "$LOG"; then
@@ -1672,6 +1678,8 @@ if DATE=$(date_pos 18-home); then
   wait_screen 18-month "Agenda view" 8 || true
   peek 18-month
   if calendar_opened && on_screen 18-month "Month view, shown"; then pass "a tap on the clock's date opens the calendar on the month"; else fail "a tap on the clock's date opens the calendar on the month"; python3 ci/describe_ui.py "$OUT/18-month.xml" 30 | sed 's/^/        /'; fi
+  # The Islamic holidays come from Android's own Hijri tables (java.time's HijrahDate): they must be there.
+  if grep -qE "Calendar: Hijri today: [0-9]+ .* 14[0-9][0-9]" "$LOG"; then pass "Android has the Hijri tables ($(grep -oE 'Hijri today: .*' "$LOG" | tail -1))"; else fail "Android has the Hijri tables"; grep "Calendar:" "$LOG" | tail -4 | sed 's/^/        /'; fi
   if [ -n "${EVENT_ID:-}" ]; then
     if on_screen 18-month "Proba 2 smoke block"; then pass "today's agenda shows the phone's events"; else fail "today's agenda shows the phone's events"; fi
   else
@@ -1679,12 +1687,18 @@ if DATE=$(date_pos 18-home); then
   fi
   idle_frames "calendar"
   tap_text 18-month "Agenda view" exact || tap_text 18-month "Agenda view" || true
-  wait_screen 18-agenda "DS P2 in" 8 || true
+  wait_screen 18-agenda "Agenda view, shown" 8 || true
   peek 18-agenda
-  if on_screen 18-agenda "DS P2 in"; then pass "the agenda counts down to the built-in school dates"; else fail "the agenda counts down to the built-in school dates"; python3 ci/describe_ui.py "$OUT/18-agenda.xml" 30 | sed 's/^/        /'; fi
+  # The countdowns scroll sideways: the first ones on screen depend on the day (the winter break, a revision, DS P2).
+  if on_screen 18-agenda "Winter break in" || on_screen 18-agenda "Révision in" || on_screen 18-agenda "DS P2 in"; then
+    pass "the agenda counts down to the built-in school dates"
+  else
+    fail "the agenda counts down to the built-in school dates"
+    python3 ci/describe_ui.py "$OUT/18-agenda.xml" 30 | sed 's/^/        /'
+  fi
   YEAR0=$(grep -c "Calendar: year " "$LOG" || true)
   tap_text 18-agenda "Year view" exact || tap_text 18-agenda "Year view" || true
-  wait_screen 18-year "more events" 8 || true
+  wait_screen 18-year "Previous year" 8 || true
   peek 18-year
   year_read() { [ "$(grep -c "Calendar: year " "$LOG" || true)" -gt "$YEAR0" ]; }
   wait_until 6 year_read || true
@@ -1693,6 +1707,7 @@ if DATE=$(date_pos 18-home); then
     grep "Calendar: year " "$LOG" | tail -1 | sed 's/^/        /'
   else
     fail "the year view draws the heatmap from the phone's events"
+    python3 ci/describe_ui.py "$OUT/18-year.xml" 30 | sed 's/^/        /'
   fi
   tap_text 18-year "Week view" exact || tap_text 18-year "Week view" || true
   wait_screen 18-week "Previous week" 8 || true

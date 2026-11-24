@@ -433,6 +433,7 @@ internal fun WallpaperStudio(
             try {
                 val source = Wallpapers.source(context, data, pick)
                 if (source == null) {
+                    DebugLog.error("Wallpaper", "could not read the picture picked")
                     controller.toast("Could not read that picture")
                     state.flow = state.flow.failed(key)
                     state.choosing = state.pick
@@ -714,6 +715,7 @@ internal fun WallpaperStudio(
         val source = state.source
         if (pick == null || source == null) {
             // No new picture: the looks and the layout choice are kept, and the sheet goes; the screen already shows them.
+            DebugLog.event("Wallpaper", "apply: no new picture, only the looks")
             saveLooks()
             // W8 (P8): the picture on screen keeps its own look (or goes back to the one for all) when it was edited.
             if (state.lookTouched) data.wallpapers.get().current?.let { data.wallpapers.setLook(it, state.pictureLook) }
@@ -812,6 +814,7 @@ internal fun WallpaperStudio(
     LaunchedEffect(controller.sharedPick) {
         val item = controller.sharedPick ?: return@LaunchedEffect
         controller.sharedPick = null
+        DebugLog.event("Wallpaper", "picked what was shared: " + (item.video?.kind ?: "picture"))
         state.flow = state.flow.endSelecting()
         state.page = "pictures"
         state.tab = "all"

@@ -8,6 +8,8 @@ Kotlin, Jetpack Compose, Material 3 Expressive motion, liquid glass, everything 
 
 ## Status
 
+0.16.0: the wallpaper library sorts, filters, selects and peeks, with Undo after a change; each layout has its own wallpaper, recents, collection, look and automatic changes; pictures from Island or Insular and folders per layout; video, GIF and animated WebP wallpapers under the glass; the liquid calendar grows out of the clock's date (month, week strip, agenda, year heatmap, a liquid blob on the day picked, Tunisia's holidays, the ESSAI school year with countdowns pinned under the clock); Settings › Calendar.
+
 0.15.3: board photos with the launcher's own camera, several in a row, each saved at once in the class's folder; the unlock animation is gone.
 
 0.15.0: search lands: the pill and the keyboard stop together (the bounce is a squash), one keyboard control per opening; Settings in WM Keyboard's style (hues, headings with breadcrumbs, grouped cards, page pushes with flying icons); the keyboard wallpaper says which theme is missing.

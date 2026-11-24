@@ -411,9 +411,16 @@ internal fun rememberBlob(target: Offset?): Blob {
             blob.placed = true
             return@LaunchedEffect
         }
-        kotlinx.coroutines.coroutineScope {
-            launch { blob.head.animateTo(target, spring(dampingRatio = 0.66f, stiffness = MotionScale.stiffness(520f))) }
-            launch { blob.tail.animateTo(target, spring(dampingRatio = 0.85f, stiffness = MotionScale.stiffness(190f))) }
+        // Its frames are counted apart by the frame meter (only where nothing else is being measured).
+        val measured = FrameCost.activity == null || FrameCost.activity == CalendarBlobFlowing
+        if (measured) FrameCost.activity = CalendarBlobFlowing
+        try {
+            kotlinx.coroutines.coroutineScope {
+                launch { blob.head.animateTo(target, spring(dampingRatio = 0.66f, stiffness = MotionScale.stiffness(520f))) }
+                launch { blob.tail.animateTo(target, spring(dampingRatio = 0.85f, stiffness = MotionScale.stiffness(190f))) }
+            }
+        } finally {
+            if (measured && FrameCost.activity == CalendarBlobFlowing) FrameCost.activity = null
         }
     }
     return blob

@@ -178,6 +178,11 @@ class CalendarUi {
 
 private fun calLerp(a: Float, b: Float, t: Float) = a + (b - a) * t
 
+/** The frame meter's names for the calendar's motion. */
+private const val CalendarMoving = "the calendar growing or shrinking"
+private const val CalendarFollowing = "the calendar following the finger"
+internal const val CalendarBlobFlowing = "the calendar's blob flowing"
+
 /** The calendar's rectangles, from the screen, the insets, its size and its progress. */
 @Stable
 private class CalendarGeometry(
@@ -306,6 +311,24 @@ internal fun LiquidCalendar(glass: GlassConfig, lightBackground: Boolean, backdr
             Modifier.liquidGlass(backdrop, shape, glass.style(Surfaces.Menu, lightBackground, large = true).copy(quality = quality), layer)
         }
     }
+    // The frame meter counts the calendar's own motion apart (Med: frame-meter numbers for its animations): growing or
+    // shrinking on its spring, and following the finger.
+    androidx.compose.runtime.LaunchedEffect(controller) {
+        androidx.compose.runtime.snapshotFlow {
+            when {
+                controller.calendarDragging -> CalendarFollowing
+                controller.calendar.isRunning -> CalendarMoving
+                else -> null
+            }
+        }.collect { motion ->
+            if (motion != null) FrameCost.activity = motion
+            else if (FrameCost.activity == CalendarMoving || FrameCost.activity == CalendarFollowing) FrameCost.activity = null
+        }
+    }
+    // It may leave the screen on the frame its spring ends, before the flow above says so.
+    androidx.compose.runtime.DisposableEffect(controller) {
+        onDispose { if (FrameCost.activity == CalendarMoving || FrameCost.activity == CalendarFollowing) FrameCost.activity = null }
+    }
     Box(Modifier.fillMaxSize()) {
         // The home screen dims as the glass grows; a tap outside puts the calendar back into the date.
         Box(
@@ -362,6 +385,7 @@ private fun CalendarBody(controller: HomeController, color: Color, modifier: Mod
     val context = LocalContext.current
     val store = controller.data.settings
     val look by store.derive { calendarLook(widget = false) }
+    val size by store.derive { get(LauncherSettings.CalendarSize) }
     val notesKey by store.derive { get(LauncherSettings.CalendarSchoolYear) + "|" + get(LauncherSettings.CalendarHolidayChanges) }
     val tick = rememberMinuteTick()
     val today = remember(tick) { LocalDate.now() }
@@ -411,10 +435,12 @@ private fun CalendarBody(controller: HomeController, color: Color, modifier: Mod
             "year" -> YearView(ui, today, look, allowed, focused, color, controller, Modifier.weight(1f))
             else -> {
                 MonthHeader(ui, today, color)
+                // The compact card takes the days one step smaller, so the day's agenda keeps a couple of rows under them.
+                val small = size == "compact"
                 val cell = when (look.density) {
-                    "compact" -> 36.dp
-                    "roomy" -> 52.dp
-                    else -> 44.dp
+                    "compact" -> if (small) 32.dp else 36.dp
+                    "roomy" -> if (small) 44.dp else 52.dp
+                    else -> if (small) 36.dp else 44.dp
                 }
                 AnimatedContent(
                     targetState = ui.month,
@@ -920,6 +946,20 @@ private fun YearView(
             Spacer(Modifier.width(6.dp))
             RoundArrow(color, back = false, description = "Next year") { ui.year = year + 1 }
         }
+        // What the colours say, under the year (it was under the months, out of sight on a half sheet).
+        Row(Modifier.padding(start = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Fewer", style = calText(color.copy(alpha = 0.55f), 11f))
+            for (a in listOf(0.08f, 0.3f, 0.5f, 0.7f, 0.92f)) {
+                Spacer(Modifier.width(4.dp))
+                Box(Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(if (a < 0.1f) color.copy(alpha = a) else accent.copy(alpha = a)))
+            }
+            Spacer(Modifier.width(4.dp))
+            Text("more events", style = calText(color.copy(alpha = 0.55f), 11f))
+            Spacer(Modifier.width(12.dp))
+            Box(Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).border(1.5.dp, HolidayInk, RoundedCornerShape(2.dp)))
+            Spacer(Modifier.width(4.dp))
+            Text("holiday", style = calText(color.copy(alpha = 0.55f), 11f))
+        }
         val scroll = rememberScrollState()
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(scroll).swipeBy { ui.year = year + it.toInt() }, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             for (row in 0 until 4) {
@@ -939,15 +979,6 @@ private fun YearView(
                         }
                     }
                 }
-            }
-            Row(Modifier.padding(top = 4.dp, start = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Fewer", style = calText(color.copy(alpha = 0.55f), 11f))
-                for (a in listOf(0.08f, 0.3f, 0.5f, 0.7f, 0.92f)) {
-                    Spacer(Modifier.width(4.dp))
-                    Box(Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(if (a < 0.1f) color.copy(alpha = a) else accent.copy(alpha = a)))
-                }
-                Spacer(Modifier.width(4.dp))
-                Text("more events", style = calText(color.copy(alpha = 0.55f), 11f))
             }
         }
     }

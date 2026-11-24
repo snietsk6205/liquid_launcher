@@ -1772,3 +1772,14 @@ check 11c runs with checkpoint 5.
 | One component with the widget; share switch | Done | `MonthDays`; the widget keeps its look and its tap to the calendar app unless it shares (off by default, D211). |
 | Calendar settings entry | Done | Eighth entry, three pages, live preview (D213). |
 | Tests | Done | `SchoolYearTest` (4), `HolidaysTest` (3), `DayLineTest` (+1), `SettingsMapTest` (+1, eight entries), `CalendarLookTest` (3, home module, CI only); emulator 18: the date opens it on the month with 14b's event in today's agenda, idle frames, the agenda's "DS P2 in …", the year heatmap read from the calendar (its time in the log), the week strip, Back closes it. |
+
+Run 149 (checkpoint 5): build and every unit test green, the redirect part green. The calendar's check 18 passed but
+one item: the date opens it on the month, today's agenda shows the test calendar's block, it sits still (0 frames in
+3 s), the agenda counts down to the school dates, the week strip shows, Back shrinks it into the date; the year view read
+its events ("year 2026: 4 events read in 68 ms") but its legend was below the fold of the half sheet, where the check
+looked for it. The legend now sits under the year (better there anyway). The video check 11c ran for the first time:
+the shared video was added with its poster and the re-encode question came, but the check's dump was taken while the
+question was still closing, so "Apply" was never tapped (the log has no apply at all). It now waits for the button and
+prints the screen when it is missing; the wallpaper screen logs what was shared and picked, and an Apply without a new
+picture. Same commit: the frame meter's labels for the calendar (D215), the Hijri check, smaller days on the compact
+size, a summary for every calendar option.
