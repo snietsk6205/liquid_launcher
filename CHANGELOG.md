@@ -46,6 +46,18 @@ Versions marked *not published on its own* were built but came to the phone insi
   layout uses all of them, as before). Automatic changes "from folders" use the layout's folders.
 - The wallpaper strip shows the newest pictures of your folders after your favourites and recent ones (Island's too),
   at once, from what was last seen there (Settings › Wallpaper and layouts › Folders and Island).
+- Video wallpapers: a video, a GIF or an animated WebP (from "+ Files" or the share menu) plays on the home screen,
+  over its still frame, and the liquid glass bends it. The wallpaper screen's Video tab sets how it plays: loop,
+  Boomerang (forward then back) or once; speed from 0.25× to 2×; a cross-fade where the loop starts again; filling the
+  screen (where it is cropped) or fitted whole; always, once per unlock, or for a few seconds; the part played; the
+  still frame (what shows while it rests, and the colours); a re-encode for this phone (H.264, at most 1080p or 720p
+  and 24, 30 or 60 frames a second, an optional blur made once); and "Lock screen and recents too", which makes it the
+  phone's live wallpaper as well (Android asks you to confirm). It rests whenever the home screen is away, the screen
+  is off, or the battery rules say so (battery saver, below 15 %, or only while charging: Settings › Wallpaper and
+  layouts › Video). Adding a video asks whether to re-encode it.
+- The glass over a video: by default the launcher measures the first seconds a video plays and, when the phone cannot
+  keep up, the pill and the dock bend a still of the home screen refreshed every few seconds instead (Settings ›
+  Wallpaper and layouts › Video; the debug log gives the numbers).
 - Every picture applied is kept in the launcher: one an automatic change takes from a folder is kept as a saved copy
   (not in All, not in backups, deleted once no recent list needs it), so the wallpaper, recents and Undo keep working
   while Island is frozen, paused or locked. Then a folder of it says "Island is paused, showing saved copies" and shows
@@ -63,8 +75,10 @@ Versions marked *not published on its own* were built but came to the phone insi
   wallpaper with it" are gone (every layout keeps its own); turn "Each layout has its own wallpaper" off to share one
   wallpaper and get both back.
 - "Also on the lock screen" became Lock screen › Same (it was on for you if you had it on).
-- Settings › Wallpaper and layouts has two new pages: Library (the order of the pictures, and Recent wallpapers to show,
-  which moved there from Wallpaper › More) and Per layout. Lock screen is in Wallpaper › More.
+- Settings › Wallpaper and layouts has four new pages: Library (the order of the pictures, and Recent wallpapers to
+  show, which moved there from Wallpaper › More), Per layout, Folders and Island, and Video. Lock screen is in
+  Wallpaper › More.
+- "+ Files" also takes videos; the share menu's "Set as Liquid wallpaper" takes videos too.
 
 ### Fixed
 - Picking a favourite hid its heart: the heart is now on a small dark badge, above the ring.

@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -629,9 +630,9 @@ internal fun WallpaperStudio(
             scope.launch {
                 state.busy = true
                 val island = uris.count { dev.liquid.launcher.core.data.ProfileUris.isOtherProfile(it.authority) }
-                val added = uris.mapNotNull { data.wallpapers.importUri(it) }
+                val added = uris.mapNotNull { controller.importAny(it) }
                 state.busy = false
-                DebugLog.event("Wallpaper", "+ Files: ${added.size} of ${uris.size} picture(s) added" + if (island > 0) ", $island from the work profile (Island)" else "")
+                DebugLog.event("Wallpaper", "+ Files: ${added.size} of ${uris.size} picture(s) or video(s) added" + if (island > 0) ", $island from the work profile (Island)" else "")
                 if (added.isEmpty()) {
                     controller.notice(dev.liquid.launcher.core.common.NoticeKind.Wallpaper, "Those pictures could not be read", if (island > 0) "Island may be paused" else null)
                     return@launch
@@ -871,8 +872,11 @@ internal fun WallpaperStudio(
                         data.settings.set(LauncherSettings.WallpaperSheetTall, up)
                     }
                 }
+                // 0.16.0 (D207): a fourth tab when the picture picked (or on screen) is a video.
+                val videoItem = ((state.pick as? WallpaperPick.Library)?.item?.id ?: library.current.takeIf { state.pick == null })
+                    ?.let { id -> library.items.firstOrNull { it.id == id } }?.takeIf { it.video != null }
                 Segmented(
-                    listOf("pictures" to "Pictures", "look" to "Blur and dim", "auto" to "Automatic"),
+                    listOf("pictures" to "Pictures", "look" to "Blur and dim", "auto" to "Automatic") + if (videoItem != null) listOf("video" to "Video") else emptyList(),
                     state.page, color,
                 ) { state.page = it }
                 Spacer(Modifier.height(12.dp))
@@ -888,6 +892,7 @@ internal fun WallpaperStudio(
                         gridHeight = gridHeight,
                     )
                     "look" -> LookPage(state, glass, color, currentLayout?.name, ::setLockPicture)
+                    "video" -> if (videoItem != null) VideoPage(videoItem, color, controller) else AutoPage(data.settings, color)
                     else -> AutoPage(data.settings, color)
                 }
                 if (state.page == "pictures") {
@@ -995,6 +1000,26 @@ internal fun WallpaperStudio(
                 }) { Text("Save") }
             },
             dismissButton = { TextButton(onClick = { state.naming = null }) { Text("Cancel") } },
+        )
+    }
+    controller.reencodeAsk?.let { added ->
+        AlertDialog(
+            onDismissRequest = { controller.reencodeAsk = null },
+            title = { Text("Re-encode this video for the phone?") },
+            text = {
+                Text(
+                    "H.264, at most ${data.settings.get(LauncherSettings.VideoMaxHeight)}p and ${data.settings.get(LauncherSettings.VideoMaxFps)} frames a " +
+                        "second, without sound: a smaller file, lighter on the battery. It takes a minute and plays as it is meanwhile. " +
+                        "(Settings › Wallpaper and layouts › Video can always or never do it.)",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    controller.reencodeAsk = null
+                    controller.reencodeVideo(added)
+                }) { Text("Re-encode") }
+            },
+            dismissButton = { TextButton(onClick = { controller.reencodeAsk = null }) { Text("Not now") } },
         )
     }
     state.confirmDelete?.let { n ->
@@ -1442,11 +1467,23 @@ private fun LibraryThumb(
     // Read by the emulator test and by TalkBack: which picture, and whether it is a favourite, picked or selected.
     val description = buildString {
         append("Wallpaper ").append(index + 1)
+        // 0.16.0 (D207): a video or an animated picture.
+        if (item.video != null) append(if (item.video.kind == "video") ", video" else ", animated")
         if (item.favourite) append(", favourite")
         if (picked) append(", picked")
         if (selected == true) append(", selected")
     }
-    Thumb(thumb, picked, selected, item.favourite, color, description, onHold, onClick)
+    Box {
+        Thumb(thumb, picked, selected, item.favourite, color, description, onHold, onClick)
+        // 0.16.0 (D207): a video or animated picture says so in its corner.
+        if (item.video != null) {
+            Text(
+                "▶",
+                modifier = Modifier.align(Alignment.BottomStart).padding(7.dp),
+                style = TextStyle(color = Color.White, fontSize = 12.sp, shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.6f), Offset(0f, 1f), 4f)),
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -1685,6 +1722,96 @@ private fun LookPage(state: StudioState, glass: GlassConfig, color: Color, layou
     if (state.lockMode == "chosen") {
         Spacer(Modifier.height(8.dp))
         SmallChip(LauncherIcons.Lock, "Use the picture picked for the lock screen", color, Modifier.fillMaxWidth()) { setLockPicture() }
+    }
+}
+
+/**
+ * 0.16.0 (D207): how a video (or animated) wallpaper plays: the loop, its speed and cross-fade, how it sits on the
+ * screen, when it plays, the part played, its still frame, a re-encode for this phone, and the phone's own wallpaper.
+ * Every change is kept at once; the home screen plays it as set when the wallpaper screen closes.
+ */
+@Composable
+private fun VideoPage(item: WallpaperItem, color: Color, controller: HomeController) {
+    val data = controller.data
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val spec = item.video ?: return
+    val video = spec.kind == "video"
+    fun save(next: dev.liquid.launcher.core.data.VideoSpec) = data.wallpapers.setVideo(item.id, next)
+    val seconds = (spec.durationMs / 1000).toInt().coerceAtLeast(1)
+    Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
+        PageLabel(
+            if (!video) "An animated picture: it plays at its own pace, forward"
+            else "A video of ${"%.1f".format(java.util.Locale.ROOT, spec.durationMs / 1000f)} s, ${spec.width} × ${spec.height}" +
+                if (spec.encoded.isNotEmpty()) ", re-encoded (${spec.encoded})" else "",
+            color,
+        )
+        PageLabel("Plays", color)
+        Segmented(
+            if (video) listOf("loop" to "Loop", "boomerang" to "Boomerang", "once" to "Once") else listOf("loop" to "Loop", "once" to "Once"),
+            spec.loop, color,
+        ) { save(spec.copy(loop = it)) }
+        if (video && spec.loop == "boomerang" && !spec.allKeyFrames) {
+            PageLabel("Boomerang steps back frame by frame: smoothest after \"Re-encode for this phone\" below", color)
+        }
+        if (video) {
+            PageLabel("Speed", color)
+            Segmented(
+                dev.liquid.launcher.core.data.VideoRules.speeds.map { it.toString() to (if (it == it.toInt().toFloat()) "${it.toInt()}×" else "$it×") },
+                spec.speed.toString(), color,
+            ) { save(spec.copy(speed = it.toFloat())) }
+            if (spec.loop == "loop") {
+                PageLabel("Cross-fade where the loop starts again", color)
+                Segmented(listOf("0" to "Off", "300" to "0.3 s", "600" to "0.6 s", "1000" to "1 s"), spec.crossfadeMs.toString(), color) { save(spec.copy(crossfadeMs = it.toInt())) }
+            }
+        }
+        PageLabel("On the screen", color)
+        Segmented(listOf("fill" to "Fills it", "fit" to "Whole, fitted"), spec.fit, color) { save(spec.copy(fit = it)) }
+        if (spec.fit == "fill") {
+            ValueSlider("Across", (spec.panX * 100).toInt(), 0, 100, "%", color) { save(spec.copy(panX = it / 100f)) }
+            ValueSlider("Down", (spec.panY * 100).toInt(), 0, 100, "%", color) { save(spec.copy(panY = it / 100f)) }
+        }
+        PageLabel("When it plays (never with the screen off or the home screen away)", color)
+        Segmented(listOf("always" to "Always", "unlock" to "Once per unlock", "seconds" to "A few seconds"), spec.plays, color) { save(spec.copy(plays = it)) }
+        if (spec.plays == "seconds") ValueSlider("For", spec.seconds, 2, 60, "s", color) { save(spec.copy(seconds = it)) }
+        if (video) {
+            PageLabel("The part played", color)
+            ValueSlider("From", (spec.startMs / 1000).toInt(), 0, seconds, "s", color) { save(spec.copy(startMs = it * 1000L)) }
+            ValueSlider("To", if (spec.endMs <= 0) seconds else (spec.endMs / 1000).toInt(), 1, seconds, "s", color) {
+                save(spec.copy(endMs = if (it >= seconds) 0L else it * 1000L))
+            }
+            PageLabel("Still frame: what shows while it rests, and what the glass bends when it does not bend the video", color)
+            var posterAt by remember(item.id) { mutableIntStateOf((spec.posterMs / 1000).toInt()) }
+            ValueSlider("At", posterAt, 0, seconds, "s", color) { posterAt = it }
+            SmallChip(LauncherIcons.Image, "Use the frame at $posterAt s", color, Modifier.fillMaxWidth()) {
+                scope.launch {
+                    if (!VideoWallpapers.setPoster(data, item, posterAt * 1000L)) {
+                        controller.toast("That frame could not be read")
+                        return@launch
+                    }
+                    // On screen now: the still (its colours, the glass's picture, the phone's wallpaper) follows.
+                    if (data.wallpapers.get().current == item.id) data.wallpapers.find(item.id)?.let { controller.applyWallpaper(WallpaperPick.Library(it)) }
+                }
+            }
+            PageLabel("For this phone", color)
+            var blur by remember(item.id) { mutableIntStateOf(0) }
+            ValueSlider("Blur", blur, 0, 25, "", color) { blur = it }
+            SmallChip(
+                LauncherIcons.Tune,
+                if (spec.encoded.isEmpty()) "Re-encode for this phone" else "Re-encode again",
+                color, Modifier.fillMaxWidth(),
+            ) { controller.reencodeVideo(item, blur.toFloat(), allKeyFrames = spec.loop == "boomerang") }
+            PageLabel("The phone's own wallpaper", color)
+            Segmented(listOf("launcher" to "Home screen only", "system" to "Lock screen and recents too"), spec.mode, color) { mode ->
+                save(spec.copy(mode = mode))
+                if (mode == "system") {
+                    data.wallpapers.find(item.id)?.let { VideoWallpapers.writeLiveConfig(context, data, it) }
+                    // Android asks: no app may set a live wallpaper by itself.
+                    runCatching { controller.start(VideoWallpapers.liveWallpaperIntent(context)) }
+                        .onFailure { controller.toast("This phone does not offer live wallpapers") }
+                }
+            }
+        }
     }
 }
 

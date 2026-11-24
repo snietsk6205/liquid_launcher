@@ -14,5 +14,22 @@
             android:exported="false"
             android:screenOrientation="portrait"
             android:theme="@android:style/Theme.Material.NoActionBar" />
+        <!--
+            0.16.0 (D207): a video wallpaper as the phone's live wallpaper too (lock screen, recents), set only by the user in
+            Android's own screen. Its own process: decoding there can never slow the redirect or the home screen.
+        -->
+        <service
+            android:name="dev.liquid.launcher.feature.home.LiquidVideoWallpaperService"
+            android:exported="true"
+            android:label="Liquid video wallpaper"
+            android:permission="android.permission.BIND_WALLPAPER"
+            android:process=":wallpaper">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/liquid_video_wallpaper" />
+        </service>
     </application>
 </manifest>

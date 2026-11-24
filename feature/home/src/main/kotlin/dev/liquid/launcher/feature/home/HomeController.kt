@@ -1530,12 +1530,45 @@ class HomeController(
     }
 
     /**
+     * 0.16.0 (D207): a picture into the library, or a video, GIF or animated WebP as a video wallpaper (with its poster).
+     * A new video may be re-encoded for this phone ("Re-encode a video you add": always, or asked by the wallpaper screen).
+     */
+    internal suspend fun importAny(uri: android.net.Uri, folder: String? = null): dev.liquid.launcher.core.data.WallpaperItem? {
+        val moving = VideoWallpapers.isVideo(context, uri) || VideoWallpapers.isAnimated(context, uri)
+        if (!moving) return data.wallpapers.importUri(uri, folder)
+        val item = VideoWallpapers.import(context, data, uri, folder) ?: return null
+        if (item.video?.kind == "video") {
+            when (data.settings.get(LauncherSettings.VideoReencode)) {
+                "always" -> reencodeVideo(item)
+                "ask" -> reencodeAsk = item
+            }
+        }
+        return item
+    }
+
+    /** 0.16.0 (D207): a video just added, waiting for "Re-encode for this phone?" (the wallpaper screen asks). */
+    var reencodeAsk by mutableStateOf<dev.liquid.launcher.core.data.WallpaperItem?>(null)
+
+    /** 0.16.0 (D207): re-encodes a video wallpaper in the background, saying when it starts and how it went. */
+    fun reencodeVideo(item: dev.liquid.launcher.core.data.WallpaperItem, blur: Float = 0f, allKeyFrames: Boolean = false) {
+        scope.launch {
+            notice(dev.liquid.launcher.core.common.NoticeKind.Wallpaper, "Re-encoding the video", "It can take a minute; it keeps playing as it is meanwhile")
+            val error = VideoWallpapers.reencode(context, data, item, blur, allKeyFrames)
+            notice(
+                dev.liquid.launcher.core.common.NoticeKind.Wallpaper,
+                if (error == null) "The video is ready for this phone" else "The video could not be re-encoded",
+                error ?: data.wallpapers.find(item.id)?.video?.encoded,
+            )
+        }
+    }
+
+    /**
      * 0.16.0: pictures shared to "Set as Liquid wallpaper" (or "Set as" in a gallery) go into the library, and the
      * wallpaper screen opens with the first one picked, ready to Place or Apply.
      */
     fun importShared(uris: List<android.net.Uri>) {
         scope.launch {
-            val items = uris.mapNotNull { data.wallpapers.importUri(it) }
+            val items = uris.mapNotNull { importAny(it) }
             DebugLog.event("Wallpaper", "shared: ${items.size} of ${uris.size} picture(s) added to the library")
             if (items.isEmpty()) {
                 toast("Could not read that picture")

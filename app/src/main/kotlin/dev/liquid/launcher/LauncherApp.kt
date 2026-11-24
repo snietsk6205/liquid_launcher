@@ -34,6 +34,9 @@ class LauncherApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // 0.16.0 (D207): the live wallpaper's own process needs none of this (and two processes must never write the
+        // launcher's data files): it only plays a video.
+        if (getProcessName().endsWith(":wallpaper")) return
         DebugLog.sink = { entry ->
             val priority = if (entry.level == LogLevel.ERROR) Log.ERROR else Log.INFO
             Log.println(priority, LOGCAT_TAG, "${entry.tag}: ${entry.message}")

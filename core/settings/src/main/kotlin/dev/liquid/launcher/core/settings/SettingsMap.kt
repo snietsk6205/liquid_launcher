@@ -254,6 +254,15 @@ object SettingsMap {
             mapOf(B to listOf("wallpaper.stripFolders", "wallpaper.stripFolderCount")),
         ),
         SettingsSurface(
+            "wallpaperVideo", "Video", "Video, GIF and animated wallpapers: the glass over them, the battery, re-encoding", SettingsEntry.WALLPAPER,
+            listOf("wallpaperVideo"),
+            mapOf(
+                K to listOf("video.glass", "video.stillSeconds"),
+                B to listOf("video.pauseSaver", "video.pauseBelow", "video.onlyCharging"),
+                M to listOf("video.reencode", "video.maxSize", "video.maxFps"),
+            ),
+        ),
+        SettingsSurface(
             "layouts", "Layouts", "Home setups to switch between, each with its wallpaper; export and import them", SettingsEntry.WALLPAPER, listOf("layouts"),
             mapOf(B to listOf("layouts.autoSave", "layouts.windowFrom", "layouts.windowTo", "layouts.windowDays")),
         ),

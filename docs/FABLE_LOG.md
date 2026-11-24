@@ -1723,3 +1723,24 @@ launcher's own file provider.
 | File Shuttle off and Android refuses | Done | The folder says what happened in plain words; the how-to has the ways in. |
 | Share from apps inside Island | Built, to see on the phone | "Set as Liquid wallpaper" is declared for pictures; whether it shows in Insular's apps depends on what Insular lets cross profiles. |
 | Strip: folders' newest | Done | From the remembered list, read again in the background. |
+
+Run 145 (checkpoints 1 and 2, with the share fix): all green, the three emulator parts too. 11b passed all eight checks:
+16 pictures shared in, Select, the peek, a picked favourite keeps its heart, "after Place and Done the library is where it
+was, the picture still picked" (Med's bug), Done keeps the placed picture on the screen, Apply offers Undo, Undo works.
+
+### Part 4: video wallpapers (checkpoint)
+
+| Point | State | What |
+|---|---|---|
+| In the launcher, the glass bending it | Done; to measure on the phone | ExoPlayer on a TextureView inside what the glass bends (D207). |
+| System live wallpaper | Built; to see on the phone | Its own process; Android's screen confirms; the launcher keeps it and counts it as its own. Whether MagicOS's lock screen shows another app's live wallpaper is not known until tried. |
+| Trim, loop, once, speed, cross-fade, fill/fit/pan, dim, parallax | Done | Dim, tint, colour and parallax are the wallpaper's own (they apply to the video too). |
+| Blur | Done (at re-encode) | Never live: made once in the frames (smoothness rule). |
+| Boomerang | Built, measured | Steps back by exact seeks; under 15 frames a second it becomes a loop with a cross-fade and the log says so. Not for GIF and WebP (Android's animated image only plays forward). |
+| When it plays; battery rules | Done | `VideoRules`, tested. |
+| Frame-rate and resolution caps | Done (at re-encode) | `FrameDropEffect`, `Presentation`. Without a re-encode the video plays as it is. |
+| Poster frame | Done | Chosen in the Video tab; the colours and the phone's wallpaper follow it. |
+| Re-encode offer on import | Done | Asked by default (H.264, no sound). |
+| GIF, animated WebP | Done | Forward only, at their own pace (no speed). |
+| Pause off home and with the screen off | Done | Window focus, screen broadcasts. |
+| Measure; still frame when too costly | Done; numbers from the phone | D208: "Frames: video wallpaper, the glass …" lines in Med's log. |

@@ -44,4 +44,15 @@ done
 get org.jetbrains.skiko skiko-awt 0.9.4.2 lib
 get io.github.kyant0 backdrop-desktop 2.0.1 lib
 get org.robolectric android-all 17-robolectric-16653203 lib
+# 0.16.0: Media3 (video wallpapers) is on Google's Maven only, as .aar files: their classes.jar is what the check needs.
+G=https://dl.google.com/android/maven2
+for a in media3-common media3-exoplayer media3-transformer media3-effect media3-datasource media3-decoder media3-container media3-extractor media3-muxer; do
+  f="lib/$a-1.11.1.jar"
+  [ -s "$f" ] && continue
+  if curl -s --max-time 300 -o "/tmp/$a.aar" "$G/androidx/media3/$a/1.11.1/$a-1.11.1.aar"; then
+    unzip -p "/tmp/$a.aar" classes.jar > "$f" && echo "ok $a-1.11.1" || echo "FAILED $a"
+  else
+    echo "FAILED $a"
+  fi
+done
 echo done

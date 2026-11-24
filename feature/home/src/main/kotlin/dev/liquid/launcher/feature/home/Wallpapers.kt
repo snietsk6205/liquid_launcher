@@ -197,7 +197,13 @@ object Wallpapers {
         markUsed: Boolean = true,
     ): String? {
         val store = WallpaperStore.get(context)
-        val error = store.persist(prepared.bitmap, lockToo(data), system = system)
+        // 0.16.0 (D207): a video meant for the phone's live wallpaper keeps it (its still is not handed over); anything
+        // else replaces it, and the live wallpaper's service is told there is nothing more to play.
+        val pickedItem = (prepared.pick as? WallpaperPick.Library)?.item
+        val live = pickedItem?.video?.mode == "system"
+        val keepLive = live && VideoWallpapers.isOurLiveWallpaper(context)
+        if (live) VideoWallpapers.writeLiveConfig(context, data, pickedItem) else VideoWallpapers.writeLiveConfig(context, data, null)
+        val error = store.persist(prepared.bitmap, lockToo(data), system = if (keepLive) WallpaperStore.SystemWrite.Never else system)
         // A folder's picture picked by hand joins the library; one an automatic change used is kept as a saved copy
         // (0.16.0, D206: until then it was not kept at all), so recents, the layouts and Undo work while its folder cannot
         // be read (Island paused).

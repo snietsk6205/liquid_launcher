@@ -268,7 +268,8 @@ class MainActivity : ComponentActivity() {
             pickFiles = { callback ->
                 filesCallback = callback
                 try {
-                    pickDocuments.launch(arrayOf("image/*"))
+                    // 0.16.0 (D207): pictures and videos (GIFs and animated WebPs are pictures).
+                    pickDocuments.launch(arrayOf("image/*", "video/*"))
                 } catch (e: Exception) {
                     filesCallback = null
                     callback(emptyList())
@@ -343,6 +344,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        tellLiveWallpaper(true)
         clock?.onResume()
         dev.liquid.launcher.feature.home.KeyboardLeaving.active = false
         applySelectionEntry()
@@ -400,8 +402,20 @@ class MainActivity : ComponentActivity() {
 
     private var lastConfiguration: android.content.res.Configuration? = null
 
+    /** 0.16.0 (D207): tells the live video wallpaper (its own process) whether the launcher plays its own copy now. */
+    private fun tellLiveWallpaper(inFront: Boolean) {
+        if (!dev.liquid.launcher.feature.home.VideoWallpapers.liveConfig(this).exists()) return
+        val marker = java.io.File(filesDir, dev.liquid.launcher.feature.home.LiquidVideoWallpaperService.HOME_IN_FRONT)
+        runCatching { if (inFront) marker.createNewFile() else marker.delete() }
+        sendBroadcast(
+            Intent(if (inFront) dev.liquid.launcher.feature.home.LiquidVideoWallpaperService.ACTION_HOME_SHOWN else dev.liquid.launcher.feature.home.LiquidVideoWallpaperService.ACTION_HOME_HIDDEN)
+                .setPackage(packageName),
+        )
+    }
+
     override fun onStop() {
         super.onStop()
+        tellLiveWallpaper(false)
         clock?.onStop()
         // 0.16.0 (D204): a wallpaper change that came due ("every few minutes", "at set times") happens while the home
         // screen is away, a moment after an app took over, so it is ready (and never seen happening) when you come back.

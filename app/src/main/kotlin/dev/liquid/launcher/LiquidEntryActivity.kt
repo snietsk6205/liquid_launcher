@@ -63,7 +63,8 @@ class LiquidEntryActivity : Activity() {
     /** The pictures of a share (one or several) or of "Set as"; none for text. */
     private fun pictures(intent: Intent?): List<android.net.Uri> {
         if (intent == null) return emptyList()
-        val picture = intent.type?.startsWith("image/") == true
+        // 0.16.0 (D207): videos too (they become video wallpapers).
+        val picture = intent.type?.let { it.startsWith("image/") || it.startsWith("video/") } == true
         return when (intent.action) {
             Intent.ACTION_SEND -> if (picture) listOfNotNull(intent.getParcelableExtra(Intent.EXTRA_STREAM, android.net.Uri::class.java)) else emptyList()
             Intent.ACTION_SEND_MULTIPLE -> if (picture) intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, android.net.Uri::class.java).orEmpty() else emptyList()

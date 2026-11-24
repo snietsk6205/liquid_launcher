@@ -2278,6 +2278,64 @@ object LauncherSettings {
         section = "wallpaperFolders", keywords = "wallpaper strip folders how many newest",
     )
 
+    // ---- 0.16.0 (D207): video wallpapers (Settings › Wallpaper and layouts › Video) ----
+
+    val VideoGlass = ChoiceSetting(
+        key = "video.glass", default = "auto",
+        options = listOf(
+            "auto" to "Bends the video while the phone keeps up (measured as it plays)",
+            "live" to "Always bends the video",
+            "still" to "A still frame, refreshed every few seconds",
+        ),
+        title = "The glass over a video wallpaper",
+        summary = "Bending a moving picture costs the graphics chip every frame. Automatic measures the first seconds it plays " +
+            "and, when too many frames come late, lets the glass bend a still frame of it instead (the debug log says how many)",
+        section = "wallpaperVideo", keywords = "video wallpaper glass bend refraction still frame smooth lag",
+    )
+    val VideoStillSeconds = IntSetting(
+        key = "video.stillSeconds", default = 5, min = 2, max = 30, step = 1, unit = "s",
+        title = "Still frame for the glass, refreshed every",
+        section = "wallpaperVideo", keywords = "video wallpaper glass still frame refresh seconds",
+    )
+    val VideoPauseSaver = BoolSetting(
+        key = "video.pauseSaver", default = true,
+        title = "Rest in battery saver",
+        summary = "The video stops on its current frame while the phone saves battery",
+        section = "wallpaperVideo", keywords = "video wallpaper battery saver pause",
+    )
+    val VideoPauseBelow = IntSetting(
+        key = "video.pauseBelow", default = 15, min = 0, max = 50, step = 5, unit = "%",
+        title = "Rest below this battery",
+        summary = "0: whatever the battery",
+        section = "wallpaperVideo", keywords = "video wallpaper battery low pause percent",
+    )
+    val VideoOnlyCharging = BoolSetting(
+        key = "video.onlyCharging", default = false,
+        title = "Only while charging",
+        section = "wallpaperVideo", keywords = "video wallpaper charging only battery",
+    )
+    val VideoReencode = ChoiceSetting(
+        key = "video.reencode", default = "ask",
+        options = listOf("ask" to "Ask each time", "always" to "Always", "never" to "Never"),
+        title = "Re-encode a video you add",
+        summary = "Made again for this phone (H.264, at most the size and frame rate below): smaller, and lighter on the battery",
+        section = "wallpaperVideo", keywords = "video wallpaper import re-encode transcode h264 battery size",
+    )
+    val VideoMaxHeight = ChoiceSetting(
+        key = "video.maxSize", default = "1080",
+        options = listOf("720" to "720p", "1080" to "1080p"),
+        title = "Largest size when re-encoding",
+        section = "wallpaperVideo", keywords = "video wallpaper resolution 720p 1080p cap",
+    )
+    val VideoMaxFps = ChoiceSetting(
+        key = "video.maxFps", default = "30",
+        options = listOf("24" to "24 frames a second", "30" to "30 frames a second", "60" to "60 frames a second"),
+        title = "Highest frame rate when re-encoding",
+        section = "wallpaperVideo", keywords = "video wallpaper frame rate fps cap 24 30 60",
+    )
+    /** 0.16.0 (D207): the share of late frames measured while the glass bent a video ("" not measured yet). */
+    val VideoMeasured = TextSetting(key = "state.videoMeasured", default = "", title = "Video glass measured", section = "state", hidden = true)
+
     // ---- 0.16.0 (D203): the lock screen ----
 
     val WallpaperLockMode = ChoiceSetting(
@@ -2953,6 +3011,7 @@ object LauncherSettings {
         WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, WallpaperRotationMinutes, WallpaperRotationTimes, LayoutsAutoSave,
         LayoutsOwnWallpaper, LayoutsOwnRecents, LayoutsOwnCollection, LayoutsTransition, WallpaperHomeSaturation, WallpaperHomeTint, WallpaperHomeTintAmount,
         WallpaperLockMode, WallpaperLockPicture, Migrated0160, WallpaperStripFolders, WallpaperStripFolderCount,
+        VideoGlass, VideoStillSeconds, VideoPauseSaver, VideoPauseBelow, VideoOnlyCharging, VideoReencode, VideoMaxHeight, VideoMaxFps, VideoMeasured,
         BackupAuto, BackupKeep, BackupWallpapers, BackupFolder, BackupLast,
         LayoutWindowLayout, LayoutWindowFrom, LayoutWindowTo, LayoutWindowDays,
         StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyCameraApp, StudyBoardCamera, StudyPendingPhoto, StudyPlanLink, StudyLinkOpener,

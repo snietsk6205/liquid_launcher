@@ -1573,6 +1573,50 @@ else
 fi
 adb shell input keyevent KEYCODE_HOME
 sleep 1
+
+clear_anr
+# 0.16.0 (D207): a video wallpaper. A 3-second H.264 video (ci/media) is shared in, applied, and must play over its
+# poster; the glass's cost over it is measured as it plays (the emulator draws in software: the numbers say nothing about
+# the phone, only that the measure runs).
+section "11c. Video wallpaper: shared, applied, playing"
+adb push ci/media/test-wallpaper.mp4 /data/local/tmp/lltest/test-wallpaper.mp4 >/dev/null 2>&1
+adb shell su 0 sh -c "'cp /data/local/tmp/lltest/test-wallpaper.mp4 /data/data/dev.liquid.launcher/cache/share/ && chown \$(stat -c %u:%g /data/data/dev.liquid.launcher) /data/data/dev.liquid.launcher/cache/share/test-wallpaper.mp4'" >/dev/null 2>&1
+adb shell am start -a android.intent.action.SEND -t video/mp4 --eu android.intent.extra.STREAM "content://dev.liquid.launcher.updates/share/test-wallpaper.mp4" \
+  -n "$PKG/.LiquidEntryActivity" >/dev/null 2>&1
+wait_log "video added to the library" 15
+if grep -q "video added to the library" "$LOG"; then pass "a shared video becomes a video wallpaper (with its poster)"; else fail "a shared video becomes a video wallpaper (with its poster)"; grep -E "Wallpaper.*(video|shared|import)" "$LOG" | tail -5 | sed 's/^/        /'; fi
+wait_screen 11c-ask "Re-encode this video for the phone?" 8 || true
+if on_screen 11c-ask "Re-encode this video for the phone?"; then
+  pass "adding a video asks whether to re-encode it"
+  tap_text 11c-ask "Not now" exact || adb shell input keyevent KEYCODE_BACK
+else
+  fail "adding a video asks whether to re-encode it"
+fi
+wait_gone 11c-ask "Working" 8 || true
+dump 11c-studio
+APPLY0=$(grep -c "apply: " "$LOG" || true)
+tap_text 11c-studio "Apply" exact || true
+wait_log "video wallpaper: first frame drawn" 20
+if grep -q "video wallpaper: first frame drawn" "$LOG" && grep -q "video wallpaper: playing" "$LOG"; then
+  pass "the video wallpaper plays on the home screen"
+else
+  fail "the video wallpaper plays on the home screen"
+  grep -E "video wallpaper" "$LOG" | tail -6 | sed 's/^/        /'
+fi
+wait_log "Frames: video wallpaper" 20
+if grep -q "Frames: video wallpaper" "$LOG"; then
+  pass "the glass's cost over the video is measured"
+  grep "Frames: video wallpaper" "$LOG" | tail -2 | sed 's/^/        /'
+else
+  fail "the glass's cost over the video is measured"
+fi
+RESTING0=$(grep -c "video wallpaper: resting" "$LOG" || true)
+adb shell am start -a android.settings.SETTINGS >/dev/null 2>&1
+resting() { [ "$(grep -c "video wallpaper: resting" "$LOG" || true)" -gt "$RESTING0" ]; }
+wait_until 8 resting || true
+if resting; then pass "the video rests while the home screen is away"; else fail "the video rests while the home screen is away"; fi
+adb shell input keyevent KEYCODE_HOME
+sleep 1
 }
 
 blk_shaders() {

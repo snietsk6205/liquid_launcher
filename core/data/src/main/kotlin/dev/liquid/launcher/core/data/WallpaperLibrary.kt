@@ -57,12 +57,54 @@ data class WallpaperItem(
      * by hand, made a favourite or put in a collection, it joins the library.
      */
     val saved: Boolean = false,
+    /**
+     * 0.16.0 (D207): a video (or a GIF or animated WebP) wallpaper: how it plays. [file] is then its poster frame, the
+     * still picture everything else uses (thumbnails, colours, the glass when it does not bend the video, the phone's
+     * own wallpaper, layouts); the moving file is [VideoSpec.file].
+     */
+    val video: VideoSpec? = null,
 ) {
     val crop: CropSpec get() = CropSpec(cx, cy, zoom)
 
     /** Its colour and shape are known (see [WallpaperLibrary.describeMissing]). */
     val described: Boolean get() = colour != null && w > 0 && h > 0
 }
+
+/** 0.16.0 (D207): how a video (or GIF, animated WebP) wallpaper plays. Plain data; [VideoRules] decides with it. */
+@Serializable
+data class VideoSpec(
+    /** The moving file, next to the poster in the library's folder. */
+    val file: String,
+    /** "video", or "animated" (a GIF or an animated WebP, played by Android's animated image). */
+    val kind: String = "video",
+    /** "launcher": the launcher plays it (the glass can bend it); "system": the phone's live wallpaper too (lock screen, recents). */
+    val mode: String = "launcher",
+    /** The part played (ms); [endMs] 0: to the end. */
+    val startMs: Long = 0,
+    val endMs: Long = 0,
+    /** "loop", "boomerang" (forward then back) or "once" (stops on its last frame). */
+    val loop: String = "loop",
+    /** 0.25 to 2. */
+    val speed: Float = 1f,
+    /** A cross-fade where the loop starts again, in ms (0: none). */
+    val crossfadeMs: Int = 0,
+    /** "fill" (covers the screen; [panX], [panY] say which part shows) or "fit" (all of it, the poster's colours around). */
+    val fit: String = "fill",
+    val panX: Float = 0.5f,
+    val panY: Float = 0.5f,
+    /** "always" (while the home screen shows), "unlock" (once after each unlock), "seconds" ([seconds], then it rests). */
+    val plays: String = "always",
+    val seconds: Int = 8,
+    /** Where the poster (the still frame) is taken from, in ms. */
+    val posterMs: Long = 0,
+    val durationMs: Long = 0,
+    val width: Int = 0,
+    val height: Int = 0,
+    /** What a re-encode at import did ("" none), e.g. "H.264 1080p 30 fps". */
+    val encoded: String = "",
+    /** Every frame a key frame (made for Boomerang, which steps back frame by frame). */
+    val allKeyFrames: Boolean = false,
+)
 
 /** 0.16.0 (D198): a named group of library pictures (a picture can be in several). */
 @Serializable
@@ -413,6 +455,66 @@ class WallpaperLibrary(
         }
     }
 
+    /**
+     * 0.16.0 (D207): a video (or animated picture) joins the library: [moving], a file in the cache, is moved in next to
+     * [poster], its still frame (a JPEG, the item's [WallpaperItem.file]); the id comes from the moving file's bytes, so the
+     * same video is kept once.
+     */
+    suspend fun addVideo(moving: File, extension: String, poster: Bitmap, spec: VideoSpec, folder: String? = null): WallpaperItem? = withContext(Dispatchers.IO) {
+        try {
+            val digest = MessageDigest.getInstance("SHA-256")
+            moving.inputStream().use { input ->
+                val buffer = ByteArray(256 * 1024)
+                while (true) {
+                    val n = input.read(buffer)
+                    if (n <= 0) break
+                    digest.update(buffer, 0, n)
+                }
+            }
+            val id = "v" + digest.digest().take(10).joinToString("") { "%02x".format(it) }
+            find(id)?.let { existing ->
+                moving.delete()
+                return@withContext existing
+            }
+            dir.mkdirs()
+            val videoName = "$id.$extension"
+            val target = File(dir, videoName)
+            if (!moving.renameTo(target)) {
+                moving.copyTo(target, overwrite = true)
+                moving.delete()
+            }
+            val posterName = "$id.jpg"
+            File(dir, posterName).outputStream().use { poster.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+            val item = WallpaperItem(
+                id = id, file = posterName, added = System.currentTimeMillis(), folder = folder,
+                w = poster.width, h = poster.height, video = spec.copy(file = videoName),
+            )
+            store.update { WallpaperLibraryOps.add(it, item) }
+            DebugLog.event("Wallpaper", "video added to the library: $videoName (${target.length() / 1024} KB, ${spec.durationMs} ms, ${spec.width} × ${spec.height})")
+            item
+        } catch (e: Throwable) {
+            DebugLog.error("Wallpaper", "adding a video failed: $e")
+            moving.delete()
+            null
+        }
+    }
+
+    /** 0.16.0 (D207): the moving file of a video wallpaper. */
+    fun videoFileOf(item: WallpaperItem): File? = item.video?.let { File(if (item.saved) savedDir else dir, it.file) }
+
+    /** 0.16.0 (D207): a video wallpaper's settings changed (how it plays, its still frame, its re-encoded file). */
+    fun setVideo(id: String, spec: VideoSpec) =
+        store.update { s -> s.copy(items = s.items.map { if (it.id == id && it.video != null) it.copy(video = spec) else it }) }
+
+    /** 0.16.0 (D207): a new still frame for a video wallpaper (its poster file is written again; the thumbnail too). */
+    suspend fun setPoster(id: String, poster: Bitmap) = withContext(Dispatchers.IO) {
+        val item = find(id) ?: return@withContext
+        fileOf(item).outputStream().use { poster.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+        File(thumbDir, "$id.jpg").delete()
+        thumbs.remove(id)
+        store.update { s -> s.copy(items = s.items.map { if (it.id == id) it.copy(colour = null) else it }) }
+    }
+
     /** 0.16.0 (D206): a saved copy joins the library (picked by hand, a favourite, a collection): its file moves in. */
     fun promote(id: String) {
         val item = find(id)?.takeIf { it.saved } ?: return
@@ -488,6 +590,7 @@ class WallpaperLibrary(
 
     fun remove(id: String) {
         val item = find(id) ?: return
+        videoFileOf(item)?.delete()
         fileOf(item).delete()
         File(thumbDir, "$id.jpg").delete()
         thumbs.remove(id)
@@ -548,6 +651,8 @@ class WallpaperLibrary(
         trashDir.mkdirs()
         val now = System.currentTimeMillis()
         for (item in items) {
+            // 0.16.0 (D207): a video's moving file waits with its poster.
+            videoFileOf(item)?.let { video -> if (video.exists()) video.renameTo(File(trashDir, video.name)) }
             val file = fileOf(item)
             val kept = File(trashDir, item.file)
             if (file.exists() && !file.renameTo(kept)) {
@@ -565,6 +670,7 @@ class WallpaperLibrary(
     fun restore(deleted: Deleted) {
         dir.mkdirs()
         for (item in deleted.items) {
+            item.video?.let { spec -> File(trashDir, spec.file).takeIf { it.exists() }?.renameTo(File(dir, spec.file)) }
             val kept = File(trashDir, item.file)
             if (kept.exists() && !kept.renameTo(fileOf(item))) runCatching { kept.copyTo(fileOf(item), overwrite = true); kept.delete() }
         }
