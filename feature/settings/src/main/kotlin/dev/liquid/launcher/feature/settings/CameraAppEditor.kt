@@ -35,12 +35,15 @@ import kotlinx.coroutines.launch
 /**
  * Settings → Study companion → More: the camera app for board photos (0.11.2, Med: "give me the option to select the
  * camera app I want, not the default one"), and a test photo, so the whole way can be tried outside a class: it is
- * saved in Pictures/ESSAI/Test like a board photo.
+ * saved in Pictures/ESSAI/Test like a board photo. 0.15.3 (D196): first, and the default, the launcher's own camera
+ * (several photos in a row).
  */
 @Composable
 internal fun CameraAppEditor(store: SettingsStore) {
     val context = LocalContext.current
     val chosen by store.observe(LauncherSettings.StudyCameraApp)
+    val mode by store.observe(LauncherSettings.StudyBoardCamera)
+    val app = mode == "app"
     val cameras = remember { BoardPhotos.cameras(context) }
     val scope = rememberCoroutineScope()
     var result by remember { mutableStateOf<String?>(null) }
@@ -55,20 +58,40 @@ internal fun CameraAppEditor(store: SettingsStore) {
     InfoCard {
         Text("Camera for board photos", style = MaterialTheme.typography.titleMedium)
         BodyText(
-            "The \"Board\" chip of a class in Today takes a photo with this app and saves it in Pictures/ESSAI/<the class>.",
+            "Board (a class's chip in Today, or the pill's and the home menu's) saves its photos in Pictures/ESSAI/<the class>. " +
+                "The launcher's camera takes several in a row; a camera app takes one at a time.",
             Modifier.padding(top = 4.dp, bottom = 6.dp),
         )
-        CameraRow("The phone's default camera", null, chosen.isBlank()) { store.reset(LauncherSettings.StudyCameraApp) }
-        for ((pkg, label) in cameras) {
-            CameraRow(label, pkg, chosen == pkg) { store.set(LauncherSettings.StudyCameraApp, pkg) }
+        CameraRow("The launcher's camera", "Several photos in a row, each saved at once; the volume keys take photos too", !app) {
+            store.set(LauncherSettings.StudyBoardCamera, "launcher")
+        }
+        CameraRow("The phone's default camera", null, app && chosen.isBlank()) {
+            store.set(LauncherSettings.StudyBoardCamera, "app")
+            store.reset(LauncherSettings.StudyCameraApp)
+        }
+        for (camera in cameras) {
+            // 0.13.0: every camera; one that cannot take a photo for another app opens as it is, and the photo is picked after.
+            val label = if (camera.handsBack) camera.label else camera.label + " (opens; you pick the photo after)"
+            CameraRow(label, camera.pkg, app && chosen == camera.pkg) {
+                store.set(LauncherSettings.StudyBoardCamera, "app")
+                store.set(LauncherSettings.StudyCameraApp, camera.pkg)
+            }
+        }
+        if (app && !BoardPhotos.cameraAllowed(context)) {
+            BodyText("Until the camera is allowed for the launcher, a camera app opens as it is and the photo is picked after.")
         }
         if (cameras.isEmpty()) BodyText("No camera app was found on the phone.")
-        if (chosen.isNotBlank() && cameras.none { it.first == chosen }) {
+        if (chosen.isNotBlank() && cameras.none { it.pkg == chosen }) {
             BodyText("The camera chosen before ($chosen) is no longer on the phone: the default one is used.")
         }
         OutlinedButton(
             onClick = {
                 result = null
+                if (!app) {
+                    runCatching { context.startActivity(BoardPhotos.cameraIntent(context, "Test")) }
+                        .onFailure { result = "The camera could not be opened: ${it.message}" }
+                    return@OutlinedButton
+                }
                 val intent = runCatching { BoardPhotos.start(context, store, "Test") }.getOrNull()
                 if (intent == null) result = "No camera app to take the photo." else runCatching { take.launch(intent) }.onFailure {
                     result = "The camera could not be opened: ${it.message}"
@@ -85,7 +108,7 @@ internal fun CameraAppEditor(store: SettingsStore) {
 }
 
 @Composable
-private fun CameraRow(label: String, pkg: String?, selected: Boolean, onClick: () -> Unit) {
+private fun CameraRow(label: String, detail: String?, selected: Boolean, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -94,7 +117,7 @@ private fun CameraRow(label: String, pkg: String?, selected: Boolean, onClick: (
         Spacer(Modifier.width(12.dp))
         Column {
             Text(label, style = MaterialTheme.typography.bodyLarge)
-            if (pkg != null) Text(pkg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (detail != null) Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

@@ -106,6 +106,12 @@ import kotlin.math.roundToInt
 class HomeReturnState {
     /** 0 = just returned (content hidden), 1 = settled. */
     val progress = mutableFloatStateOf(1f)
+
+    /**
+     * 0.11.3 (D170): the whole screen's opacity, wallpaper included, while the launcher fades in over the system's home
+     * screen after a redirect (its window shows the system wallpaper behind it). 1 when it arrives at once.
+     */
+    val screen = mutableFloatStateOf(1f)
     var tick by mutableIntStateOf(0)
         private set
     var homePresses by mutableIntStateOf(0)
@@ -115,8 +121,9 @@ class HomeReturnState {
      * Call before the first frame after the activity becomes visible again. Setting the
      * progress here, not in an effect, means no frame is drawn with the content fully visible.
      */
-    fun onReturn(animate: Boolean) {
+    fun onReturn(animate: Boolean, wholeScreen: Boolean = false) {
         if (animate) progress.floatValue = 0f
+        if (animate && wholeScreen) screen.floatValue = 0f
         tick++
     }
 
@@ -128,6 +135,13 @@ class HomeReturnState {
     /** Something another screen asked the home screen to open ("wallpaper"), or null. */
     var request by mutableStateOf<String?>(null)
 
+    /** 0.12.0: the text for a "search" request (from another app or the keyboard), and whether to ask Claude with it. */
+    var searchText: String? = null
+    var searchAsk = false
+
+    /** 0.16.0: the pictures of a "sharedPictures" request (shared to "Set as Liquid wallpaper"). */
+    var sharedPictures: List<android.net.Uri>? = null
+
     /**
      * Asked by the activity as it is paused: is something showing that will be closed while the
      * launcher is away (drawer, search, a menu)? Set by the home screen.
@@ -136,6 +150,9 @@ class HomeReturnState {
 
     /** Called by the activity once the launcher is no longer visible. Set by the home screen. */
     var onLeft: () -> Unit = {}
+
+    /** 0.11.3: an app was just started from the launcher. Set by the home screen. */
+    var appJustStarted: () -> Boolean = { false }
 }
 
 /**
@@ -200,7 +217,7 @@ private fun pageEnv(env: PageEnv, page: dev.liquid.launcher.core.data.HomePage):
 private fun savedImageKey(wallpaper: WallpaperStore): Any? = wallpaper.image.collectAsState().value
 
 /** How the home screen is shown: the real thing, or a miniature inside the settings app. */
-enum class HomeMode { Live, Preview, PreviewDrawer, PreviewDrawerMotion, PreviewDrawerIndex, PreviewMenu, PreviewHomeMenu, PreviewToday, PreviewSearch, PreviewEffects }
+enum class HomeMode { Live, Preview, PreviewDrawer, PreviewDrawerMotion, PreviewDrawerIndex, PreviewMenu, PreviewHomeMenu, PreviewToday, PreviewSearch, PreviewEffects, PreviewCalendar }
 
 @Composable
 fun HomeScreen(
@@ -323,28 +340,48 @@ private fun HomeScreenBody(
             null
         }
     }
-    val image = savedImage
+    // 0.16.0 (D197): a picture placed in the wallpaper screen stands in for the wallpaper after Done, blur and all.
+    val image = studio?.shownImage ?: savedImage
     // W8 (P8): the picture's own look, when it has one, over the one set for all.
     val libraryState by data.wallpapers.state.collectAsState()
     val pictureLook = if (studio != null) studio.shownLook else libraryState.current?.let { id -> libraryState.items.firstOrNull { it.id == id }?.look }
+    // 0.16.0 (D207): the current wallpaper is a video: it plays over its poster (not while the wallpaper screen is open).
+    val videoItem = if (live && studio == null) libraryState.current?.let { id -> libraryState.items.firstOrNull { it.id == id }?.takeIf { it.video != null } } else null
+    val videoGlass by store.derive { Triple(get(LauncherSettings.VideoGlass), get(LauncherSettings.VideoMeasured), get(LauncherSettings.VideoStillSeconds)) }
+    val measuredBending = videoGlass.second.split(';').firstOrNull { it.startsWith("bending it=") }?.substringAfter('=')?.toFloatOrNull()
+    val glassBendsVideo = videoItem == null || dev.liquid.launcher.core.data.VideoRules.glassBendsVideo(videoGlass.first, measuredBending)
+    val videoMeasure = when {
+        videoItem == null -> null
+        glassBendsVideo && measuredBending == null -> "bending it"
+        !glassBendsVideo && videoGlass.second.split(';').none { it.startsWith("bending a still frame=") } -> "bending a still frame"
+        else -> null
+    }
     val homeBlurDp = pictureLook?.blur?.takeIf { it >= 0 } ?: studio?.homeBlur ?: look.homeBlurDp
     val homeDim = pictureLook?.dim?.takeIf { it >= 0 }?.div(100f) ?: (studio?.homeDim?.div(100f)) ?: look.homeDim
-    val saturation = (pictureLook?.saturation ?: 100) / 100f
+    // 0.16.0 (D202): the layout's own colour and tint; a picture's own saturation (not 100 %) comes first.
+    val layoutLook by store.derive { Triple(get(LauncherSettings.WallpaperHomeSaturation), get(LauncherSettings.WallpaperHomeTint), get(LauncherSettings.WallpaperHomeTintAmount)) }
+    val layoutSaturation = studio?.homeSaturation ?: layoutLook.first
+    val saturation = (pictureLook?.saturation?.takeIf { it != 100 } ?: layoutSaturation) / 100f
+    val tintColour = dev.liquid.launcher.core.settings.ColorSetting.parse(studio?.homeTint ?: layoutLook.second)
+    val tintAmount = (studio?.homeTintAmount ?: layoutLook.third) / 100f
     val vignette = (pictureLook?.vignette ?: 0) / 100f
     val searchBlurDp = studio?.searchBlur ?: search.blurDp
     val drawerShown = if (studio != null) drawerConfig.copy(dim = studio.drawerDim / 100f) else drawerConfig
     val motionShown = if (studio != null) motion.copy(homeBlurDp = studio.drawerBlur) else motion
     val density1 = LocalDensity.current
-    val blurredWallpaper by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, image, homeBlurDp) {
+    // 0.16.0: kept with the picture it was made from, so a new wallpaper (or the placed preview) never shows the old
+    // one's blur for the moment its own is being made: it shows sharp until then.
+    val blurredPair by produceState<Pair<androidx.compose.ui.graphics.ImageBitmap, androidx.compose.ui.graphics.ImageBitmap>?>(null, image, homeBlurDp) {
         val source = image
         value = if (source != null && homeBlurDp > 0) {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                dev.liquid.launcher.core.designsystem.WallpaperBlur.blur(source.asAndroidBitmap(), homeBlurDp * density1.density).asImageBitmap()
+                source to dev.liquid.launcher.core.designsystem.WallpaperBlur.blur(source.asAndroidBitmap(), homeBlurDp * density1.density).asImageBitmap()
             }
         } else {
             null
         }
     }
+    val blurredWallpaper = blurredPair?.takeIf { it.first === image && homeBlurDp > 0 }?.second
     // The blur behind the drawer and behind search: a blurred copy of the wallpaper, made once,
     // that fades in over the sharp one. Costs two textured quads per frame. Up to 0.5.0 the whole
     // home screen went through a live blur whose radius changed every frame, the most expensive
@@ -419,12 +456,21 @@ private fun HomeScreenBody(
                 IconLanding.land(key)
             }
             val progress = returnState.progress
-            if (progress.floatValue < 1f) {
+            val screen = returnState.screen
+            if (progress.floatValue < 1f || screen.floatValue < 1f) {
                 val (style, duration) = handover
                 if (style == "none" || duration == 0) {
                     progress.floatValue = 1f
+                    screen.floatValue = 1f
                 } else {
-                    animate(0f, 1f, animationSpec = tween(duration)) { value, _ -> progress.floatValue = value }
+                    // 0.11.3: the screen (wallpaper too) fades in over the system's home screen, eased out, and the
+                    // content settles in with it.
+                    val fromScreen = screen.floatValue
+                    animate(0f, 1f, animationSpec = tween(duration, easing = androidx.compose.animation.core.LinearOutSlowInEasing)) { value, _ ->
+                        progress.floatValue = value
+                        if (fromScreen < 1f) screen.floatValue = fromScreen + (1f - fromScreen) * value
+                    }
+                    screen.floatValue = 1f
                 }
             }
         }
@@ -439,14 +485,30 @@ private fun HomeScreenBody(
                 }
                 // 0.11.2: Settings → Diagnostics → Speed check.
                 "speedCheck" -> controller.runSpeedCheck()
+                // 0.16.0: pictures shared to "Set as Liquid wallpaper": into the library, then the wallpaper screen.
+                "sharedPictures" -> returnState.sharedPictures?.let { uris ->
+                    returnState.sharedPictures = null
+                    controller.importShared(uris)
+                }
+                // 0.12.0 (D171): text from another app, the text selection menu or the keyboard.
+                "search" -> returnState.searchText?.let { text ->
+                    returnState.searchText = null
+                    val open = controller.searchOpen
+                    if (!open) controller.closeAll(immediately = true)
+                    controller.searchQuery = text
+                    controller.askClaudeMode = returnState.searchAsk
+                    if (!open) controller.openSearch()
+                }
             }
             returnState.request = null
         }
         DisposableEffect(controller, returnState) {
             returnState.closesWhileAway = { controller.closesWhileAway }
+            returnState.appJustStarted = { controller.appJustStarted }
             returnState.onLeft = { controller.tidyAfterLeaving() }
             onDispose {
                 returnState.closesWhileAway = { false }
+                returnState.appJustStarted = { false }
                 returnState.onLeft = {}
             }
         }
@@ -527,6 +589,20 @@ private fun HomeScreenBody(
 
     val homeBackdrop = rememberLayerBackdrop()
     val wallpaperBackdrop = rememberLayerBackdrop()
+    // 0.16.0 (D207): with a video wallpaper the glass of the pill and the dock bends a picture of the home screen, taken
+    // every few seconds, instead of every frame, when that is the choice (or the measure says the phone cannot keep up).
+    val stillBackdrop = rememberLayerBackdrop()
+    var homeStill by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    val stillGlass = videoItem != null && !glassBendsVideo
+    LaunchedEffect(stillGlass, videoGlass.third) {
+        homeStill = null
+        if (!stillGlass) return@LaunchedEffect
+        while (true) {
+            kotlinx.coroutines.delay(if (homeStill == null) 600L else videoGlass.third * 1000L)
+            runCatching { homeBackdrop.graphicsLayer.toImageBitmap() }.getOrNull()?.let { homeStill = it }
+        }
+    }
+    val barBackdrop = if (stillGlass && homeStill != null) stillBackdrop else homeBackdrop
     val drawerLayer = rememberLayerBackdrop()
     // Overlays refract the drawer too when they open over it (long-press menu in the drawer).
     val overlayBackdrop = rememberCombinedBackdrop(homeBackdrop, drawerLayer)
@@ -537,6 +613,8 @@ private fun HomeScreenBody(
         controller.searchInPill = morph && search.field != "top"
         controller.searchField = search.field
         controller.searchKeyboard = search.keyboard
+        controller.searchFieldSize = search.fieldSize
+        controller.live = live
     }
     val density = LocalDensity.current
     val settle = handover.first
@@ -561,7 +639,8 @@ private fun HomeScreenBody(
             }
         }
     }
-    val transitionStyle by store.derive { get(LauncherSettings.WallpaperTransition) }
+    // 0.16.0: the style of the change running (a layout switch can have its own).
+    val transitionStyle = controller.transitionStyle
     if (live) SystemWallpaperOffsets(controller)
     val touchFx = LocalTouchFx.current
     val touchBase by store.derive { touchFxConfig() }
@@ -585,6 +664,8 @@ private fun HomeScreenBody(
     Box(
         Modifier
             .fillMaxSize()
+            // 0.11.3 (D170): after a redirect the whole screen fades in over the system's home screen (read in the layer).
+            .then(if (live) Modifier.graphicsLayer { alpha = returnState.screen.floatValue } else Modifier)
             .onSizeChanged {
                 controller.screenHeight = it.height.toFloat().coerceAtLeast(1f)
                 controller.screenWidth = it.width.toFloat().coerceAtLeast(1f)
@@ -606,7 +687,8 @@ private fun HomeScreenBody(
         // point is to preview the screen behind them (clock, widget options, wallpaper) leave it sharp.
         val windowBlurDp = LocalControls.current?.theme?.windowBlurDp ?: 0
         val sheetOpen = controller.layoutsSheet || controller.tagging != null || controller.wallpaperStrip || controller.widgetPicker ||
-            controller.todaySheet || controller.homeMenu || controller.menu != null || controller.openFolder != null
+            controller.todaySheet || controller.homeMenu || controller.menu != null || controller.openFolder != null || controller.reviewSheet != null ||
+            controller.calendarOpen
         val sheetBlur by androidx.compose.animation.core.animateFloatAsState(
             if (windowBlurDp > 0 && sheetOpen) 1f else 0f,
             androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = MotionScale.stiffness(420f)),
@@ -614,6 +696,11 @@ private fun HomeScreenBody(
         )
         // W7: the blur behind the study hub, in step with it growing out of the pill.
         val hubBlurDp by store.derive { get(LauncherSettings.StudyHubBlur) }
+        homeStill?.let { still ->
+            Box(Modifier.fillMaxSize().layerBackdrop(stillBackdrop)) {
+                androidx.compose.foundation.Image(still, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
+            }
+        }
         Box(Modifier.fillMaxSize().layerBackdrop(homeBackdrop)) {
           // Blurs wallpaper and pages together while the drawer is open.
           Box(
@@ -633,8 +720,9 @@ private fun HomeScreenBody(
                       renderEffect = if (radius >= 0.5f) BlurEffect(radius, radius, TileMode.Clamp) else null
                   }
           ) {
-            val placing = studio?.takeIf { it.drawsSource }
-            val shownWallpaper = placing?.sourceImage ?: blurredWallpaper ?: image
+            // While a picture is placed, or peeked at with a long press (0.16.0), the home screen draws it as it is.
+            val placing = studio?.takeIf { it.drawsSource || it.drawsPeek }
+            val shownWallpaper = placing?.let { if (it.drawsPeek) it.peekImage else it.sourceImage } ?: blurredWallpaper ?: image
             // The wallpaper takes part in the drawer transition (it drifts and grows a little).
             Box(
                 Modifier.fillMaxSize().graphicsLayer {
@@ -653,7 +741,10 @@ private fun HomeScreenBody(
             if (shownWallpaper != null) {
                 WallpaperImage(
                     image = shownWallpaper,
-                    frame = if (placing != null) ({ placing.frame(controller.screenWidth, controller.screenHeight) }) else ({ null }),
+                    frame = if (placing != null) ({
+                        if (placing.drawsPeek) placing.peekFrame(controller.screenWidth, controller.screenHeight)
+                        else placing.frame(controller.screenWidth, controller.screenHeight)
+                    }) else ({ null }),
                     offset = {
                         studio?.sweep ?: run {
                             val pages = controller.pager.pageCount
@@ -663,21 +754,39 @@ private fun HomeScreenBody(
                     modifier = Modifier.layerBackdrop(wallpaperBackdrop),
                     filter = { controller.wallpaperFilter(saturation) },
                 )
-                // 0.11.1: after placing, the placed picture fades back into the wallpaper (Apply then ripples to it).
-                val leaving = studio?.takeIf { it.placeLeaving && !it.adjusting }
-                val leavingImage = leaving?.sourceImage
-                if (leaving != null && leavingImage != null) {
-                    WallpaperImage(
-                        image = leavingImage,
-                        frame = { leaving.frame(controller.screenWidth, controller.screenHeight) },
+                // 0.16.0 (D207): a video wallpaper plays over its poster.
+                if (videoItem != null) {
+                    val video = videoItem.video
+                    val parallax = videoItem.parallax.takeIf { it >= 0f } ?: (store.get(LauncherSettings.WallpaperParallax) / 100f)
+                    VideoWallpaperLayer(
+                        item = videoItem,
+                        controller = controller,
+                        canvasWidth = controller.screenWidth * (1f + parallax),
+                        canvasHeight = controller.screenHeight,
                         offset = {
-                            leaving.sweep ?: run {
+                            val pages = controller.pager.pageCount
+                            if (pages <= 1) 0.5f else (controller.pager.currentPage + controller.pager.currentPageOffsetFraction) / (pages - 1)
+                        },
+                        saturation = saturation,
+                        stillEverySeconds = videoGlass.third,
+                        onStill = null,
+                        measure = videoMeasure.takeIf { video != null },
+                    )
+                }
+                // 0.16.0: a picture that stopped showing (a placed preview that ended, the peek) fades back into the wallpaper.
+                val fading = studio?.fade
+                if (studio != null && fading != null) {
+                    WallpaperImage(
+                        image = fading.image,
+                        frame = { fading.frame?.invoke(controller.screenWidth, controller.screenHeight) },
+                        offset = {
+                            studio.sweep ?: run {
                                 val pages = controller.pager.pageCount
                                 if (pages <= 1) 0.5f else (controller.pager.currentPage + controller.pager.currentPageOffsetFraction) / (pages - 1)
                             }
                         },
                         modifier = Modifier,
-                        alpha = { leaving.placeShown.value },
+                        alpha = { studio.fadeAlpha.value },
                     )
                 }
                 val deep = deepWallpaper
@@ -712,6 +821,8 @@ private fun HomeScreenBody(
             }
             }
             if (homeDim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = homeDim)))
+            // 0.16.0 (D202): the layout's tint over its wallpaper (inside what the glass bends, like the dim).
+            if (tintColour != null && tintAmount > 0.005f) Box(Modifier.fillMaxSize().background(Color(tintColour).copy(alpha = tintAmount)))
             // W8 (P8): the picture's vignette: its corners darker, the middle as it is.
             if (vignette > 0.01f) {
                 Box(
@@ -857,7 +968,7 @@ private fun HomeScreenBody(
             }
             EditToolbar(controller, glass, lightBackground, homeBackdrop, pill, barModifier)
         } else if (pill.enabled && !morph) {
-            Pill(pill, glass, lightBackground, homeBackdrop, appIndex, controller, live, barModifier)
+            Pill(pill, glass, lightBackground, barBackdrop, appIndex, controller, live, barModifier)
         }
 
         if (dock.enabled) {
@@ -868,7 +979,7 @@ private fun HomeScreenBody(
                 apps = appIndex,
                 glass = glass,
                 lightBackground = lightBackground,
-                backdrop = homeBackdrop,
+                backdrop = barBackdrop,
                 color = contentColor,
                 shadow = shadow,
                 controller = controller,
@@ -948,24 +1059,34 @@ private fun HomeScreenBody(
         if (searchHere && searchShown && !controller.searchInPill) {
             SearchOverlay(controller, search, glass, lightBackground, overlayBackdrop, apps, motionConfig.searchTransition, motion, env = searchEnv, live = live)
         }
-        Presence(controller.openFolder?.let { id -> layout.find(id)?.second?.takeIf { it.kind == ItemKind.FOLDER } }) { folder ->
+        // 0.13.0 (D176): overlays leave as a picture of themselves, into what opened them; sheets follow a drag down and
+        // the Back gesture.
+        val folderAt = controller.folderOrigin
+        Presence(
+            controller.openFolder?.let { id -> layout.find(id)?.second?.takeIf { it.kind == ItemKind.FOLDER } },
+            origin = { folderAt?.let { androidx.compose.ui.geometry.Rect(it.x - 90f, it.y - 90f, it.x + 90f, it.y + 90f) } },
+        ) { folder ->
             FolderOverlay(folder, appIndex, controller, glass, lightBackground, overlayBackdrop, grid)
         }
-        Presence(controller.menu) { target ->
+        Presence(controller.menu, origin = { it.anchor }) { target ->
             AppMenu(target, menuEntries, controller, glass, lightBackground, overlayBackdrop)
         }
         if (mode == HomeMode.PreviewHomeMenu) SideEffect { controller.homeMenu = true }
-        Presence(if ((live || mode == HomeMode.PreviewHomeMenu) && controller.homeMenu) Unit else null) {
+        Presence(if ((live || mode == HomeMode.PreviewHomeMenu) && controller.homeMenu) Unit else null, onClose = { controller.back() }) {
             HomeMenu(homeMenuConfig, glass, lightBackground, overlayBackdrop, appIndex, controller)
         }
-        Presence(if (live && controller.layoutsSheet) Unit else null) {
+        Presence(if (live && controller.layoutsSheet) Unit else null, onClose = { controller.back() }) {
             LayoutsSheet(glass, lightBackground, overlayBackdrop, controller)
         }
-        Presence(if (live) controller.widgetOptions?.let { id -> layout.find(id)?.second } else null) { item ->
+        Presence(if (live) controller.widgetOptions?.let { id -> layout.find(id)?.second } else null, onClose = { controller.back() }) { item ->
             WidgetOptionsSheet(item, glass, lightBackground, overlayBackdrop, controller)
         }
-        Presence(if (live && controller.wallpaperStrip) Unit else null) {
+        Presence(if (live && controller.wallpaperStrip) Unit else null, onClose = { controller.back() }) {
             WallpaperStrip(glass, lightBackground, overlayBackdrop, controller)
+        }
+        // 0.13.0 (D178): the flashcards due, from the pill's live item or a card search found.
+        Presence(if (live) controller.reviewSheet else null, onClose = { controller.back() }) { start ->
+            ReviewSheet(start, glass, lightBackground, overlayBackdrop, controller)
         }
         // 0.11.1: the sheet sinks away when the screen closes (it vanished in one frame); after Apply with a new picture it
         // goes at once, as it leaves inside the picture of the old screen that ripples away.
@@ -988,11 +1109,28 @@ private fun HomeScreenBody(
         if ((live || mode == HomeMode.PreviewToday) && hubShown) {
             StudyHub(glass, lightBackground, overlayBackdrop, controller)
         }
+        // 0.16.0 (D209): the calendar, grown out of the clock's date; in Settings › Calendar, open over the preview and
+        // grown again when its size, corners or bounce change, so the setting is seen doing what it says.
+        if (mode == HomeMode.PreviewCalendar) {
+            val replay by store.derive { Triple(get(LauncherSettings.CalendarSize), get(LauncherSettings.CalendarBounce), get(LauncherSettings.CalendarCorner)) }
+            LaunchedEffect(replay) {
+                controller.closeCalendar(immediately = true)
+                kotlinx.coroutines.delay(160)
+                controller.openCalendar(CalendarOpener.ClockDate("preview", null), ask = false)
+            }
+        }
+        val calendarShown by remember { derivedStateOf { controller.calendarOpen || controller.calendar.value > 0.001f } }
+        if ((live || mode == HomeMode.PreviewCalendar) && calendarShown) {
+            LiquidCalendar(glass, lightBackground, overlayBackdrop, controller)
+        }
         // C1: a distracting app asked for during a block waits here.
-        Presence(controller.speedBump.takeIf { live }) { bump ->
+        Presence(
+            controller.speedBump.takeIf { live },
+            origin = { b -> b.bounds?.let { androidx.compose.ui.geometry.Rect(it.left.toFloat(), it.top.toFloat(), it.right.toFloat(), it.bottom.toFloat()) } },
+        ) { bump ->
             SpeedBumpOverlay(bump, glass, lightBackground, overlayBackdrop, controller)
         }
-        Presence(if (live && controller.widgetPicker) Unit else null) {
+        Presence(if (live && controller.widgetPicker) Unit else null, onClose = { controller.back() }) {
             WidgetPicker(glass, lightBackground, overlayBackdrop, controller)
         }
         if (live) {
@@ -1023,7 +1161,7 @@ private fun HomeScreenBody(
             DragGhost(drag)
         }
         controller.renaming?.let { RenameDialog(it, controller) }
-        Presence(controller.tagging) { app -> ProvideControls(controller, glass, null) { AppTagsSheet(app, controller, glass, lightBackground, overlayBackdrop) } }
+        Presence(controller.tagging, onClose = { controller.back() }) { app -> ProvideControls(controller, glass, null) { AppTagsSheet(app, controller, glass, lightBackground, overlayBackdrop) } }
         controller.iconPicking?.let { IconPickerDialog(it, controller) }
         controller.swipeEditing?.let { id -> layout.find(id)?.let { (_, item) -> SwipeActionsDialog(item, apps, controller) } }
         // W6: picking apps in the drawer, tagging them together, and a tag's own list of apps.
@@ -1033,11 +1171,11 @@ private fun HomeScreenBody(
         if (controller.selection != null && !picking) SideEffect { controller.endSelecting() }
         val bulk = controller.bulkTag
         val picked = controller.selection
-        Presence(if (bulk != null && picked != null) bulk to picked else null) { (shownBulk, shownPicked) ->
+        Presence(if (bulk != null && picked != null) bulk to picked else null, onClose = { controller.back() }) { (shownBulk, shownPicked) ->
             ProvideControls(controller, glass, null) { BulkTagSheet(controller, shownBulk, shownPicked, glass, lightBackground, overlayBackdrop) }
         }
-        Presence(controller.tagApps) { tag -> ProvideControls(controller, glass, null) { TagAppsSheet(controller, tag, glass, lightBackground, overlayBackdrop) } }
-        Presence(controller.layoutWallpaperPick) { id -> ProvideControls(controller, glass, null) { LayoutWallpaperSheet(controller, id, glass, lightBackground, overlayBackdrop) } }
+        Presence(controller.tagApps, onClose = { controller.back() }) { tag -> ProvideControls(controller, glass, null) { TagAppsSheet(controller, tag, glass, lightBackground, overlayBackdrop) } }
+        Presence(controller.layoutWallpaperPick, onClose = { controller.back() }) { id -> ProvideControls(controller, glass, null) { LayoutWallpaperSheet(controller, id, glass, lightBackground, overlayBackdrop) } }
         // W4: "Customise …" after a long press on a surface.
         Presence(controller.customise) { offer -> CustomiseChip(controller, offer, if (lightBackground) Color(0xFF16181C) else Color.White) }
         if (live) TransitionOverlay(controller, transitionStyle)
@@ -1240,6 +1378,8 @@ fun wallpaperIsLight(context: Context): Boolean = dev.liquid.launcher.core.data.
 internal fun openScreenName(c: HomeController): String = when {
     c.wallpaperStudio -> "wallpaper screen"
     c.clockStudio != null -> "clock gallery"
+    // 0.16.0: the calendar from its first frame to its last, so its growing and shrinking count as the calendar's.
+    c.calendarOpen || c.calendar.value > 0.01f -> "calendar"
     c.hub.value > 0.5f -> "study hub"
     c.tagSheet -> "tag list"
     c.openFolder != null -> "folder"

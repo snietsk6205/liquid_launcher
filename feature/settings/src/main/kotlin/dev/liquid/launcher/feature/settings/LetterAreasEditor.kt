@@ -69,8 +69,8 @@ internal fun LetterAreasEditor(store: SettingsStore) {
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Letters from the", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                FilterChip(selected = !area.right, onClick = { save(areas.replace(i, area.copy(right = false))) }, label = { Text("Left edge") })
-                FilterChip(selected = area.right, onClick = { save(areas.replace(i, area.copy(right = true))) }, label = { Text("Right edge") })
+                dev.liquid.launcher.core.designsystem.KitChip(selected = !area.right, onClick = { save(areas.replace(i, area.copy(right = false))) }, label = { Text("Left edge") })
+                dev.liquid.launcher.core.designsystem.KitChip(selected = area.right, onClick = { save(areas.replace(i, area.copy(right = true))) }, label = { Text("Right edge") })
             }
             AreaSlider("Across", area.across, 0, 100, 1, "%") { save(areas.replace(i, area.copy(across = it))) }
             AreaSlider("Down the apps", area.down, 0, 100, 1, "%") { save(areas.replace(i, area.copy(down = it))) }
@@ -101,7 +101,7 @@ private fun AreaSlider(label: String, value: Int, min: Int, max: Int, step: Int,
             Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             Text("$shown $unit", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Slider(
+        dev.liquid.launcher.core.designsystem.KitSlide(
             value = if (dragging) dragged else value.toFloat(),
             onValueChange = {
                 dragging = true

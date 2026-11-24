@@ -14,6 +14,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.liquid.launcher.core.data.SearchCards
 import dev.liquid.launcher.core.designsystem.LauncherIcon
@@ -52,7 +54,11 @@ internal fun SearchCardsEditor(store: SettingsStore) {
         }
         hidden.forEach { card ->
             Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = false, onCheckedChange = { save(shown + card.id) })
+                Checkbox(
+                    checked = false,
+                    onCheckedChange = { save(shown + card.id) },
+                    modifier = Modifier.semantics { contentDescription = "Add ${card.name}" },
+                )
                 Column(Modifier.weight(1f)) {
                     Text(card.name, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(card.about, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

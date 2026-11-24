@@ -58,6 +58,7 @@ import dev.liquid.launcher.core.designsystem.LauncherIcon
 import dev.liquid.launcher.core.designsystem.LauncherIcons
 import dev.liquid.launcher.core.designsystem.liquidGlass
 import dev.liquid.launcher.core.settings.LauncherSettings
+import dev.liquid.launcher.core.settings.derive
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
@@ -151,8 +152,22 @@ internal fun WallpaperStrip(
     val recentCount = remember { controller.data.settings.get(LauncherSettings.WallpaperHistory) }
     val items = remember(library) {
         val favourites = WallpaperLibraryOps.favourites(library)
-        val recent = WallpaperLibraryOps.recent(library).filter { !it.favourite }.take(recentCount)
+        // 0.16.0 (D202): the current layout's own recents, when each layout has its own.
+        val recent = Wallpapers.recent(controller.data, library).filter { !it.favourite }.take(recentCount)
         favourites + recent
+    }
+    // 0.16.0 (D205): the newest pictures of the folders the layout uses (Island's too), from what was last seen there, so
+    // the strip opens at once; the folders are read again in the background as it opens.
+    val showFolders by controller.data.settings.derive { get(LauncherSettings.WallpaperStripFolders) to get(LauncherSettings.WallpaperStripFolderCount) }
+    val folderPicks = remember(library, showFolders) {
+        if (!showFolders.first) emptyList()
+        else Wallpapers.layoutFolders(controller.data)
+            .flatMap { folder -> folder.newest.map { folder to it } }
+            .sortedByDescending { it.second.modified }
+            .take(showFolders.second)
+    }
+    LaunchedEffect(Unit) {
+        if (showFolders.first) Wallpapers.layoutFolders(controller.data).forEach { controller.data.wallpapers.readFolder(it) }
     }
     val color = sheetContentColor(glass, lightBackground)
     val appear = remember { Animatable(0f) }
@@ -181,7 +196,7 @@ internal fun WallpaperStrip(
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .padding(vertical = 12.dp),
         ) {
-            if (items.isEmpty()) {
+            if (items.isEmpty() && folderPicks.isEmpty()) {
                 Text(
                     "No wallpapers yet. Open the wallpaper screen to add photos or link a folder.",
                     modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
@@ -196,6 +211,17 @@ internal fun WallpaperStrip(
                         StripThumb(item, item.id == library.current, color, controller) {
                             controller.wallpaperStrip = false
                             controller.applyWallpaper(WallpaperPick.Library(item))
+                        }
+                    }
+                    items(folderPicks, key = { "f:" + it.second.uri }) { (folder, image) ->
+                        FolderStripThumb(image.uri, color, controller) {
+                            // Island paused: its pictures cannot be read now; say so instead of failing.
+                            if (folder.island && dev.liquid.launcher.core.data.IslandProfile.paused(controller.context)) {
+                                controller.notice(dev.liquid.launcher.core.common.NoticeKind.Wallpaper, "Island is paused", "This picture comes back when Island does")
+                                return@FolderStripThumb
+                            }
+                            controller.wallpaperStrip = false
+                            controller.applyWallpaper(WallpaperPick.External(android.net.Uri.parse(image.uri), folder.name))
                         }
                     }
                 }
@@ -242,6 +268,32 @@ private fun StripThumb(item: WallpaperItem, current: Boolean, color: Color, cont
                 modifier = Modifier.align(Alignment.TopEnd).padding(5.dp),
             )
         }
+    }
+}
+
+/** 0.16.0 (D205): a folder's picture in the strip (its thumbnail kept on disk, so it shows while Island is paused). */
+@Composable
+private fun FolderStripThumb(uri: String, color: Color, controller: HomeController, onClick: () -> Unit) {
+    val thumb by produceState<ImageBitmap?>(null, uri) { value = controller.data.wallpapers.thumbnail(android.net.Uri.parse(uri)) }
+    val shape = RoundedCornerShape(14.dp)
+    var centre by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
+    Box(
+        Modifier
+            .size(width = 58.dp, height = 104.dp)
+            .onGloballyPositioned { centre = it.boundsInRoot().center }
+            .clip(shape)
+            .background(color.copy(alpha = 0.1f))
+            .border(0.5.dp, color.copy(alpha = 0.25f), shape)
+            .clickable {
+                controller.transitionOrigin = centre
+                onClick()
+            },
+    ) {
+        thumb?.let { Image(it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+        LauncherIcon(
+            LauncherIcons.Folder, contentDescription = "From a folder", tint = Color.White, size = 13.dp,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(5.dp),
+        )
     }
 }
 

@@ -5,7 +5,7 @@
 cd "$(dirname "$0")"
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 CP=$(ls lib/*.jar | tr '\n' ':')
-find $REPO -name '*.kt' \( -path '*/src/main/kotlin/*' -o -path '*/src/test/kotlin/*' \) -not -path '*/build/*' > sources.txt
+find $REPO -name '*.kt' \( -path '*/src/main/kotlin/*' -o -path '*/src/test/kotlin/*' \) -not -path '*/build/*' -not -path '*/.claude/*' > sources.txt
 rm -rf out; mkdir -p out
 start=$(date +%s)
 java -Xmx6g -Xss8m -cp "kc/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \

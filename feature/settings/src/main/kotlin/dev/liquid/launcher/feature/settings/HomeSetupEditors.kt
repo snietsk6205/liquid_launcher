@@ -241,6 +241,47 @@ private fun AnnalesFolderCard(store: SettingsStore) {
     }
 }
 
+/** Opens the system's notification access for the launcher's listener (its own page when the phone has one). */
+private fun openNotificationAccess(context: android.content.Context) {
+    val component = android.content.ComponentName(context.packageName, "dev.liquid.launcher.QuietService").flattenToString()
+    val detail = Intent("android.settings.NOTIFICATION_LISTENER_DETAIL_SETTINGS")
+        .putExtra("android.provider.extra.NOTIFICATION_LISTENER_COMPONENT_NAME", component)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    val list = Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(detail) }.recoverCatching { context.startActivity(list) }
+}
+
+/**
+ * 0.13.0 (D178): the live item shows what is playing only with notification access (Android shows other apps' media
+ * to a notification listener only). Shown on Pill → Layout while that option is on and the pill has a live item.
+ */
+@Composable
+internal fun LiveMusicAccessCard(store: SettingsStore) {
+    val music by store.observe(LauncherSettings.PillLiveMusic)
+    val slots by store.observe(LauncherSettings.PillSlots)
+    if (!music || "live" !in slots) return
+    val context = LocalContext.current
+    fun check(): Boolean = android.provider.Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        ?.contains(context.packageName) == true
+    var granted by remember { mutableStateOf(check()) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(1000)
+            granted = check()
+        }
+    }
+    if (granted) return
+    InfoCard {
+        Text("What's playing on the pill", style = MaterialTheme.typography.titleMedium)
+        BodyText(
+            "Android shows what other apps play to a notification listener only. Allow \"Liquid Launcher\" in the system's " +
+                "notification access (the same switch as Quiet during blocks; it is read on the phone only), or turn off " +
+                "\"Live item: what's playing\".",
+        )
+        Button(onClick = { openNotificationAccess(context) }, modifier = Modifier.padding(top = 8.dp)) { Text("Open notification access") }
+    }
+}
+
 /** C5 (0.9.16): whether "Quiet during blocks" may hold notifications, and the way to the system switch. */
 @Composable
 private fun QuietAccessCard(store: SettingsStore) {
@@ -266,14 +307,7 @@ private fun QuietAccessCard(store: SettingsStore) {
                 "Notification access is off, so nothing waits yet. Allow \"Liquid Launcher: quiet during study blocks\" " +
                     "in the system's notification access.",
             )
-            Button(onClick = {
-                val component = android.content.ComponentName(context.packageName, "dev.liquid.launcher.QuietService").flattenToString()
-                val detail = Intent("android.settings.NOTIFICATION_LISTENER_DETAIL_SETTINGS")
-                    .putExtra("android.provider.extra.NOTIFICATION_LISTENER_COMPONENT_NAME", component)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                val list = Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                runCatching { context.startActivity(detail) }.recoverCatching { context.startActivity(list) }
-            }, modifier = Modifier.padding(top = 8.dp)) { Text("Open notification access") }
+            Button(onClick = { openNotificationAccess(context) }, modifier = Modifier.padding(top = 8.dp)) { Text("Open notification access") }
         }
     }
 }
@@ -322,7 +356,8 @@ private const val FEED_EXAMPLE = """{"v":1,"updated":"2026-11-16T20:50",
  "exams":[{"label":"DS + Examens P2","date":"2027-01-07","confirmed":false}],
  "absences":{"rule_confirmed":false,"limit":0.20,
    "modules":[{"name":"Intégration et Probabilité TD","absent":3,"total":null}]},
- "flashcard":{"module":"Micro","q":"…","a":"…"},
+ "flashcards":[{"id":"proba2-fatou","module":"Proba 2","q":"Lemme de Fatou pour ${'$'}f_n \\ge 0${'$'} ?",
+   "a":"${'$'}${'$'}\\int \\liminf f_n \\, d\\mu \\le \\liminf \\int f_n \\, d\\mu${'$'}${'$'}"}],
  "grades":[{"module":"Stat Des","type":"DS","mark":null,"coef":null}]}"""
 
 /**

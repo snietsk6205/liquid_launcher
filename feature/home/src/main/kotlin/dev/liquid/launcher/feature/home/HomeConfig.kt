@@ -110,6 +110,8 @@ data class PillConfig(
     val study: StudyItemLook = StudyItemLook(),
     /** Each item's own gestures, by item code (0.9.1). */
     val slotGestures: Map<String, dev.liquid.launcher.core.data.SlotGestures> = emptyMap(),
+    /** What the live item shows (0.13.0, D178). */
+    val live: LiveLook = LiveLook(),
 )
 
 data class DrawerConfig(
@@ -403,6 +405,14 @@ fun SettingsStore.pillConfig() = PillConfig(
         ring = get(S.PillStudyRing),
     ),
     slotGestures = dev.liquid.launcher.core.data.SlotGestures.decodeAll(get(S.PillSlotGestures)),
+    live = LiveLook(
+        focus = get(S.PillLiveFocus),
+        classes = get(S.PillLiveClass),
+        leadMinutes = get(S.PillLiveLead),
+        music = get(S.PillLiveMusic),
+        cards = get(S.PillLiveCards),
+        shape = get(S.PillLiveShape),
+    ),
 )
 
 fun SettingsStore.drawerConfig() = DrawerConfig(
@@ -524,7 +534,12 @@ data class SearchConfig(
     val clipboard: Boolean = true,
     /** The empty page's cards, top to bottom (0.9.3). */
     val cards: List<String> = dev.liquid.launcher.core.data.SearchCards.defaultOrder,
+    /** 0.11.3: the open search pill's size and gap above the keyboard. */
+    val fieldSize: SearchFieldSize = SearchFieldSize(),
 )
+
+/** 0.11.3: the open search pill's height, width (share of the screen) and gap above the keyboard it rides on. */
+data class SearchFieldSize(val heightDp: Int = 54, val widthShare: Float = 0.9f, val gapDp: Int = 14)
 
 fun SettingsStore.searchConfig() = SearchConfig(
     engine = get(S.SearchEngine),
@@ -536,6 +551,7 @@ fun SettingsStore.searchConfig() = SearchConfig(
     claude = get(S.SearchClaude),
     clipboard = get(S.SearchClipboard),
     cards = dev.liquid.launcher.core.data.SearchCards.shown(get(S.SearchCards)),
+    fieldSize = SearchFieldSize(get(S.SearchFieldHeight), get(S.SearchFieldWidth) / 100f, get(S.SearchFieldGap)),
 )
 
 /** Wallpaper treatment on the home screen. */

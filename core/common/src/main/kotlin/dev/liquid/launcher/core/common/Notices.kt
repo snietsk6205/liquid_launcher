@@ -28,6 +28,16 @@ data class Notice(
     val text: String,
     val detail: String? = null,
     val action: String? = null,
+    /**
+     * 0.16.0 (D200): a button inside the label ([buttonLabel], e.g. "Undo") and what it does, apart from tapping the rest
+     * of the label. Kept in this process only: a notice with a button is not meant to outlive it.
+     */
+    val buttonLabel: String? = null,
+    val button: (() -> Unit)? = null,
+    /** How long it shows: null for the time set in Settings. */
+    val showMs: Long? = null,
+    /** It stays its whole time even when a newer notice is waiting (an Undo must not be cut short). */
+    val holds: Boolean = false,
 )
 
 /**

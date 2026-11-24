@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Constraints
 import dev.liquid.launcher.core.data.StudyShift
+import dev.liquid.launcher.core.data.DayLine
 import kotlin.math.roundToInt
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -924,40 +925,6 @@ internal fun StudyRing(glance: StudyGlance, color: Color, size: Dp, tint: Color?
     }
 }
 
-/**
- * The line under a clock widget: the block running now with a ring for the time gone, else the
- * next block, else the tasks left. Tap opens Today (ticks, Done, Skip, Focus). No long press of its own:
- * holding the clock widget already means "edit and move it". Uses the clock's colour and shadow so it
- * reads as part of the clock.
- */
-@Composable
-internal fun StudyLine(
-    glance: StudyGlance,
-    controller: HomeController,
-    color: Color,
-    shadow: androidx.compose.ui.graphics.Shadow?,
-    interactive: Boolean,
-    modifier: Modifier = Modifier,
-    /** 0.10.2: the ring and the round buttons in [color] too (the clock's colour) instead of the block's and the theme's. */
-    ownColours: Boolean = false,
-) {
-    val focus by controller.data.study.focus.collectAsState()
-    val focusing = glance is StudyGlance.Running && focus?.eventKey == glance.block.key
-    // A new kind of line (the block starts, ends, the next one comes) slides in; the minutes just change (0.7.0).
-    androidx.compose.animation.AnimatedContent(
-        targetState = glance,
-        contentKey = { glanceKey(it) },
-        transitionSpec = {
-            (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(260, delayMillis = 60)) +
-                androidx.compose.animation.slideInVertically(spring(dampingRatio = 0.85f, stiffness = MotionScale.stiffness(380f))) { it / 2 }) togetherWith
-                (androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(160)) +
-                    androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(200)) { -it / 2 })
-        },
-        modifier = modifier,
-        label = "clockLine",
-    ) { shown -> StudyLineRow(shown, controller, color, shadow, interactive, focusing && shown is StudyGlance.Running, ownColours) }
-}
-
 /** What makes two glances "the same line" for the animation: their kind and block. */
 private fun glanceKey(glance: StudyGlance): String = when (glance) {
     is StudyGlance.Running -> "run:" + glance.block.key
@@ -1052,6 +1019,362 @@ private fun StudyLineRow(
             LineButton(action.first, action.second, color, strong = focusing, own = ownColours, onClick = action.third)
         }
     }
+}
+
+// ---- 0.13.1 (D181): the line under the clock, reimagined ----
+
+/** What the line under the clock says: one of the study glances, or one of the line's own ([DayLine.Main]). */
+internal sealed interface ClockLineMain {
+    data class Glance(val glance: StudyGlance) : ClockLineMain
+    data class Own(val main: DayLine.Main) : ClockLineMain
+
+    /**
+     * 0.14.0 (D184): a study session runs ("Study with Claude"): what is studied, a ✓ to finish it; the time left only
+     * when the pill does not count it down ([onPill]).
+     */
+    data class Session(val subject: String, val startedAt: Long, val until: Long, val onPill: Boolean) : ClockLineMain
+}
+
+/** The line under the clock: its main line ([main]; null with only facts to say) and its quieter second line. */
+internal data class ClockLineState(val main: ClockLineMain?, val facts: List<DayLine.Fact>)
+
+/**
+ * The main line at [now] (Med: "more practical and useful"), the first that applies: when to leave, "present?"; while
+ * the pill counts a focus down, the block's next step (never the same countdown twice); the block running; the class
+ * you are in; the rest after getting home, the evening check-in; a class or block within the hour (the sooner); a
+ * block to mark; free until the next block or class; the tasks left; tomorrow. [glance] is the study glance (the pill's
+ * and the drawer's, unchanged), which has every rule but the line's own.
+ */
+internal fun clockLineMain(
+    glance: StudyGlance?,
+    day: StudyDay,
+    now: Long,
+    focusKey: String?,
+    focusOnPill: Boolean,
+    session: dev.liquid.launcher.core.data.StudyFocus? = null,
+): ClockLineMain? {
+    if (glance is StudyGlance.LeaveBy || glance is StudyGlance.Attendance) return ClockLineMain.Glance(glance)
+    if (session != null && session.isSession && session.until > now) {
+        return ClockLineMain.Session(session.subject, session.startedAt, session.until, focusOnPill)
+    }
+    if (focusOnPill) DayLine.focus(day, focusKey, now)?.let { return ClockLineMain.Own(it) }
+    if (glance is StudyGlance.Running) return ClockLineMain.Glance(glance)
+    DayLine.inClass(day, now)?.let { return ClockLineMain.Own(it) }
+    if (glance is StudyGlance.Rest || glance is StudyGlance.WindDown) return ClockLineMain.Glance(glance)
+    val soon = DayLine.classSoon(day, now)
+    if (soon != null && (glance !is StudyGlance.Next || soon.minutesUntil <= glance.minutesUntil)) return ClockLineMain.Own(soon)
+    if (glance is StudyGlance.Next && glance.minutesUntil <= DayLine.SOON_MINUTES) return ClockLineMain.Glance(glance)
+    if (glance is StudyGlance.Unmarked) return ClockLineMain.Glance(glance)
+    DayLine.free(day, now)?.let { return ClockLineMain.Own(it) }
+    return glance?.let { ClockLineMain.Glance(it) }
+}
+
+/** The events [main] already names (the second line says something else), and from when "then" looks. */
+private fun clockLineScope(main: ClockLineMain?, now: Long): Pair<Set<String>, Long> = when (main) {
+    null -> emptySet<String>() to now
+    is ClockLineMain.Session -> emptySet<String>() to maxOf(now, main.until)
+    is ClockLineMain.Own -> when (val m = main.main) {
+        is DayLine.Main.After -> setOfNotNull(m.event.key, m.next?.key) to maxOf(now, m.next?.end ?: m.event.end)
+        is DayLine.Main.Free -> setOf(m.event.key) to m.event.end
+        else -> setOf(m.event.key) to maxOf(now, m.event.end)
+    }
+    is ClockLineMain.Glance -> when (val g = main.glance) {
+        is StudyGlance.Running -> setOf(g.block.key) to g.block.end
+        is StudyGlance.Next -> setOf(g.block.key) to g.block.end
+        is StudyGlance.Unmarked -> setOf(g.block.key) to now
+        is StudyGlance.LeaveBy -> setOf(g.firstClass.key) to g.firstClass.end
+        is StudyGlance.Attendance -> setOf(g.cls.key) to now
+        is StudyGlance.Rest -> setOf(g.first.key) to g.first.end
+        is StudyGlance.Tomorrow -> setOf(g.block.key) to now
+        is StudyGlance.Tasks, is StudyGlance.WindDown -> emptySet<String>() to now
+    }
+}
+
+/**
+ * The line under the clock now, or null when the companion is off, cannot read the calendar, or has nothing to say.
+ * 0.16.0 (D209): with [withPinned] (the clock's line), a countdown pinned from the school year joins its facts, merged
+ * with the exam of the same day; it shows even while the study line is off ([withStudy] false) or not loaded yet.
+ */
+@Composable
+internal fun rememberClockLine(controller: HomeController, withStudy: Boolean = true, withPinned: Boolean = false): ClockLineState? {
+    val glance = if (withStudy) rememberStudyGlance(controller) else null
+    val study = controller.data.study
+    val loaded by study.loaded.collectAsState()
+    val day by study.day.collectAsState()
+    val focus by study.focus.collectAsState()
+    val tick = rememberMinuteTick()
+    val withAfter by controller.data.settings.derive { get(LauncherSettings.StudyLineAfter) }
+    // The pill counts the focus down itself when its live item is on and shows it.
+    val focusOnPill by controller.data.settings.derive {
+        get(LauncherSettings.PillEnabled) && "live" in get(LauncherSettings.PillSlots) && get(LauncherSettings.PillLiveFocus)
+    }
+    val schoolText by controller.data.settings.derive { if (withPinned) get(LauncherSettings.CalendarSchoolYear) else null }
+    val pinned = remember(schoolText, tick) {
+        schoolText?.let { dev.liquid.launcher.core.data.SchoolYear.pinnedFact(dev.liquid.launcher.core.data.SchoolYear.parse(it), java.time.LocalDate.now()) }
+    }
+    return remember(glance, loaded, day, focus, tick, withAfter, focusOnPill, withStudy, pinned) {
+        if (!withStudy || !loaded) {
+            return@remember pinned?.let { ClockLineState(null, listOf(DayLine.Fact("school", it.text, it.tone))) }
+        }
+        val now = System.currentTimeMillis()
+        val main = clockLineMain(glance, day, now, focus?.eventKey, focusOnPill, focus)
+        val facts = if (withAfter) {
+            val (shown, from) = clockLineScope(main, now)
+            val tasksShown = (main as? ClockLineMain.Glance)?.glance is StudyGlance.Tasks
+            // With nothing on the main line, one fact takes its place.
+            DayLine.facts(day, now, from, shown, tasksShown, ::time, max = if (main == null) 1 else 2, pinned = pinned)
+        } else {
+            listOfNotNull(pinned?.let { DayLine.Fact("school", it.text, it.tone) })
+        }
+        if (main == null && facts.isEmpty()) null else ClockLineState(main, facts)
+    }
+}
+
+/** What makes two main lines "the same line" for the animation: their kind and event. */
+private fun clockLineKey(main: ClockLineMain): String = when (main) {
+    is ClockLineMain.Session -> "session:" + main.startedAt
+    is ClockLineMain.Glance -> glanceKey(main.glance)
+    is ClockLineMain.Own -> when (val m = main.main) {
+        is DayLine.Main.Step -> "step:" + m.event.key + ":" + m.task.index
+        is DayLine.Main.StepsDone -> "steps:" + m.event.key
+        is DayLine.Main.After -> "after:" + m.event.key
+        is DayLine.Main.InClass -> "class:" + m.event.key
+        is DayLine.Main.ClassSoon -> "soon:" + m.event.key
+        is DayLine.Main.Free -> "free:" + m.event.key
+    }
+}
+
+/** The line's own main line as words. */
+internal fun ownLineText(main: DayLine.Main, now: Long = System.currentTimeMillis()): String {
+    fun place(e: StudyEvent) = e.location.trim().lineSequence().firstOrNull()?.takeIf { it.isNotBlank() && it.length <= 24 }?.let { " · $it" } ?: ""
+    fun name(e: StudyEvent) = e.title.subject.ifBlank { e.rawTitle }
+    return when (main) {
+        is DayLine.Main.Step -> "Step ${main.number} of ${main.total} · " + main.task.text
+        is DayLine.Main.StepsDone -> (if (main.total == 1) "Step done" else "All ${main.total} steps done") + " · " + name(main.event)
+        is DayLine.Main.After -> main.next?.let { "Then " + name(it) + " at " + time(it.begin) + place(it) } ?: ("Last one today · free from " + time(main.event.end))
+        is DayLine.Main.InClass -> name(main.event) + " until " + time(main.event.end) + place(main.event)
+        is DayLine.Main.ClassSoon -> name(main.event) + " in " + minutes(main.event.begin - now) + place(main.event)
+        is DayLine.Main.Free -> "Free until " + time(main.event.begin) + " · " + name(main.event) + if (main.isClass) place(main.event) else ""
+    }
+}
+
+/**
+ * 0.13.1 (D181): the line under a clock (and the "Study block" widget), reimagined: the main line ([ClockLineMain]) and,
+ * smaller, the rest of the day ([DayLine.facts]). Tap either for Today, as before; a step's ✓ ticks it in the calendar.
+ */
+@Composable
+internal fun ClockLine(
+    state: ClockLineState,
+    controller: HomeController,
+    color: Color,
+    shadow: androidx.compose.ui.graphics.Shadow?,
+    interactive: Boolean,
+    modifier: Modifier = Modifier,
+    ownColours: Boolean = false,
+    align: Alignment.Horizontal = Alignment.CenterHorizontally,
+) {
+    val focus by controller.data.study.focus.collectAsState()
+    Column(modifier.animateContentSize(spring(dampingRatio = 1f, stiffness = MotionScale.stiffness(500f))), horizontalAlignment = align) {
+        val main = state.main
+        if (main != null) {
+            androidx.compose.animation.AnimatedContent(
+                targetState = main,
+                contentKey = { clockLineKey(it) },
+                transitionSpec = {
+                    (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(260, delayMillis = 60)) +
+                        androidx.compose.animation.slideInVertically(spring(dampingRatio = 0.85f, stiffness = MotionScale.stiffness(380f))) { it / 2 }) togetherWith
+                        (androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(160)) +
+                            androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(200)) { -it / 2 })
+                },
+                label = "clockLine",
+            ) { shown ->
+                when (shown) {
+                    is ClockLineMain.Glance -> {
+                        val g = shown.glance
+                        val focusing = g is StudyGlance.Running && focus?.eventKey == g.block.key
+                        StudyLineRow(g, controller, color, shadow, interactive, focusing, ownColours)
+                    }
+                    is ClockLineMain.Own -> OwnLineRow(shown.main, controller, color, shadow, interactive, ownColours)
+                    is ClockLineMain.Session -> SessionLineRow(shown, controller, color, shadow, interactive, ownColours)
+                }
+            }
+        }
+        // A tap opens Today, as before; with the companion off (only a pinned countdown to say) it does nothing.
+        if (state.facts.isNotEmpty()) ClockLineFacts(state.facts, controller, color, shadow, interactive && controller.data.study.enabled, big = main == null)
+    }
+}
+
+@Composable
+private fun OwnLineRow(
+    main: DayLine.Main,
+    controller: HomeController,
+    color: Color,
+    shadow: androidx.compose.ui.graphics.Shadow?,
+    interactive: Boolean,
+    ownColours: Boolean,
+) {
+    val bounds = remember { arrayOfNulls<androidx.compose.ui.geometry.Rect>(1) }
+    Row(
+        Modifier
+            .height(30.dp)
+            .onGloballyPositioned { bounds[0] = it.boundsInRoot() }
+            .clip(RoundedCornerShape(50))
+            .then(if (interactive) Modifier.clickable(interactionSource = null, indication = null, onClick = { controller.openToday(bounds[0]) }) else Modifier)
+            .padding(horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OwnLineRing(main, color, 15.dp, tint = if (ownColours) color else null)
+        Spacer(Modifier.width(8.dp))
+        Text(
+            ownLineText(main),
+            style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp, fontWeight = FontWeight.Medium, shadow = shadow),
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        if (interactive) {
+            when (main) {
+                // The step's ✓ ticks it in the calendar ("[x]"); the line moves on to the next step.
+                is DayLine.Main.Step -> {
+                    Spacer(Modifier.width(8.dp))
+                    LineButton(LauncherIcons.Check, "Tick the step: " + main.task.text, color, strong = true, own = ownColours) {
+                        controller.studyTick(main.event, main.task.index, true)
+                    }
+                }
+                is DayLine.Main.StepsDone -> {
+                    Spacer(Modifier.width(8.dp))
+                    LineButton(LauncherIcons.Check, "Mark the block done", color, strong = true, own = ownColours) {
+                        controller.studyStatus(main.event, StudyStatus.Done)
+                    }
+                }
+                else -> Unit
+            }
+        }
+    }
+}
+
+/** The words of a study session's line: "Studying Proba 2", with the time left when the pill does not count it. */
+internal fun sessionLineText(main: ClockLineMain.Session, now: Long = System.currentTimeMillis()): String =
+    "Studying" + (main.subject.takeIf { it.isNotBlank() }?.let { " $it" } ?: "") +
+        if (main.onPill) "" else " · " + minutes(main.until - now) + " left"
+
+/** 0.14.0 (D184): a study session on the line under the clock: a ring for the time gone, what is studied, ✓ to finish. */
+@Composable
+private fun SessionLineRow(
+    main: ClockLineMain.Session,
+    controller: HomeController,
+    color: Color,
+    shadow: androidx.compose.ui.graphics.Shadow?,
+    interactive: Boolean,
+    ownColours: Boolean,
+) {
+    val bounds = remember { arrayOfNulls<androidx.compose.ui.geometry.Rect>(1) }
+    val now = remember(rememberMinuteTick()) { System.currentTimeMillis() }
+    val length = (main.until - main.startedAt).coerceAtLeast(1)
+    val progress by animateFloatAsState(((now - main.startedAt).toFloat() / length).coerceIn(0f, 1f), androidx.compose.animation.core.tween(700), label = "sessionRing")
+    val accent = if (ownColours) color else HomeTheme.accent
+    Row(
+        Modifier
+            .height(30.dp)
+            .onGloballyPositioned { bounds[0] = it.boundsInRoot() }
+            .clip(RoundedCornerShape(50))
+            .then(if (interactive) Modifier.clickable(interactionSource = null, indication = null, onClick = { controller.openToday(bounds[0]) }) else Modifier)
+            .padding(horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        androidx.compose.foundation.Canvas(Modifier.size(15.dp)) {
+            val stroke = this.size.minDimension * 0.14f
+            val radius = (this.size.minDimension - stroke) / 2f
+            drawCircle(color.copy(alpha = 0.22f), radius = radius, style = Stroke(stroke))
+            if (progress > 0f) {
+                drawArc(
+                    accent, -90f, 360f * progress, false,
+                    androidx.compose.ui.geometry.Offset(stroke / 2f, stroke / 2f), androidx.compose.ui.geometry.Size(radius * 2f, radius * 2f),
+                    style = Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round),
+                )
+            }
+            drawCircle(accent, radius = radius * 0.42f)
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            sessionLineText(main, now),
+            style = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 15.sp, fontWeight = FontWeight.Medium, shadow = shadow),
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        if (interactive) {
+            Spacer(Modifier.width(8.dp))
+            LineButton(LauncherIcons.Check, "Finish the study session", color, strong = true, own = ownColours) { controller.stopStudySession() }
+        }
+    }
+}
+
+/** The ring before the line's own main line: the steps done, the class gone, a dot for what comes, a hollow one when free. */
+@Composable
+private fun OwnLineRing(main: DayLine.Main, color: Color, size: Dp, tint: Color?) {
+    val accent = tint ?: when (main) {
+        is DayLine.Main.After -> main.next?.let { eventColor(it) } ?: color
+        else -> eventColor(main.event)
+    }
+    val progress = when (main) {
+        is DayLine.Main.Step -> (main.number - 1).toFloat() / main.total.coerceAtLeast(1)
+        is DayLine.Main.StepsDone -> 1f
+        is DayLine.Main.InClass -> main.progress
+        else -> 0f
+    }
+    val shown by animateFloatAsState(progress, androidx.compose.animation.core.tween(700), label = "ownRing")
+    androidx.compose.foundation.Canvas(Modifier.size(size)) {
+        val stroke = this.size.minDimension * 0.14f
+        val radius = (this.size.minDimension - stroke) / 2f
+        val arcSize = androidx.compose.ui.geometry.Size(radius * 2f, radius * 2f)
+        val arcAt = androidx.compose.ui.geometry.Offset(stroke / 2f, stroke / 2f)
+        when (main) {
+            is DayLine.Main.Step, is DayLine.Main.StepsDone, is DayLine.Main.InClass -> {
+                drawCircle(color.copy(alpha = 0.22f), radius = radius, style = Stroke(stroke))
+                if (shown > 0f) drawArc(accent, -90f, 360f * shown, false, arcAt, arcSize, style = Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                drawCircle(accent, radius = radius * if (main is DayLine.Main.StepsDone) 0.55f else 0.42f)
+            }
+            is DayLine.Main.After, is DayLine.Main.ClassSoon -> drawCircle(accent, radius = radius * 0.55f)
+            is DayLine.Main.Free -> drawCircle(accent.copy(alpha = 0.7f), radius = radius * 0.8f, style = Stroke(stroke))
+        }
+    }
+}
+
+/** The second line: the rest of the day, smaller and quieter; an exam soon in amber, close in red. */
+@Composable
+private fun ClockLineFacts(
+    facts: List<DayLine.Fact>,
+    controller: HomeController,
+    color: Color,
+    shadow: androidx.compose.ui.graphics.Shadow?,
+    interactive: Boolean,
+    big: Boolean,
+) {
+    val quiet = color.copy(alpha = if (big) 0.92f else 0.78f)
+    val text = androidx.compose.ui.text.buildAnnotatedString {
+        facts.forEachIndexed { i, fact ->
+            if (i > 0) append("  ·  ")
+            val ink = when (fact.tone) {
+                DayLine.Tone.Soon -> Color(0xFFFFB74D)
+                DayLine.Tone.Urgent -> LeaveRed
+                DayLine.Tone.Plain -> quiet
+            }
+            pushStyle(androidx.compose.ui.text.SpanStyle(color = ink))
+            append(fact.text)
+            pop()
+        }
+    }
+    Text(
+        text,
+        style = TextStyle(
+            fontFamily = HomeTheme.font, color = quiet, fontSize = if (big) 15.sp else 12.5.sp,
+            fontWeight = if (big) FontWeight.Medium else FontWeight.Normal, shadow = shadow,
+        ),
+        maxLines = 1, overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .then(if (interactive) Modifier.clickable(interactionSource = null, indication = null, onClick = { controller.openToday() }) else Modifier)
+            .padding(horizontal = 6.dp)
+            .padding(top = if (big) 6.dp else 0.dp, bottom = 2.dp),
+    )
 }
 
 /**

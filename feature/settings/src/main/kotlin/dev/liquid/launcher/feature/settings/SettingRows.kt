@@ -16,6 +16,10 @@ import dev.liquid.launcher.core.settings.ColorSetting
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
@@ -118,11 +122,11 @@ private fun ColorRow(setting: ColorSetting, store: SettingsStore) {
                         }
                     }
                     Text("Hue", style = MaterialTheme.typography.labelMedium)
-                    Slider(value = hue, onValueChange = { hue = it }, valueRange = 0f..360f)
+                    dev.liquid.launcher.core.designsystem.KitSlide(value = hue, onValueChange = { hue = it }, valueRange = 0f..360f)
                     Text("Saturation", style = MaterialTheme.typography.labelMedium)
-                    Slider(value = sat, onValueChange = { sat = it }, valueRange = 0f..1f)
+                    dev.liquid.launcher.core.designsystem.KitSlide(value = sat, onValueChange = { sat = it }, valueRange = 0f..1f)
                     Text("Brightness", style = MaterialTheme.typography.labelMedium)
-                    Slider(value = bright, onValueChange = { bright = it }, valueRange = 0f..1f)
+                    dev.liquid.launcher.core.designsystem.KitSlide(value = bright, onValueChange = { bright = it }, valueRange = 0f..1f)
                     Text(ColorSetting.format(current), style = MaterialTheme.typography.bodyMedium)
                 }
             },
@@ -165,6 +169,8 @@ private fun RowFrame(
     onClick: () -> Unit,
     trailing: @Composable (() -> Unit)? = null,
     below: @Composable (() -> Unit)? = null,
+    /** 0.15.0: the value at the end of the title line (WM Keyboard's "8 dp"), not under the summary. */
+    valueRight: Boolean = false,
 ) {
     val values by store.values.collectAsStateCompat()
     val changed = store.isChanged(setting, values)
@@ -173,8 +179,12 @@ private fun RowFrame(
     val context = androidx.compose.ui.platform.LocalContext.current
     var menu by remember { mutableStateOf(false) }
     var explain by remember { mutableStateOf(false) }
+    val accent = screenAccent()
+    val ink = if (darkSettings()) accent else androidx.compose.ui.graphics.lerp(accent, androidx.compose.ui.graphics.Color.Black, 0.3f)
 
-    Box {
+    // 0.15.0 (D191): WM Keyboard's option row: the title with a "?" that explains it, the value on the right, the
+    // summary under it, and its control (a switch, a slider, chips); on its own card or its group's.
+    Box(Modifier.loneCard()) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -185,19 +195,39 @@ private fun RowFrame(
                     },
                     onLongClick = { menu = true },
                 )
-                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .padding(start = 18.dp, end = 14.dp, top = 12.dp, bottom = 12.dp)
                 .alpha(if (off == null) 1f else 0.45f)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(setting.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f, fill = false))
+                        Text(
+                            setting.title,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
                         if (changed) {
                             Spacer(Modifier.width(8.dp))
                             Box(
                                 Modifier
                                     .size(7.dp)
-                                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+                                    .background(accent, CircleShape)
+                            )
+                        }
+                        // What it does, where it lives and what it needs, one tap away (it was only in the hold menu).
+                        Box(
+                            Modifier
+                                .padding(start = 4.dp)
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .clickable { explain = true },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            dev.liquid.launcher.core.designsystem.LauncherIcon(
+                                dev.liquid.launcher.core.designsystem.LauncherIcons.Info,
+                                contentDescription = "Explain",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                size = 17.dp,
                             )
                         }
                     }
@@ -208,16 +238,26 @@ private fun RowFrame(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    if (valueText != null) {
+                    if (valueText != null && !valueRight) {
                         Text(
                             valueText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                            color = ink,
+                            modifier = Modifier.padding(top = 2.dp),
                         )
                     }
                     if (off != null) {
                         Text(off, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                }
+                if (valueText != null && valueRight) {
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        valueText,
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.align(Alignment.Top).padding(top = 3.dp),
+                    )
                 }
                 if (trailing != null) {
                     Spacer(Modifier.width(12.dp))
@@ -298,7 +338,20 @@ private fun BoolRow(setting: BoolSetting, store: SettingsStore) {
     RowFrame(
         setting, store, valueText = null,
         onClick = { store.set(setting, !value) },
-        trailing = { Switch(checked = value, onCheckedChange = { store.set(setting, it) }, enabled = LocalRowContext.current.whyOff == null) },
+        trailing = {
+            // 0.15.0 (D191): in the place's hue, as WM Keyboard's.
+            val accent = screenAccent()
+            Switch(
+                checked = value,
+                onCheckedChange = { store.set(setting, it) },
+                enabled = LocalRowContext.current.whyOff == null,
+                colors = androidx.compose.material3.SwitchDefaults.colors(
+                    checkedTrackColor = accent,
+                    checkedBorderColor = accent,
+                    checkedThumbColor = androidx.compose.ui.graphics.Color.White,
+                ),
+            )
+        },
     )
 }
 
@@ -312,8 +365,9 @@ private fun IntRow(setting: IntSetting, store: SettingsStore) {
     RowFrame(
         setting, store, valueText = "$shown$unit",
         onClick = {},
+        valueRight = true,
         below = {
-            Slider(
+            ExpressiveSlider(
                 value = if (dragging) dragValue else stored.toFloat(),
                 onValueChange = {
                     dragging = true
@@ -325,6 +379,7 @@ private fun IntRow(setting: IntSetting, store: SettingsStore) {
                 },
                 valueRange = setting.min.toFloat()..setting.max.toFloat(),
                 enabled = LocalRowContext.current.whyOff == null,
+                modifier = Modifier.padding(top = 8.dp),
             )
         },
     )
@@ -339,6 +394,13 @@ private fun snap(value: Float, setting: IntSetting): Int {
 private fun ChoiceRow(setting: ChoiceSetting, store: SettingsStore) {
     val value by store.observe(setting)
     var open by remember { mutableStateOf(false) }
+    // 0.15.0 (D191): a few short choices are chips under the option, one tap each (WM Keyboard's "Tap | Key | Click");
+    // longer ones keep their list.
+    val short = setting.options.size <= 6 && setting.options.all { it.second.length <= 18 }
+    if (short) {
+        RowFrame(setting, store, valueText = null, onClick = {}, below = { ChoiceChips(setting, value) { store.set(setting, it) } })
+        return
+    }
     RowFrame(setting, store, valueText = setting.labelOf(value), onClick = { open = true })
     if (open) {
         AlertDialog(
@@ -437,3 +499,56 @@ private fun ListRow(setting: StringListSetting, store: SettingsStore) {
         )
     }
 }
+
+
+/** A few short choices as chips: the chosen one filled in the place's hue with a tick. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun ChoiceChips(setting: ChoiceSetting, value: String, choose: (String) -> Unit) {
+    val enabled = LocalRowContext.current.whyOff == null
+    val accent = screenAccent()
+    androidx.compose.foundation.layout.FlowRow(
+        Modifier.padding(top = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        setting.options.forEach { (option, label) ->
+            val on = option == value
+            val shape = RoundedCornerShape(12.dp)
+            Row(
+                Modifier
+                    .clip(shape)
+                    .background(if (on) accent.copy(alpha = 0.22f) else androidx.compose.ui.graphics.Color.Transparent)
+                    .border(1.dp, if (on) accent.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outlineVariant, shape)
+                    .clickable(enabled = enabled) { choose(option) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                androidx.compose.animation.AnimatedVisibility(on) {
+                    Row {
+                        dev.liquid.launcher.core.designsystem.LauncherIcon(
+                            dev.liquid.launcher.core.designsystem.LauncherIcons.Check, contentDescription = null, size = 16.dp,
+                            tint = if (darkSettings()) accent else androidx.compose.ui.graphics.lerp(accent, androidx.compose.ui.graphics.Color.Black, 0.3f),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                    }
+                }
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (on) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun ExpressiveSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+) = dev.liquid.launcher.core.designsystem.KitSlider(value, onValueChange, onValueChangeFinished, valueRange, enabled, modifier)

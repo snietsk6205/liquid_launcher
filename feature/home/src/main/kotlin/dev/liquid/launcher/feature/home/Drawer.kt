@@ -1061,8 +1061,9 @@ internal fun DrawerSearchField(
                 singleLine = true,
                 textStyle = TextStyle(fontFamily = HomeTheme.font, color = color, fontSize = 16.sp),
                 cursorBrush = SolidColor(color),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                keyboardActions = KeyboardActions(onGo = { controller.drawerFirstResult?.let { controller.launch(it, fromDrawer = true) } }),
+                // 0.12.0: app names are not corrected, and the keyboard's key is Search.
+                keyboardOptions = searchKeyboardOptions(ask = false),
+                keyboardActions = searchKeyboardActions { controller.drawerFirstResult?.let { controller.launch(it, fromDrawer = true) } },
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focus)

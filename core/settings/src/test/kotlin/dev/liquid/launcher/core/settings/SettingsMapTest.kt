@@ -35,8 +35,12 @@ class SettingsMapTest {
     }
 
     @Test
-    fun sevenEntriesEachWithPages() {
-        assertEquals(7, SettingsEntry.entries.size)
+    fun eightEntriesEachWithPages() {
+        // 0.16.0 (D209): Calendar is the eighth, after Study.
+        assertEquals(8, SettingsEntry.entries.size)
+        assertEquals(SettingsEntry.STUDY.ordinal + 1, SettingsEntry.CALENDAR.ordinal)
+        assertEquals("Calendar › Calendar › Layout", SettingsMap.path(LauncherSettings.CalendarSize))
+        assertEquals("Calendar › Holidays and school year › Layout", SettingsMap.path(LauncherSettings.CalendarHolidays))
         for (entry in SettingsEntry.entries) assertTrue(entry.title, SettingsMap.surfacesOf(entry).isNotEmpty())
         assertEquals(SettingsMap.surfaces.size, SettingsMap.surfaces.map { it.id }.toSet().size)
     }
@@ -60,6 +64,20 @@ class SettingsMapTest {
         assertEquals("advanced", info.level)
         assertEquals("layout", SettingsMap.info(LauncherSettings.HomeColumns).scope)
         assertEquals("Home › Pill › Behaviour", SettingsMap.path(LauncherSettings.PillTap))
+    }
+
+    @Test
+    fun theWidgetsOwnOptionsMatterOnlyWhileItSharesNothing() {
+        val store = SettingsStore.inMemory()
+        assertEquals(null, SettingDependencies.whyOff(LauncherSettings.CalendarWidgetMarks, store))
+        assertTrue(SettingDependencies.isVisible(LauncherSettings.CalendarWidgetMarks, store))
+        store.set(LauncherSettings.CalendarShareWidget, true)
+        assertEquals(
+            "Only when \u201CThe Calendar widget uses the calendar's settings\u201D is off",
+            SettingDependencies.whyOff(LauncherSettings.CalendarWidgetMarks, store),
+        )
+        assertTrue(!SettingDependencies.isVisible(LauncherSettings.CalendarWidgetSchool, store))
+        assertEquals("!calendar.shareWidget", SettingsMap.info(LauncherSettings.CalendarWidgetToday).dependsOn)
     }
 
     @Test

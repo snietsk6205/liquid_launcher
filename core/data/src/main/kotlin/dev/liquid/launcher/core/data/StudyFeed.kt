@@ -18,10 +18,23 @@ data class StudyFeed(
     val exams: List<FeedExam> = emptyList(),
     val absences: FeedAbsences? = null,
     val flashcard: FeedCard? = null,
+    /** 0.12.0 (D173): a small deck; the single [flashcard] still reads as a deck of one. */
+    val flashcards: List<FeedCard> = emptyList(),
     val grades: List<FeedGrade> = emptyList(),
+    /**
+     * 0.14.0 (D185): up to three short tasks Claude recommends for the next days (written at the end of each study chat),
+     * shown in Today under "Recommended". Older launcher-data without it reads as before.
+     */
+    val recommended: List<String> = emptyList(),
 ) {
     /** True when there is nothing in it the launcher shows. */
-    val isEmpty: Boolean get() = exams.isEmpty() && (absences?.modules.isNullOrEmpty()) && flashcard?.q.isNullOrBlank() && grades.isEmpty()
+    val isEmpty: Boolean get() = exams.isEmpty() && (absences?.modules.isNullOrEmpty()) && cards.isEmpty() && grades.isEmpty() && tasks.isEmpty()
+
+    /** [recommended] without blanks or repeats, at most three. */
+    val tasks: List<String> get() = recommended.map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(3)
+
+    /** Every card in it, the deck's and the single one, with a question. */
+    val cards: List<FeedCard> get() = (flashcards + listOfNotNull(flashcard)).filter { it.q.isNotBlank() }
 }
 
 /** An exam; [date] is "yyyy-MM-dd". Unconfirmed dates are shown with "≈" (B1). */
@@ -40,9 +53,9 @@ data class FeedAbsences(
 @Serializable
 data class FeedModule(val name: String = "", val absent: Int = 0, val total: Int? = null)
 
-/** The daily flashcard (E4). */
+/** A flashcard (E4); [id] names it across days (0.12.0: when missing, its module and question do). */
 @Serializable
-data class FeedCard(val module: String = "", val q: String = "", val a: String = "")
+data class FeedCard(val id: String = "", val module: String = "", val q: String = "", val a: String = "")
 
 /** A grade (E2); [mark] out of 20 and [coef] null while unknown. */
 @Serializable
@@ -73,8 +86,9 @@ object StudyFeedParser {
         val parts = ArrayList<String>()
         if (feed.exams.isNotEmpty()) parts += if (feed.exams.size == 1) "1 exam" else "${feed.exams.size} exams"
         feed.absences?.modules?.takeIf { it.isNotEmpty() }?.let { parts += if (it.size == 1) "absences of 1 module" else "absences of ${it.size} modules" }
-        if (!feed.flashcard?.q.isNullOrBlank()) parts += "a flashcard"
+        feed.cards.size.takeIf { it > 0 }?.let { parts += if (it == 1) "a flashcard" else "$it flashcards" }
         if (feed.grades.isNotEmpty()) parts += if (feed.grades.size == 1) "1 grade" else "${feed.grades.size} grades"
+        feed.tasks.size.takeIf { it > 0 }?.let { parts += if (it == 1) "1 recommended task" else "$it recommended tasks" }
         return if (parts.isEmpty()) "valid, but empty" else parts.joinToString(", ")
     }
 }

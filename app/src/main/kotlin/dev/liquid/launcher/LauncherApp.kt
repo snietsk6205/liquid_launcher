@@ -34,6 +34,9 @@ class LauncherApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // 0.16.0 (D207): the live wallpaper's own process needs none of this (and two processes must never write the
+        // launcher's data files): it only plays a video.
+        if (getProcessName().endsWith(":wallpaper")) return
         DebugLog.sink = { entry ->
             val priority = if (entry.level == LogLevel.ERROR) Log.ERROR else Log.INFO
             Log.println(priority, LOGCAT_TAG, "${entry.tag}: ${entry.message}")
@@ -52,6 +55,8 @@ class LauncherApp : Application() {
         dev.liquid.launcher.core.settings.SettingsMigrations.migrate0110(settings)
         // 0.11.1: the letter circle becomes the first letter area, where it was, once.
         dev.liquid.launcher.core.settings.SettingsMigrations.migrate0111(settings)
+        // 0.14.0: Quiz me alone in Today, where the old five templates were never changed, once.
+        dev.liquid.launcher.core.settings.SettingsMigrations.migrate0140(settings)
         // W5: the daily backup job, if it is on.
         runCatching { dev.liquid.launcher.core.data.AutoBackup.schedule(this) }
         DebugLog.enabled = settings.get(LauncherSettings.LogEnabled)
@@ -80,9 +85,13 @@ class LauncherApp : Application() {
             wallpaper.load()
             // Wallpapers of earlier versions (history, current) join the library once.
             data.wallpapers.migrate(wallpaper.legacyHistoryDir, wallpaper.currentFile)
+            // 0.16.0 (D202, D203): each layout's own wallpaper, recents and collection; the lock screen's choice. Once.
+            dev.liquid.launcher.feature.home.Wallpapers.migrate0160(this@LauncherApp, data)
         }
         data.apps.start()
         watchScreen()
+        // 0.13.1 (D180): the wallpaper behind WM Keyboard's keys follows every wallpaper the launcher shows (when on).
+        dev.liquid.launcher.feature.settings.KeyboardWallpaper.start(this, settings, appScope)
         // A wallpaper set in another app should show: the launcher stops drawing its own copy
         // (it stays in the library), so picture and colours match again.
         appScope.launch {
@@ -116,6 +125,24 @@ class LauncherApp : Application() {
             }
         }
         registerReceiver(receiver, android.content.IntentFilter(android.content.Intent.ACTION_SCREEN_OFF))
+        // 0.16.0 (D205): Island's or Insular's work profile paused, back or unlocked: folders of it are read again.
+        val profile = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+                when (intent.action) {
+                    android.content.Intent.ACTION_MANAGED_PROFILE_AVAILABLE -> dev.liquid.launcher.core.data.IslandProfile.changed("back (not paused)")
+                    android.content.Intent.ACTION_MANAGED_PROFILE_UNAVAILABLE -> dev.liquid.launcher.core.data.IslandProfile.changed("paused")
+                    android.content.Intent.ACTION_MANAGED_PROFILE_UNLOCKED -> dev.liquid.launcher.core.data.IslandProfile.changed("unlocked")
+                }
+            }
+        }
+        registerReceiver(
+            profile,
+            android.content.IntentFilter().apply {
+                addAction(android.content.Intent.ACTION_MANAGED_PROFILE_AVAILABLE)
+                addAction(android.content.Intent.ACTION_MANAGED_PROFILE_UNAVAILABLE)
+                addAction(android.content.Intent.ACTION_MANAGED_PROFILE_UNLOCKED)
+            },
+        )
     }
 
     /** No crash reporting service: the last crash is written to a file the debug log can show. */

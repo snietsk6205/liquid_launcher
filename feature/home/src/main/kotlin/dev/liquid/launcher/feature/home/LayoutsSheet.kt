@@ -194,11 +194,15 @@ internal fun LayoutsSheet(
                     }
                     DialogRow("Rename") { renaming = layout; holding = null }
                     DialogRow("Duplicate") { controller.data.layouts.duplicate(layout.id); holding = null }
-                    DialogRow(if (layout.wallpaper != null) "Stop switching the wallpaper with it" else "Give it the current wallpaper") {
-                        val file = if (layout.wallpaper != null) null else WallpaperStore.get(context).currentFile
-                        if (layout.wallpaper == null && file == null) controller.toast("Pick a wallpaper in the launcher first")
-                        controller.data.layouts.setWallpaper(layout.id, file, controller.data.wallpapers.get().current)
-                        holding = null
+                    // 0.16.0 (D202): with a wallpaper per layout, a layout always keeps one (Choose its wallpaper changes it).
+                    val ownWallpapers = controller.data.settings.get(LauncherSettings.LayoutsOwnWallpaper)
+                    if (!(ownWallpapers && layout.wallpaper != null)) {
+                        DialogRow(if (layout.wallpaper != null) "Stop switching the wallpaper with it" else "Give it the current wallpaper") {
+                            val file = if (layout.wallpaper != null) null else WallpaperStore.get(context).currentFile
+                            if (layout.wallpaper == null && file == null) controller.toast("Pick a wallpaper in the launcher first")
+                            controller.data.layouts.setWallpaper(layout.id, file, controller.data.wallpapers.get().current)
+                            holding = null
+                        }
                     }
                     // W8 (P8): any picture of the library as this layout's wallpaper, not only the one on screen.
                     DialogRow("Choose its wallpaper…") {
@@ -314,7 +318,9 @@ internal fun SaveLayoutDialog(controller: HomeController) {
     val context = LocalContext.current
     val count = controller.data.layouts.state.collectAsState().value.layouts.size
     var name by remember { mutableStateOf(if (count == 0) "Main" else "Layout ${count + 1}") }
-    var withWallpaper by remember { mutableStateOf(false) }
+    // 0.16.0 (D202): with a wallpaper per layout, a new layout always comes with the wallpaper on screen.
+    val ownWallpapers = remember { controller.data.settings.get(LauncherSettings.LayoutsOwnWallpaper) }
+    var withWallpaper by remember { mutableStateOf(ownWallpapers) }
     val wallpaper = remember { WallpaperStore.get(context) }
     AlertDialog(
         onDismissRequest = { controller.savingLayout = false },
@@ -322,9 +328,11 @@ internal fun SaveLayoutDialog(controller: HomeController) {
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, label = { Text("Name, for example Study") })
-                Row(Modifier.fillMaxWidth().clickable { withWallpaper = !withWallpaper }, verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = withWallpaper, onCheckedChange = { withWallpaper = it }, enabled = wallpaper.hasManagedWallpaper)
-                    Text("Switch to the current wallpaper with it")
+                if (!ownWallpapers) {
+                    Row(Modifier.fillMaxWidth().clickable { withWallpaper = !withWallpaper }, verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = withWallpaper, onCheckedChange = { withWallpaper = it }, enabled = wallpaper.hasManagedWallpaper)
+                        Text("Switch to the current wallpaper with it")
+                    }
                 }
                 Text(
                     "Saved: pages and their items, the pill, icons, gestures, the clock and the home menu. Drawer, tags and redirect settings stay shared.",
@@ -334,7 +342,9 @@ internal fun SaveLayoutDialog(controller: HomeController) {
         },
         confirmButton = {
             TextButton(onClick = {
-                controller.data.layouts.saveCurrentAs(name, if (withWallpaper) wallpaper.currentFile else null, controller.data.wallpapers.get().current)
+                val recents = Wallpapers.recent(controller.data).map { it.id }
+                val saved = controller.data.layouts.saveCurrentAs(name, if (withWallpaper) wallpaper.currentFile else null, controller.data.wallpapers.get().current)
+                Wallpapers.setUpLayout(controller.data, saved.id, recents)
                 controller.savingLayout = false
                 controller.toast("Saved \"${name.trim()}\"")
             }) { Text("Save") }

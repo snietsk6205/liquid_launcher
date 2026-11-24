@@ -455,6 +455,42 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
 
     internal fun pauseEngine(durationMs: Long, reason: String) = onEngine { engine.pause(durationMs, reason) }
 
+    /**
+     * 0.13.0 (D175): a picture of the screen (the service's screenshot ability, Android 11+), for the launcher's own
+     * search screen only: the keyboard's picture that rises with the pill before the keyboard is ready. [onResult] gets
+     * a software bitmap of the whole screen, or null (refused, too soon after the last one, or not allowed).
+     */
+    internal fun captureScreen(onResult: (android.graphics.Bitmap?) -> Unit) {
+        try {
+            takeScreenshot(
+                android.view.Display.DEFAULT_DISPLAY,
+                mainExecutor,
+                object : TakeScreenshotCallback {
+                    override fun onSuccess(screenshot: ScreenshotResult) {
+                        val buffer = screenshot.hardwareBuffer
+                        val bitmap = try {
+                            android.graphics.Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
+                                ?.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+                        } catch (e: Exception) {
+                            null
+                        } finally {
+                            buffer.close()
+                        }
+                        onResult(bitmap)
+                    }
+
+                    override fun onFailure(errorCode: Int) {
+                        DebugLog.event(TAG, "screen picture refused (code $errorCode)")
+                        onResult(null)
+                    }
+                },
+            )
+        } catch (e: Exception) {
+            DebugLog.error(TAG, "screen picture failed: $e")
+            onResult(null)
+        }
+    }
+
     internal fun resumeEngine() = onEngine { engine.resume() }
 
     internal fun startCalibration() = onEngine {
@@ -637,19 +673,26 @@ class LauncherAccessibilityService : AccessibilityService(), EngineHost {
         }
         val now = SystemClock.uptimeMillis()
         RedirectStatus.onLaunchRequested(now, triggerAt)
-        DebugLog.decision(TAG, "REDIRECT ($reason), ${now - triggerAt} ms after trigger")
+        // 0.11.3 (D170): fading in, the launcher arrives over the system's home screen without its last picture (the
+        // picture, then the screen fading in, blinked); at once, it arrives on its last picture when that is up to date.
+        val fadeMs = if (store.get(LauncherSettings.SettleStyle) != "none") store.get(LauncherSettings.SettleDuration) else 0
+        val arrival = when {
+            fadeMs > 0 -> "fades in over $fadeMs ms"
+            RedirectStatus.staleSnapshot -> "at once; its last picture is out of date (drawer, search or a menu was open): none"
+            else -> "at once, on its last picture"
+        }
+        DebugLog.decision(TAG, "REDIRECT ($reason), ${now - triggerAt} ms after trigger; $arrival")
         if (DebugLog.verbosity == LogLevel.TREE) traceWindow("at redirect")
         try {
             val intent = Intent(Intent.ACTION_MAIN)
                 .setComponent(component)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
-            if (RedirectStatus.staleSnapshot) {
+            if (RedirectStatus.staleSnapshot || fadeMs > 0) {
                 // The system shows the task's last picture while the launcher comes to the front, unless
                 // the intent "asks for something else" (ActivityRecord.allowTaskSnapshot: an intent with
-                // extras that is not a plain launcher start). That picture shows the drawer and keyboard
-                // the launcher has closed since, so it is not wanted this time.
+                // extras that is not a plain launcher start). That picture can show the drawer or search
+                // the launcher has closed since; and a launcher fading in must start from the system's home.
                 intent.putExtra(EXTRA_FRESH, true)
-                DebugLog.decision(TAG, "the launcher's last picture is out of date (drawer, search or keyboard was open): asking for none")
             }
             startActivity(intent, ActivityOptions.makeCustomAnimation(this, 0, 0).toBundle())
         } catch (e: Exception) {

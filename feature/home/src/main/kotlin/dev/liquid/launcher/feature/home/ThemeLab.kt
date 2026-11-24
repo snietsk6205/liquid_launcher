@@ -85,6 +85,8 @@ import dev.liquid.launcher.core.data.ThemeStore
 import dev.liquid.launcher.core.data.WallpaperRole
 import dev.liquid.launcher.core.designsystem.LauncherIcon
 import dev.liquid.launcher.core.designsystem.LauncherIcons
+import dev.liquid.launcher.core.designsystem.kitLoneCard
+import dev.liquid.launcher.core.designsystem.kitStaggerIn
 import dev.liquid.launcher.core.designsystem.WallpaperStore
 import dev.liquid.launcher.core.settings.LauncherSettings
 import dev.liquid.launcher.core.settings.SettingsStore
@@ -254,17 +256,19 @@ fun ThemeLab(onBack: () -> Unit) {
         }
     }
 
-    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().systemBarsPadding()) {
-            // Title bar: back, undo, redo, more.
-            Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { LauncherIcon(LauncherIcons.ArrowBack, contentDescription = "Back") }
-                Column(Modifier.weight(1f)) {
-                    Text("Theme lab", style = MaterialTheme.typography.titleLarge, maxLines = 1)
-                    Text(state.doc.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                IconButton(onClick = { state.undo() }, enabled = state.undo.isNotEmpty()) { LauncherIcon(LauncherIcons.Undo, contentDescription = "Undo") }
-                IconButton(onClick = { state.redo() }, enabled = state.redo.isNotEmpty()) { LauncherIcon(LauncherIcons.Redo, contentDescription = "Redo") }
+    // 0.15.2 (D193): the Theme lab in the settings kit (Med: "a really good job on the settings design except a couple of
+    // places like the Theme lab"): its heading with the breadcrumbs, the preview on a card, the views as one segmented
+    // control, the options on grouped cards with the kit's sliders and chips.
+    val listScroll = rememberScrollState()
+    val modes = listOf("sample" to "Every control", "home" to "Home", "drawer" to "Drawer", "search" to "Search")
+    dev.liquid.launcher.core.designsystem.KitScaffold(
+        title = "Theme lab",
+        onBack = onBack,
+        scroll = false,
+        headerScroll = listScroll,
+        actions = {
+            IconButton(onClick = { state.undo() }, enabled = state.undo.isNotEmpty()) { LauncherIcon(LauncherIcons.Undo, contentDescription = "Undo") }
+            IconButton(onClick = { state.redo() }, enabled = state.redo.isNotEmpty()) { LauncherIcon(LauncherIcons.Redo, contentDescription = "Redo") }
                 Box {
                     IconButton(onClick = { menu = true }) { LauncherIcon(LauncherIcons.Tune, contentDescription = "Presets, import and export") }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -299,37 +303,50 @@ fun ThemeLab(onBack: () -> Unit) {
                         })
                     }
                 }
+        },
+    ) {
+        // The live preview, always in sight.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.36f)
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainer),
+        ) {
+            LabPreview(mode, resolved, Modifier.fillMaxSize())
+        }
+        Text(
+            state.doc.name,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 2.dp),
+        )
+        dev.liquid.launcher.core.designsystem.KitSegments(modes.map { it.second }, modes.indexOfFirst { it.first == mode }.coerceAtLeast(0)) { mode = modes[it].first }
+        // What is edited: the whole launcher, or one pill (individual pills).
+        if (state.doc.pillLook == "individual") {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                dev.liquid.launcher.core.designsystem.KitChip(selected = state.target == null, onClick = { state.target = null }, label = { Text("Whole launcher") })
+                for (p in ThemePill.all) dev.liquid.launcher.core.designsystem.KitChip(selected = state.target == p, onClick = { state.target = p }, label = { Text(ThemePill.labels.getValue(p)) })
             }
-            // The live preview, always in sight.
-            LabPreview(mode, resolved, Modifier.fillMaxWidth().fillMaxHeight(0.4f).padding(horizontal = 12.dp))
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                for ((id, label) in listOf("sample" to "Every control", "home" to "Home", "drawer" to "Drawer", "search" to "Search")) {
-                    FilterChip(selected = mode == id, onClick = { mode = id }, label = { Text(label) })
-                }
+        }
+        // Groups.
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (g in ThemeGroup.entries) {
+                dev.liquid.launcher.core.designsystem.KitChip(selected = !pillsTab && group == g, onClick = { group = g; pillsTab = false }, label = { Text(g.title) })
             }
-            // What is edited: the whole launcher, or one pill (individual pills).
-            if (state.doc.pillLook == "individual") {
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(selected = state.target == null, onClick = { state.target = null }, label = { Text("Whole launcher") })
-                    for (p in ThemePill.all) FilterChip(selected = state.target == p, onClick = { state.target = p }, label = { Text(ThemePill.labels.getValue(p)) })
-                }
+            dev.liquid.launcher.core.designsystem.KitChip(selected = pillsTab, onClick = { pillsTab = true }, label = { Text("Pills") })
+        }
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(listScroll).padding(bottom = 24.dp)) {
+            message?.let { m ->
+                Text(m, style = MaterialTheme.typography.bodyMedium, color = dev.liquid.launcher.core.designsystem.kitAccent(), modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp).clickable { message = null })
             }
-            // Groups.
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (g in ThemeGroup.entries) {
-                    FilterChip(selected = !pillsTab && group == g, onClick = { group = g; pillsTab = false }, label = { Text(g.title) })
-                }
-                FilterChip(selected = pillsTab, onClick = { pillsTab = true }, label = { Text("Pills") })
-            }
-            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-                message?.let { m ->
-                    Text(m, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp).clickable { message = null })
-                }
-                if (pillsTab) {
-                    PillsGroup(state)
-                } else {
-                    GroupRows(group, state, palette)
-                }
+            if (pillsTab) {
+                PillsGroup(state)
+            } else {
+                GroupRows(group, state, palette)
             }
         }
     }
@@ -461,18 +478,11 @@ private fun GroupRows(group: ThemeGroup, state: LabState, palette: WallpaperPale
             state.edit { d -> fields.fold(d) { acc, f -> resetField(acc, f) } }
         }) { Text("Reset group") }
     }
-    var lastSection = ""
-    for (field in fields) {
-        if (field.section != lastSection) {
-            lastSection = field.section
-            Text(
-                field.section,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
-            )
+    for ((section, inSection) in fields.groupBy { it.section }) {
+        dev.liquid.launcher.core.designsystem.KitSection(section)
+        dev.liquid.launcher.core.designsystem.KitGroup {
+            inSection.forEachIndexed { i, field -> Box(Modifier.kitStaggerIn(i)) { FieldRow(field, doc, state, palette) } }
         }
-        FieldRow(field, doc, state, palette)
     }
     if (group == ThemeGroup.EXTRAS) ExtrasRows(state)
     if (group == ThemeGroup.FROST) FrostPresets(state)
@@ -499,7 +509,7 @@ private fun FieldRow(field: ThemeField, doc: ThemeDoc, state: LabState, palette:
     var picking by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
     val alpha = if (applies) 1f else 0.45f
-    Box {
+    Box(Modifier.kitLoneCard()) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -508,12 +518,17 @@ private fun FieldRow(field: ThemeField, doc: ThemeDoc, state: LabState, palette:
                     onClick = { if (applies) picking = true },
                     onLongClick = { menu = true },
                 )
-                .padding(horizontal = 20.dp, vertical = 10.dp),
+                .padding(start = 18.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(field.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha))
+                Text(
+                    field.title,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                )
                 if (!isDefault(doc, field.path)) {
-                    Box(Modifier.padding(end = 8.dp).size(7.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+                    Box(Modifier.padding(end = 8.dp).size(7.dp).clip(CircleShape).background(dev.liquid.launcher.core.designsystem.kitAccent()))
                 }
                 ValueView(field, doc, state, applies)
             }
@@ -522,7 +537,7 @@ private fun FieldRow(field: ThemeField, doc: ThemeDoc, state: LabState, palette:
             }
             if (applies && (field.kind == ThemeFieldKind.FLOAT || field.kind == ThemeFieldKind.INT)) {
                 val value = doc.float(field.path) ?: ThemeDocs.Default.float(field.path) ?: field.min
-                Slider(
+                dev.liquid.launcher.core.designsystem.KitSlide(
                     value = value.coerceIn(field.min, field.max),
                     onValueChange = { v ->
                         val stepped = if (field.step > 0f) (Math.round(v / field.step) * field.step) else v
@@ -533,18 +548,18 @@ private fun FieldRow(field: ThemeField, doc: ThemeDoc, state: LabState, palette:
                 )
             }
             if (applies && field.kind == ThemeFieldKind.CHOICE && field.options.size <= 6) {
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     val current = doc.string(field.path) ?: ""
                     for ((value, label) in field.options) {
-                        FilterChip(selected = current == value, onClick = { state.edit { d -> setChoice(d, field, value) } }, label = { Text(label) })
+                        dev.liquid.launcher.core.designsystem.KitChip(selected = current == value, onClick = { state.edit { d -> setChoice(d, field, value) } }, label = { Text(label) })
                     }
                 }
             }
             if (applies && field.kind == ThemeFieldKind.SURFACES) {
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     val on = doc.strings(field.path).toSet()
                     for ((value, label) in field.options) {
-                        FilterChip(selected = value in on, onClick = {
+                        dev.liquid.launcher.core.designsystem.KitChip(selected = value in on, onClick = {
                             state.edit { d -> d.withStrings(field.path, field.options.map { it.first }.filter { (it in on) != (it == value) }) }
                         }, label = { Text(label) })
                     }
@@ -655,9 +670,9 @@ private fun ColourDialog(field: ThemeField, doc: ThemeDoc, state: LabState, pale
                 Box(Modifier.fillMaxWidth().height(40.dp).clip(RoundedCornerShape(12.dp)).background(checker()).background(Color(current())))
                 Text("Follow the wallpaper", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 10.dp))
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(selected = follow == null, onClick = { follow = null; push(false) }, label = { Text("Fixed") })
+                    dev.liquid.launcher.core.designsystem.KitChip(selected = follow == null, onClick = { follow = null; push(false) }, label = { Text("Fixed") })
                     for (role in WallpaperRole.all) {
-                        FilterChip(selected = follow == role, onClick = {
+                        dev.liquid.launcher.core.designsystem.KitChip(selected = follow == role, onClick = {
                             follow = role
                             // The colour now shows the role's; its opacity stays yours.
                             palette?.of(role)?.let { rgb ->
@@ -677,7 +692,7 @@ private fun ColourDialog(field: ThemeField, doc: ThemeDoc, state: LabState, pale
                 if (field.path == "accent") {
                     // 0.10.2: the accent follows the wallpaper by default; the fixed blue of 0.10.1 stays one tap away.
                     Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilterChip(selected = follow == null && current() == ThemeDocs.BLUE, onClick = {
+                        dev.liquid.launcher.core.designsystem.KitChip(selected = follow == null && current() == ThemeDocs.BLUE, onClick = {
                             follow = null
                             val c = FloatArray(3).also { android.graphics.Color.colorToHSV(ThemeDocs.BLUE.toInt(), it) }
                             h = c[0]; s = c[1]; v = c[2]; a = 1f
@@ -724,7 +739,7 @@ private fun ColourDialog(field: ThemeField, doc: ThemeDoc, state: LabState, pale
 private fun LabSlider(label: String, value: Float, min: Float, max: Float, onChange: (Float) -> Unit) {
     Column(Modifier.padding(top = 6.dp)) {
         Text(label, style = MaterialTheme.typography.bodySmall)
-        Slider(value = value.coerceIn(min, max), onValueChange = onChange, valueRange = min..max)
+        dev.liquid.launcher.core.designsystem.KitSlide(value = value.coerceIn(min, max), onValueChange = onChange, valueRange = min..max)
     }
 }
 
@@ -832,7 +847,7 @@ private fun GradientDialog(field: ThemeField, doc: ThemeDoc, state: LabState, on
                 }
                 Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     for (t in listOf("LINEAR" to "Linear", "RADIAL" to "Radial", "SWEEP" to "Sweep")) {
-                        FilterChip(selected = type == t.first, onClick = { type = t.first; push() }, label = { Text(t.second) })
+                        dev.liquid.launcher.core.designsystem.KitChip(selected = type == t.first, onClick = { type = t.first; push() }, label = { Text(t.second) })
                     }
                 }
                 if (type == "LINEAR") LabSlider("Angle: ${angle.toInt()}°", angle, 0f, 360f) { angle = it; push(true) }
@@ -893,7 +908,7 @@ private fun TextDialog(field: ThemeField, doc: ThemeDoc, state: LabState, onDone
 /** WM Keyboard's frost presets: the frost's numbers and the controls' see-through fills together. */
 @Composable
 private fun FrostPresets(state: LabState) {
-    Text("Presets", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp))
+    dev.liquid.launcher.core.designsystem.KitSection("Presets")
     Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         // (name, blur, saturation, brightness, rim, grain, style, refraction, dispersion, key alpha, popup alpha)
         val presets = listOf(
@@ -904,7 +919,7 @@ private fun FrostPresets(state: LabState) {
             listOf("Liquid", 5f, 1.15f, 0.03f, 0.9f, 0f, "LIQUID", 0.7f, 0.3f, 0x2E, 0x99),
         )
         for (p in presets) {
-            FilterChip(selected = false, onClick = {
+            dev.liquid.launcher.core.designsystem.KitChip(selected = false, onClick = {
                 state.edit { d ->
                     fun alpha(path: String, a: Int, x: ThemeDoc): ThemeDoc = x.color(path)?.let { c -> x.withColor(path, ((a.toLong() and 0xFF) shl 24) or (c and 0xFFFFFF)) } ?: x
                     var x = d.withBool("frost.enabled", true)
@@ -940,7 +955,7 @@ private fun ExtrasRows(state: LabState) {
             }
         }
     }
-    Text("Stickers on sheets", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp))
+    dev.liquid.launcher.core.designsystem.KitSection("Stickers on sheets")
     decals.forEachIndexed { i, d ->
         fun f(k: String, def: Float) = (d[k] as? JsonPrimitive)?.content?.toFloatOrNull() ?: def
         Column(Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
@@ -964,7 +979,7 @@ private fun ExtrasRows(state: LabState) {
         TextButton(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.padding(horizontal = 12.dp)) { Text("Add a sticker") }
     }
     // Variants: other looks kept inside the theme; switching swaps the current look with the chosen one.
-    Text("Other looks of this theme", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp))
+    dev.liquid.launcher.core.designsystem.KitSection("Other looks of this theme")
     val variants = (state.doc.element("variants") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
     variants.forEachIndexed { i, v ->
         val name = (v["name"] as? JsonPrimitive)?.content ?: "Look ${i + 2}"
@@ -999,18 +1014,18 @@ private fun PillsGroup(state: LabState) {
         modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
     )
     Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        FilterChip(selected = doc.pillLook != "individual", onClick = { state.target = null; state.edit { it.withPillLook("shared") } }, label = { Text("Shared") })
-        FilterChip(selected = doc.pillLook == "individual", onClick = { state.edit { it.withPillLook("individual") } }, label = { Text("Individual") })
+        dev.liquid.launcher.core.designsystem.KitChip(selected = doc.pillLook != "individual", onClick = { state.target = null; state.edit { it.withPillLook("shared") } }, label = { Text("Shared") })
+        dev.liquid.launcher.core.designsystem.KitChip(selected = doc.pillLook == "individual", onClick = { state.edit { it.withPillLook("individual") } }, label = { Text("Individual") })
     }
     if (doc.pillLook == "individual") {
         for (to in ThemePill.all) {
-            Text("Copy to the ${ThemePill.labels.getValue(to).lowercase()} from…", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp))
+            dev.liquid.launcher.core.designsystem.KitSection("Copy to the ${ThemePill.labels.getValue(to).lowercase()} from…")
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                FilterChip(selected = false, onClick = {
+                dev.liquid.launcher.core.designsystem.KitChip(selected = false, onClick = {
                     state.replace(doc.withPill(to, pillSeed(doc, to)))
                 }, label = { Text("Whole launcher") })
                 for (from in ThemePill.all.filter { it != to }) {
-                    FilterChip(selected = false, onClick = {
+                    dev.liquid.launcher.core.designsystem.KitChip(selected = false, onClick = {
                         doc.pill(from)?.let { state.replace(doc.withPill(to, it)) }
                     }, label = { Text(ThemePill.labels.getValue(from)) })
                 }

@@ -14,6 +14,8 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+    <!-- 0.13.0: search finds people (asked the first time search offers it; never read otherwise). -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Study companion, arrival home (0.9.1): Android tells an app the Wi-Fi name only with location access. Asked for only when you set your home Wi-Fi. -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -35,6 +37,7 @@
         <activity
             android:name=".MainActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|fontScale|assetsPaths|colorMode"
+            android:enableOnBackInvokedCallback="true"
             android:excludeFromRecents="true"
             android:exported="true"
             android:launchMode="singleTask"
@@ -49,6 +52,52 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 0.12.0 (D171): the way in from other apps and the keyboard: search with text, or ready to ask Claude. -->
+        <activity
+            android:name=".LiquidEntryActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/entry_search"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter android:label="@string/entry_share">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="dev.liquid.launcher.action.SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- 0.16.0: pictures shared to the launcher, or "Set as" in a gallery: into the wallpaper library. -->
+            <intent-filter android:label="@string/entry_wallpaper">
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter android:label="@string/entry_wallpaper_set">
+                <action android:name="android.intent.action.ATTACH_DATA" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+        <!-- "Liquid" in the text selection menu; Settings → Search → More can take it away. -->
+        <activity-alias
+            android:name=".LiquidSelectionEntry"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/entry_selection"
+            android:targetActivity=".LiquidEntryActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- Hands a downloaded update to the system installer. -->
         <provider

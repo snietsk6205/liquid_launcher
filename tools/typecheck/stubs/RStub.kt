@@ -38,6 +38,7 @@ object R { object drawable {
   const val ic_pages = 0
   const val ic_palette = 0
   const val ic_paste = 0
+  const val ic_pin = 0
   const val ic_recents = 0
   const val ic_redo = 0
   const val ic_remove_circle = 0

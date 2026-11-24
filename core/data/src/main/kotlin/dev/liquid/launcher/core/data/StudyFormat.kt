@@ -88,6 +88,7 @@ object StudyFormat {
 
     private val breaks = Regex("(?i)<br\\s*/?>|</p>|</div>|</li>|</h[1-6]>")
     private val tags = Regex("<[^>]+>")
+    private val numeric = Regex("&#([xX][0-9a-fA-F]+|[0-9]+);")
 
     /** True when the description is HTML (edited in Google Calendar's web page). */
     fun isHtml(description: String): Boolean = Regex("(?i)<br|<p[ >]|<div|<li|<ul|<span|<b>|<a ").containsMatchIn(description)
@@ -96,7 +97,13 @@ object StudyFormat {
     fun lines(description: String): List<String> {
         val plain = if (isHtml(description)) {
             description.replace(breaks, "\n").replace(tags, "")
-                .replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'")
+                .replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'")
+                // 0.12.0: numeric references too (&#58; &#x3A;), as the web page writes some characters.
+                .replace(numeric) { m ->
+                    val code = m.groupValues[1].let { if (it.startsWith("x", ignoreCase = true)) it.drop(1).toIntOrNull(16) else it.toIntOrNull() }
+                    if (code != null && Character.isValidCodePoint(code)) String(Character.toChars(code)) else m.value
+                }
+                .replace("&amp;", "&")
         } else {
             description
         }

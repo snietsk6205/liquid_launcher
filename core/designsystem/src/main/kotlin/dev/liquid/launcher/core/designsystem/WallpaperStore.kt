@@ -209,9 +209,54 @@ class WallpaperStore private constructor(private val context: Context) {
 
     private fun scheduleSystemWrite(delayMs: Long) {
         writerJob?.cancel()
+        // 0.16.0 (D200): while an Undo is offered, the hand-over waits for it to go (an Undo would cost a second one).
+        val wait = maxOf(delayMs, holdUntil - android.os.SystemClock.uptimeMillis())
         writerJob = writerScope.launch {
-            kotlinx.coroutines.delay(delayMs)
+            kotlinx.coroutines.delay(wait)
             writeSystem()
+        }
+    }
+
+    /** 0.16.0 (D200): until when (uptime ms) a hand-over to the system waits. */
+    @Volatile
+    private var holdUntil = 0L
+
+    /**
+     * 0.16.0 (D200): no hand-over to the system for [ms] from now, while the change can still be undone. A hand-over
+     * already waiting waits longer; one "at screen off" or "never" is not affected.
+     */
+    fun holdSystemWrite(ms: Long) {
+        holdUntil = android.os.SystemClock.uptimeMillis() + ms
+        if (writerJob?.isActive == true) scheduleSystemWrite(SOON_MS)
+    }
+
+    /** The Undo has gone (or was used): a hand-over still waiting goes ahead as it would have. */
+    fun releaseSystemWrite() {
+        holdUntil = 0L
+        if (writerJob?.isActive == true && prefs.getBoolean(KEY_PENDING, false)) scheduleSystemWrite(SOON_MS)
+    }
+
+    /**
+     * 0.16.0 (D200): copies the wallpaper as it is now (the finished picture, placement included) to [target], so an
+     * Undo can bring it back after a new one was written over it. False when there is none.
+     */
+    suspend fun copyCurrent(target: File): Boolean = withContext(Dispatchers.IO) {
+        writeLock.lock()
+        try {
+            val source = currentFile ?: return@withContext false
+            target.parentFile?.mkdirs()
+            val temp = File(target.path + ".tmp")
+            source.copyTo(temp, overwrite = true)
+            if (!temp.renameTo(target)) {
+                target.delete()
+                temp.renameTo(target)
+            }
+            true
+        } catch (e: Throwable) {
+            DebugLog.error("Wallpaper", "could not keep the wallpaper for Undo: $e")
+            false
+        } finally {
+            writeLock.unlock()
         }
     }
 
@@ -277,6 +322,29 @@ class WallpaperStore private constructor(private val context: Context) {
         md.digest().take(8).joinToString("") { "%02x".format(it) }
     } catch (e: Throwable) {
         source.lastModified().toString()
+    }
+
+    /**
+     * 0.16.0 (D203): makes [bitmap] the lock screen's own wallpaper; the home screen's is left as it is. A hand-over like
+     * the home one (MagicOS takes seconds and can bring the system launcher forward), so it runs off the main thread and
+     * counts as the launcher's own write. Returns null or what went wrong.
+     */
+    suspend fun setLockScreen(bitmap: Bitmap): String? = withContext(Dispatchers.IO) {
+        writeLock.lock()
+        val started = android.os.SystemClock.uptimeMillis()
+        WallpaperTones.beginOwnWrite()
+        try {
+            val bytes = java.io.ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it) }.toByteArray()
+            WallpaperManager.getInstance(context).setStream(java.io.ByteArrayInputStream(bytes), null, true, WallpaperManager.FLAG_LOCK)
+            DebugLog.event("Wallpaper", "lock screen wallpaper set (its own picture), took ${android.os.SystemClock.uptimeMillis() - started} ms")
+            null
+        } catch (e: Throwable) {
+            DebugLog.error("Wallpaper", "lock screen wallpaper not set: $e")
+            e.message ?: e.toString()
+        } finally {
+            WallpaperTones.endOwnWrite(context, WallpaperTones.systemId(context), false)
+            writeLock.unlock()
+        }
     }
 
     /** [show] and [persist] in one go. */

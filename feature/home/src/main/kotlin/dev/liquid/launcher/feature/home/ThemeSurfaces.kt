@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -176,6 +177,9 @@ internal fun Modifier.boardPicture(shape: Shape, amount: () -> Float = { 1f }): 
     val picture = image?.takeIf { board.imageOpacity > 0.01f }
     if (picture == null && decals.none { it.second != null }) return this
     val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    // 0.13.1: what the layer was last recorded for (size, picture, blur). It was recorded again on every frame, so the
+    // blur ran again on every frame the sheet drew (the hub grows, scrolls and follows the minute on it).
+    val recorded = remember(layer) { arrayOfNulls<Any>(1) }
     return drawWithContent {
         val a = amount().coerceIn(0f, 1f)
         if (a > 0.01f) {
@@ -183,17 +187,21 @@ internal fun Modifier.boardPicture(shape: Shape, amount: () -> Float = { 1f }): 
             clipPath(clip) {
                 if (picture != null) {
                     val r = board.imageBlurDp.dp.toPx()
-                    layer.renderEffect = if (r > 0.5f) BlurEffect(r, r, TileMode.Clamp) else null
                     layer.alpha = board.imageOpacity * a
-                    layer.record {
-                        val scale = max(size.width / picture.width, size.height / picture.height)
-                        val w = picture.width * scale
-                        val h = picture.height * scale
-                        drawImage(
-                            picture,
-                            dstOffset = IntOffset(((size.width - w) / 2f).toInt(), ((size.height - h) / 2f).toInt()),
-                            dstSize = IntSize(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1)),
-                        )
+                    val key = Triple(size, picture, r)
+                    if (recorded[0] != key) {
+                        recorded[0] = key
+                        layer.renderEffect = if (r > 0.5f) BlurEffect(r, r, TileMode.Clamp) else null
+                        layer.record {
+                            val scale = max(size.width / picture.width, size.height / picture.height)
+                            val w = picture.width * scale
+                            val h = picture.height * scale
+                            drawImage(
+                                picture,
+                                dstOffset = IntOffset(((size.width - w) / 2f).toInt(), ((size.height - h) / 2f).toInt()),
+                                dstSize = IntSize(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1)),
+                            )
+                        }
                     }
                     drawLayer(layer)
                 }

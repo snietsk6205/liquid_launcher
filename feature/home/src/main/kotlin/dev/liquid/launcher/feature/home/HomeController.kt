@@ -179,12 +179,40 @@ class HomeController(
     val drawerOpen: Boolean get() = drawer.targetValue > 0.5f || drawer.value > 0.01f
     val anyOverlay: Boolean get() = drawerOpen || searchOpen || menu != null || editMode || renaming != null || tagging != null ||
         iconPicking != null || swipeEditing != null || openFolder != null || homeMenu || wallpaperStudio || layoutsSheet || savingLayout ||
-        wallpaperStrip || clockStudio != null || todaySheet || widgetPicker || speedBump != null
+        wallpaperStrip || clockStudio != null || todaySheet || widgetPicker || speedBump != null || reviewSheet != null || calendarOpen
 
     // ---- home menu, wallpaper, layouts ----
 
     /** The home menu's glass pills are open. */
     var homeMenu by mutableStateOf(false)
+
+    /**
+     * 0.13.0 (D178): the quick review of the flashcards, over the home screen (from the pill's live item, or a card
+     * found by search). The value is the card to start with ("" for the first due); null when closed.
+     */
+    var reviewSheet by mutableStateOf<String?>(null)
+
+    /** Opens the quick review on [cardId] (or the first card due). */
+    fun openReview(cardId: String = "") {
+        if (drawerOpen) closeDrawer(immediately = true)
+        homeMenu = false
+        menu = null
+        openFolder = null
+        Haptics.tick(view)
+        reviewSheet = cardId
+    }
+
+    /**
+     * 0.13.0 (D178): the pill swells and settles like a drop when its live item changes (Settings → Pill → "Changes
+     * shape when something happens"). Read while drawing only.
+     */
+    val livePop = Animatable(0f)
+
+    fun popPill() {
+        scope.launch {
+            livePop.animateTo(0f, spring(dampingRatio = 0.32f, stiffness = MotionScale.stiffness(300f)), initialVelocity = 9f)
+        }
+    }
 
     /** W8 (P8): the layout whose wallpaper is being chosen from the library; null when none. */
     var layoutWallpaperPick by mutableStateOf<String?>(null)
@@ -272,6 +300,15 @@ class HomeController(
     internal var homeMenuRun: (String) -> Unit = {}
 
     var wallpaperStudio by mutableStateOf(false)
+
+    /**
+     * 0.16.0: Back while the wallpaper screen is open goes one step back inside it first (the peek, selecting, placing);
+     * set by the screen. Returns true when it handled Back.
+     */
+    internal var wallpaperStudioBack: (() -> Boolean)? = null
+
+    /** 0.16.0: a picture shared to the launcher ("Set as Liquid wallpaper"), picked by the wallpaper screen as it opens. */
+    var sharedPick by mutableStateOf<dev.liquid.launcher.core.data.WallpaperItem?>(null)
 
     /** The clock gallery, open on one clock widget; the widget draws its draft style meanwhile. */
     var clockStudio by mutableStateOf<ClockStudioState?>(null)
@@ -364,10 +401,9 @@ class HomeController(
         hubOrigin = from ?: pillBounds
         hubDragPos = null
         menu = null
-        // W7: from closed, the hub opens collapsed unless set to show the whole day at once.
+        // 0.14.0 (D186): Today is one simple screen, always at its full height (W7's collapsed day is gone with the blocks).
         if (!todaySheet && hub.value < 0.05f) {
-            val full = data.settings.get(LauncherSettings.StudyHubOpen) == "full"
-            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { hubExpand.snapTo(if (full) 1f else 0f) }
+            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { hubExpand.snapTo(1f) }
         }
         todaySheet = true
         scope.launch { hub.animateTo(1f, hubSpring(opening = true), initialVelocity = velocity ?: hub.velocity) }
@@ -421,6 +457,122 @@ class HomeController(
         openHub(from)
     }
 
+    // ---- 0.16.0 (D209): the calendar that grows out of the clock's date ----
+
+    /** The calendar is open (or opening); [calendar] follows it, and the finger while it is pulled down. */
+    var calendarOpen by mutableStateOf(false)
+
+    /** 0 = closed (the date it grew from), 1 = open; a little over 1 while the spring overshoots. */
+    val calendar = Animatable(0f)
+    val calendarAmount: Float get() = calendar.value.coerceIn(0f, 1f)
+
+    /** What opened it, and where it grows from and shrinks back into. */
+    var calendarOpener: CalendarOpener? = null
+
+    /** What the calendar shows (its view, the day picked, the month and year shown); kept while it is closed. */
+    val calendarUi = CalendarUi()
+
+    /** Finger travel in px between closed and open, from its last layout. */
+    var calendarTravel = 1f
+
+    /** An app opened from the calendar (an event, Quick add): it is still open on coming back. */
+    var calendarKeep = false
+
+    // Observed (not a plain field) so the frame meter can tell the frames that follow the finger apart.
+    private var calendarDragPos by mutableStateOf<Float?>(null)
+    val calendarDragging: Boolean get() = calendarDragPos != null
+
+    private fun calendarSpring(opening: Boolean): androidx.compose.animation.core.SpringSpec<Float> {
+        val bounce = data.settings.get(LauncherSettings.CalendarBounce) / 100f
+        return spring(
+            dampingRatio = if (opening) (1f - 0.5f * bounce).coerceIn(0.45f, 1f) else 1f,
+            stiffness = MotionScale.stiffness(if (opening) 380f else 500f),
+            visibilityThreshold = 0.001f,
+        )
+    }
+
+    /**
+     * Opens the calendar, growing out of [opener]'s bounds (today only the clock's date; D209 keeps the door open for
+     * others). [velocity] in openings per second, so an interrupted close hands its momentum on. The first time it opens
+     * it asks to read the phone's calendars (only to read; once).
+     */
+    fun openCalendar(opener: CalendarOpener, velocity: Float? = null, ask: Boolean = true) {
+        if (drawerOpen) closeDrawer(immediately = true)
+        if (searchOpen || search.value > 0f) closeSearch(immediately = true)
+        if (todaySheet || hub.value > 0f) closeHub(immediately = true)
+        homeMenu = false
+        menu = null
+        openFolder = null
+        wallpaperStrip = false
+        val fresh = !calendarOpen && calendar.value < 0.05f
+        calendarOpener = opener
+        calendarDragPos = null
+        if (fresh) {
+            val first = data.settings.get(LauncherSettings.CalendarView).let { if (it == "last") data.settings.get(LauncherSettings.CalendarLastView) else it }
+            calendarUi.reset(first)
+            DebugLog.event("Calendar", "opened from the ${opener.name} on ${calendarUi.view}")
+            // The Islamic holidays and the Hijri line come from the phone's own Hijri tables: say whether it has them.
+            val hijri = dev.liquid.launcher.core.data.Hijri.of(java.time.LocalDate.now(), data.settings.get(LauncherSettings.CalendarHijriShift))
+            DebugLog.event("Calendar", hijri?.let { "Hijri today: " + dev.liquid.launcher.core.data.Hijri.format(it) } ?: "no Hijri tables on this phone: no Islamic holidays")
+            // [ask] is false for the settings' preview, which must not use up the one time it asks.
+            if (ask && !dev.liquid.launcher.core.data.PhoneCalendars.canRead(context) && !data.settings.get(LauncherSettings.CalendarAsked)) {
+                data.settings.set(LauncherSettings.CalendarAsked, true)
+                callbacks.requestCalendarRead { granted ->
+                    DebugLog.event("Calendar", if (granted) "may read the calendars" else "may not read the calendars")
+                    calendarUi.allowedTick++
+                }
+            }
+        }
+        calendarOpen = true
+        Haptics.tick(view)
+        scope.launch { calendar.animateTo(1f, calendarSpring(opening = true), initialVelocity = velocity ?: calendar.velocity) }
+    }
+
+    /** Shrinks the calendar back into what opened it. */
+    fun closeCalendar(immediately: Boolean = false, velocity: Float? = null) {
+        if (!calendarOpen && calendar.value <= 0f) return
+        calendarDragPos = null
+        if (calendarOpen) {
+            data.settings.set(LauncherSettings.CalendarLastView, calendarUi.view)
+            DebugLog.event("Calendar", "closed")
+        }
+        calendarOpen = false
+        calendarKeep = false
+        scope.launch {
+            if (immediately) calendar.snapTo(0f) else calendar.animateTo(0f, calendarSpring(opening = false), initialVelocity = velocity ?: calendar.velocity)
+        }
+    }
+
+    /** Moves the calendar by [deltaPx] of finger travel (down closes). Returns the px it used, for nested scrolling. */
+    fun dragCalendarBy(deltaPx: Float): Float {
+        val travel = calendarTravel.coerceAtLeast(1f)
+        val before = calendarDragPos ?: calendar.value.coerceIn(0f, 1f)
+        val next = (before - deltaPx / travel).coerceIn(0f, 1f)
+        if (next == before) return 0f
+        calendarDragPos = next
+        scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { calendar.snapTo(next) }
+        return (before - next) * travel
+    }
+
+    /** Finger released while pulling the calendar: open or close by position and speed (px per second, down positive). */
+    fun settleCalendar(velocityPxPerSec: Float) {
+        val position = calendarDragPos ?: calendar.value
+        val velocity = (-velocityPxPerSec / calendarTravel.coerceAtLeast(1f)).coerceIn(-12f, 12f)
+        val open = when {
+            velocityPxPerSec > 900f -> false
+            velocityPxPerSec < -900f -> true
+            else -> position > 0.55f
+        }
+        val opener = calendarOpener
+        if (open && opener != null) openCalendar(opener, velocity, ask = false) else closeCalendar(velocity = velocity)
+    }
+
+    /** Opens [intent] from the calendar (an event, Quick add): the calendar is still there on coming back. */
+    fun startFromCalendar(intent: Intent) {
+        calendarKeep = true
+        start(intent)
+    }
+
     // ---- Claude from the study companion (0.9.1, D1–D2) ----
 
     /** "[1A ESSAI · P2 · now: Micro: chapitre 3]" (D1); empty when the companion is off or the header is empty. */
@@ -454,12 +606,45 @@ class HomeController(
         askClaude(withStudyHeader(prompt.trim() + (block?.let { "\n\n" + blockContext(it) } ?: "")))
     }
 
-    /** The evening check-in: the message from the settings and today's log, to Claude. */
+    /**
+     * 0.14.0 (D186): the check-in, now the start of a study chat: the check-in message (Settings › Study companion, which
+     * points Claude to the plan doc) and the day as context ([dev.liquid.launcher.core.data.Kickoff]), to Claude. Today's
+     * "Study with Claude" also starts a 45-minute session on what was picked ([studyKickoff]); the evening line and the
+     * search card only open the chat.
+     */
     fun eveningCheckin() {
         Haptics.confirm(view)
+        sendKickoff("", recommendedNow())
+    }
+
+    /** 0.14.0 (D186): Today's "Study with Claude": a 45-minute session on [subject] and the chat with the day as context. */
+    fun studyKickoff(subject: String, recommended: List<String>) {
+        Haptics.confirm(view)
+        startStudySession(subject)
+        sendKickoff(subject, recommended)
+    }
+
+    private fun sendKickoff(subject: String, recommended: List<String>) {
         data.study.markCheckin()
         val message = data.settings.get(LauncherSettings.StudyCheckin).trim()
-        askClaude(withStudyHeader(message + "\n\n" + studyReport(data.study.day.value)))
+        val date = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", java.util.Locale.ENGLISH))
+        val text = dev.liquid.launcher.core.data.Kickoff.context(
+            message, data.study.day.value, subject, data.study.studiedToday.value, recommended,
+            System.currentTimeMillis(), date, ::studyClock,
+        )
+        askClaude(withStudyHeader(text))
+    }
+
+    /** What Today recommends now (the ones not ticked), as words, for a check-in sent from elsewhere. */
+    private fun recommendedNow(): List<String> {
+        val day = data.study.day.value
+        val now = System.currentTimeMillis()
+        val today = java.time.LocalDate.now()
+        val due = dev.liquid.launcher.core.data.FlashcardDeck.due(data.study.deck.value, today).size
+        val ticked = dev.liquid.launcher.core.data.Recommend.ticked(data.settings.get(LauncherSettings.StudyRecommendDone), today.toString())
+        val header = day.exams.firstOrNull { it.begin > now }?.key
+        return dev.liquid.launcher.core.data.Recommend.items(day.feed, day.exams, day.unconfirmedExams, due, now, header)
+            .filter { it.key !in ticked }.map { it.text }
     }
 
     // ---- arrival, shift tonight, quick notes (0.9.1, A2, A3, D5) ----
@@ -491,8 +676,8 @@ class HomeController(
         }
     }
 
-    /** E4: the day's flashcard, right or wrong (wrong becomes a note for the check-in). */
-    fun answerCard(card: dev.liquid.launcher.core.data.FeedCard, right: Boolean) {
+    /** E4: a flashcard of the deck, right or wrong (wrong comes back tomorrow and becomes a note for the check-in). */
+    fun answerCard(card: dev.liquid.launcher.core.data.DeckCard, right: Boolean) {
         if (right) Haptics.tick(view) else Haptics.confirm(view)
         scope.launch {
             val ok = data.study.answerCard(card, right)
@@ -512,6 +697,12 @@ class HomeController(
     fun boardPhoto() {
         val now = System.currentTimeMillis()
         val module = classForPhoto(now)?.title?.subject ?: data.study.day.value.current(now)?.title?.subject ?: "Notes"
+        // 0.15.3 (D196): the launcher's own camera, several photos in a row (a camera app when chosen in Settings).
+        if (data.settings.get(LauncherSettings.StudyBoardCamera) != "app") {
+            Haptics.tick(view)
+            callbacks.openBoardCamera(module)
+            return
+        }
         val intent = try {
             dev.liquid.launcher.core.data.BoardPhotos.start(context, data.settings, module, now)
         } catch (e: Exception) {
@@ -714,6 +905,28 @@ class HomeController(
             }
             data.study.startFocus(event)
             notice(dev.liquid.launcher.core.common.NoticeKind.Study, "Focus on ${event.title.subject}", "Until the block ends; tap Focus again to stop")
+        }
+    }
+
+    /**
+     * 0.14.0 (D184): a 45-minute study session on [subject], from Today's "Study with Claude" (a focus or session running
+     * is stopped first). The pill counts it down, the line under the clock says what is studied, and the speed bump holds
+     * distracting apps back while it runs.
+     */
+    fun startStudySession(subject: String) {
+        scope.launch {
+            if (data.study.focus.value != null) data.study.stopFocus()
+            data.study.startSession(subject)
+            DebugLog.event("Study", "session: ${subject.ifBlank { "(no subject)" }}, ${dev.liquid.launcher.core.data.StudyFocus.SESSION_MINUTES} min")
+        }
+    }
+
+    /** 0.14.0: ends the study session now (the ✓ on the line under the clock). */
+    fun stopStudySession() {
+        Haptics.confirm(view)
+        scope.launch {
+            val minutes = data.study.stopFocus()
+            notice(dev.liquid.launcher.core.common.NoticeKind.Study, "Session done: $minutes min", "${data.study.studiedToday.value} min studied today")
         }
     }
 
@@ -939,6 +1152,12 @@ class HomeController(
     val keyboardGuess: Float get() = dev.liquid.launcher.core.common.KeyboardLine.guess(keyboardOpenings, screenHeight)
 
     /**
+     * 0.13.1: the keyboard's height is known from this phone (its picture, or an opening seen), not only the low first
+     * guess: only then is a keyboard that says it is much taller doubted ([dev.liquid.launcher.core.common.KeyboardDrive.believes]).
+     */
+    val keyboardHeightKnown: Boolean get() = KeyboardPicture.height > 0 || keyboardOpenings.any { it > 0 }
+
+    /**
      * Search is counting on the keyboard: from the moment it starts opening until the keyboard is
      * put away while search stays open (then the field follows the keyboard down).
      */
@@ -957,18 +1176,131 @@ class HomeController(
     }
 
     /**
-     * Where the bottom of the open search field sits, in px from the bottom of the screen, before its margin: while
-     * search counts on the keyboard, at the lowest height it opened at lately until the keyboard gets there, then on
-     * the keyboard; otherwise above the keyboard or the navigation bar. It never goes above the keyboard to come back
-     * down, unless the keyboard opens lower than ever seen lately (then in step with it). See [KeyboardLine].
+     * Where the bottom of the open search field sits now, in px from the bottom of the screen, before its gap: on the
+     * keyboard or the navigation bar, never above them (0.11.3: the launcher slides the keyboard in with the pill, and
+     * the field rides on it; [KeyboardLine.ride]). In a settings preview the keyboard is a plate at the usual height.
      */
-    fun searchFieldLine(nav: Float, ime: Float, target: Float): Float {
-        if (!expectKeyboard) return maxOf(nav, ime)
-        return dev.liquid.launcher.core.common.KeyboardLine.line(nav, ime, target, keyboardGuess)
+    fun searchFieldLine(nav: Float, ime: Float, @Suppress("UNUSED_PARAMETER") target: Float): Float =
+        dev.liquid.launcher.core.common.KeyboardLine.ride(nav, previewIme(ime))
+
+    /**
+     * Where the bottom of the open search field will end up, for laying search's results out above it (they then stay
+     * still while the keyboard slides in): the keyboard's height once known, else the lowest recent opening.
+     */
+    fun searchFieldPlanned(nav: Float, ime: Float, target: Float): Float {
+        if (!expectKeyboard) return maxOf(nav, previewIme(ime))
+        if (keyboardRise > 0f) return maxOf(nav, previewIme(ime), keyboardRise)
+        return dev.liquid.launcher.core.common.KeyboardLine.planned(nav, previewIme(ime), target, keyboardDriveShown, keyboardGuess)
     }
+
+    /** A settings preview has no keyboard: the plate it shows instead slides in with search, at the usual height. */
+    private fun previewIme(ime: Float): Float =
+        if (live || !expectKeyboard) ime else (if (keyboardRise > 0f) keyboardRise else keyboardGuess) * search.value.coerceIn(0f, 1f)
+
+    /** False for a settings preview (set by the home screen): it never asks for a keyboard and shows a plate instead. */
+    var live by mutableStateOf(true)
+
+    /** 0.11.3: the open search pill's size and its gap above the keyboard (Settings → Search → Layout). Set by the home screen. */
+    var searchFieldSize by mutableStateOf(SearchFieldSize())
+
+    /**
+     * 0.11.3: how the keyboard came for the current opening of search: "drive" (the launcher slides it in with the
+     * pill), "usual" (shown the usual way, the field rides on it), or null (not asked yet).
+     */
+    var keyboardPath by mutableStateOf<String?>(null)
+
+    /** The keyboard's height fully up, from the system, while the launcher drives it (0: not known). */
+    var keyboardDriveShown by mutableFloatStateOf(0f)
+
+    /** Counts openings of search that count on the keyboard: each starts one drive. */
+    var keyboardSession by mutableIntStateOf(0)
+        private set
 
     private fun startExpectingKeyboard() {
         expectKeyboard = searchKeyboard && searchField == "keyboard" && searchInPill && !speedChecking
+        keyboardSteady = false
+        if (expectKeyboard) {
+            keyboardPath = null
+            keyboardDriveShown = 0f
+            keyboardDriving = false
+            riseGlide?.cancel()
+            // 0.13.0 (D175): the keyboard rises with the pill from the first frame, at the height of its picture (or
+            // the height it usually opens at): its picture until it is ready, then the keyboard itself.
+            keyboardRise = KeyboardPicture.height.takeIf { it > 0 }?.toFloat() ?: keyboardGuess
+            keyboardStandInOn = live
+            keyboardSession++
+        }
+    }
+
+    /**
+     * 0.13.0 (D175): while search opens with the keyboard, the height the keyboard rises to (px from the bottom of the
+     * screen); the pill goes only up, from where it rests to just above that height, on search's own spring, and the
+     * keyboard (its picture until it is ready) rises in step under it. 0: not rising (the field rides on the keyboard).
+     */
+    var keyboardRise by mutableFloatStateOf(0f)
+
+    /** The keyboard's picture stands in for it (from the swipe's first frame until the keyboard itself is in place). */
+    var keyboardStandInOn by mutableStateOf(false)
+
+    /** The keyboard was put away or never came: search stops planning around it. */
+    fun stopKeyboardRise() {
+        riseGlide?.cancel()
+        keyboardRise = 0f
+        keyboardStandInOn = false
+        keyboardSteady = false
+    }
+
+    /**
+     * 0.15.0 (D188): search is open and the keyboard stands up under the pill, handed back to the system (or shown the
+     * usual way and settled). While steady, the pill keeps to the line the keyboard settled at ([keyboardRise]): a
+     * keyboard that says it is taller for a moment (WM Keyboard rebuilding itself, 25 ms on Med's phone) no longer throws
+     * the pill up and down; one that stays taller is followed after [dev.liquid.launcher.core.common.KeyboardDrive.GROW_SETTLE_MS],
+     * on a glide. False while search opens or closes, where the pill rides on the keyboard as it moves.
+     */
+    var keyboardSteady by mutableStateOf(false)
+
+    /** The keyboard line the pill sits on now (see [keyboardSteady]), px from the bottom of the screen. */
+    fun pillKeyboardLine(ime: Float): Float =
+        dev.liquid.launcher.core.common.KeyboardDrive.steadyLine(ime, keyboardRise, keyboardSteady && searchOpen)
+
+    /**
+     * 0.13.1: the launcher holds the keyboard right now (between the drive's "ready" and its hand-back), so its height
+     * fully up is [keyboardDriveShown], not what the system's own animation would report.
+     */
+    var keyboardDriving by mutableStateOf(false)
+
+    private var riseGlide: kotlinx.coroutines.Job? = null
+
+    /** 0.15.2: the rise is gliding to a new height (the keyboard is not handed back meanwhile). */
+    val keyboardRiseGliding: Boolean get() = riseGlide?.isActive == true
+
+    /**
+     * 0.13.1 (Med: "after I change the wallpaper the pill goes higher than intended the first time"): moves [keyboardRise]
+     * to [px] on a short spring without bounce instead of in one frame, so the pill (and the keyboard while the launcher
+     * holds it) glides to a height that turned out different: the keyboard's real height once it is ready, or where it
+     * settled while search stays open. Not rising: set at once.
+     */
+    /** 0.15.0: the rise set at once (the pill already stands there, riding on the keyboard), any glide stopped. */
+    fun settleKeyboardRise(px: Float) {
+        riseGlide?.cancel()
+        if (keyboardRise > 0f && px > 0f) keyboardRise = px
+    }
+
+    fun glideKeyboardRise(px: Float) {
+        riseGlide?.cancel()
+        val from = keyboardRise
+        if (from <= 0f || px <= 0f || kotlin.math.abs(from - px) < 1f) {
+            keyboardRise = px
+            return
+        }
+        riseGlide = scope.launch {
+            // 0.15.2 (D194): over within half a pixel (it then lands exactly): the keyboard is handed back only once the
+            // glide is over, and a spring's last hundredth of a pixel took a third of its time (about 170 ms).
+            androidx.compose.animation.core.animate(
+                from, px,
+                animationSpec = spring(dampingRatio = 1f, stiffness = MotionScale.stiffness(650f), visibilityThreshold = 0.5f),
+            ) { value, _ -> if (keyboardRise > 0f) keyboardRise = value }
+        }
     }
 
     /** 0.11.2: the speed check is playing (Settings → Diagnostics): search opens without the keyboard. */
@@ -1040,10 +1372,21 @@ class HomeController(
     /** Where the finger has put search, ahead of [search] (see [dragPosition]). */
     private var searchDragPosition: Float? = null
 
+    /**
+     * A finger is moving search (0.11.3: the keyboard drive waits for it to let go before handing the keyboard over).
+     * 0.15.0: snapshot state, so the keyboard can start following a finger that pushes open search away.
+     */
+    var searchDragging by mutableStateOf(false)
+        private set
+
+    /** Where the bottom of search's field was at the last layout, px from the bottom of the screen (for the log; not state). */
+    var fieldBottomPx = 0f
+
     /** Lets the activity pick an image (photo picker); set by the activity. */
     internal val pickImage: ((android.net.Uri?) -> Unit) -> Unit get() = callbacks.pickImage
     internal val pickImages: ((List<android.net.Uri>) -> Unit) -> Unit get() = callbacks.pickImages
     internal val pickFolder: ((android.net.Uri?) -> Unit) -> Unit get() = callbacks.pickFolder
+    internal val pickFiles: ((List<android.net.Uri>) -> Unit) -> Unit get() = callbacks.pickFiles
     internal val pickFont: ((android.net.Uri?) -> Unit) -> Unit get() = callbacks.pickFont
 
     /** The finger let go after sliding: run the item under it, if any. */
@@ -1067,6 +1410,10 @@ class HomeController(
     /** Where the change was started (the wallpaper tapped in the strip), in screen pixels: a ripple spreads from there. */
     var transitionOrigin: androidx.compose.ui.geometry.Offset? = null
 
+    /** 0.16.0: the style of the change running (a layout switch can have its own, D202); read while it plays. */
+    var transitionStyle by mutableStateOf("ripple")
+        private set
+
     /** The wallpaper strip from the home menu. */
     var wallpaperStrip by mutableStateOf(false)
 
@@ -1080,11 +1427,14 @@ class HomeController(
      * [commit] swaps everything underneath, and the picture melts away. [after] runs once the
      * transition is done (writing files, setting the system wallpaper), so it never stutters.
      */
-    fun <T : Any> changeScreen(prepare: suspend () -> T?, commit: (T) -> Unit, after: suspend (T) -> Unit = {}) {
+    fun <T : Any> changeScreen(prepare: suspend () -> T?, commit: (T) -> Unit, after: suspend (T) -> Unit = {}, style: String? = null) {
         transitionJob?.cancel()
         transitionJob = scope.launch {
             val value = prepare() ?: return@launch
-            val style = data.settings.get(LauncherSettings.WallpaperTransition)
+            val style = style ?: data.settings.get(LauncherSettings.WallpaperTransition)
+            transitionStyle = style
+            // 0.16.0: the liquid wipe grows out of the pill.
+            if (style == "pill") transitionOrigin = pillBounds?.center
             val shot = if (style != "none") runCatching { captureHome?.invoke() }.getOrNull() else null
             transitionProgress.snapTo(0f)
             transitionShot = shot
@@ -1143,24 +1493,41 @@ class HomeController(
             },
             after = { switch ->
                 val bitmap = switch.wallpaper ?: return@changeScreen
-                store.persist(bitmap, data.settings.get(LauncherSettings.WallpaperLockToo), switch.file, Wallpapers.systemWrite(data))
-                switch.wallpaperId?.let { wid -> data.wallpapers.find(wid)?.let { data.wallpapers.markUsed(it.id, null) } }
+                store.persist(bitmap, Wallpapers.lockToo(data), switch.file, Wallpapers.systemWrite(data))
+                switch.wallpaperId?.let { wid -> data.wallpapers.find(wid)?.let { Wallpapers.markUsed(data, it.id, null) } }
             },
+            // 0.16.0 (D202): "When the layout switches" (by default the wallpaper's transition).
+            style = data.settings.get(LauncherSettings.LayoutsTransition).takeIf { it != "same" },
         )
     }
 
-    /** Makes [pick] the wallpaper with the transition (wallpaper strip, shuffle). */
-    fun applyWallpaper(pick: WallpaperPick) {
+    /**
+     * Makes [pick] the wallpaper with the transition (wallpaper strip, shuffle). 0.16.0 (D200): a glass notice offers
+     * Undo for 10 s ([noticeText], with the label's own [noticeDetail] and [noticeAction] as before).
+     */
+    fun applyWallpaper(
+        pick: WallpaperPick,
+        noticeText: String = "New wallpaper",
+        noticeDetail: String? = null,
+        noticeAction: LauncherAction? = null,
+    ) {
         dev.liquid.launcher.core.common.ColourTiming.begin("wallpaper switch")
         changeScreen(
-            prepare = { Wallpapers.prepare(context, data, pick) ?: run { toast("Could not read that picture"); null } },
+            prepare = {
+                val prepared = Wallpapers.prepare(context, data, pick) ?: run { toast("Could not read that picture"); null }
+                if (prepared != null) keepForUndo((pick as? WallpaperPick.Library)?.item?.id, Wallpapers.ownLayout(data))
+                prepared
+            },
             commit = { prepared ->
                 WallpaperStore.get(context).show(prepared.bitmap, prepared.tone)
                 IconPaint.now(prepared.palette)
                 HomeTheme.refreshAccent(context)
                 dev.liquid.launcher.core.common.ColourTiming.mark("wallpaper and colours on screen")
             },
-            after = { prepared -> Wallpapers.persist(context, data, prepared)?.let { toast("Could not set the wallpaper: $it") } },
+            after = { prepared ->
+                offerWallpaperUndo(noticeText, noticeDetail, noticeAction)
+                Wallpapers.persist(context, data, prepared)?.let { toast("Could not set the wallpaper: $it") }
+            },
         )
     }
 
@@ -1171,8 +1538,161 @@ class HomeController(
                 notice(dev.liquid.launcher.core.common.NoticeKind.Info, "Nothing to shuffle yet", "Add favourites in the wallpaper screen", LauncherAction.WallpaperStudio)
                 return@launch
             }
-            applyWallpaper(pick)
-            notice(dev.liquid.launcher.core.common.NoticeKind.Wallpaper, "Wallpaper shuffled", "Tap for the wallpaper strip", LauncherAction.Wallpaper)
+            applyWallpaper(pick, "Wallpaper shuffled", "Tap for the wallpaper strip", LauncherAction.Wallpaper)
+        }
+    }
+
+    // ---- 0.16.0 (D200): Undo after a wallpaper change ----
+
+    /** What the last wallpaper change replaced, while its Undo is offered. */
+    private class WallpaperUndo(
+        /** The wallpaper as it was: the finished picture, placement included. */
+        val file: java.io.File,
+        /** The library picture it was made from. */
+        val current: String?,
+        /** The record of the picture the change applied, as it was before (its placement and use count). */
+        val before: dev.liquid.launcher.core.data.WallpaperItem?,
+        /** A layout whose own wallpaper the change replaced, and a copy of that wallpaper (null: it had none). */
+        val layoutId: String?,
+        val layoutFile: java.io.File?,
+        val layoutWallpaperId: String?,
+    ) {
+        /** Uptime when the Undo was offered (0: not yet). */
+        var offeredAt = 0L
+    }
+
+    private var wallpaperUndo: WallpaperUndo? = null
+    private var undoExpiry: kotlinx.coroutines.Job? = null
+
+    /**
+     * Keeps what a wallpaper change is about to replace: the wallpaper as it is now, the library's current picture, the
+     * record of the picture applied ([appliedId]) and, when the change also replaces [layoutId]'s own wallpaper, that one.
+     * Call before anything is written (in the change's prepare step).
+     */
+    internal suspend fun keepForUndo(appliedId: String?, layoutId: String?) {
+        val dir = java.io.File(context.cacheDir, "wallpaper-undo")
+        val file = java.io.File(dir, "wallpaper.jpg")
+        if (!WallpaperStore.get(context).copyCurrent(file)) {
+            wallpaperUndo = null
+            return
+        }
+        val layout = layoutId?.let { data.layouts.find(it) }
+        val layoutCopy = layout?.let { data.layouts.wallpaperFile(it) }?.let { source ->
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { source.copyTo(java.io.File(dir, "layout.jpg"), overwrite = true) }.getOrNull()
+            }
+        }
+        val library = data.wallpapers.get()
+        wallpaperUndo = WallpaperUndo(file, library.current, data.wallpapers.snapshot(appliedId), layout?.id, layoutCopy, layout?.wallpaperId)
+    }
+
+    /**
+     * After a wallpaper change: a glass notice with Undo for [UNDO_MS] (when wallpaper notices show), and the hand-over
+     * to the system waits that long, so an Undo never costs a second one. Call before the new wallpaper is written.
+     */
+    internal fun offerWallpaperUndo(text: String, detail: String? = null, action: LauncherAction? = null) {
+        val undo = wallpaperUndo ?: return
+        val notices = data.settings.noticeConfig()
+        if (!notices.enabled || dev.liquid.launcher.core.common.NoticeKind.Wallpaper.id !in notices.kinds) {
+            wallpaperUndo = null
+            return
+        }
+        undo.offeredAt = android.os.SystemClock.uptimeMillis()
+        val store = WallpaperStore.get(context)
+        store.holdSystemWrite(UNDO_MS)
+        dev.liquid.launcher.core.common.Notices.post(
+            dev.liquid.launcher.core.common.Notice(
+                dev.liquid.launcher.core.common.NoticeKind.Wallpaper, text, detail, action?.encode(),
+                buttonLabel = "Undo", button = { undoWallpaper() }, showMs = UNDO_MS, holds = true,
+            )
+        )
+        undoExpiry?.cancel()
+        undoExpiry = scope.launch {
+            kotlinx.coroutines.delay(UNDO_MS + 1_000)
+            if (wallpaperUndo === undo) wallpaperUndo = null
+            store.releaseSystemWrite()
+        }
+    }
+
+    /** Undo of the last wallpaper change: the wallpaper, its placement and the library's records come back, with the transition. */
+    fun undoWallpaper() {
+        val undo = wallpaperUndo ?: return toast("Too late to undo")
+        wallpaperUndo = null
+        undoExpiry?.cancel()
+        val store = WallpaperStore.get(context)
+        DebugLog.event("Wallpaper", "undo: back to the wallpaper before")
+        changeScreen(
+            prepare = {
+                val bitmap = store.decodeFile(undo.file) ?: return@changeScreen run { toast("Could not bring the wallpaper back"); null }
+                val tone = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { dev.liquid.launcher.core.common.WallpaperTones.fromBitmap(bitmap) }
+                Triple(bitmap, tone, tone?.let { data.paletteFor(it.primary) })
+            },
+            commit = { (bitmap, tone, palette) ->
+                store.show(bitmap, tone)
+                IconPaint.now(palette)
+                HomeTheme.refreshAccent(context)
+            },
+            after = { (bitmap, _, _) ->
+                store.persist(bitmap, Wallpapers.lockToo(data), undo.file, Wallpapers.systemWrite(data))
+                store.releaseSystemWrite()
+                data.wallpapers.undoApply(undo.current, undo.before)
+                val layoutId = undo.layoutId
+                if (layoutId != null) {
+                    if (undo.layoutFile != null) data.layouts.setWallpaper(layoutId, undo.layoutFile, undo.layoutWallpaperId)
+                    else data.layouts.setWallpaper(layoutId, null)
+                }
+            },
+        )
+    }
+
+    /**
+     * 0.16.0 (D207): a picture into the library, or a video, GIF or animated WebP as a video wallpaper (with its poster).
+     * A new video may be re-encoded for this phone ("Re-encode a video you add": always, or asked by the wallpaper screen).
+     */
+    internal suspend fun importAny(uri: android.net.Uri, folder: String? = null): dev.liquid.launcher.core.data.WallpaperItem? {
+        val moving = VideoWallpapers.isVideo(context, uri) || VideoWallpapers.isAnimated(context, uri)
+        if (!moving) return data.wallpapers.importUri(uri, folder)
+        val item = VideoWallpapers.import(context, data, uri, folder) ?: return null
+        if (item.video?.kind == "video") {
+            when (data.settings.get(LauncherSettings.VideoReencode)) {
+                "always" -> reencodeVideo(item)
+                "ask" -> reencodeAsk = item
+            }
+        }
+        return item
+    }
+
+    /** 0.16.0 (D207): a video just added, waiting for "Re-encode for this phone?" (the wallpaper screen asks). */
+    var reencodeAsk by mutableStateOf<dev.liquid.launcher.core.data.WallpaperItem?>(null)
+
+    /** 0.16.0 (D207): re-encodes a video wallpaper in the background, saying when it starts and how it went. */
+    fun reencodeVideo(item: dev.liquid.launcher.core.data.WallpaperItem, blur: Float = 0f, allKeyFrames: Boolean = false) {
+        scope.launch {
+            notice(dev.liquid.launcher.core.common.NoticeKind.Wallpaper, "Re-encoding the video", "It can take a minute; it keeps playing as it is meanwhile")
+            val error = VideoWallpapers.reencode(context, data, item, blur, allKeyFrames)
+            notice(
+                dev.liquid.launcher.core.common.NoticeKind.Wallpaper,
+                if (error == null) "The video is ready for this phone" else "The video could not be re-encoded",
+                error ?: data.wallpapers.find(item.id)?.video?.encoded,
+            )
+        }
+    }
+
+    /**
+     * 0.16.0: pictures shared to "Set as Liquid wallpaper" (or "Set as" in a gallery) go into the library, and the
+     * wallpaper screen opens with the first one picked, ready to Place or Apply.
+     */
+    fun importShared(uris: List<android.net.Uri>) {
+        scope.launch {
+            val items = uris.mapNotNull { importAny(it) }
+            DebugLog.event("Wallpaper", "shared: ${items.size} of ${uris.size} picture(s) added to the library")
+            if (items.isEmpty()) {
+                toast("Could not read that picture")
+                return@launch
+            }
+            if (!wallpaperStudio) closeAll(immediately = true)
+            sharedPick = items.first()
+            wallpaperStudio = true
         }
     }
 
@@ -1255,12 +1775,16 @@ class HomeController(
     /** Finger released while moving the drawer: open or close depending on position and speed. */
     fun settleDrawer(velocityPxPerSec: Float) {
         val position = dragPosition ?: drawer.value
-        DebugLog.event("Home", "drawer: released at " + "%.2f".format(position) + ", " + velocityPxPerSec.toInt() + " px/s")
         val open = when {
             velocityPxPerSec < -800f -> true
             velocityPxPerSec > 800f -> false
             else -> position > OPEN_POINT
         }
+        // 0.15.2: with what the release does, so a log (and the emulator test) can tell a swipe too short and slow apart.
+        DebugLog.event(
+            "Home",
+            "drawer: released at " + "%.2f".format(position) + ", " + velocityPxPerSec.toInt() + " px/s: " + if (open) "opens" else "closes",
+        )
         // Upward finger speed is negative on screen and positive for the drawer.
         val velocity = (-velocityPxPerSec / (screenHeight * drawerTravel())).coerceIn(-14f, 14f)
         if (open) openDrawer(velocity) else closeDrawer(velocity = velocity)
@@ -1287,9 +1811,16 @@ class HomeController(
     /** Asks for the calendar (the Calendar widget), then runs [then] if it may be read. */
     fun askCalendar(then: () -> Unit) = callbacks.requestCalendar { granted -> if (granted) then() }
 
+    /** 0.16.0 (D209): asks only to read the calendars; [then] runs with whatever the answer was. */
+    fun askCalendarRead(then: () -> Unit) = callbacks.requestCalendarRead { granted ->
+        DebugLog.event("Calendar", if (granted) "may read the calendars" else "may not read the calendars")
+        then()
+    }
+
     fun openSearch(velocity: Float = Float.NaN) {
         menu = null
         searchDragPosition = null
+        searchDragging = false
         if (!searchOpen && search.value < 0.001f) startExpectingKeyboard()
         searchOpen = true
         val v = if (velocity.isNaN()) search.velocity else velocity
@@ -1298,7 +1829,9 @@ class HomeController(
 
     fun closeSearch(immediately: Boolean = false, velocity: Float = Float.NaN) {
         searchDragPosition = null
+        searchDragging = false
         searchOpen = false
+        keyboardSteady = false
         searchEditing = false
         searchGlanceOpen = false
         val v = if (velocity.isNaN()) search.velocity else velocity
@@ -1308,6 +1841,7 @@ class HomeController(
                 searchQuery = ""
                 askClaudeMode = false
                 expectKeyboard = false
+                stopKeyboardRise()
             }
         }
     }
@@ -1319,24 +1853,29 @@ class HomeController(
         val next = (before + deltaFraction / drawerTravel()).coerceIn(0f, 1f)
         if (motionConfig.drawerTick && (before > OPEN_POINT) != (next > OPEN_POINT)) Haptics.tick(view)
         searchDragPosition = next
+        if (!searchDragging) searchDragging = true
         scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { search.snapTo(next) }
     }
 
     /** Finger released while moving search: open or close by position and speed, as the drawer does. */
     fun settleSearch(velocityPxPerSec: Float) {
         val position = searchDragPosition ?: search.value
-        DebugLog.event("Home", "search: released at " + "%.2f".format(position) + ", " + velocityPxPerSec.toInt() + " px/s")
         val open = when {
             velocityPxPerSec > 800f -> true
             velocityPxPerSec < -800f -> false
             else -> position > OPEN_POINT
         }
+        DebugLog.event(
+            "Home",
+            "search: released at " + "%.2f".format(position) + ", " + velocityPxPerSec.toInt() + " px/s: " + if (open) "opens" else "closes",
+        )
         val velocity = (velocityPxPerSec / (screenHeight * drawerTravel())).coerceIn(-14f, 14f)
         if (open) openSearch(velocity) else closeSearch(velocity = velocity)
     }
 
     fun closeAll(immediately: Boolean = false) {
         speedBump = null
+        reviewSheet = null
         customise = null
         endSelecting()
         tagApps = null
@@ -1345,6 +1884,7 @@ class HomeController(
         layoutsSheet = false
         wallpaperStudio = false
         if (todaySheet || hub.value > 0f) closeHub(immediately)
+        if (calendarOpen || calendar.value > 0f) closeCalendar(immediately)
         widgetPicker = false
         if (clockStudio != null) closeClockStudio(save = true)
         menu = null
@@ -1364,6 +1904,8 @@ class HomeController(
             tagApps != null -> tagApps = null
             selection != null -> endSelecting()
             speedBump != null -> speedBump = null
+            reviewSheet != null -> reviewSheet = null
+            calendarOpen -> closeCalendar()
             renaming != null -> renaming = null
             tagging != null -> tagging = null
             iconPicking != null -> iconPicking = null
@@ -1374,7 +1916,7 @@ class HomeController(
             homeMenu -> homeMenu = false
             wallpaperStrip -> wallpaperStrip = false
             layoutsSheet -> layoutsSheet = false
-            wallpaperStudio -> wallpaperStudio = false
+            wallpaperStudio -> if (wallpaperStudioBack?.invoke() != true) wallpaperStudio = false
             todaySheet -> closeHub()
             widgetPicker -> widgetPicker = false
             clockStudio != null -> closeClockStudio(save = true)
@@ -1520,7 +2062,12 @@ class HomeController(
         if (words.isEmpty() || app.tags.isEmpty()) return null
         val ids = data.organisation.value.value.tags.filter { it.name.trim().lowercase() in words }.map { it.id }.toSet()
         if (app.tags.none { it in ids }) return null
-        return data.study.day.value.current(System.currentTimeMillis())?.takeIf { it.status == dev.liquid.launcher.core.data.StudyStatus.Open }
+        val now = System.currentTimeMillis()
+        data.study.day.value.current(now)?.takeIf { it.status == dev.liquid.launcher.core.data.StudyStatus.Open }?.let { return it }
+        // 0.14.0 (D184): a study session holds them back too (as a block named after what is studied).
+        return data.study.focus.value?.takeIf { it.isSession && it.until > now }?.let {
+            dev.liquid.launcher.core.data.StudyEvent(-1, 0, it.startedAt, it.until, false, it.subject.ifBlank { "Study session" })
+        }
     }
 
     /** The speed bump's "Open anyway": the app it held back opens as it would have. */
@@ -1565,6 +2112,9 @@ class HomeController(
     val closesWhileAway: Boolean
         get() = tidyPending && (drawerOpen || searchOpen || search.value > 0.01f || menu != null || todaySheet || hub.value > 0.01f)
 
+    /** 0.11.3 (D170): an app was just started from the launcher (a keyboard still up is only on its way out). */
+    val appJustStarted: Boolean get() = tidyPending
+
     /**
      * Called right after an app was started from anywhere in the launcher. The keyboard goes away at
      * once (so it is neither in the system's picture of this screen nor brought back on return);
@@ -1587,6 +2137,8 @@ class HomeController(
         menu = null
         tagSheet = false
         if (todaySheet || hub.value > 0f) closeHub(immediately = true)
+        // 0.16.0: an event or Quick add opened from the calendar comes back to the calendar.
+        if (!calendarKeep && (calendarOpen || calendar.value > 0f)) closeCalendar(immediately = true)
         if (searchOpen || search.value > 0f) closeSearch(immediately = true)
         if (drawerOpen && data.settings.get(LauncherSettings.DrawerCloseOnLaunch)) closeDrawer(immediately = true)
         hideKeyboard()
@@ -2078,6 +2630,12 @@ class HomeController(
 
     fun openSection(id: String) = callbacks.openSection(id)
 
+    /** 0.13.0: Settings at a page, a tab and an option ("page:pill:layout:pill.live.music"). */
+    fun openSettingsAt(target: String) = callbacks.openSettingsAt(target)
+
+    /** 0.13.0: asks for the contacts; [done] says whether search may read them. */
+    fun requestContacts(done: (Boolean) -> Unit) = callbacks.requestContacts(done)
+
     /** Static shortcuts may point at activities their app does not export; then only the default launcher can open them. */
     fun openShortcut(shortcut: dev.liquid.launcher.core.data.StaticShortcut) {
         try {
@@ -2113,6 +2671,9 @@ private const val EDGE_DWELL_MS = 650L
 /** Past this fraction a released drawer opens. */
 private const val OPEN_POINT = 0.4f
 
+/** 0.16.0 (D200): how long Undo is offered after a wallpaper change (Med: 10 seconds). */
+internal const val UNDO_MS = 10_000L
+
 /** What the home screen asks the activity to do. */
 /** How long after starting an app the drawer, search and menus are closed (its opening animation covers them by then). */
 private const val LEAVE_TIDY_MS = 250L
@@ -2131,17 +2692,30 @@ class HomeCallbacks(
     val openSetup: () -> Unit,
     /** Opens one settings section by its id. */
     val openSection: (String) -> Unit = { openSettings() },
+    /** 0.13.0: Settings at a page, a tab and an option ("page:pill:layout:pill.live.music"), for search's results. */
+    val openSettingsAt: (String) -> Unit = { openSettings() },
+    /** 0.13.0: asks for the contacts (search finds people); answers whether they may be read. */
+    val requestContacts: ((Boolean) -> Unit) -> Unit = { it(false) },
     /** Shows the photo picker; the callback gets the picked image or null. */
     val pickImage: ((android.net.Uri?) -> Unit) -> Unit = { it(null) },
     /** Shows the photo picker for several images; the callback gets them (maybe none). */
     val pickImages: ((List<android.net.Uri>) -> Unit) -> Unit = { it(emptyList()) },
     /** Shows the system folder picker; the callback gets the folder or null. */
     val pickFolder: ((android.net.Uri?) -> Unit) -> Unit = { it(null) },
+    /**
+     * 0.16.0 (D205): Android's file picker for several pictures (its Work tab reaches Island's or Insular's files when File
+     * Shuttle is on); the callback gets them (maybe none).
+     */
+    val pickFiles: ((List<android.net.Uri>) -> Unit) -> Unit = { it(emptyList()) },
+    /** 0.16.0 (D209): asks only to read the calendars (the calendar from the clock's date); the callback gets the answer. */
+    val requestCalendarRead: ((Boolean) -> Unit) -> Unit = { it(false) },
     /** Asks for calendar access (read and write); the callback gets whether reading was granted. */
     val requestCalendar: ((Boolean) -> Unit) -> Unit = { it(false) },
     /** Opens the camera to take a picture into [Uri]; the callback gets whether one was taken (E1). */
     /** 0.11.2: starts the camera with [BoardPhotos]' intent; the answer is handled by the activity. */
     val takePhoto: (android.content.Intent) -> Unit = {},
+    /** 0.15.3 (D196): opens the launcher's board camera for a class (its module). */
+    val openBoardCamera: (String) -> Unit = {},
     /** Asks for location access (Android's condition for reading the Wi-Fi name); the callback gets whether it was given. */
     val requestLocation: ((Boolean) -> Unit) -> Unit = { it(false) },
     /** Shows the system file picker for a font file; the callback gets it or null. */

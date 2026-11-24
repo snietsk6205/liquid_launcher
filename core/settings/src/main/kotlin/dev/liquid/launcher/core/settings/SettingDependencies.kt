@@ -40,6 +40,14 @@ object SettingDependencies {
         map
     }
 
+    /** 0.16.0: options that only matter while a switch is off (the Calendar widget's own options, while it shares nothing). */
+    val offParents: Map<String, BoolSetting> by lazy {
+        listOf(
+            LauncherSettings.CalendarWidgetMarks, LauncherSettings.CalendarWidgetToday, LauncherSettings.CalendarWidgetWeekNumbers,
+            LauncherSettings.CalendarWidgetHolidays, LauncherSettings.CalendarWidgetSchool,
+        ).associate { it.key to LauncherSettings.CalendarShareWidget }
+    }
+
     /** Options that only matter for some values of a choice (0.9.1): the key, the choice and those values. */
     val choiceParents: Map<String, Pair<ChoiceSetting, Set<String>>> by lazy {
         val look = LauncherSettings.PillStudyLook
@@ -81,12 +89,14 @@ object SettingDependencies {
                 return "Only when \u201C${choice.title}\u201D is " + values.joinToString(" or ") { "\u201C${choice.labelOf(it)}\u201D" }
             }
         }
+        offParents[setting.key]?.let { off -> if (store.get(off)) return "Only when \u201C${off.title}\u201D is off" }
         val parent = parents[setting.key] ?: return null
         return if (store.get(parent)) null else "Only when \u201C${parent.title}\u201D is on"
     }
 
     fun isVisible(setting: Setting<*>, store: SettingsStore): Boolean {
         choiceParents[setting.key]?.let { (choice, values) -> if (store.get(choice) !in values) return false }
+        offParents[setting.key]?.let { off -> if (store.get(off)) return false }
         val parent = parents[setting.key] ?: return true
         return store.get(parent)
     }

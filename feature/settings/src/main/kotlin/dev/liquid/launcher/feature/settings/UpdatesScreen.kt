@@ -146,7 +146,7 @@ internal fun UpdateBanner(store: SettingsStore, open: () -> Unit) {
         }
     }
     val newer = UpdateState.result as? UpdateCheck.Newer ?: return
-    NavRow("Update available: ${newer.release.version} (build ${newer.release.build})", "Tap to download and install", open)
+    NavRow("Update available: ${newer.release.version} (build ${newer.release.build})", "Tap to download and install", icon = dev.liquid.launcher.core.designsystem.LauncherIcons.ArrowDown, onClick = open)
 }
 
 /** One version's changes as the changelog words them (W1, 0.10.0): its note, then Added, Changed, Removed, Fixed. */

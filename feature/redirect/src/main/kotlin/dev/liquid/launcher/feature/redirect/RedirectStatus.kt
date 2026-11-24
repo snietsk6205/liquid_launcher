@@ -131,6 +131,12 @@ object RedirectStatus {
         service?.resumeEngine()
     }
 
+    /** 0.13.0 (D175): a picture of the screen through the redirect service, or null (see LauncherAccessibilityService). */
+    fun captureScreen(onResult: (android.graphics.Bitmap?) -> Unit) {
+        val s = service
+        if (s == null) onResult(null) else s.captureScreen(onResult)
+    }
+
     /** Opens the system launcher on purpose and keeps the redirect off for a while. */
     fun openSystemLauncher(context: Context, pauseMs: Long) {
         service?.pauseEngine(pauseMs, "system launcher opened on purpose")
@@ -142,6 +148,28 @@ object RedirectStatus {
             context.startActivity(intent)
         } catch (e: Exception) {
             DebugLog.error("Redirect", "could not open system launcher: $e")
+        }
+    }
+
+    /**
+     * 0.11.3 (D170), Settings → Redirect → "Try the arrival": shows the system's home screen with the redirect on, so it
+     * brings the launcher back the way the arrival is set. False when the redirect service or the system launcher is
+     * not known yet.
+     */
+    fun tryArrival(context: Context): Boolean {
+        val launcher = systemLauncher.value
+        if (service == null || launcher.isEmpty()) return false
+        val intent = Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_HOME)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .setPackage(launcher)
+        return try {
+            DebugLog.event("Redirect", "trying the arrival: the system's home screen is shown, the redirect brings the launcher back")
+            context.startActivity(intent)
+            true
+        } catch (e: Exception) {
+            DebugLog.error("Redirect", "could not show the system's home screen: $e")
+            false
         }
     }
 

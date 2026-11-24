@@ -205,6 +205,16 @@ object WallpaperTones {
             synchronized(lock) { strangerId = -1 }
             return tone
         }
+        // 0.16.0 (D207): the launcher's own live video wallpaper is its own, not a wallpaper set elsewhere.
+        val ownLive = try {
+            WallpaperManager.getInstance(context).wallpaperInfo?.packageName == context.packageName
+        } catch (e: Throwable) {
+            false
+        }
+        if (ownLive) {
+            adopt(context, now, true)
+            return _tone.value
+        }
         val uptime = android.os.SystemClock.uptimeMillis()
         val verdict = synchronized(lock) {
             when {

@@ -15,7 +15,7 @@ object SearchCards {
         Card("annales", "Annales", "In the week before an exam: your past papers, one folder per module (choose the folder in Study companion)"),
         Card("absences", "Absence meter", "One tube per module from launcher-data, against the absence limit; always UNVERIFIED until the rule is confirmed"),
         Card("grades", "Grade average", "Your weighted average, once every mark has its coefficient"),
-        Card("flashcard", "Daily flashcard", "Face down; tap to turn it over, then right or wrong"),
+        Card("flashcard", "Flashcards", "Your deck from launcher-data with repeats: the first card due face down, how many more, then All done for today. Formulas are drawn"),
         Card("review", "Sunday review", "On Sundays: the week's blocks, focus, absences and the next exam; a tap reviews it with Claude"),
         Card("next", "Next block", "The block now or next with today's progress, its next step and one action"),
         Card("commands", "Study commands", "!next, !exam, !plan, !abs and ? for Claude, one tap each (they also appear as you type !)"),

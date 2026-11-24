@@ -1,0 +1,92 @@
+package dev.liquid.launcher.core.common
+
+/**
+ * 0.11.3 (Med chose "Keyboard slides with the pill"): how far up the launcher slides the keyboard, 0..1, while search
+ * opens. In step with search's own progress; a keyboard that became ready to be moved after search had started
+ * (its window is drawn first: 200 to 724 ms on Med's phone) catches up over [CATCH_UP_MS], eased out, instead of
+ * jumping to where search already is. It never goes ahead of search, so the field, which rides on it, is never
+ * left behind.
+ */
+object KeyboardDrive {
+    const val CATCH_UP_MS = 180L
+
+    /** Asking for the keyboard longer than this without it becoming ready: it is shown the usual way instead. */
+    const val ASK_LIMIT_MS = 1_500L
+
+    /** [progress]: how far search has opened (a spring can pass 1); [sinceReadyMs]: since the keyboard became movable. */
+    fun fraction(progress: Float, sinceReadyMs: Long): Float {
+        val p = progress.coerceIn(0f, 1f)
+        val t = (sinceReadyMs.toFloat() / CATCH_UP_MS).coerceIn(0f, 1f)
+        val catchUp = 1f - (1f - t) * (1f - t) * (1f - t)
+        return minOf(p, catchUp)
+    }
+
+    /** The drive can hand the keyboard over, fully up: search is open and still, and the keyboard has caught up. */
+    fun done(progress: Float, open: Boolean, moving: Boolean, sinceReadyMs: Long): Boolean =
+        open && !moving && progress >= 0.999f && sinceReadyMs >= CATCH_UP_MS
+
+    /** 0.13.1: how much taller than expected a keyboard may say it is before its height is doubted, in dp. */
+    const val TALLER_DP = 48f
+
+    /**
+     * 0.13.1 (Med: "after I change the wallpaper, the pill goes higher than intended the first time"): whether the height
+     * the system gives for the keyboard fully up ([shownPx]) is believed over the height it was expected at ([expectedPx]:
+     * its picture's, else the lowest recent opening; 0: none). A keyboard that has just rebuilt itself (WM Keyboard after
+     * the wallpaper changed its colours, or back from an app where it showed its suggestion strip) is laid out taller at
+     * first (1188 px instead of 933 px on Med's phone, 85 dp) and comes down to its real height a moment later; the
+     * pill then keeps to the expected height instead of rising to the first one. Shorter is always believed.
+     */
+    fun believes(shownPx: Float, expectedPx: Float, tolerancePx: Float): Boolean =
+        expectedPx <= 0f || shownPx <= expectedPx + tolerancePx
+
+    /**
+     * The share of the keyboard's own height ([shownPx]) to show so that its top stands at [risePx] x [progress], the
+     * pill's line (0..1). Equal heights at full progress give 1: the keyboard fully up.
+     */
+    fun share(risePx: Float, progress: Float, shownPx: Float): Float =
+        if (shownPx <= 0f) 0f else (risePx * progress.coerceIn(0f, 1f) / shownPx).coerceIn(0f, 1f)
+
+    // ---- 0.15.0 (D188, Med: "the pill sometimes goes at the top when I open search") ----
+
+    /**
+     * Where the pill and the keyboard stand for search's [progress]: in step with it, but never past fully open. Search's
+     * spring overshoots with Bounce (1.13 to 1.15 in Med's log, Bounce 40 % and a flick), and up to 0.14 the pill followed
+     * it: it floated 25 to 30 dp above a keyboard that stops at its height, then fell back onto it. Now both stop together
+     * at the top and the overshoot is spent on the pill's [squash] instead.
+     */
+    fun landed(progress: Float): Float = progress.coerceIn(0f, 1f)
+
+    /** How much the pill squashes per unit of overshoot past fully open. */
+    const val SQUASH_PER_OVERSHOOT = 0.75f
+
+    /** The deepest squash, a share of the pill's height (its width grows by half as much). */
+    const val SQUASH_MAX = 0.10f
+
+    /**
+     * The pill landing on the keyboard: how much it squashes (0: none) while search's spring is past fully open, like a
+     * drop that lands. 0 at Bounce 0, where the spring never passes 1.
+     */
+    fun squash(progress: Float): Float = ((progress - 1f) * SQUASH_PER_OVERSHOOT).coerceIn(0f, SQUASH_MAX)
+
+    /**
+     * The keyboard can be handed back to the system as soon as it is fully up with search open, without waiting for the
+     * spring to settle (up to 0.14 the launcher held it through the whole bounce, and a swipe closing search meanwhile
+     * collided with it). [frames]: frames since it first stood fully up.
+     */
+    fun handOver(open: Boolean, dragging: Boolean, fullyUp: Boolean, frames: Int): Boolean =
+        open && !dragging && fullyUp && frames >= 2
+
+    /**
+     * A keyboard that is already up and grows while search stays open (WM Keyboard rebuilding itself after a wallpaper
+     * change says it is 85 dp taller for a moment, 25 ms on Med's phone) is followed only once it has stayed taller this
+     * long; shorter spikes leave the pill where it is.
+     */
+    const val GROW_SETTLE_MS = 160L
+
+    /**
+     * The keyboard line the open pill sits on, px from the bottom: the keyboard [now], but no higher than the line it
+     * settled at ([settled], 0: none yet) while search is open and still ([steady]). Lower is always followed.
+     */
+    fun steadyLine(now: Float, settled: Float, steady: Boolean): Float =
+        if (steady && settled > 0f) minOf(now, settled) else now
+}

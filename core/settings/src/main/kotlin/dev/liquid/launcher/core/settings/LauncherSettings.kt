@@ -50,6 +50,9 @@ object LauncherSettings {
         val Exclusions = SettingsSection("exclusions", "Exclusions and safety", "When not to redirect, loop guard", "Redirect")
         val Handover = SettingsSection("handover", "Hand-over", "How the launcher appears after a redirect", "Redirect")
         val Log = SettingsSection("log", "Debug log", "What is recorded", "Redirect")
+        val Calendar = SettingsSection("calendar", "Calendar", "What grows out of the clock's date: size, views, the week, days and glass", "Calendar")
+        val CalendarDays = SettingsSection("calendarDays", "Holidays and school year", "Tunisia's holidays, the Islamic dates and your school year", "Calendar")
+        val CalendarWidget = SettingsSection("calendarWidget", "Calendar widget", "The calendar's settings, or its own", "Calendar")
 
         // In the order the settings app lists them; sections with the same group sit under one heading.
         val all = listOf(
@@ -59,6 +62,7 @@ object LauncherSettings {
             Motion, Notices,
             Layouts, Backup,
             Study,
+            Calendar, CalendarDays, CalendarWidget,
             Redirect, Detection, Exclusions, Handover, Log,
         )
     }
@@ -264,16 +268,25 @@ object LauncherSettings {
 
     // ---- Hand-over ----
 
+    // 0.11.3 (D170): the arrival after a redirect. Fading in now covers the whole screen, wallpaper included, over the
+    // system's home screen, and never starts from the launcher's last picture (the content blinked: picture, hidden,
+    // settling in). "At once" uses that picture when it is up to date, the fastest way, with a cut.
     val SettleStyle = ChoiceSetting(
         key = "handover.settle", default = "scale",
-        options = listOf("scale" to "Scale in", "fade" to "Fade in", "none" to "None"),
-        title = "Content animation on return",
-        section = "handover", keywords = "animation settle return home",
+        options = listOf(
+            "scale" to "Fade in over the system's home screen, the icons growing into place",
+            "fade" to "Fade in over the system's home screen",
+            "none" to "At once, from the launcher's last picture when it is up to date (fastest, a cut)",
+        ),
+        title = "Arrival after a redirect",
+        summary = "How the launcher takes over from the system's home screen after Home, recents or the screen going off",
+        section = "handover", keywords = "animation settle return home arrival fade cut picture snapshot swap recents smooth",
     )
     val SettleDuration = IntSetting(
         key = "handover.settleDuration", default = 180, min = 0, max = 400, step = 10, unit = "ms",
-        title = "Content animation length",
-        section = "handover", keywords = "animation duration speed",
+        title = "Arrival length",
+        summary = "How long the fade takes. 0: at once",
+        section = "handover", keywords = "animation duration speed arrival fade",
     )
     val ExcludeFromRecents = BoolSetting(
         key = "handover.excludeFromRecents", default = true,
@@ -657,13 +670,14 @@ object LauncherSettings {
     val SearchField = ChoiceSetting(
         key = "search.field", default = "keyboard",
         options = listOf(
-            "keyboard" to "Above the keyboard: the pill flows straight to where the keyboard will be",
+            "keyboard" to "Above the keyboard: the keyboard slides in with the pill",
             "bottom" to "At the bottom (the keyboard pushes it up)",
             "top" to "At the top of the screen",
         ),
         title = "Search field",
         summary = "Above the keyboard and at the bottom, the pill itself becomes the field (with \"The pill becomes the search field\" " +
-            "in Drawer motion and the pill at the bottom). The field waits at the lowest height your keyboard opened at lately and the keyboard pushes it up from there, so it never goes above the keyboard",
+            "in Drawer motion and the pill at the bottom). Above the keyboard, the launcher slides the keyboard in itself, in step with the pill, " +
+            "from the moment you start swiping; the field rides on it and is never above it",
         section = "search", keywords = "search field position keyboard bottom top pill morph",
     )
     val SearchHomeScale = IntSetting(
@@ -683,6 +697,25 @@ object LauncherSettings {
         title = "Speed",
         summary = "How quickly search opens and closes after you let go",
         section = "search", keywords = "search speed fast slow spring stiffness",
+    )
+    /** 0.11.3: the open search pill's size and its gap above the keyboard (Settings → Search → Layout, with its preview). */
+    val SearchFieldHeight = IntSetting(
+        key = "search.fieldHeight", default = 54, min = 40, max = 76, step = 2, unit = "dp",
+        title = "Search pill height",
+        summary = "How tall the search field is once the pill has become it",
+        section = "search", keywords = "search pill field bar height size tall thin bigger smaller",
+    )
+    val SearchFieldWidth = IntSetting(
+        key = "search.fieldWidth", default = 90, min = 50, max = 100, step = 2, unit = "%",
+        title = "Search pill width",
+        summary = "How wide the search field is, as a share of the screen. 100: from edge to edge",
+        section = "search", keywords = "search pill field bar width wide narrow size margin edge",
+    )
+    val SearchFieldGap = IntSetting(
+        key = "search.fieldGap", default = 14, min = 0, max = 40, step = 2, unit = "dp",
+        title = "Gap above the keyboard",
+        summary = "The space between the search field and the top of the keyboard it rides on",
+        section = "search", keywords = "search pill field gap space distance above keyboard margin",
     )
     val SearchStretch = IntSetting(
         key = "search.stretch", default = 50, min = 0, max = 100, step = 10, unit = "%",
@@ -767,10 +800,52 @@ object LauncherSettings {
         section = "pill", keywords = "pill bar dock search",
     )
 
-    /** Ordered slot codes, see PillSlot in core/data. Edited with the pill editor, not a generic row. */
+    /**
+     * Ordered slot codes, see PillSlot in core/data. Edited with the pill editor, not a generic row. 0.13.0 (D178): the
+     * live item joined the default (it takes no room while nothing is happening).
+     */
     val PillSlots = StringListSetting(
-        key = "pill.slots", default = listOf("search", "date"),
+        key = "pill.slots", default = listOf("search", "live", "date"),
         title = "Pill items", section = "pill", hidden = true,
+    )
+
+    // 0.13.0 (D178): the pill's live item (Settings → Pill → Layout).
+    val PillLiveFocus = BoolSetting(
+        key = "pill.live.focus", default = true,
+        title = "Live item: focus timer",
+        summary = "While a focus timer runs on a block, the pill counts down to the end of the block",
+        section = "pill", keywords = "live item focus timer countdown block study seconds dynamic island",
+    )
+    val PillLiveClass = BoolSetting(
+        key = "pill.live.class", default = true,
+        title = "Live item: next class",
+        summary = "A countdown to your next block or class, the time left in the one running, and when to leave in the morning",
+        section = "pill", keywords = "live item next class block countdown starts in minutes left leave dynamic island",
+    )
+    val PillLiveLead = IntSetting(
+        key = "pill.live.lead", default = 60, min = 10, max = 180, step = 5, unit = "min",
+        title = "Count down from",
+        summary = "How long before a class the live item starts counting down",
+        section = "pill", keywords = "live item countdown minutes before class lead early next",
+    )
+    val PillLiveMusic = BoolSetting(
+        key = "pill.live.music", default = true,
+        title = "Live item: what's playing",
+        summary = "The song or podcast playing, with play and pause; a tap opens the app playing it. Needs notification access " +
+            "(the same switch as Quiet during blocks)",
+        section = "pill", keywords = "live item music playing song podcast spotify youtube media play pause now playing notification access",
+    )
+    val PillLiveCards = BoolSetting(
+        key = "pill.live.cards", default = true,
+        title = "Live item: flashcards due",
+        summary = "How many flashcards are due today; a tap or a long press opens a quick review over the home screen",
+        section = "pill", keywords = "live item flashcards cards due count review quick sheet deck repeat badge",
+    )
+    val PillLiveShape = BoolSetting(
+        key = "pill.live.shape", default = true,
+        title = "Changes shape when something happens",
+        summary = "The pill swells and settles like a drop when the live item changes: a class starts, music plays, cards are due",
+        section = "pill", keywords = "live item shape pop bounce swell drop wobble animation change dynamic island",
     )
     val PillPosition = ChoiceSetting(
         key = "pill.position", default = "bottom",
@@ -1845,10 +1920,54 @@ object LauncherSettings {
         title = "Web search engine",
         section = "search", keywords = "web search engine google duckduckgo",
     )
+    /** 0.12.0 (D171): "Liquid" in other apps' text selection menu (an activity alias the launcher turns on or off). */
+    // 0.13.0 (D179): search finds more than apps. Each source can be turned off.
+    val SearchFindSettings = BoolSetting(
+        key = "search.find.settings", default = true,
+        title = "Find settings",
+        summary = "Options of Settings that match, each opening its page with the option lit up",
+        section = "search", keywords = "search everything find settings options results",
+    )
+    val SearchFindContacts = BoolSetting(
+        key = "search.find.contacts", default = true,
+        title = "Find contacts",
+        summary = "People from your contacts; a tap opens their card. Asks for access to contacts the first time",
+        section = "search", keywords = "search everything find contacts people phone call names permission",
+    )
+    val SearchFindEvents = BoolSetting(
+        key = "search.find.events", default = true,
+        title = "Find calendar events",
+        summary = "Events of your calendars from a month ago to six months ahead whose title or place matches; a tap opens it",
+        section = "search", keywords = "search everything find calendar events agenda classes exams appointments",
+    )
+    val SearchFindNotes = BoolSetting(
+        key = "search.find.notes", default = true,
+        title = "Find notes",
+        summary = "Your notes for the evening check-in (\"Note: …\" in the calendar), from the last six months",
+        section = "search", keywords = "search everything find notes check-in evening written",
+    )
+    val SearchFindCards = BoolSetting(
+        key = "search.find.cards", default = true,
+        title = "Find flashcards",
+        summary = "Cards of your deck whose question, answer or module matches; a tap opens it in the quick review",
+        section = "search", keywords = "search everything find flashcards cards deck question answer module review",
+    )
+    /** Hidden: contacts were asked for once from search (an "allow" row is not offered again). */
+    val SearchContactsAsked = BoolSetting(
+        key = "search.contactsAsked", default = false,
+        title = "Contacts asked", section = "search", hidden = true,
+    )
+    val SearchSelectionEntry = BoolSetting(
+        key = "search.selectionEntry", default = true,
+        title = "\"Liquid\" in the text selection menu",
+        summary = "Select text in any app (or in WM Keyboard's text tools) and pick Liquid: search opens with it. Sharing text to " +
+            "\"Search in Liquid\" does the same",
+        section = "keyboard", keywords = "text selection menu process text share other apps keyboard copy liquid wm",
+    )
     val SearchOpenKeyboard = BoolSetting(
         key = "search.keyboard", default = true,
         title = "Open the keyboard",
-        summary = "It comes up as soon as search is opening for good, under a field that is already in its place",
+        summary = "It is asked for as soon as you start swiping towards search and slides in with the pill (with the field above the keyboard)",
         section = "search", keywords = "keyboard focus",
     )
     val SearchClaude = ChoiceSetting(
@@ -1883,6 +2002,47 @@ object LauncherSettings {
         key = "state.keyboardHeight", default = 0, min = 0, max = 10000,
         title = "Height of the keyboard last time, px", section = "state", hidden = true,
     )
+    /**
+     * 0.13.1 (Med: "a setting I can turn on so that when the wallpaper changes, the background of my keyboard also
+     * changes"): WM Keyboard cannot read the wallpaper's picture on Android 13 and later (only its colours), so the
+     * launcher hands it the part of the wallpaper behind the keyboard, at every change (D180).
+     */
+    val KeyboardWallpaper = BoolSetting(
+        key = "keyboard.wallpaper", default = false,
+        title = "Your wallpaper behind the keys",
+        summary = "WM Keyboard's background becomes the part of your wallpaper the keyboard covers, and changes with every " +
+            "wallpaper. Set it up once below: one theme to add, and two permissions in WM Keyboard",
+        section = "keyboard", keywords = "keyboard background wallpaper picture image follow change wm theme behind keys",
+    )
+    val KeyboardWallpaperLook = ChoiceSetting(
+        key = "keyboard.wallpaperLook", default = "search",
+        options = listOf(
+            "search" to "Like behind search: blurred and dimmed as search shows it, so the keyboard carries it on",
+            "home" to "Sharp, like the home screen (a little darker, for the letters)",
+        ),
+        title = "Look of the wallpaper behind the keys",
+        summary = "Changes the picture at once; nothing to add again in WM Keyboard",
+        section = "keyboard", keywords = "keyboard background blur dim sharp wallpaper search",
+    )
+    /** 0.13.1: which of the two "Liquid wallpaper" themes WM Keyboard shows now (0 or 1); the next picture goes to the other. */
+    val KeyboardWallpaperSlot = IntSetting(
+        key = "state.keyboardWallpaperSlot", default = 0, min = 0, max = 1,
+        title = "Keyboard wallpaper theme in use", section = "state", hidden = true,
+    )
+    /** 0.13.1: the last thing that happened when the keyboard's wallpaper was handed over, for Settings. */
+    val KeyboardWallpaperLast = TextSetting(
+        key = "state.keyboardWallpaperLast", default = "",
+        title = "Last keyboard wallpaper hand-over", section = "state", hidden = true,
+    )
+    /**
+     * 0.15.0 (D189): which of the two wallpaper themes WM Keyboard has, as WM Keyboard last answered ("1", "2", "1,2";
+     * empty: not known yet). One is enough now; with both, a change costs one switch instead of two.
+     */
+    val KeyboardWallpaperThemes = TextSetting(
+        key = "state.keyboardWallpaperThemes", default = "",
+        title = "Keyboard wallpaper themes WM Keyboard has", section = "state", hidden = true,
+    )
+
     /** 0.11.2: the heights the keyboard opened at lately (px, newest last); search's field waits at the lowest. */
     val SearchKeyboardOpenings = StringListSetting(
         key = "state.keyboardOpenings", default = emptyList(),
@@ -1941,10 +2101,11 @@ object LauncherSettings {
         title = "Dim on the home screen",
         section = "wallpaper", keywords = "wallpaper dim darken home",
     )
+    /** Up to 0.15.3; 0.16.0 (D203): read once into [WallpaperLockMode] (on: "same"), no longer shown. */
     val WallpaperLockToo = BoolSetting(
         key = "wallpaper.lockToo", default = false,
         title = "Also set it as the lock screen wallpaper",
-        section = "wallpaper", keywords = "wallpaper lock screen",
+        section = "state", keywords = "wallpaper lock screen", hidden = true,
     )
     val WallpaperSystemWrite = ChoiceSetting(
         key = "wallpaper.systemWrite", default = "soon",
@@ -1962,8 +2123,21 @@ object LauncherSettings {
     val WallpaperHistory = IntSetting(
         key = "wallpaper.history", default = 12, min = 4, max = 40, step = 2,
         title = "Recent wallpapers to show",
-        summary = "In the home menu's wallpaper strip and the library. Each picture appears once, however often you used it",
-        section = "wallpaper", keywords = "wallpaper history recent",
+        summary = "In the home menu's wallpaper strip and the library; with a layout's own recents, how many each keeps. Each " +
+            "picture appears once, however often you used it",
+        section = "wallpaperLibrary", keywords = "wallpaper history recent how many keep",
+    )
+    /** 0.16.0: the order of the wallpaper library's pictures (its "Order and filter" card sets it too). */
+    val WallpaperLibrarySort = ChoiceSetting(
+        key = "wallpaper.librarySort", default = "newest",
+        options = listOf(
+            "newest" to "Newest first (in Recent: last used first)",
+            "used" to "Most used first",
+            "colour" to "By colour",
+        ),
+        title = "Order of the wallpaper library",
+        summary = "How the pictures are ordered in the library's lists and collections. Uses are counted from 0.16.0 on",
+        section = "wallpaperLibrary", keywords = "wallpaper library sort order newest most used colour",
     )
     val WallpaperParallax = IntSetting(
         key = "wallpaper.parallax", default = 0, min = 0, max = 50, step = 5, unit = "%",
@@ -1972,20 +2146,23 @@ object LauncherSettings {
             "Each wallpaper can have its own while you place it. 0 keeps it still",
         section = "wallpaper", keywords = "wallpaper parallax scroll pages move slide",
     )
+    /** The transitions a wallpaper or layout change can use (0.16.0: shared by both settings; "pill" is new). */
+    private val transitionStyles = listOf(
+        "liquid" to "Liquid: blurs away as the new screen settles",
+        "ripple" to "Ripple: a wave from the picture you tapped",
+        "pill" to "Liquid wipe: grows out of the pill",
+        "ink" to "Ink: dissolves in soft clouds",
+        "shine" to "Shine: a pane of glass sweeps across",
+        "melt" to "Melt: runs down like paint",
+        "zoom" to "Zoom: you pass through the old screen",
+        "depth" to "Depth: the old one sinks, the new one comes forward",
+        "slide" to "Slide",
+        "fade" to "Cross-fade",
+        "none" to "None",
+    )
     val WallpaperTransition = ChoiceSetting(
         key = "wallpaper.transition", default = "ripple",
-        options = listOf(
-            "liquid" to "Liquid: blurs away as the new screen settles",
-            "ripple" to "Ripple: a wave from the picture you tapped",
-            "ink" to "Ink: dissolves in soft clouds",
-            "shine" to "Shine: a pane of glass sweeps across",
-            "melt" to "Melt: runs down like paint",
-            "zoom" to "Zoom: you pass through the old screen",
-            "depth" to "Depth: the old one sinks, the new one comes forward",
-            "slide" to "Slide",
-            "fade" to "Cross-fade",
-            "none" to "None",
-        ),
+        options = transitionStyles,
         title = "Transition",
         summary = "When the wallpaper or the layout changes: wallpaper, icons and widgets change together. Ripple, ink, shine and melt run on the GPU",
         section = "wallpaper", keywords = "wallpaper transition crossfade fade animation layout switch",
@@ -2001,9 +2178,12 @@ object LauncherSettings {
             "off" to "Off",
             "unlock" to "Every time you unlock",
             "daily" to "Once a day",
+            "interval" to "Every few minutes",
+            "times" to "At set times of day",
         ),
         title = "Change automatically",
-        summary = "A new picture is put in place while the screen is off, so it is ready when you unlock. \"Shuffle wallpaper\" in the home menu changes it now",
+        summary = "A new picture is put in place while the screen is off or while you are in an app, so it is ready when you " +
+            "come back, never while you look. Each layout keeps its own way. \"Shuffle wallpaper\" in the home menu changes it now",
         section = "wallpaper", keywords = "wallpaper rotation automatic change shuffle daily unlock",
     )
     val WallpaperRotationPool = ChoiceSetting(
@@ -2013,6 +2193,7 @@ object LauncherSettings {
             "recent" to "Recently used",
             "all" to "Everything in the library",
             "folders" to "Linked phone folders",
+            "collection" to "This layout's collection",
         ),
         title = "Change between",
         section = "wallpaper", keywords = "wallpaper rotation pool favourites folder",
@@ -2023,6 +2204,327 @@ object LauncherSettings {
         summary = "Off: in order",
         section = "wallpaper", keywords = "wallpaper rotation shuffle random order",
     )
+    /** 0.16.0: "Every few minutes": how many. */
+    val WallpaperRotationMinutes = IntSetting(
+        key = "wallpaper.rotationMinutes", default = 30, min = 5, max = 240, step = 5, unit = "min",
+        title = "Every few minutes: how often",
+        summary = "The next picture comes once this time has passed, at the next moment you are not looking at the home screen",
+        section = "wallpaper", keywords = "wallpaper rotation interval minutes how often",
+    )
+    /** 0.16.0: "At set times of day": when. */
+    val WallpaperRotationTimes = TextSetting(
+        key = "wallpaper.rotationTimes", default = "07:00, 12:00, 18:00, 22:00", placeholder = "07:00, 12:00, 18:00",
+        title = "At set times: when",
+        summary = "Times of day (24 h), separated by commas; the next picture comes after each, when you are not looking",
+        section = "wallpaper", keywords = "wallpaper rotation times of day morning evening schedule",
+    )
+
+    // ---- 0.16.0 (D202): wallpaper per layout (Settings › Wallpaper and layouts › Per layout) ----
+
+    val LayoutsOwnWallpaper = BoolSetting(
+        key = "layouts.ownWallpaper", default = true,
+        title = "Each layout has its own wallpaper",
+        summary = "A new wallpaper goes to the layout you are in, and switching brings each layout's own back. Off: one " +
+            "wallpaper for all (a layout can still keep its own: the wallpaper screen's \"Only for the layout\")",
+        section = "wallpaperLayout", keywords = "layout wallpaper own per layout separate study projects",
+    )
+    val LayoutsOwnRecents = BoolSetting(
+        key = "layouts.ownRecents", default = true,
+        title = "Each layout has its own recent wallpapers",
+        summary = "Recent, in the library and the wallpaper strip, is what you used in the layout you are in. How many: " +
+            "Library › Recent wallpapers to show",
+        section = "wallpaperLayout", keywords = "layout recent wallpapers history per layout",
+    )
+    val LayoutsOwnCollection = BoolSetting(
+        key = "layouts.ownCollection", default = true,
+        title = "Each layout has its own collection",
+        summary = "The library opens on the collection of the layout you are in (All is one tap away). Each layout gets one " +
+            "named after it; hold a collection's chip in the library to give it to the layout you are in",
+        section = "wallpaperLayout", keywords = "layout collection library filter per layout",
+    )
+    val LayoutsTransition = ChoiceSetting(
+        key = "layouts.transition", default = "same",
+        options = listOf("same" to "The one for a new wallpaper") + transitionStyles,
+        title = "When the layout switches",
+        summary = "The transition as you switch layouts. Its length is the wallpaper's (Transition length) and follows the Speed setting",
+        section = "wallpaperLayout", keywords = "layout switch transition liquid wipe pill ripple crossfade",
+    )
+    val WallpaperHomeSaturation = IntSetting(
+        key = "wallpaper.homeSaturation", default = 100, min = 0, max = 200, step = 5, unit = "%",
+        title = "Colour of the wallpaper",
+        summary = "Less or more colour than the picture has (100 %: as it is). Each layout keeps its own; a picture's own look comes first",
+        section = "wallpaperLayout", keywords = "wallpaper saturation colour grey vivid layout look",
+    )
+    val WallpaperHomeTint = ColorSetting(
+        key = "wallpaper.homeTint", default = "", autoLabel = "None",
+        title = "Tint over the wallpaper",
+        summary = "A colour laid over the home wallpaper, as strong as \"Tint strength\". Each layout keeps its own",
+        section = "wallpaperLayout", keywords = "wallpaper tint colour overlay layout look",
+    )
+    val WallpaperHomeTintAmount = IntSetting(
+        key = "wallpaper.homeTintAmount", default = 0, min = 0, max = 60, step = 5, unit = "%",
+        title = "Tint strength",
+        section = "wallpaperLayout", keywords = "wallpaper tint strength amount layout look",
+    )
+
+    // ---- 0.16.0 (D205): folders and Island (Settings › Wallpaper and layouts › Folders and Island) ----
+
+    val WallpaperStripFolders = BoolSetting(
+        key = "wallpaper.stripFolders", default = true,
+        title = "Newest pictures of your folders in the wallpaper strip",
+        summary = "After your favourites and recent ones, the newest pictures of the folders the layout uses (Island's too); " +
+            "shown from what was last seen there, so the strip opens at once",
+        section = "wallpaperFolders", keywords = "wallpaper strip folders newest island insular",
+    )
+    val WallpaperStripFolderCount = IntSetting(
+        key = "wallpaper.stripFolderCount", default = 6, min = 3, max = 12, step = 1,
+        title = "How many from the folders",
+        section = "wallpaperFolders", keywords = "wallpaper strip folders how many newest",
+    )
+
+    // ---- 0.16.0 (D207): video wallpapers (Settings › Wallpaper and layouts › Video) ----
+
+    val VideoGlass = ChoiceSetting(
+        key = "video.glass", default = "auto",
+        options = listOf(
+            "auto" to "Bends the video while the phone keeps up (measured as it plays)",
+            "live" to "Always bends the video",
+            "still" to "A still frame, refreshed every few seconds",
+        ),
+        title = "The glass over a video wallpaper",
+        summary = "Bending a moving picture costs the graphics chip every frame. Automatic measures the first seconds it plays " +
+            "and, when too many frames come late, lets the glass bend a still frame of it instead (the debug log says how many)",
+        section = "wallpaperVideo", keywords = "video wallpaper glass bend refraction still frame smooth lag",
+    )
+    val VideoStillSeconds = IntSetting(
+        key = "video.stillSeconds", default = 5, min = 2, max = 30, step = 1, unit = "s",
+        title = "Still frame for the glass, refreshed every",
+        section = "wallpaperVideo", keywords = "video wallpaper glass still frame refresh seconds",
+    )
+    val VideoPauseSaver = BoolSetting(
+        key = "video.pauseSaver", default = true,
+        title = "Rest in battery saver",
+        summary = "The video stops on its current frame while the phone saves battery",
+        section = "wallpaperVideo", keywords = "video wallpaper battery saver pause",
+    )
+    val VideoPauseBelow = IntSetting(
+        key = "video.pauseBelow", default = 15, min = 0, max = 50, step = 5, unit = "%",
+        title = "Rest below this battery",
+        summary = "0: whatever the battery",
+        section = "wallpaperVideo", keywords = "video wallpaper battery low pause percent",
+    )
+    val VideoOnlyCharging = BoolSetting(
+        key = "video.onlyCharging", default = false,
+        title = "Only while charging",
+        section = "wallpaperVideo", keywords = "video wallpaper charging only battery",
+    )
+    val VideoReencode = ChoiceSetting(
+        key = "video.reencode", default = "ask",
+        options = listOf("ask" to "Ask each time", "always" to "Always", "never" to "Never"),
+        title = "Re-encode a video you add",
+        summary = "Made again for this phone (H.264, at most the size and frame rate below): smaller, and lighter on the battery",
+        section = "wallpaperVideo", keywords = "video wallpaper import re-encode transcode h264 battery size",
+    )
+    val VideoMaxHeight = ChoiceSetting(
+        key = "video.maxSize", default = "1080",
+        options = listOf("720" to "720p", "1080" to "1080p"),
+        title = "Largest size when re-encoding",
+        section = "wallpaperVideo", keywords = "video wallpaper resolution 720p 1080p cap",
+    )
+    val VideoMaxFps = ChoiceSetting(
+        key = "video.maxFps", default = "30",
+        options = listOf("24" to "24 frames a second", "30" to "30 frames a second", "60" to "60 frames a second"),
+        title = "Highest frame rate when re-encoding",
+        section = "wallpaperVideo", keywords = "video wallpaper frame rate fps cap 24 30 60",
+    )
+    /** 0.16.0 (D207): the share of late frames measured while the glass bent a video ("" not measured yet). */
+    val VideoMeasured = TextSetting(key = "state.videoMeasured", default = "", title = "Video glass measured", section = "state", hidden = true)
+
+    // ---- 0.16.0 (D209–D212): the calendar that grows out of the clock's date (Settings › Calendar) ----
+
+    val CalendarSize = ChoiceSetting(
+        key = "calendar.size", default = "half",
+        options = listOf(
+            "compact" to "Compact: a card under the date",
+            "half" to "Half sheet: the lower half of the screen",
+            "full" to "Full: the whole screen",
+        ),
+        title = "Size",
+        summary = "How much of the screen the calendar takes when it grows out of the clock's date",
+        section = "calendar", keywords = "calendar size compact half sheet full screen pop-up popup",
+    )
+    val CalendarView = ChoiceSetting(
+        key = "calendar.view", default = "month",
+        options = listOf("month" to "Month", "week" to "Week strip", "agenda" to "Agenda", "year" to "Year", "last" to "The one you left it on"),
+        title = "Opens on",
+        summary = "The view it shows first; the tabs at its top switch between them",
+        section = "calendar", keywords = "calendar view month week strip agenda year heatmap default open",
+    )
+    val CalendarMondayFirst = BoolSetting(
+        key = "calendar.mondayFirst", default = true,
+        title = "Week starts on Monday",
+        summary = "Off: on your phone language's first day. The Calendar widget follows this too",
+        section = "calendar", keywords = "calendar week start monday sunday first day widget",
+    )
+    val CalendarWeekNumbers = BoolSetting(
+        key = "calendar.weekNumbers", default = false,
+        title = "Week numbers",
+        summary = "The week of the year (ISO) beside each week of the month and over the week strip",
+        section = "calendar", keywords = "calendar week numbers iso",
+    )
+    val CalendarDensity = ChoiceSetting(
+        key = "calendar.density", default = "normal",
+        options = listOf("compact" to "Compact", "normal" to "Normal", "roomy" to "Roomy"),
+        title = "Density",
+        summary = "How much room the days and the agenda's rows take",
+        section = "calendar", keywords = "calendar density compact roomy spacing rows size",
+    )
+    val CalendarGlass = ChoiceSetting(
+        key = "calendar.glass", default = "auto",
+        options = listOf(
+            "auto" to "Like the launcher's sheets",
+            "full" to "Liquid glass: bends what is behind it",
+            "frosted" to "Frosted: blur and tint",
+            "tint" to "Tint only: no blur, lightest on the battery",
+        ),
+        title = "Glass",
+        summary = "The glass tier of the calendar's surface",
+        section = "calendar", keywords = "calendar glass tier liquid frosted tint blur refraction",
+    )
+    val CalendarCorner = IntSetting(
+        key = "calendar.corner", default = 30, min = 8, max = 44, step = 2, unit = "dp",
+        title = "Corners",
+        summary = "How round the calendar's corners are once it is open",
+        section = "calendar", keywords = "calendar corners radius round shape",
+    )
+    val CalendarToday = ChoiceSetting(
+        key = "calendar.today", default = "filled",
+        options = listOf("filled" to "A filled circle", "ring" to "A ring", "text" to "Its number in the accent colour", "glow" to "A soft glow"),
+        title = "Today",
+        summary = "How today stands out; the day you pick wears the liquid blob",
+        section = "calendar", keywords = "calendar today highlight style circle ring glow accent",
+    )
+    val CalendarMarks = ChoiceSetting(
+        key = "calendar.marks", default = "dots",
+        options = listOf("dots" to "Dots in each event's colour", "bars" to "Colour bars"),
+        title = "Events on a day",
+        summary = "What a day with events shows under its number",
+        section = "calendar", keywords = "calendar events marks dots bars colour color",
+    )
+    val CalendarHijri = BoolSetting(
+        key = "calendar.hijri", default = false,
+        title = "Hijri date line",
+        summary = "The Islamic date of the day you pick, under its name (≈: Tunisia follows the moon)",
+        section = "calendar", keywords = "calendar hijri islamic date line ramadan moon",
+    )
+    val CalendarDim = IntSetting(
+        key = "calendar.dim", default = 25, min = 0, max = 70, step = 5, unit = "%",
+        title = "Dim behind it",
+        summary = "How much the home screen darkens behind the calendar",
+        section = "calendar", keywords = "calendar dim darken background behind",
+    )
+    val CalendarBounce = IntSetting(
+        key = "calendar.bounce", default = 40, min = 0, max = 100, step = 10, unit = "%",
+        title = "Bounce as it opens",
+        summary = "0: it settles without overshooting. It always follows your finger when you pull it down",
+        section = "calendar", keywords = "calendar bounce spring open motion",
+    )
+    /** Ids of the phone's calendars the calendar leaves out (Calendars and colours). */
+    val CalendarHidden = StringListSetting(
+        key = "calendar.hidden", default = emptyList(),
+        title = "Calendars left out", section = "calendar", hidden = true,
+    )
+    /** "id=#RRGGBB": a calendar shown in a colour of your own (Calendars and colours). */
+    val CalendarColours = StringListSetting(
+        key = "calendar.colours", default = emptyList(),
+        title = "Colours of calendars", section = "calendar", hidden = true,
+    )
+
+    val CalendarHolidays = BoolSetting(
+        key = "calendar.holidays", default = true,
+        title = "Holidays in Tunisia",
+        summary = "Public holidays on their days, in the agenda and in the year; the Islamic ones with ≈ until you set their date",
+        section = "calendarDays", keywords = "calendar holidays tunisia public aid eid mouled hijri new year revolution",
+    )
+    val CalendarSchool = BoolSetting(
+        key = "calendar.school", default = true,
+        title = "School year",
+        summary = "Your ESSAI dates (indicative) on their days, in the agenda and in the year",
+        section = "calendarDays", keywords = "calendar school year essai exams ds revision period dates countdown",
+    )
+    val CalendarHijriShift = IntSetting(
+        key = "calendar.hijriShift", default = 0, min = -2, max = 2, step = 1, unit = "days",
+        title = "Islamic dates moved by",
+        summary = "When Tunisia's dates differ from the Umm al-Qura tables: the Islamic holidays and the Hijri line follow",
+        section = "calendarDays", keywords = "calendar hijri islamic shift adjust days moon aid ramadan",
+    )
+    /** The school year as JSON (SchoolYear in core/data); empty: the built-in ESSAI 2026–27 dates. */
+    val CalendarSchoolYear = TextSetting(key = "calendar.schoolYear", default = "", title = "School year", section = "calendarDays", hidden = true)
+    /** Holidays moved or hidden by hand (TunisiaHolidays in core/data), as JSON. */
+    val CalendarHolidayChanges = TextSetting(key = "calendar.holidayChanges", default = "", title = "Holidays set by hand", section = "calendarDays", hidden = true)
+
+    val CalendarShareWidget = BoolSetting(
+        key = "calendar.shareWidget", default = false,
+        title = "The Calendar widget uses the calendar's settings",
+        summary = "On: its marks, today, week numbers, holidays, school year and chosen calendars come from the calendar. It keeps " +
+            "its own card, corners and colour, and a tap on a day still opens your calendar app. Off: the options below",
+        section = "calendarWidget", keywords = "calendar widget share same settings separate own",
+    )
+    val CalendarWidgetMarks = ChoiceSetting(
+        key = "calendar.widget.marks", default = "dots", options = CalendarMarks.options,
+        title = "Widget: events on a day",
+        summary = "What a day with events shows on the widget",
+        section = "calendarWidget", keywords = "calendar widget events marks dots bars",
+    )
+    val CalendarWidgetToday = ChoiceSetting(
+        key = "calendar.widget.today", default = "filled", options = CalendarToday.options,
+        title = "Widget: today",
+        summary = "How today stands out on the widget",
+        section = "calendarWidget", keywords = "calendar widget today highlight circle ring glow",
+    )
+    val CalendarWidgetWeekNumbers = BoolSetting(
+        key = "calendar.widget.weekNumbers", default = false,
+        title = "Widget: week numbers",
+        summary = "The week of the year beside each week of the widget's month",
+        section = "calendarWidget", keywords = "calendar widget week numbers",
+    )
+    val CalendarWidgetHolidays = BoolSetting(
+        key = "calendar.widget.holidays", default = false,
+        title = "Widget: holidays in Tunisia",
+        summary = "Tunisia's holidays coloured on the widget's days",
+        section = "calendarWidget", keywords = "calendar widget holidays tunisia",
+    )
+    val CalendarWidgetSchool = BoolSetting(
+        key = "calendar.widget.school", default = false,
+        title = "Widget: school year",
+        summary = "Your school dates marked on the widget's days",
+        section = "calendarWidget", keywords = "calendar widget school year essai exams",
+    )
+
+    /** 0.16.0 (D209): the calendar asked for the phone's calendars once, the first time it opened. */
+    val CalendarAsked = BoolSetting(key = "state.calendarAsked", default = false, title = "Calendar asked to read events", section = "state", hidden = true)
+
+    /** The calendar's view when it closed ("Opens on: the one you left it on"). */
+    val CalendarLastView = TextSetting(key = "state.calendarLastView", default = "month", title = "Calendar's last view", section = "state", hidden = true)
+
+    // ---- 0.16.0 (D203): the lock screen ----
+
+    val WallpaperLockMode = ChoiceSetting(
+        key = "wallpaper.lockMode", default = "off",
+        options = listOf(
+            "off" to "Left alone (it keeps its own)",
+            "same" to "The same as the home screen",
+            "chosen" to "A picture of its own",
+        ),
+        title = "Lock screen",
+        summary = "What the launcher does with the lock screen's wallpaper. \"A picture of its own\": the picture picked " +
+            "in the wallpaper screen (Blur and dim › Lock screen)",
+        section = "wallpaper", keywords = "wallpaper lock screen same own picture",
+    )
+    /** 0.16.0: the library picture set as the lock screen's own ("chosen"). */
+    val WallpaperLockPicture = TextSetting(key = "wallpaper.lockPicture", default = "", title = "Lock screen picture", section = "state", hidden = true)
+    /** 0.16.0 (D202): per-layout wallpapers, recents and collections were set up once. */
+    val Migrated0160 = BoolSetting(key = "state.migrated0160", default = false, title = "Wallpaper per layout set up", section = "state", hidden = true)
 
     // ---- Study companion ----
 
@@ -2036,15 +2538,24 @@ object LauncherSettings {
     val StudyClockLine = ChoiceSetting(
         key = "study.clockLine", default = "block",
         options = listOf(
-            "block" to "Now, next, unmarked, tasks left, then tomorrow",
+            "block" to "What needs you now or next, then tomorrow",
             "today" to "Today only (nothing about tomorrow)",
             "off" to "Nothing",
         ),
         title = "Under the clock",
-        summary = "A line under your clock widget: the block running now with a ring for the time gone; the next block when it starts within the hour; " +
-            "a block that ended without Done or Skip; the next block later; the tasks left; then tomorrow's first block. " +
-            "Tap it for Today. The pill can show the same: add \"Study block\" to its items",
-        section = "study", keywords = "study clock line now current block next glance pill tomorrow unmarked",
+        summary = "A line under your clock widget that never repeats the pill. While the pill counts a focus down: the block's " +
+            "next step with a tick (or what comes after it). Otherwise, the first that applies: when to leave in the morning, " +
+            "\"present?\" after a class, the block running, the class you are in (until when, where), a class or block within " +
+            "the hour, a block to mark, free until the next thing, the tasks left, tomorrow's first block. Tap it for Today",
+        section = "study", keywords = "study clock line now current block next glance pill tomorrow unmarked step focus class room free",
+    )
+    /** 0.13.1 (D181): the quieter second line under the clock. */
+    val StudyLineAfter = BoolSetting(
+        key = "study.lineAfter", default = true,
+        title = "Second line: the rest of the day",
+        summary = "Smaller, under the line: what comes after, the tasks left, and an exam within two weeks (amber, red from " +
+            "three days, in hours)",
+        section = "study", keywords = "study clock line second rest of day then next tasks exam countdown",
     )
     val StudyBlockCards = ChoiceSetting(
         key = "study.blockCards", default = "preview",
@@ -2055,13 +2566,13 @@ object LauncherSettings {
         ),
         title = "Blocks in Today",
         summary = "Compact: each block shows its title, time and step count, and a tap shows its steps and buttons (the block now or next too). Tap a block's title to open or close it",
-        section = "study", keywords = "study today hub block card cards expand collapse folded compact steps description notes details",
+        section = "study", keywords = "study today hub block card cards expand collapse folded compact steps description notes details", hidden = true,
     )
     val StudyButtonSide = ChoiceSetting(
         key = "study.buttonSide", default = "end",
         options = listOf("end" to "Right", "start" to "Left"),
         title = "Done and Skip buttons",
-        section = "study", keywords = "study done skip buttons right left side align",
+        section = "study", keywords = "study done skip buttons right left side align", hidden = true,
     )
     val StudyTomorrow = ChoiceSetting(
         key = "study.tomorrow", default = "peek",
@@ -2072,7 +2583,7 @@ object LauncherSettings {
         ),
         title = "Tomorrow in Today",
         summary = "Tap a block of tomorrow to read its steps and notes",
-        section = "study", keywords = "study tomorrow peek expand next day preview hide",
+        section = "study", keywords = "study tomorrow peek expand next day preview hide", hidden = true,
     )
     val StudyLinkOpener = ChoiceSetting(
         key = "study.linkOpener", default = "tab",
@@ -2125,6 +2636,20 @@ object LauncherSettings {
         title = "Camera for board photos",
         summary = "The app that takes the board photos; empty: the phone's default camera",
         section = "study", keywords = "camera photo board picture app essai class",
+        hidden = true,
+    )
+    /**
+     * 0.15.3 (D196, Med: "I want to be able to take multiple pictures at once"): board photos with the launcher's own
+     * camera (several in a row, each saved at once in the class's folder) or a camera app (one at a time, the app above).
+     * Chosen on the page, with the camera app.
+     */
+    val StudyBoardCamera = ChoiceSetting(
+        key = "study.boardCamera", default = "launcher",
+        options = listOf("launcher" to "The launcher's camera", "app" to "A camera app"),
+        title = "Board photos with",
+        summary = "The launcher's camera takes several photos in a row, each saved at once in the class's folder; a camera " +
+            "app takes one photo at a time",
+        section = "study", keywords = "camera photo board picture several series burst multiple launcher app essai class",
         hidden = true,
     )
     /** 0.11.2: the board photo being taken (BoardPhotos), so a launcher restarted while the camera is open still saves it. */
@@ -2320,25 +2845,33 @@ object LauncherSettings {
         section = "study", keywords = "study claude header prompt context",
     )
     val StudyCheckin = TextSetting(
-        key = "study.checkin", default = "Evening check-in. Here is my day; ask me what you need, then plan tomorrow.",
-        placeholder = "Evening check-in",
-        title = "Evening check-in message",
-        summary = "The study hub's Evening check-in button sends this with today's log to Claude",
-        section = "study", keywords = "study evening check-in claude prompt",
+        key = "study.checkin", default = "Study check-in. Here is my day; ask me what I want to study and how far I am, then let's start.",
+        placeholder = "Study check-in",
+        title = "Check-in message",
+        summary = "Today's \"Study with Claude\" sends this first, then your day: today's classes, what you picked, the minutes " +
+            "studied, your notes, what is recommended and the next exam. Point it to your plan doc's check-in section",
+        section = "study", keywords = "study evening check-in claude prompt kick-off study with claude message",
+    )
+    /** 0.14.0 (D186): the old five templates were checked once ([SettingsMigrations.migrate0140]). */
+    val TemplatesMigrated0140 = BoolSetting(
+        key = "state.templatesMigrated0140", default = false,
+        title = "Templates checked for 0.14.0", section = "state", hidden = true,
+    )
+    /** 0.14.0 (D185): Today's recommended tasks ticked, as "yyyy-MM-dd|key" (today's only are kept). */
+    val StudyRecommendDone = StringListSetting(
+        key = "state.recommendDone", default = emptyList(),
+        title = "Recommended tasks ticked today", section = "state", hidden = true,
     )
 
     /** "Label|prompt" lines; the hub shows the labels as chips. */
     val StudyTemplates = StringListSetting(
         key = "study.templates",
+        // 0.14.0 (D186, Med: "keep Quiz me", the rest is clutter): one template by default; add more here if wanted.
         default = listOf(
-            "Explain|Explain this to me step by step, with one worked example:",
-            "Quiz me|Quiz me on the block I am working on: five short questions, one at a time.",
-            "Stuck|I am stuck on this step. Give me a hint, not the answer:",
-            "Reschedule|I missed a block today. Suggest how to reschedule it this week without touching fixed dates.",
-            "Résumé|Fais-moi un résumé en 5 points de ce que je viens d'étudier :",
+            "Quiz me|Quiz me on what I studied today and in class: five short questions, one at a time, in French for course content.",
         ),
         title = "Prompt templates",
-        summary = "One per line as \"Label|prompt\". Shown as chips in the study hub; a tap sends the prompt to Claude with the header",
+        summary = "One per line as \"Label|prompt\". Shown as chips at the bottom of Today; a tap sends the prompt to Claude with the header",
         section = "study", keywords = "study claude prompt templates chips",
     )
     val StudyHubSize = IntSetting(
@@ -2356,7 +2889,7 @@ object LauncherSettings {
         ),
         title = "Study hub opens",
         summary = "At full height with the whole day, or collapsed to the block now or next",
-        section = "study", keywords = "study hub today panel collapsed expanded full whole day open compact size height half",
+        section = "study", keywords = "study hub today panel collapsed expanded full whole day open compact size height half", hidden = true,
     )
     val StudyHubDim = IntSetting(
         key = "study.hubDim", default = 26, min = 0, max = 80, step = 2, unit = "%",
@@ -2628,6 +3161,7 @@ object LauncherSettings {
         PillEnabled, PillSlots, PillPosition, PillOffset, PillWidth, PillHeight, PillCorner, PillIconSize,
         SearchCards,
         PillStudyLook, PillStudyGlyph, PillStudyApp, PillStudyPicture, PillStudyFrame, PillStudySize, PillStudyTint, PillStudyRing, PillSlotGestures,
+        PillLiveFocus, PillLiveClass, PillLiveLead, PillLiveMusic, PillLiveCards, PillLiveShape,
         PillHint, PillTap, PillLongPress, PillSwipeUp, PillSwipeDown,
         DrawerColumns, DrawerIconSize, DrawerLabels, DrawerFromBottom, DrawerAutoKeyboard, DrawerSort,
         DrawerWork, DrawerCloseOnLaunch, DrawerSideMargin, DrawerDim, DrawerTabsPosition,
@@ -2639,19 +3173,29 @@ object LauncherSettings {
         DrawerTabsStyle, DrawerTabsSize, DrawerTabsIcons, DrawerTabsButtons, DrawerTabMenu, DrawerTabsInSearch,
         TagStripPosition, TagButtonPosition, TagButtonSize, TagStripOrder, TagStripCount, TagStripCounts, TagTap, TagMatch, TagSwipe, TagFilterKeep, TagPinned,
         MenuEntries,
-        SearchTransition, SearchBounce, SearchSpeed, SearchStretch, SearchField, SearchOpenKeyboard, SearchBlur, SearchDim, SearchHomeScale,
+        SearchTransition, SearchBounce, SearchSpeed, SearchStretch, SearchFieldHeight, SearchFieldWidth, SearchFieldGap, SearchSelectionEntry,
+        SearchFindSettings, SearchFindContacts, SearchFindEvents, SearchFindNotes, SearchFindCards, SearchContactsAsked, SearchField, SearchOpenKeyboard, SearchBlur, SearchDim, SearchHomeScale,
         SearchClaude, SearchClaudeTarget, SearchClipboard, SearchEngine, SearchKeyboardHeight, SearchKeyboardOpenings, WallpaperSheetTall,
+        KeyboardWallpaper, KeyboardWallpaperLook, KeyboardWallpaperSlot, KeyboardWallpaperLast, KeyboardWallpaperThemes,
         HomeMenuSetup, HomeMenuActions, HomeMenuLabels, HomeMenuSink,
-        WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
-        WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, LayoutsAutoSave,
+        WallpaperHomeBlur, WallpaperHomeDim, WallpaperLockToo, WallpaperSystemWrite, WallpaperHistory, WallpaperLibrarySort, WallpaperParallax, WallpaperTransition, WallpaperTransitionMs,
+        WallpaperRotation, WallpaperRotationPool, WallpaperRotationShuffle, WallpaperRotationMinutes, WallpaperRotationTimes, LayoutsAutoSave,
+        LayoutsOwnWallpaper, LayoutsOwnRecents, LayoutsOwnCollection, LayoutsTransition, WallpaperHomeSaturation, WallpaperHomeTint, WallpaperHomeTintAmount,
+        WallpaperLockMode, WallpaperLockPicture, Migrated0160, WallpaperStripFolders, WallpaperStripFolderCount,
+        VideoGlass, VideoStillSeconds, VideoPauseSaver, VideoPauseBelow, VideoOnlyCharging, VideoReencode, VideoMaxHeight, VideoMaxFps, VideoMeasured,
+        CalendarSize, CalendarView, CalendarMondayFirst, CalendarWeekNumbers, CalendarDensity, CalendarGlass, CalendarCorner, CalendarToday,
+        CalendarMarks, CalendarHijri, CalendarDim, CalendarBounce, CalendarHidden, CalendarColours,
+        CalendarHolidays, CalendarSchool, CalendarHijriShift, CalendarSchoolYear, CalendarHolidayChanges,
+        CalendarShareWidget, CalendarWidgetMarks, CalendarWidgetToday, CalendarWidgetWeekNumbers, CalendarWidgetHolidays, CalendarWidgetSchool,
+        CalendarAsked, CalendarLastView,
         BackupAuto, BackupKeep, BackupWallpapers, BackupFolder, BackupLast,
         LayoutWindowLayout, LayoutWindowFrom, LayoutWindowTo, LayoutWindowDays,
-        StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyCameraApp, StudyPendingPhoto, StudyPlanLink, StudyLinkOpener,
+        StudyEnabled, StudyClockLine, StudyBlockCards, StudyButtonSide, StudyTomorrow, StudyBlockCalendars, StudyTaskCalendars, StudyWriteBack, StudyOverdueDays, StudyNoticeLead, StudyClaudeApp, StudyCameraApp, StudyBoardCamera, StudyPendingPhoto, StudyPlanLink, StudyLinkOpener,
         StudyAttendance, StudyLeaveBy, StudyCommute, StudyRest, StudyWindDown, StudySpeedBump, StudySpeedBumpTags, StudyFeedCalendar, StudyFeedLocal, StudyGlassTint,
         StudyCommuteLayout, StudyExamLayout, ContextActive, ContextApplied, ContextBase, LayoutTimerUntil, LayoutTimerLayout, LayoutTimerBack,
         StudyQuiet, StudyQuietPeople, StudyQuietEmail, StudyQuietTags, StudyAnnales,
         StudyArrival, StudyHomeWifi, StudyArrivalCharger, StudyShiftLead, StudyLatestEnd, StudyClassCalendars, StudyHeader, StudyCheckin, StudyTemplates,
-        StudyHubSize, StudyHubBounce, StudyClockAction, StudyHubOpen, StudyHubDim, StudyHubBlur, StudyHubInk, StudyLineInk, StudyLineShadow,
+        StudyHubSize, StudyHubBounce, StudyClockAction, StudyHubOpen, StudyHubDim, StudyHubBlur, StudyHubInk, StudyLineInk, StudyLineShadow, StudyLineAfter, StudyRecommendDone, TemplatesMigrated0140,
         NoticesEnabled, NoticePosition, NoticeDuration, NoticeStyle, NoticeIcons,
         NoticeLayout, NoticeWallpaper, NoticeTags, NoticeRedirect, NoticeUpdate, NoticeStudy, NoticeTask, NoticeInfo,
         GlassQuality, GlassEngine, GlassAuto, GlassCap, GlassFullPercent, GlassTintMode,
@@ -2676,7 +3220,15 @@ object LauncherSettings {
     val layoutKeys: Set<String> by lazy {
         val sections = setOf("home", "clock", "gestures", "pill", "icons", "homeMenu", "folders", "dock")
         all.filter { it.section in sections }.map { it.key }.toSet() +
-            setOf(WallpaperHomeBlur.key, WallpaperHomeDim.key)
+            setOf(WallpaperHomeBlur.key, WallpaperHomeDim.key) +
+            // 0.16.0 (D202): each layout's own look and its own automatic changes ([rotationLayoutKeys]: carried into
+            // the layouts saved before, once, so switching does not reset them).
+            setOf(WallpaperHomeSaturation.key, WallpaperHomeTint.key, WallpaperHomeTintAmount.key) + rotationLayoutKeys
+    }
+
+    /** 0.16.0 (D202): the automatic changes, part of each layout since 0.16.0 (existing layouts get the values of the day). */
+    val rotationLayoutKeys: Set<String> by lazy {
+        setOf(WallpaperRotation.key, WallpaperRotationPool.key, WallpaperRotationShuffle.key, WallpaperRotationMinutes.key, WallpaperRotationTimes.key)
     }
 
     /** Keys that make up a theme: the Theme section and the glass look (not its quality, which is about this phone). */
@@ -2714,6 +3266,7 @@ object LauncherSettings {
             ThemedIconsWhere, ThemedIconsUncovered, ThemedIconsPacks, ThemedIconsColors, ThemedIconsStyle, IconMask,
             GlassAuto, WallpaperSystemWrite, WallpaperHistory, WallpaperTransitionMs,
             NoticeDuration, NoticeIcons, TagFilterKeep, StudyOverdueDays, StudyClaudeApp,
+            CalendarDim, CalendarHijriShift,
         ).map { it.key }.toSet() + glassSurfaces.flatMap { it.settings }.map { it.key }
     }
 

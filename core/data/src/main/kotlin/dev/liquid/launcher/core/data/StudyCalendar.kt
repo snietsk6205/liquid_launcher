@@ -33,8 +33,21 @@ import java.time.format.DateTimeFormatter
 /** A calendar on the phone, for choosing which ones hold study blocks and tasks. */
 data class StudyCalendarInfo(val id: Long, val name: String, val account: String, val color: Int, val writable: Boolean, val primary: Boolean = false)
 
-/** A focus timer running on a block. */
-data class StudyFocus(val eventKey: String, val eventId: Long, val startedAt: Long)
+/**
+ * A focus timer running on a block, or (0.14.0, D184) a study session not tied to any block: [subject] is what is
+ * studied (as chosen when Claude opened) and [until] when it ends (45 minutes after it began).
+ */
+data class StudyFocus(val eventKey: String, val eventId: Long, val startedAt: Long, val subject: String = "", val until: Long = 0) {
+    /** A session started from Today's "Study with Claude", not a block's focus. */
+    val isSession: Boolean get() = eventKey.startsWith(SESSION_PREFIX)
+
+    companion object {
+        const val SESSION_PREFIX = "session:"
+
+        /** Med's own rule: no study stretch longer than 45 minutes. */
+        const val SESSION_MINUTES = 45
+    }
+}
 
 /**
  * The study companion's data: study blocks and tasks read from the phone's calendar, and the
@@ -73,8 +86,20 @@ class StudyCalendar(
 
     init {
         val key = prefs.getString("focusKey", null)
-        if (key != null) _focus.value = StudyFocus(key, prefs.getLong("focusEvent", 0), prefs.getLong("focusStart", 0))
+        if (key != null) {
+            _focus.value = StudyFocus(
+                key, prefs.getLong("focusEvent", 0), prefs.getLong("focusStart", 0),
+                prefs.getString("focusSubject", null).orEmpty(), prefs.getLong("focusEnd", 0),
+            )
+        }
     }
+
+    private val _studied = MutableStateFlow(studiedOn(LocalDate.now()))
+
+    /** 0.14.0 (D184): minutes of study sessions finished today (the one running not counted until it ends). */
+    val studiedToday: StateFlow<Int> = _studied
+
+    private fun studiedOn(date: LocalDate): Int = prefs.getInt("studied:$date", 0)
 
     /** Starts or stops following calendar changes (while the launcher is on screen). */
     fun watch(on: Boolean) {
@@ -102,7 +127,7 @@ class StudyCalendar(
             _homeAt.value = storedHome()
             _attendance.value = storedAttendance()
             _checkedIn.value = storedCheckin()
-            _cardAnswered.value = storedCard()
+            _studied.value = studiedOn(LocalDate.now())
             // Not part of this job: a newer refresh must not cancel the write of the minutes.
             if (_focus.value != null) scope.launch(Dispatchers.IO) { finishFocusIfOver() }
         }
@@ -262,6 +287,8 @@ class StudyCalendar(
         val fromCalendar = StudyFeedParser.parse(feedText)
         if (feedText != null && fromCalendar == null) DebugLog.error("Study", "launcher-data of $feedDay is not valid JSON; using the local copy")
         val feed = fromCalendar ?: StudyFeedParser.parse(settings.get(LauncherSettings.StudyFeedLocal))
+        // 0.12.0 (D173): its flashcards join the local deck (new ones only; none is lost when the event changes).
+        feed?.let { ingestCards(it.cards) }
         val feedSource = when {
             fromCalendar != null -> "calendar"
             feed != null -> "local"
@@ -491,7 +518,19 @@ class StudyCalendar(
         val focus = StudyFocus(event.key, event.eventId, System.currentTimeMillis())
         _focus.value = focus
         prefs.edit().putString("focusKey", focus.eventKey).putLong("focusEvent", focus.eventId).putLong("focusStart", focus.startedAt)
-            .putLong("focusEnd", event.end).putBoolean("focusRecurring", event.recurring).apply()
+            .putLong("focusEnd", event.end).putBoolean("focusRecurring", event.recurring).remove("focusSubject").apply()
+    }
+
+    /**
+     * 0.14.0 (D184): a study session on [subject] for [minutes], started from Today's "Study with Claude" (no block in
+     * the calendar any more). It ends by itself like a block's focus; its minutes count towards [studiedToday] and are
+     * written nowhere in the calendar.
+     */
+    fun startSession(subject: String, minutes: Int = StudyFocus.SESSION_MINUTES, now: Long = System.currentTimeMillis()) {
+        val focus = StudyFocus(StudyFocus.SESSION_PREFIX + now, -1, now, subject.trim(), now + minutes * 60_000L)
+        _focus.value = focus
+        prefs.edit().putString("focusKey", focus.eventKey).putLong("focusEvent", -1).putLong("focusStart", now)
+            .putLong("focusEnd", focus.until).putBoolean("focusRecurring", false).putString("focusSubject", focus.subject).apply()
     }
 
     /** The end of the block the focus timer runs on (0 when unknown). */
@@ -508,7 +547,11 @@ class StudyCalendar(
         val end = focusEnd(focus)
         if (!StudyLocal.focusOver(end, now)) return null
         val minutes = stopFocus(until = end)
-        Notices.post(NoticeKind.Study, "Focus ended with the block: $minutes min", if (minutes > 0) "Added to the block" else null)
+        if (focus.isSession) {
+            Notices.post(NoticeKind.Study, "Study session over: $minutes min", "${_studied.value} min studied today")
+        } else {
+            Notices.post(NoticeKind.Study, "Focus ended with the block: $minutes min", if (minutes > 0) "Added to the block" else null)
+        }
         return minutes
     }
 
@@ -519,8 +562,16 @@ class StudyCalendar(
         val recurring = prefs.getBoolean("focusRecurring", false)
         // Taken atomically, so the minute tick and a refresh cannot both write the same minutes.
         val focus = _focus.getAndUpdate { if (it == running) null else it }.takeIf { it == running } ?: return 0
-        prefs.edit().remove("focusKey").remove("focusEvent").remove("focusStart").remove("focusEnd").remove("focusRecurring").apply()
+        prefs.edit().remove("focusKey").remove("focusEvent").remove("focusStart").remove("focusEnd").remove("focusRecurring").remove("focusSubject").apply()
         val minutes = StudyLocal.focusMinutes(focus.startedAt, until, end)
+        if (focus.isSession) {
+            // A session's minutes count for the day it began; nothing is written into the calendar.
+            val day = java.time.Instant.ofEpochMilli(focus.startedAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+            val total = studiedOn(day) + minutes
+            prefs.edit().putInt("studied:$day", total).apply()
+            if (day == LocalDate.now()) _studied.value = total
+            return minutes
+        }
         if (minutes > 0) addFocus(focus, end, recurring, minutes)
         return minutes
     }
@@ -697,22 +748,83 @@ class StudyCalendar(
         _checkedIn.value = true
     }
 
+    /** 0.11.2's state: the question of the one flashcard answered today, read once to move it into the deck. */
     private fun storedCard(): String? = prefs.getString("card:" + LocalDate.now(), null)
 
-    private val _cardAnswered = MutableStateFlow(storedCard())
+    // ---- 0.12.0 (D173): the flashcard deck, in a file of its own ----
 
-    /** The question of the flashcard answered today (E4), or null. */
-    val cardAnswered: StateFlow<String?> = _cardAnswered
+    private val deckFile = java.io.File(context.filesDir, "flashcards.json")
+    private val deckJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val deckLock = Any()
+    private var deckMigrated = deckFile.exists()
+    private val _deck = MutableStateFlow(readDeck())
 
-    /** E4: the day's flashcard was answered; a wrong answer becomes "Note: flashcard wrong <module>: <question>". */
-    suspend fun answerCard(card: FeedCard, right: Boolean): Boolean {
-        val today = "card:" + LocalDate.now()
-        val edit = prefs.edit()
-        prefs.all.keys.filter { it.startsWith("card:") && it != today }.forEach { edit.remove(it) }
-        edit.putString(today, card.q).apply()
-        _cardAnswered.value = card.q
+    /** The local deck: every card launcher-data ever brought, with its schedule. */
+    val deck: StateFlow<Deck> = _deck
+
+    /** After a backup was restored: the deck as the file now holds it. */
+    fun reloadDeck() {
+        synchronized(deckLock) {
+            _deck.value = readDeck()
+            deckMigrated = true
+        }
+    }
+
+    private fun readDeck(): Deck = runCatching {
+        if (deckFile.exists()) deckJson.decodeFromString(Deck.serializer(), deckFile.readText()) else Deck()
+    }.getOrElse {
+        DebugLog.error("Study", "the flashcard deck could not be read ($it); it is kept aside as flashcards.broken.json")
+        runCatching { deckFile.copyTo(java.io.File(context.filesDir, "flashcards.broken.json"), overwrite = true) }
+        Deck()
+    }
+
+    private fun writeDeck(deck: Deck) {
+        runCatching {
+            val tmp = java.io.File(context.filesDir, "flashcards.json.tmp")
+            tmp.writeText(deckJson.encodeToString(Deck.serializer(), deck))
+            if (!tmp.renameTo(deckFile)) {
+                deckFile.writeText(tmp.readText())
+                tmp.delete()
+            }
+        }.onFailure { DebugLog.error("Study", "the flashcard deck could not be saved: $it") }
+    }
+
+    private fun ingestCards(cards: List<FeedCard>) {
+        synchronized(deckLock) {
+            val today = LocalDate.now()
+            var next = FlashcardDeck.merge(_deck.value, cards, today)
+            if (!deckMigrated) {
+                // The first deck: 0.11.2's card answered today stays hidden today, as it was.
+                next = FlashcardDeck.migrateAnswered(next, storedCard(), today)
+                deckMigrated = true
+            }
+            if (next != _deck.value || !deckFile.exists()) {
+                val added = next.cards.size - _deck.value.cards.size
+                if (added > 0) DebugLog.event("Study", "flashcards: $added new in the deck (${next.cards.size} in all)")
+                _deck.value = next
+                writeDeck(next)
+            }
+        }
+    }
+
+    /**
+     * A flashcard was answered (E4, 0.12.0): wrong comes back tomorrow and writes "Note: flashcard wrong <module>:
+     * <question>" for the evening check-in; right waits longer each time (1, 3, 7, 14, 30 days).
+     */
+    suspend fun answerCard(card: DeckCard, right: Boolean): Boolean {
+        val today = LocalDate.now()
+        withContext(Dispatchers.IO) {
+            synchronized(deckLock) {
+                val next = FlashcardDeck.answer(_deck.value, card.id, right, today)
+                _deck.value = next
+                writeDeck(next)
+            }
+        }
+        val after = _deck.value.cards.firstOrNull { it.id == card.id }
+        DebugLog.event("Study", "flashcard ${if (right) "right" else "wrong"}: ${card.module.ifBlank { "card" }}, next on ${after?.due}")
         if (right) return true
         val module = card.module.trim().ifEmpty { "card" }
+        // The question as Claude wrote it (LaTeX included: the check-in reads it as written).
         return addNote("flashcard wrong $module: " + card.q.trim().replace('\n', ' ').take(90))
     }
 

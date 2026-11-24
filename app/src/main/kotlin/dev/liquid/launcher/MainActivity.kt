@@ -28,7 +28,9 @@ class MainActivity : ComponentActivity() {
 
     private val returnState = HomeReturnState()
     private val frameMeter = FrameMeter()
+    private var clock: ClockRefresher? = null
     private var firstStart = true
+    @Volatile
     private var resumed = false
     private var pausedAt = 0L
     private var imageCallback: ((android.net.Uri?) -> Unit)? = null
@@ -41,10 +43,22 @@ class MainActivity : ComponentActivity() {
         imagesCallback?.invoke(uris)
         imagesCallback = null
     }
+    // 0.16.0 (D205): "+ Files": Android's file picker (its Work tab reaches Island's or Insular's files when File Shuttle is on).
+    private var filesCallback: ((List<android.net.Uri>) -> Unit)? = null
+    private val pickDocuments = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        filesCallback?.invoke(uris)
+        filesCallback = null
+    }
     private var folderCallback: ((android.net.Uri?) -> Unit)? = null
     private val pickTree = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
         folderCallback?.invoke(uri)
         folderCallback = null
+    }
+
+    private var contactsCallback: ((Boolean) -> Unit)? = null
+    private val askContacts = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { granted ->
+        contactsCallback?.invoke(granted)
+        contactsCallback = null
     }
 
     private var calendarCallback: ((Boolean) -> Unit)? = null
@@ -56,6 +70,20 @@ class MainActivity : ComponentActivity() {
     // the camera was open used to lose it); what is being taken is written down in the settings (BoardPhotos).
     private val takePhotoLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
         val app = application as LauncherApp
+        // 0.13.0: a camera that cannot hand a photo back: the photo picker opens on the newest photos.
+        if (dev.liquid.launcher.core.data.BoardPhotos.pending(app.settings)?.pick == true) {
+            imageCallback = { uri ->
+                app.appScope.launch {
+                    dev.liquid.launcher.core.data.BoardPhotos.savePicked(app, app.settings, uri)?.let { module ->
+                        dev.liquid.launcher.core.common.Notices.post(dev.liquid.launcher.core.common.NoticeKind.Study, "Board photo: $module", "Pictures/ESSAI/$module")
+                    }
+                }
+            }
+            runCatching {
+                pickMedia.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }.onFailure { DebugLog.error("App", "photo picker failed: $it") }
+            return@registerForActivityResult
+        }
         app.appScope.launch {
             dev.liquid.launcher.core.data.BoardPhotos.finish(app, app.settings, result.resultCode == RESULT_OK)?.let { module ->
                 dev.liquid.launcher.core.common.Notices.post(dev.liquid.launcher.core.common.NoticeKind.Study, "Board photo: $module", "Pictures/ESSAI/$module")
@@ -98,6 +126,8 @@ class MainActivity : ComponentActivity() {
         screensCreated++
         DebugLog.event("Home", if (screensCreated == 1) "screen created" else "screen created again (#$screensCreated in this process): everything is drawn anew")
         lastConfiguration = android.content.res.Configuration(resources.configuration)
+        // 0.11.3 (D168): one time source for every clock and timer, read from the wall clock at screen on and unlock.
+        clock = ClockRefresher(applicationContext).also { it.register() }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         @Suppress("DEPRECATION")
         overridePendingTransition(0, 0)
@@ -112,7 +142,26 @@ class MainActivity : ComponentActivity() {
         val callbacks = HomeCallbacks(
             openSettings = { startActivity(SettingsActivity.intent(this)) },
             openSetup = { startActivity(SettingsActivity.intent(this, SettingsActivity.SCREEN_SETUP)) },
-            openSection = { startActivity(SettingsActivity.intent(this, SettingsActivity.SECTION_PREFIX + it)) },
+            // 0.13.0: a link to a page starts Settings afresh. With only NEW_TASK, Android brought a Settings left open in
+            // the background to the front as it was, and the page asked for never came (the emulator test caught it).
+            openSection = {
+                startActivity(SettingsActivity.intent(this, SettingsActivity.SECTION_PREFIX + it).addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK))
+            },
+            openSettingsAt = { startActivity(SettingsActivity.intent(this, it).addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)) },
+            requestContacts = { callback ->
+                if (checkSelfPermission(android.Manifest.permission.READ_CONTACTS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    callback(true)
+                } else {
+                    contactsCallback = callback
+                    try {
+                        askContacts.launch(android.Manifest.permission.READ_CONTACTS)
+                    } catch (e: Exception) {
+                        DebugLog.error("App", "contacts permission request failed: $e")
+                        contactsCallback = null
+                        callback(false)
+                    }
+                }
+            },
             pickImage = { callback ->
                 imageCallback = callback
                 try {
@@ -153,11 +202,34 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             },
+            // 0.16.0 (D209): the calendar from the clock's date only reads; it asks for nothing more.
+            requestCalendarRead = { callback ->
+                if (checkSelfPermission(android.Manifest.permission.READ_CALENDAR) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    callback(true)
+                } else {
+                    calendarCallback = callback
+                    try {
+                        askCalendar.launch(arrayOf(android.Manifest.permission.READ_CALENDAR))
+                    } catch (e: Exception) {
+                        DebugLog.error("App", "calendar permission request failed: $e")
+                        calendarCallback = null
+                        callback(false)
+                    }
+                }
+            },
             takePhoto = { intent ->
                 try {
                     takePhotoLauncher.launch(intent)
                 } catch (e: Exception) {
                     DebugLog.error("App", "camera failed: $e")
+                    android.widget.Toast.makeText(this, "Could not open the camera", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            },
+            openBoardCamera = { module ->
+                try {
+                    startActivity(dev.liquid.launcher.core.data.BoardPhotos.cameraIntent(this, module))
+                } catch (e: Exception) {
+                    DebugLog.error("App", "board camera failed: $e")
                     android.widget.Toast.makeText(this, "Could not open the camera", android.widget.Toast.LENGTH_SHORT).show()
                 }
             },
@@ -208,6 +280,16 @@ class MainActivity : ComponentActivity() {
                     callback(true)
                 }
             },
+            pickFiles = { callback ->
+                filesCallback = callback
+                try {
+                    // 0.16.0 (D207): pictures and videos (GIFs and animated WebPs are pictures).
+                    pickDocuments.launch(arrayOf("image/*", "video/*"))
+                } catch (e: Exception) {
+                    filesCallback = null
+                    callback(emptyList())
+                }
+            },
             pickFolder = { callback ->
                 folderCallback = callback
                 try {
@@ -230,6 +312,8 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        intent?.let { takeSearchText(it) }
+        intent?.let { takeSharedPictures(it) }
         intent?.getStringExtra(EXTRA_OPEN)?.let { returnState.request = it }
 
         val lastCrash = java.io.File(filesDir, "last-crash.txt")
@@ -244,6 +328,8 @@ class MainActivity : ComponentActivity() {
         @Suppress("DEPRECATION")
         overridePendingTransition(0, 0)
         // Settings asked to open something here (the wallpaper screen): not a Home press.
+        takeSearchText(intent)
+        takeSharedPictures(intent)
         intent.getStringExtra(EXTRA_OPEN)?.let {
             returnState.request = it
             return
@@ -259,15 +345,24 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        clock?.onStart()
         (application as LauncherApp).data.widgets.listen(true)
-        // Set before the first frame, so the content is never drawn at full size first.
-        returnState.onReturn(animate = !firstStart)
+        // Set before the first frame, so the content is never drawn at full size first. 0.11.3 (D170): fading in, the
+        // whole screen fades in over the system's home screen; the redirect then never asks for the last picture.
+        val settings = (application as LauncherApp).settings
+        val fades = settings.get(LauncherSettings.SettleStyle) != "none" && settings.get(LauncherSettings.SettleDuration) > 0
+        returnState.onReturn(animate = !firstStart && fades, wholeScreen = fades)
+        dev.liquid.launcher.feature.home.KeyboardLeaving.active = false
         firstStart = false
         applyExcludeFromRecents()
     }
 
     override fun onResume() {
         super.onResume()
+        tellLiveWallpaper(true)
+        clock?.onResume()
+        dev.liquid.launcher.feature.home.KeyboardLeaving.active = false
+        applySelectionEntry()
         // The wallpaper may have changed while another app was open (themed icons).
         dev.liquid.launcher.core.data.LauncherData.get(this).checkWallpaperColours()
         // So may the calendar (the study companion's blocks and tasks).
@@ -294,7 +389,14 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             false
         }
-        RedirectStatus.staleSnapshot = keyboard || returnState.closesWhileAway()
+        // 0.11.3 (D170): with nothing open that closes while away, a keyboard still on screen is only on its way out (an
+        // app was started from search): the screen is laid out without it at once, so the picture taken as the launcher
+        // leaves shows it as it will be on return, and stays usable.
+        // Only when an app was just started from the launcher: paused under recents or a dialog, search keeps its keyboard.
+        val closes = returnState.closesWhileAway()
+        val leftover = keyboard && !closes && returnState.appJustStarted()
+        if (leftover) dev.liquid.launcher.feature.home.KeyboardLeaving.active = true
+        RedirectStatus.staleSnapshot = closes || (keyboard && !leftover)
         RedirectStatus.onLauncherPaused()
         super.onPause()
     }
@@ -315,20 +417,88 @@ class MainActivity : ComponentActivity() {
 
     private var lastConfiguration: android.content.res.Configuration? = null
 
+    /** 0.16.0 (D207): tells the live video wallpaper (its own process) whether the launcher plays its own copy now. */
+    private fun tellLiveWallpaper(inFront: Boolean) {
+        if (!dev.liquid.launcher.feature.home.VideoWallpapers.liveConfig(this).exists()) return
+        val marker = java.io.File(filesDir, dev.liquid.launcher.feature.home.LiquidVideoWallpaperService.HOME_IN_FRONT)
+        runCatching { if (inFront) marker.createNewFile() else marker.delete() }
+        sendBroadcast(
+            Intent(if (inFront) dev.liquid.launcher.feature.home.LiquidVideoWallpaperService.ACTION_HOME_SHOWN else dev.liquid.launcher.feature.home.LiquidVideoWallpaperService.ACTION_HOME_HIDDEN)
+                .setPackage(packageName),
+        )
+    }
+
     override fun onStop() {
         super.onStop()
+        tellLiveWallpaper(false)
+        clock?.onStop()
+        // 0.16.0 (D204): a wallpaper change that came due ("every few minutes", "at set times") happens while the home
+        // screen is away, a moment after an app took over, so it is ready (and never seen happening) when you come back.
+        // Off the main thread (the redirect shares it), as the change at screen off.
+        val app = application as LauncherApp
+        app.appScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            kotlinx.coroutines.delay(AWAY_ROTATION_DELAY_MS)
+            if (resumed) return@launch
+            try {
+                dev.liquid.launcher.feature.home.Wallpapers.rotateIfDue(app, app.data, dev.liquid.launcher.core.data.RotationRules.Moment.AWAY)
+            } catch (e: Throwable) {
+                DebugLog.error("Wallpaper", "automatic change failed: $e")
+            }
+        }
         // Nothing of the launcher is visible any more: close what an app was started from.
         returnState.onLeft()
         (application as LauncherApp).data.widgets.listen(false)
     }
 
+    /** 0.12.0 (D171): text handed over by [LiquidEntryActivity] for search ("search" request). */
+    private fun takeSearchText(intent: Intent) {
+        if (intent.getStringExtra(EXTRA_OPEN) != "search") return
+        returnState.searchText = intent.getStringExtra(LiquidEntryActivity.EXTRA_QUERY)
+        returnState.searchAsk = intent.getBooleanExtra(LiquidEntryActivity.EXTRA_ASK, false)
+    }
+
+    /** 0.16.0: pictures handed over by [LiquidEntryActivity] for the wallpaper library ("shared pictures" request). */
+    private fun takeSharedPictures(intent: Intent) {
+        if (intent.getStringExtra(EXTRA_OPEN) != OPEN_SHARED_PICTURES) return
+        val clip = intent.clipData ?: return
+        returnState.sharedPictures = (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
+    }
+
+    /** 0.12.0: "Liquid" in the text selection menu follows its setting (Settings → Search → More). */
+    private fun applySelectionEntry() {
+        val wanted = (application as LauncherApp).settings.get(LauncherSettings.SearchSelectionEntry)
+        val component = android.content.ComponentName(this, "dev.liquid.launcher.LiquidSelectionEntry")
+        val state = if (wanted) android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT
+        else android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        try {
+            if (packageManager.getComponentEnabledSetting(component) != state) {
+                packageManager.setComponentEnabledSetting(component, state, android.content.pm.PackageManager.DONT_KILL_APP)
+                DebugLog.event("Search", "\"Liquid\" in the text selection menu: ${if (wanted) "on" else "off"}")
+            }
+        } catch (e: Exception) {
+            DebugLog.error("Search", "could not change the text selection entry: $e")
+        }
+    }
+
+    override fun onDestroy() {
+        clock?.unregister()
+        clock = null
+        super.onDestroy()
+    }
+
     companion object {
         private var screensCreated = 0
         private const val HOME_PRESS_WINDOW_MS = 1500L
+
+        /** 0.16.0 (D204): how long after the launcher went to the back a due wallpaper change is made (the app opens first). */
+        private const val AWAY_ROTATION_DELAY_MS = 2500L
         private const val REQUEST_WIDGET_SET_UP = 0x5717
 
         /** Extra naming what to open on the home screen: "wallpaper" or "layouts". */
         const val EXTRA_OPEN = "dev.liquid.launcher.OPEN"
+
+        /** 0.16.0: [EXTRA_OPEN] for pictures shared to the launcher (in the intent's ClipData). */
+        const val OPEN_SHARED_PICTURES = "sharedPictures"
     }
 
     private fun applyExcludeFromRecents() {

@@ -6,6 +6,366 @@ Updates screen shows it before you install, and the launcher shows it once after
 
 Versions marked *not published on its own* were built but came to the phone inside the next release.
 
+## 0.16.0 — 2026-11-24
+
+### Added
+- The wallpaper library sorts and filters. "Order and filter" (the arrows next to Recent, Favourites and All) puts the
+  pictures newest first, most used first or by colour, and filters them by colour (nine swatches) and by shape
+  (portrait, landscape, square). The order is remembered; uses are counted from this version on.
+- Collections of wallpapers: "+ Collection" in the library makes one, Select adds pictures to it, its chip opens it, and
+  holding its chip renames it or takes it away (its pictures stay). Favourites counts as one.
+- Select (the check button next to the order): tap several pictures, then make them favourites, add them to a
+  collection, take them out of Recent, or delete them. A delete can be undone for 10 seconds.
+- A long press on a picture shows it full screen with your home screen over it. Pick picks it; Back or a tap goes back.
+- Undo after a new wallpaper: for 10 seconds a glass notice offers Undo (after Apply in the wallpaper screen, a picture
+  from the wallpaper strip, or Shuffle) and brings back the wallpaper before, with its placement. The phone gets the new
+  wallpaper only once the Undo has gone, so an Undo costs nothing.
+- "Set as Liquid wallpaper" in the share menu (one picture or several), and "Liquid wallpaper" in a gallery's "Set as":
+  the pictures go into the library and the wallpaper screen opens with the first one picked.
+- Each layout has its own wallpaper (on by default): a new wallpaper goes to the layout you are in, and switching
+  brings each layout's own back, placed as you placed it there. Your layouts without one got the wallpaper on screen;
+  those with their own kept it.
+- Each layout has its own recent wallpapers (Recent in the library and in the wallpaper strip) and its own collection,
+  named after it: the library opens on it when it has pictures, and All is one tap away. Hold a collection's chip to
+  give it to the layout you are in.
+- Each layout has its own look: colour (less or more than the picture has) and a tint, next to blur and dim, in the
+  wallpaper screen's Blur and dim › Home. A picture's own look still comes first.
+- Automatic wallpaper changes are now per layout and can also come every few minutes or at set times of day, and take
+  their pictures from the layout's collection. They never happen while you look: when the screen turns off, or a
+  moment after you open an app, so the new one is there when you come back.
+- A transition of its own when the layout switches (Settings › Wallpaper and layouts › Per layout; by default the
+  wallpaper's), and a new style for both: Liquid wipe, which grows out of the pill.
+- The lock screen: left alone, the same as the home screen, or a picture of its own (Blur and dim › Lock screen › Its
+  own, then "Use the picture picked for the lock screen").
+- Pictures from Island or Insular: "+ Files" (next to "+ Photos") and "+ Folder" open Android's file picker; where
+  Insular has File Shuttle and it is on, its Work tab reaches the work profile's pictures. Folders from there show
+  "(Island)". If the Work tab never shows, keep the wallpapers in an ordinary folder or one synced from Insular with
+  Syncthing: Settings › Wallpaper and layouts › Folders and Island explains it, and the library's "Insular's pictures?"
+  chip too.
+- Each layout can use its own linked folders: hold a folder's chip in the library to choose (none chosen: every
+  layout uses all of them, as before). Automatic changes "from folders" use the layout's folders.
+- The wallpaper strip shows the newest pictures of your folders after your favourites and recent ones (Island's too),
+  at once, from what was last seen there (Settings › Wallpaper and layouts › Folders and Island).
+- Video wallpapers: a video, a GIF or an animated WebP (from "+ Files" or the share menu) plays on the home screen,
+  over its still frame, and the liquid glass bends it. The wallpaper screen's Video tab sets how it plays: loop,
+  Boomerang (forward then back) or once; speed from 0.25× to 2×; a cross-fade where the loop starts again; filling the
+  screen (where it is cropped) or fitted whole; always, once per unlock, or for a few seconds; the part played; the
+  still frame (what shows while it rests, and the colours); a re-encode for this phone (H.264, at most 1080p or 720p
+  and 24, 30 or 60 frames a second, an optional blur made once); and "Lock screen and recents too", which makes it the
+  phone's live wallpaper as well (Android asks you to confirm). It rests whenever the home screen is away, the screen
+  is off, or the battery rules say so (battery saver, below 15 %, or only while charging: Settings › Wallpaper and
+  layouts › Video). Adding a video asks whether to re-encode it.
+- The glass over a video: by default the launcher measures the first seconds a video plays and, when the phone cannot
+  keep up, the pill and the dock bend a still of the home screen refreshed every few seconds instead (Settings ›
+  Wallpaper and layouts › Video; the debug log gives the numbers).
+- Every picture applied is kept in the launcher: one an automatic change takes from a folder is kept as a saved copy
+  (not in All, not in backups, deleted once no recent list needs it), so the wallpaper, recents and Undo keep working
+  while Island is frozen, paused or locked. Then a folder of it says "Island is paused, showing saved copies" and shows
+  them, and it is read again as soon as Island is back.
+- The liquid calendar: tap the date on a clock and the calendar grows out of it on liquid glass. Pull it down anywhere
+  (it follows your finger) or press Back, and it shrinks back into the date. The clock's date is off by default: turn it
+  on in Settings › Home › Clock, or in a clock's own Customise sheet.
+- Four views, one tap apart at its top: the month, a week strip, the agenda (the coming days, with the school year's
+  countdowns above) and the year as a heatmap (a day darker with more events; a tap opens it in the month). The day you
+  tap wears a liquid blob that flows from day to day, and its agenda shows under the month or the week.
+- Your phone's events, as dots or colour bars. The calendar asks once, the first time it opens, to read your calendars
+  (only to read them). Choose which calendars it shows and the colour of each in Settings › Calendar › Calendar › More.
+  Quick add (+) opens your calendar app's new event screen on the day picked; tapping an event opens it there; the
+  calendar is still open when you come back.
+- The school year: ESSAI 2026–27 is built in, from the winter break (about 26 December) to Délib SC on 25 June, and
+  marked as indicative. In the calendar, a school date moves a day earlier or later, is deleted (with Undo) or pinned;
+  in Settings › Calendar › Holidays and school year › More you edit, add or delete them, and bring back the built-in
+  ones. A pinned date's countdown ("DS P2 in 5 days") shows on the line under the clock, even with the study line off;
+  on the day of the exam already shown there, the two become one ("DS P2 · Analyse in 5 d"). School dates are never
+  counted as exams (the exam-week layout and the search page's exam card are unchanged).
+- Holidays in Tunisia on their days, in the agenda and in the year. The Islamic ones follow the moon, so they show with
+  ≈: when Tunisia announces the day, tap the holiday and move it a day earlier or later (or hide it), or move them all
+  (Islamic dates moved by). An optional Hijri date line (off) shows the Islamic date of the day picked.
+- Its options (Settings › Calendar): size (a compact card under the date, a half sheet or the whole screen), the view it
+  opens on, the week from Monday, week numbers, density, the glass tier, corners, how today stands out (filled, a ring,
+  the number in the accent colour or a glow), the dim behind it and its bounce. The page's preview is the calendar
+  itself, opening over your home screen.
+- The Calendar widget can use the calendar's settings (Settings › Calendar › Calendar widget): its marks, today, week
+  numbers, holidays, school year and chosen calendars. It keeps its own card, corners and colour, and a tap on one of its
+  days still opens your calendar app. Off (as it comes), the widget has its own options on that page.
+
+### Changed
+- After Place and Done, the picture stays on the screen behind the sheet, with its blur and dim, until you Apply, Cancel
+  or pick another one (it used to fade back to the old wallpaper at Done). Cancel fades it back.
+- A long press on a picture in the library now shows it full screen; its old menu (favourite, remove from recent,
+  delete) is in Select.
+- The library's first row is Recent, Favourites and All, with your collections and linked folders on the row below.
+- Back in the wallpaper screen goes one step back (the full-screen picture, selecting, placing) before closing it.
+- Tapping the picture already picked keeps it as it is (its placement used to be lost).
+- With a wallpaper per layout, the wallpaper screen's "Only for the layout" switch and the layouts' "Stop switching the
+  wallpaper with it" are gone (every layout keeps its own); turn "Each layout has its own wallpaper" off to share one
+  wallpaper and get both back.
+- "Also on the lock screen" became Lock screen › Same (it was on for you if you had it on).
+- Settings › Wallpaper and layouts has four new pages: Library (the order of the pictures, and Recent wallpapers to
+  show, which moved there from Wallpaper › More), Per layout, Folders and Island, and Video. Lock screen is in
+  Wallpaper › More.
+- "+ Files" also takes videos; the share menu's "Set as Liquid wallpaper" takes videos too.
+- A tap on a clock's date opens the calendar at once. A double tap on the rest of the clock still opens Today with the
+  note ready, and the pill's date still opens your phone's calendar app.
+- The Calendar widget starts the week on Monday (Settings › Calendar › Week starts on Monday; off for your phone
+  language's first day). Its month is drawn by the calendar's own component now; with its own options left as they
+  come it looks as before.
+- Settings has an eighth entry, Calendar, after Study, with three pages: Calendar, Holidays and school year, and
+  Calendar widget.
+
+### Fixed
+- Picking a favourite hid its heart: the heart is now on a small dark badge, above the ring.
+- After Place and Done, the library jumped back to the top: each list now keeps its place.
+
+## 0.15.3 — 2026-11-23
+
+### Added
+- Board photos with the launcher's own camera, several in a row. Board (a class's chip in Today, or the pill's and the
+  home menu's) opens a camera inside the launcher on the class of the moment. Take as many photos as you like: each one
+  is saved at once in Pictures/ESSAI/<the class> and flies into the corner while it saves, with the count on it, so the
+  next can be taken straight away. Done (or Back) closes it once every photo is saved, and the home screen says how many
+  there are. The volume keys take photos too; a tap focuses there; two fingers or the presets under the shutter zoom
+  (1×, 2×, 5×, and the wide lens when the phone has one); photos come out upright however you hold the phone. The first
+  time, Android asks for the camera. A camera app, one photo at a time, is still a choice: Settings › Study companion ›
+  More, where the test photo tries the camera you chose.
+
+### Removed
+- The unlock animation (0.15.0 to 0.15.2): it played only once the phone was already open. The home screen no longer
+  plays a wallpaper transition when you unlock, and its two settings (When you unlock, Unlock animation length) are gone.
+
+## 0.15.2 — 2026-11-22
+
+### Changed
+- When you unlock: the home screen now wakes the way a wallpaper change looks, and at once. A picture of the home screen
+  asleep (softer, paler and darker, taken as the screen turns off) leaves over the live screen in your transition's style,
+  from a random point, while the screen settles under it, exactly as when you change the wallpaper (0.15.1 used a blurred
+  wallpaper, where the ripple's bend could not be seen). It starts the moment the home screen is in front with the phone
+  unlocked (0.15.1 could wait for the unlock's broadcast), takes its own short length, 380 ms (Settings › Wallpaper ›
+  Behaviour › Unlock animation length; 0.15.1 used the transition's 800 ms × 1.35), and the launcher's arrival fade after
+  a redirect no longer plays on top of it.
+- The Theme lab in the new Settings look: its heading with the breadcrumbs, the preview on a card, the four views as one
+  segmented control, the groups and pills as chips, every option on grouped cards with the thick slider and the chips.
+  "Tune the glass" takes the same chips and sliders on a panel in the theme's colours, and the last stock chips and
+  sliders in Settings (letter areas, looks, colours) are the kit's now.
+
+### Fixed
+- Search: 0.15.1's fix for a keyboard taller than expected was only partial (the keyboard could still be handed back
+  while the pill was gliding up to it, for a moment over the pill). The keyboard is now handed back only once that glide
+  has ended, and that glide ends a little sooner (its last fraction of a pixel took about 170 ms).
+- Search: Back pressed while the keyboard is still rising now puts it away, as it does once the keyboard is up. It used
+  to come straight back, so the next Back only hid it again instead of closing search.
+
+## 0.15.1 — 2026-11-22
+
+### Fixed
+- Search: when the keyboard turned out taller than the launcher expected (the first time, before it has a picture of the
+  keyboard, or after the keyboard's size changed), the keyboard could stand at its full height over the pill for a moment
+  while the pill was still gliding up to it. The keyboard is now handed back to the system only once the pill has reached
+  it.
+
+## 0.15.0 — 2026-11-22
+
+### Changed
+- Search opens in one motion that lands: the pill and the keyboard rise together and stop together at the top. With
+  Bounce, the pill no longer floats above the keyboard and falls back onto it (your log: search reached 1.13 to 1.15 of
+  open, the pill 25 to 30 dp above the keyboard); it squashes onto the keyboard like a drop instead. The keyboard is
+  handed back to the system as soon as it is fully up, so a swipe that closes search soon after never meets it still held
+  (that collision made the keyboard jump up before going down). A finger pushing search away takes the keyboard down with
+  it from the first movement. A keyboard that says it is taller for a moment while search is open (WM Keyboard rebuilding
+  itself after a wallpaper change) no longer throws the pill up and down; one that stays taller is followed after a
+  moment, on a glide. Search's cards come in one after the other as it opens, rising into place, so the first frame of
+  the swipe no longer builds the whole page at once.
+- Settings in WM Keyboard's style, in your wallpaper's colours: each place has its own hue (Home blue, Drawer and search
+  indigo, Study green, Look pink, Wallpaper cyan, Motion purple, System orange) on its icon tiles and, faintly, on its
+  heading; a page opens with its name large beside its icon, under breadcrumbs you can tap to go back, and the name
+  moves into the bar as you scroll; rows sit on cards stacked into groups; pages slide in from the right while the one
+  behind drifts left, and a row's icon flies into the heading of the page it opens; a page's rows come in one after the
+  other. Tabs are one segmented control with a sliding highlight, short choices are chips (one tap), sliders are thick
+  with a tall handle, switches and values take the place's hue, every option has a "?" that explains it, search shows
+  the words that matched in bold and where each option lives. Nothing moved and nothing was removed; the live previews
+  appear once the page has slid in.
+
+### Added
+- When you unlock (Settings › Wallpaper and layouts › Wallpaper › Behaviour): the home screen comes out from under
+  frosted glass as you unlock, with the wallpaper's transition (Ripple for you), starting from a different place each
+  time; Ink, Melt and Shine vary each time too. Its own style can be chosen, or Off.
+
+### Fixed
+- Your wallpaper behind the keys did nothing: WM Keyboard answered "no theme is called "Liquid wallpaper 2"" at every
+  change. Settings › Keyboard now shows which of the two themes WM Keyboard has (step 3 is ticked once both are there),
+  says on the home screen when a hand-over fails because a theme is missing (a tap opens the page), and also tells you
+  when WM Keyboard's automatic light and dark theme hides the one the launcher picked. The theme that is there gets the
+  new picture too.
+- The pill could jump up as search (or the drawer) finished closing while the keyboard was still on its way down: it
+  rested 116 dp (your distance from the edge) above the keyboard instead of on its own place.
+
+## 0.14.0 — 2026-11-22
+
+### Changed
+- Today is simple now: one question, "What would you like to study today?", with today's classes as chips (tap what
+  you'll study) or a field to type it, and one big button, **Study with Claude**. It starts a 45-minute study session
+  on the pill and opens Claude with your day as context: today's classes, what you picked, the minutes you studied,
+  your notes, what is recommended and the next exam. Claude then asks what you covered in class and a few questions
+  to see where you are, asks for today's lesson, and you study together. Below it: **Recommended** (up to four), your
+  absences as plain numbers, **Quiz me** and the **note for tonight**. Gone: the timeline, the block cards, the task
+  list, the sync row, the buttons at the top, the other chips and the block button. The header shows the date, the
+  minutes studied today and the next exam counted down.
+- Study sessions: while one runs, the pill counts it down, the line under the clock says "Studying <what>" with a ✓ to
+  finish, and apps tagged distracting wait behind the speed bump, as during a block. It ends by itself after 45 minutes.
+- The check-in is the start of a study chat now: the evening line and the search page's check-in open Claude with the
+  same context. New instructions for Claude are in the repository (docs/checkin-prompt.md): no more study blocks or
+  errands in your calendar, no questions about absences, no five-minute steps.
+- Absences are numbers only, in Today and on the search page: each module's count from your "present?" answers, no
+  meter and no limit.
+- Prompt templates: Quiz me alone by default (Explain, Stuck, Reschedule and Résumé are gone unless you had changed
+  them).
+
+### Added
+- Recommended tasks in Today: Claude writes up to three at the end of each study chat (launcher-data `recommended`),
+  and the launcher adds what it knows itself: the flashcards due and a deadline within two weeks (red within three
+  days). Tick one when it is done (kept for the day); tap one to pick it as what to study; tap the flashcards for the
+  quick review.
+
+### Removed
+- Settings that only shaped the old Today: Blocks in Today, Done and Skip buttons, Tomorrow in Today and Study hub
+  opens. Today always opens at its full height.
+
+## 0.13.1 — 2026-11-22
+
+### Added
+- Your wallpaper behind the keys (Settings → Drawer and search → Keyboard → Look): WM Keyboard's background becomes the
+  part of your wallpaper the keyboard covers, and changes with every wallpaper you set in the launcher. Android does
+  not let a keyboard read the wallpaper's picture (WM Keyboard only gets its colours), so the launcher hands it the
+  picture, either blurred and dimmed the way search shows the wallpaper (the keyboard carries search's background on),
+  or sharp like the home screen. Set it up once on that page: let WM Keyboard read your photos, let other apps control
+  it, and add the two themes "Liquid wallpaper 1" and "2"; the launcher switches between them so WM Keyboard reads each
+  new picture at once. "Try it now" does a change on the spot and says what WM Keyboard answered.
+- A second line under the clock, smaller: what comes after, the tasks left, and an exam within two weeks (amber, red
+  from three days, in hours). Settings → Study companion → Second line.
+
+### Changed
+- The line under the clock, reimagined: it no longer repeats the pill. While the pill counts a focus down, the line
+  shows the block's next step with a ✓ that ticks it in your calendar (then the next step, then "mark it done"); a
+  block without steps shows what comes after it. In a class it says until when and in which room; before a class, in
+  how long and where; with more than an hour free, "Free until 14:00" and what comes then. Leaving in the morning,
+  "present?", the rest after getting home, the evening check-in, a block to mark, the tasks and tomorrow stay. The
+  "Study block" widget shows the same.
+
+### Fixed
+- Search after a wallpaper change: the first time, the pill went up too high and stayed there (WM Keyboard, rebuilt
+  with its new colours, says it is taller for a moment, then comes down). The pill now keeps to the keyboard's usual
+  height, and comes down onto the keyboard whenever the keyboard settles lower while search is open.
+- The study hub was redrawn every second while a focus ran (the pill's countdown behind it), at about a tenth of a
+  second per frame: the countdown now waits while the hub, search or the drawer covers it. Sheets with a picture on
+  their board no longer blur it again on every frame.
+
+## 0.13.0 — 2026-11-21
+
+### Added
+- The live pill: a new item in the pill shows what is happening now, and changes as it does. The focus timer counts
+  down to the end of its block; a class or block starting soon counts down ("Analyse in 12 min"), the one running
+  shows a small ring and the minutes left; what is playing shows its cover and title with its own play/pause (a tap
+  opens the app playing it); and when nothing else is on, the flashcards due today. When something changes, its
+  capsule takes the new content and the pill swells and settles like a drop. It takes no room while nothing is
+  happening. It is in the pill already (search, live, date); Settings → Pill → Layout sets what it shows, how long
+  before a class it counts down, and the change of shape. What is playing needs notification access (the switch "Quiet
+  during blocks" uses); the Pill page offers it when it is off.
+- Flashcards one tap away: while cards are due, a small count rides on the live item. A tap or a long press on it
+  opens a quick review over the home screen, without search: the cards one after the other, turned over and answered
+  as in search (wrong comes back tomorrow, right waits longer), closing by itself after the last one. Drag it down or
+  go back to close it sooner.
+- Search everything: besides apps, search finds people from your contacts, events of your calendars (a month back to
+  six months ahead), your notes for the evening check-in, your flashcards and options of Settings. A person opens
+  their card, an event opens in your calendar app, a flashcard opens in the quick review, an option opens its page in
+  Settings with the option lit up. Accents do not matter ("revision" finds "Révision"). Contacts are read only after
+  you allow them, from a row search offers once; each kind can be turned off in Settings → Search → More.
+
+### Changed
+- Search opens in one motion: the pill only rises, straight to just above the keyboard, and the keyboard rises with it
+  from the first frame (a picture of it stands in until the real one is ready, which takes a moment on some phones).
+  Closing takes the keyboard down with the pill. The liquid stretch follows the pill's own speed, and settles without
+  a wobble when Bounce is 0; Speed and Bounce stay in Settings → Search → Behaviour. The picture of the keyboard is
+  taken through the redirect service: if it never shows, switch that service off and on once in Android's
+  accessibility settings.
+- Closing is smoother everywhere: folders, menus and sheets leave as a picture of themselves, shrinking back into what
+  opened them (a folder into its icon, a menu into the app it came from) or sinking away, on a spring without bounce.
+  Sheets follow your finger when you drag them down, and Android's back gesture shrinks them as your thumb moves.
+- The keyboard theme (Settings → Drawer and search → Keyboard) is now built on your own WM Keyboard theme file, so its
+  board, toolbar and chips stay yours and only the keys and popups take the launcher's colours. No picture is put
+  inside it any more, so the toolbar is sharp, and "Follow wallpaper colors" is on: after one import, WM Keyboard
+  recolours it by itself at every wallpaper change. "Use another file" takes another theme as the base.
+- Board photos: every camera app on the phone can be chosen, also those that cannot hand a photo back to another app;
+  those open as they are, and when you come back the photo picker opens on your newest photos and saves the one you
+  pick in its class's folder.
+
+### Removed
+- "WM Keyboard layout while searching" and the Liquid plugin for WM Keyboard: the layout switch redrew the keyboard
+  while it slid in, and the plugin could only pass text through the share sheet. Settings → Drawer and search →
+  Keyboard → Behaviour now shows how to bind a WM Keyboard mode to the launcher instead, which applies before the
+  keyboard is drawn.
+
+### Fixed
+- Opening Settings at a page from the launcher (Customise, a gesture or button set to open a page, the drawer's menu,
+  an option found by search) always shows that page now. When Settings had been left open in the background on
+  another page, it used to come back on that page instead.
+
+## 0.12.0 — 2026-11-21
+
+### Added
+- Flashcards with repeats: launcher-data can now carry several cards (`flashcards`), and the launcher keeps every card
+  it reads in a deck on the phone. Wrong brings a card back tomorrow; right waits longer each time (1, 3, 7, 14, then
+  30 days). Search's Flashcards card shows the card that has waited longest, how many more are due today, then "All
+  done for today" and when the next ones come. A wrong answer still writes its note for the evening check-in. The
+  single card of before still works, and the deck with its progress goes into your backups.
+- Formulas on flashcards: LaTeX between `$…$` (inside a sentence) or `$$…$$` (on its own line) is drawn on the phone,
+  without the internet: subscripts and superscripts, fractions, roots, integrals, sums and limits with their bounds,
+  Greek letters, arrows, ∞, ℝ and text.
+- Settings → Drawer and search → Keyboard, for WM Keyboard:
+  - "WM Keyboard layout while searching": while search is open the keyboard switches to the layout you pick from its
+    list, and back to yours afterwards (WM Keyboard › Privacy › Let other apps control the keyboard must be on).
+  - "A keyboard theme in your colours": a WM Keyboard theme made from your launcher theme with today's wallpaper
+    colours (and the wallpaper behind the keys if you like), with a preview; open it in WM Keyboard, save it or share it.
+  - "Install the Liquid plugin": a plugin for WM Keyboard's Plugins tool that hands what you type to Liquid's search,
+    or gets it ready to ask Claude.
+- "Liquid" in the text selection menu of any app, and "Search in Liquid" in the share sheet: search opens with the
+  text. Other apps (Tasker and the like) can open search with `dev.liquid.launcher.action.SEARCH`.
+
+### Changed
+- Search and the drawer's field no longer get autocorrection or an automatic capital (app names stay as you type
+  them), and the keyboard shows a Search key; in Ask Claude mode it is ordinary text with a Send key.
+- Search's "Daily flashcard" card is now "Flashcards" (Settings → Search → Layout → Cards).
+
+### Fixed
+- 0.11.3: with search open and its keyboard up, opening recents or a dialog over the launcher could drop the search
+  field under the keyboard until you came back. The launcher now lays itself out without the keyboard only when an
+  app was just started from it.
+- Calendar descriptions edited on Google Calendar's web page: characters it writes as numeric codes (such as `&#58;`
+  for a colon) are read as those characters, in launcher-data and in study blocks.
+
+## 0.11.3 — 2026-11-21
+
+### Added
+- Settings → Drawer and search → Search → Layout: the search pill's height, its width and its gap above the keyboard,
+  each shown in the page's preview.
+- Settings → System → Redirect → Look: "Try the arrival" shows the system's home screen, so you see the launcher come
+  back the way it is set.
+
+### Changed
+- Search: the launcher slides the keyboard in itself, in step with the pill, from the moment you start swiping towards
+  search. The field rides on the keyboard: never above it, never above an empty gap. If the keyboard will not be moved
+  (or is not ready within 1.5 s) it comes up the usual way and the field rides on it. The debug log says which way
+  each opening went, when the keyboard was ready and where the field and the keyboard were.
+- Arriving after a redirect ("Arrival after a redirect", was "Content animation on return"): fading in now covers the
+  whole screen, wallpaper included, over the system's home screen instead of cutting to it. "At once" arrives on the
+  launcher's last picture when it is up to date, and the icons no longer disappear and come back.
+- The launcher's last picture stays usable after you open an app from search: the keyboard on its way out no longer
+  makes it out of date.
+
+### Fixed
+- The clock and every timer showed the old time for some seconds after unlocking. They now read the phone's clock
+  when the screen turns on, at unlock, when the launcher comes back and on the system's minute tick; the debug log
+  says when a minute on screen was late, and by how much.
+
 ## 0.11.2 — 2026-11-20
 
 ### Added

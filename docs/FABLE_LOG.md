@@ -1261,3 +1261,600 @@ the workflow (the system image cache and the calm wait at the start of `smoke.sh
 blur" is much cheaper than "glass as set" for the drawer and search, build still glass for the pill and the field
 (a pre-blurred backdrop while they move); if "without shadows" or "without the theme's material" is the big saving,
 cut those first. Then the hub's line against 0.11.1's 142 ms.
+
+## Session of 2026-11-21 (Opus 5.5): 0.11.3 and 0.12.0, Med's feedback on 0.11.2
+
+Brief: `docs/NEXT_SESSION_PROMPT.md` (Med's feedback on 0.11.2, his debug log of 08:06 to 12:49 and a screenshot of a
+flashcard whose formulas showed as plain text), with his answers: search "Keyboard slides with the pill"; keyboard: all
+four ideas; flashcards "a small deck with repeats"; maths "Claude writes LaTeX, rendered". Branch
+`claude/affectionate-sagan-u5it39`.
+
+**Released:** 0.11.3 (items 1 to 3) by run 110, build 110, after every check passed; 0.12.0 (items 5 to 7) by the CI
+run of the commit "0.12.0 [release]: …" that carries this entry.
+
+**Items**
+
+| # | Med's point | State | What |
+|---|---|---|---|
+| 1 | The clock wrong for some seconds after unlock | Done | One time source, `WallClock` (core/common), set from the wall clock by the minute tick, the time or zone being set, screen on, unlock, start and resume (`ClockRefresher`); the minute delay is only a backup. A "Clock:" line says how long a shown minute had been wrong and what caught it. Unit tests for the timing. D168. |
+| 2 | The keyboard slides with the pill; the pill's size | Done; on the phone, to see | The field rides on the keyboard (never above it). On the first frame search starts opening, the field takes focus without the keyboard and `controlWindowInsetsAnimation(ime)` is asked for; the keyboard then moves in step with search (a late one catches up in 180 ms), and is handed back fully up. Refused, taken back or not ready in 1.5 s: the usual way, the field riding on it. Results are laid out above the planned field line. Every opening is logged with its path. Emulator (run 108): "ready 385 ms after asking at the swipe's start … keyboard opened at 883 px (slid in with the pill)". Settings: the pill's height, width and gap above the keyboard, in the Search page's preview. D169. |
+| 3 | Recents: the launcher and HONOR's home fight | Done (the hand-over); waits kept | Up to 0.11.2 every return hid the content on the first frame and scaled it in, even when the system had just shown the launcher's last picture with the content (a blink), and with no picture the wallpaper cut in. Now fading in (the default) fades the whole screen, wallpaper included, over the system's home (the window shows the system wallpaper behind it) and never asks for the picture; "At once" uses the picture when up to date and nothing re-animates. Leaving with only a keyboard on its way out lays the screen out without it, so the picture stays usable. "Try the arrival" on the Redirect page. The 80 ms wait after leaving recents is what keeps a redirect off an app opened from a recents card, which no CI check exercises, so it stayed; the 260 ms case in his log was recents opened over the launcher itself (MagicOS reports the launcher's live tile as the active window, so the engine never saw recents open), kept too. The REDIRECT line now says which arrival was used. D170. |
+| 4 | Pending from 0.11.2 | Not attached | No speed check log, test photo or search log came with this brief: still glass waits (D166); asked again below. |
+| 5 | WM Keyboard | Done; on the phone, to try | Checked against its docs first. Search-friendly typing (no autocorrection or automatic capital, a Search key; Ask Claude mode: text with Send). Settings › Drawer and search › Keyboard: the layout while searching (its automation intents: LIST_LAYOUTS gives the layout in use, SET_LAYOUT switches, the old one comes back when search closes; each answer in the log); a keyboard theme in the launcher's colours (`KeyboardTheme`: the wallpaper-following colours written out, the wallpaper as the keyboard's background if wanted), previewed as a small keyboard, opened in WM Keyboard (it imports a .wmtheme.json opened with it, after its own confirm dialog), saved or shared; the Liquid plugin (Python, API 5, `share` permission: WM Keyboard's plugins cannot start an app, so it hands the text to "Search in Liquid" through the share sheet), installed from Settings. "Liquid" in the text selection menu, "Search in Liquid" in the share sheet and `dev.liquid.launcher.action.SEARCH` open search with text (or ready to ask Claude). D171, D172. |
+| 6 | Flashcards: a small deck with repeats | Done | `flashcards` in launcher-data (the single `flashcard` reads as a deck of one) join a local deck (`flashcards.json`), never lost; wrong: tomorrow; right: 1, 3, 7, 14, 30 days. Search shows the card waiting longest, how many more, then "All done for today". Every wrong answer still writes its Note. 0.11.2's answered card moved into the deck. docs/05 updated, with the text to paste (study plan doc, assistant's instructions). D173. |
+| 7 | Maths: Claude writes LaTeX, the launcher draws it | Done | A small renderer of the subset (D174) rather than JLaTeXMath for Android (no release since 2020, Android views, fonts in the APK). Rendered offline here with his measure theory cards before shipping (italic corrections for f and superscripts, drawn accents, \xrightarrow with its label); the emulator check (14e) turns a card with formulas over and answers it. |
+
+**CI runs:** 107 clock (build and tests green; its emulator test was cancelled by the next push), 108 search drive
+(green with the emulator test), 109 the redirect (cancelled by the release), 110 0.11.3 (green, published), 111 WM
+Keyboard (green), 112 the deck and formulas: every check passed but the new section 14e, which failed on its own
+set-up (`content insert --bind` splits a value at its colons, so the JSON's are escaped as `\:`; and Settings came
+back on the page section 14d had left open, so it is started afresh); 113, the first "0.12.0 [release]" commit, failed
+the same section only, and 114 too (nothing was published): Android 14's `content` also halves the backslashes of a
+value, so the stored description was not JSON (the formulas' `\\ge` became `\ge`). The test now writes
+launcher-data as the HTML Google Calendar's web page makes, colons as `&#58;` and backslashes doubled, and prints what
+was stored when the check fails; the launcher now decodes numeric character references in HTML descriptions (a real
+gap: the web page writes some characters that way). No "ANR in" was seen in these runs; the snapshot cache stays.
+
+**Known bugs and limits**
+- Fixed in 0.12.0, present in 0.11.3: the "keyboard on its way out" layout (D170) also applied when the launcher was
+  paused under recents or a dialog with search's keyboard up, so the field dropped under the keyboard until the launcher
+  came back; it now applies only when an app was just started from the launcher.
+- Whether MagicOS and WM Keyboard let the launcher move the keyboard is only known from the phone's log; the usual way
+  is the fallback.
+- Fading in, the launcher is fully in about 180 ms after its first frame (about 380 ms after the trigger); "At once" is
+  faster, with a cut. If HONOR's home has icons, they still disappear at once.
+- The recents waits were not shortened (see item 3).
+- The flashcard deck lives in the launcher's files (`flashcards.json`) and goes into its backups (Settings › Backup);
+  a restore brings it back with its progress.
+- Maths: no matrices or aligned equations (their cells show in one row), and the formulas use the phone's serif face.
+- WM Keyboard: the layout switch needs its "Let other apps control the keyboard" switch; the plugin needs "Allow
+  plugins"; fonts are not embedded in an exported theme (WM Keyboard's own rule).
+
+**Questions for Med**
+1. Speed check (Settings › Diagnostics › Speed check, about a minute, hands off): send the debug log, for still glass.
+2. The test photo (Settings › Study companion › More) and a search log are still owed.
+3. Search: does the keyboard now slide up with the pill? The log says "the keyboard slides with the pill: ready … ms"
+   or "shown the usual way (why)" for each opening; send a log with a few openings.
+4. Recents: does the fade over HONOR's home read as one movement, or do you prefer "At once" (Settings › Redirect ›
+   Look)? Is HONOR's own home screen empty?
+5. WM Keyboard: with "Let other apps control the keyboard" on, does the layout switch while searching? Does "Open in
+   WM Keyboard" import the theme, and does the Liquid plugin install?
+6. Flashcards: paste the two texts from docs/05 ("Text for Med to paste") into the study plan doc and the assistant's
+   instructions; does the evening check-in write `flashcards` with LaTeX?
+
+**Exact next step:** read Med's next log. (1) Each search opening's "search: the keyboard slides with the pill: ready N
+ms" or "shown the usual way (reason)": if MagicOS refuses, the reason says whether to ask later or differently. (2) The
+"REDIRECT (…); fades in over 180 ms" and "launcher drawn …" lines after recents. (3) The speed check lines for still
+glass (the 0.11.2 entry's exact next step).
+
+## Session of 2026-11-21, night (Opus 5.5): 0.13.0, Med's feedback on 0.12.0 and three new ideas
+
+Brief: Med's message after 0.12.0, with his settings export, his WM Keyboard theme file ("wallpaper"), his log of 20:11
+to 20:35 and the diagnostics; then his answers to the designer's read I gave him, and three new ideas from my list he
+asked for ("Live pill", "Flashcards one tap away", "Search everything"). Same branch.
+
+**Released:** 0.13.0 by run 121 (build 121), the second "0.13.0 [release]" commit, after every check passed; the
+first release run (120) published nothing (see the CI runs).
+
+**Items**
+
+| # | Med's point | State | What |
+|---|---|---|---|
+| 1 | The test photo works but he could not choose the camera | Done | Every camera app is listed (also those that cannot hand a photo back); those open as they are and the photo picker follows, saving into Pictures/ESSAI/<class> (D177). |
+| 2 | Search: a fast swipe took the pill down then up with the keyboard; slow, it dipped and the bounce and stretch were not smooth; he wants it up with the keyboard at once, iOS-smooth, speed in Settings | Done; on the phone, to see | The pill only rises, from rest to just above the keyboard, on search's spring; the keyboard rises under it from the first frame, its picture standing in until it is ready; closing takes it down with the pill; the stretch follows the pill's speed and settles without a wobble at Bounce 0 (D175). Speed and Bounce were already in Settings › Search › Behaviour. |
+| 3 | Glass in motion: frosted while moving? | No change | His answer was no: the glass stays liquid while it moves. |
+| 4 | The keyboard theme: blurry toolbar; his file as the base; follow the wallpaper | Done | Built on his file, no picture inside (crisp toolbar), "Follow wallpaper colors" on, another file can be the base (D177). |
+| 5 | The plugin and the layout switch did nothing for him | Replaced | Both removed; a guide to WM Keyboard's Modes (a mode bound to the launcher) instead (D177). |
+| 6 | Smoother transitions, popups and closing animations | Done | Overlays leave as a picture of themselves into what opened them or sink, sheets close by drag and by predictive Back (D176). |
+| 7 | Live pill | Done | `PillSlot.Live`, in the default items: focus timer, next class, what's playing, cards due; the pill swells when it changes (D178). |
+| 8 | Flashcards one tap away | Done | A count on the live item; a tap or a long press opens the quick review over the home screen (D178). |
+| 9 | Search everything | Done | People, events, notes, flashcards and options of Settings (D179). |
+| 10 | Glass cheaper, a steady 60 Hz (I offered it) | Not done | It needs his speed check log (Settings › Diagnostics › Speed check): without numbers from his phone it would be guesswork (D166). |
+
+**CI runs:** 116 (the search rise; cancelled by the next push), 117 (transitions) and 118 (keyboard theme, camera) green
+with build and unit tests, 119 (`[smoke]`: live pill, quick review, search everything, with the new emulator sections
+14f and 14g; its build and unit tests passed, its emulator test was cancelled by the release push, which runs it
+again). 120, the first "0.13.0 [release]" commit, failed four checks and published nothing: 14f passed (the count on
+the pill, the quick review by a long press, Back), but two swipes (14e, 14g) landed while the launcher's window was
+still coming back after Home (InputDispatcher: "No new touched window"; the system's gesture service got them), so
+search never opened; the test now waits for the redirect's "launcher drawn" line and the end of the transition
+(`home_and_settle`). And an option found by search opened the Settings page 14e had left in the background, a real
+bug: with `NEW_TASK` alone Android brings that task back as it was; every link to a page of Settings now clears it
+(also Customise, gestures and the drawer's menu, which had the same flaw). 121, the second release run: every check
+passed, published. Its 14e also showed that Back with the keyboard up still only puts the keyboard away (search stays
+open) with predictive Back switched on (D176): the keyboard's back callback is registered after the activity's. Unit tests: 273 (5 new for the finder: matching, cards, the Settings links). No "ANR in" seen; the snapshot
+cache stays.
+
+**Known bugs and limits**
+- Nothing of this entry has been on Med's phone yet: the emulator checks the pill's count, the quick review and search
+  finding a setting and a card, not how the motion feels.
+- The keyboard's picture is taken through the redirect service's screenshot ability (Android 11+); a service enabled
+  before 0.13.0 may need to be switched off and on once. Until a picture exists, a plain plate stands in.
+- What's playing needs notification access, and only shows players that publish a media session (most do).
+- The pill's swell redraws its glass for about a second each time the live item changes (not at rest).
+- Search everything reads events from a month back to six months ahead, notes from six months back; contacts only
+  after he allows them from the row search offers (once).
+
+**Questions for Med**
+1. Search: does the pill now go up with the keyboard in one motion, fast and slow? Is Speed/Bounce enough to tune it?
+2. Keyboard theme: import it once (Settings › Drawer and search › Keyboard › Look › Open in WM Keyboard); is the
+   toolbar sharp, and does it follow the next wallpaper by itself?
+3. Live pill: is the order right (focus, a class within 15 minutes, music, the block running, the next one, cards)?
+   Notification access for the music part: the Pill page has the button.
+4. Quick review: is closing by itself after the last card right, or should it stay open?
+5. Search everything: did you allow contacts? Anything it should find that it does not?
+6. Still owed: the speed check log, for a cheaper glass at a steady 60 Hz.
+
+**Exact next step:** read Med's next log: "search: keyboard opened at … (…)" for each opening, "search: the keyboard's
+picture was taken (…)", "Live: media sessions …" (only when not allowed), and his answers above; then, with the speed
+check log, measure the glass (D166) before changing it.
+
+## Session of 2026-11-22 (Opus 5.5): 0.13.1, Med's questions on 0.13.0
+
+Brief (in chat): two screenshots (the home screen with the live pill, search with the keyboard), his settings export,
+diagnostics and a log of 00:41 to 11:09. He asked what the live pill does (a tap opened the study hub); reported that
+after a wallpaper change the search pill goes too high the first time; asked again for a switch so the keyboard's
+background changes with the wallpaper; asked to reimagine the line under the clock; and asked for recommendations.
+Branch `claude/confident-planck-nkjqga`, started from `claude/affectionate-sagan-u5it39` (0.13.0; `main` was at 0.11.2).
+
+**Released:** 0.13.1 by the CI run of the commit "0.13.1 [release]: …" that carries this entry.
+
+**Items**
+
+| # | Med's point | State | What |
+|---|---|---|---|
+| 1 | What the live pill does; a tap opened the study hub | Explained in chat | By design (D178): a tap on the live item opens Today unless it shows music (the player) or cards (the quick review). His pill: search, live, study circle; with the study item on the pill, the live item leaves blocks and classes to it and shows the focus timer, music and cards. |
+| 2 | After a wallpaper change the search pill goes too high the first time | Done | His log: "it goes to 1188 px", then "keyboard went down to 933 px while open", the field at 1206 px. D182. |
+| 3 | A switch: the keyboard's background changes with the wallpaper | Done; needs his three switches in WM Keyboard | The launcher hands WM Keyboard the picture (Android 13+ does not let WM Keyboard read it) through two themes it switches between. D180. |
+| 4 | Reimagine the line under the clock | Done | Never the pill's countdown: the block's next step with a ✓, the class now (until when, where), a class soon, "free until", and a second line for the rest of the day. D181. |
+| 5 | Recommendations | Given in chat; two speed fixes done | D183: the hub was redrawn every second under a focus; the board picture was blurred on every frame. The rest below. |
+
+**Recommendations given (not built; his choice)**
+- Speed: the focus countdown redraws the home screen's glass every second for as long as a focus runs (his idle home
+  logged 600 frames, 35 % late, around 10:04). An option "seconds only in the last minute" would cut it to once a minute.
+- Speed: the drawer's letter area runs 40 to 56 % late (composition 4 to 11 ms a frame, sync 15 to 18 ms): to measure
+  and make draw-only.
+- Speed: the speed check log (Settings › Diagnostics › Speed check) is still owed, for a cheaper glass at a steady rate.
+- Battery: a calendar sync is requested at most every 5 minutes on coming home; every 15 minutes would do.
+- Design: with the line no longer repeating it, the study circle and the live item on the pill overlap less; the
+  circle could become the live item's ring.
+- Practicality: a long press on the line (today: the clock widget's edit) for Start focus, Ask Claude about the block,
+  Write a note.
+
+**Known limits**
+- The keyboard's wallpaper needs, once: WM Keyboard's Photos permission ("Allow all"), "Let other apps control the
+  keyboard" (with "Change the theme" in its Allowed actions), and both themes added. Changing the Keyboard page's theme
+  (its base, the launcher's keys) means adding the two themes again; the look (search or sharp) does not.
+- Only wallpapers the launcher shows are handed over: one set in another app makes the launcher draw the system's
+  wallpaper instead, and the keyboard keeps its last picture until the launcher shows one of its own again.
+- The line's class facts read the class calendars (the account's main calendar unless set); a class without a place
+  shows no room.
+- Nothing here was seen on his phone: the emulator checks the line's old cases (14b) and the keyboard's drive.
+
+**Questions for Med**
+1. Keyboard: after the three steps, does "Try it now" answer "Done", and does the next wallpaper change the keyboard by
+   itself? Is "Like behind search" right, or "Sharp"? Is the toolbar sharp enough on the picture?
+2. The line under the clock: while you focus, is the next step useful, and the ✓? Is the second line too much?
+3. Search: after a wallpaper change, does the pill stay at the keyboard now (the log says "the pill comes down onto the
+   keyboard" when it had to correct)?
+4. Which of the recommendations do you want?
+5. Still owed: the speed check log.
+
+**Exact next step:** read Med's next log: "Keyboard: wallpaper behind the keys (…)" lines (each hand-over and WM
+Keyboard's answer); "search: the keyboard rises with the pill: … taller than the … px it opens at" and "the pill comes
+down onto the keyboard" after a wallpaper change; the "study hub" Frames lines (fewer frames while it stays open, and
+their time).
+
+## Same session, afternoon: 0.14.0, Today as a study kick-off
+
+Brief (in chat, after 0.13.1): two screenshots of Today (timeline, blocks, tasks, sync row, six chips), his check-in
+instructions and a new settings export. He wants the check-in simple and fun ("what would you like to study today",
+considering what he studied in class; a button that takes him to Claude with that context; Claude asks questions to
+see his progress and for today's lesson; then they study), no study blocks in the calendar, no more absence questions,
+recommended tasks, the note for tonight and Quiz me kept, everything else gone; "ask me before you do anything".
+
+**Asked first** (four questions): the Today screen (he chose the kick-off screen), where recommended tasks come from
+(Claude + automatic), absences (keep "present?" on the phone, show them as numbers only: "I don't know where to see
+them"), a timer with "Study with Claude" (yes, 45 minutes). Built as answered: D184 to D186.
+
+**Released:** 0.14.0 by the CI run of the commit "0.14.0 [release]: …" that carries this entry.
+
+**For Med to do once:** paste `docs/checkin-prompt.md` where his old check-in instructions are (his plan doc's
+section 9), and set Settings › Study companion › More › Check-in message to "Study check-in. Read section 9 of my plan
+doc https://claude.ai/artifact/GWFvdSR6uGVM7sVL1RT9JB and follow it." (his current one still says "Evening check-in").
+
+**Known limits**
+- The old system's blocks already in his calendar still show (line, pill) until they pass, or until he lets the new
+  check-in delete them (it asks once).
+- The pill's study circle fills with blocks done: without blocks it stays empty; it still opens Today.
+- Recommended tasks from Claude appear once a check-in writes `recommended` into launcher-data.
+
+**Questions for Med**
+1. Today: is it calm enough now? Anything you miss from before?
+2. Does Claude's first message feel right (short, your classes, one question at a time)?
+3. The study circle on the pill counts blocks, which are gone: turn it into minutes studied today, or remove it?
+
+**Exact next step:** his next log: "Study: session: …" lines, "ask Claude (… characters)" after Study with Claude, and
+the Frames lines of Today ("study hub").
+
+## Session of 2026-11-22, evening (Opus 5.5): 0.15.0, search that lands, Settings after WM Keyboard, the unlock reveal
+
+Brief (in chat): Med's settings export, diagnostics and a log of 21:53 to 21:57. "The search page, every time you
+don't do it right: it isn't smooth, it lags and the pill sometimes goes to the top"; "the wallpaper doesn't appear in
+the keyboard even though I turned the setting on"; "copy the design and animations of WM Keyboard's settings, don't
+delete any feature, add if you can, move settings if you should but tell me"; "when I open my phone, the same animation
+as when I change the wallpaper, starting from random places"; "improve animations and the overall experience". Branch
+`claude/dreamy-turing-2ef9yy`, moved onto `claude/compassionate-ramanujan-snhabi` (0.14.0 and its CI fixes; `main` was
+still at 0.11.2).
+
+**Asked first** (three questions): the unlock reveal starts from "frosted, then clear"; Settings in "wallpaper colours"
+(WM Keyboard's layout and motion, Material You); the pill goes to the top "when I open search".
+
+**Items**
+
+| # | Med's point | State | What |
+|---|---|---|---|
+| 1 | Search not smooth, lags, the pill goes to the top when opening | Done; on the phone, to see | His log: search at 1.13 to 1.15 when the keyboard was ready (Bounce 40 %, flicks), so the pill floated 25 to 30 dp above a keyboard that stops at its height; closings while the opening's drive still held the keyboard asked for a second control ("the system took the keyboard back", the keyboard jumped up). Now the pill and the keyboard stop together and the bounce is a squash of the pill; the keyboard is handed back once fully up; one control per opening, a finger pushing search away takes the keyboard with it; a keyboard taller for a moment is not followed; the closed pill no longer rests 116 dp above a keyboard going down; the page's cards come in one a frame. D188. |
+| 2 | The keyboard wallpaper does nothing | Explained, made visible | WM Keyboard answered "no theme is called \"Liquid wallpaper 2\"" at every change: the themes were never added (or one twice). Two themes stay necessary (WM Keyboard's keyboard stops redrawing while hidden and loads a theme's picture once per load; checked in its source). Settings shows which theme is there, a failed hand-over says so on the home screen and opens the page, the theme there gets the picture too. D189. |
+| 3 | Settings like WM Keyboard's | Done | Hues per place, tiles, headings with breadcrumbs, grouped cards, page pushes with flying tiles, staggered rows, segmented tabs, chips, expressive sliders, "?" on every option, bold matches in search. Nothing moved or removed. D191. |
+| 4 | The unlock reveal | Done; on the phone, to see | Frost up at screen off, cleared from a random point at the unlock in the wallpaper transition's style (Settings › Wallpaper › When you unlock). D190. |
+| 5 | Animations and little tricks | Done in the items above | The squash landing, the follow-the-finger keyboard, the staggered search page and settings rows, the varied shaders, the deferred live previews. |
+
+**Known limits**
+- None of the drive changes has been on his phone: the log lines are unchanged ("the keyboard rises with the pill: ready
+  … ms", "keyboard opened at … (slid in with the pill)"), plus "the keyboard was taller for a moment (… px): the pill
+  stayed" and "the keyboard stayed taller (… px): the pill rises onto it".
+- The keyboard wallpaper still needs Med to add both themes in WM Keyboard (Settings › Drawer and search › Keyboard ›
+  Look, step 3), with WM Keyboard's Photos permission and "Let other apps control the keyboard".
+- The unlock reveal needs the launcher in front at the unlock (his "When the screen turns off: home" does that).
+- Settings' Theme lab and the glass benchmark keep their own frames (they are drawn by other code).
+
+**Questions for Med**
+1. Search: does the pill now land on the keyboard and stay? Is the squash right at Bounce 40 %, or too much?
+2. After adding both themes, does "Try it now" answer "Done", and does the next wallpaper reach the keys?
+3. The unlock reveal: right length (it uses the transition's 800 ms × 1.35 for Ripple)? Should it have its own length?
+4. Settings: anything from WM Keyboard's settings you miss (the settings depth, favourites, recent searches)?
+
+**Exact next step:** read Med's next log: "search: …" lines for each opening and closing (no "the system took the
+keyboard back" should appear on closings now), "unlock: the frost leaves (…) from …", and "Keyboard: wallpaper behind the
+keys (…)" after he added both themes.
+
+**Released:** 0.15.0 by run 135 (build 135; run 134, the first "0.15.0 [release]" commit, was cancelled by the review
+fixes' push), every check passed: the three emulator parts, then the release. 0.15.1 by the run of the commit
+"0.15.1 [release]: …" that carries this addendum.
+
+**0.15.1:** run 135's study part showed a first search with no keyboard picture yet (the emulator's first guess, 720 px,
+for a keyboard of 883 px): "the field ended at 757 px", then "the keyboard stayed taller (883 px): the pill rises onto it".
+The old hand-over ("search open and still") had stayed as a fallback and handed the keyboard back on the frame the rise's
+glide to 883 px began, so the system put it at its full height over the pill. Now the keyboard is handed back only once
+its share stands still (the glide done), with a second of frames fully up as the limit. On Med's phone the picture's
+height matches the keyboard (933 px), so this showed only when the keyboard's size changed.
+
+**0.15.1** published by run 136 (build 136), every check passed. Its study part: the first search with no keyboard
+picture still ended with "the field ended at 838 px" (of 920) and "the keyboard stayed taller (883 px): the pill rises
+onto it": the rise's glide repeats its start value on its first frame, so the share looked still for two frames and the
+keyboard was handed back as the glide began. **0.15.2** (on the branch, not published: Med's limit of two releases a
+session) waits for the glide itself to have ended (`keyboardRiseGliding`). Next CI run's study part should say "the field
+ended at 920 px" on the first opening and no "stayed taller" line.
+
+**Exact next step:** publish 0.15.2 with the next release; read Med's log for the lines listed above.
+
+## Same session, late: 0.15.2, Med on 0.15.1 (the unlock reveal, the Theme lab)
+
+Med: the settings design "a really good job except a couple of places like the Theme lab, double check"; the unlock
+ripple "doesn't feel the same as when I change the wallpaper, and it is very slow, I want it instant". His log of 23:45 to
+23:50: seven unlocks, each "unlock: the frost leaves (ripple) …" (1080 ms: 800 ms × 1.35), one followed 95 ms later by the
+screen-off redirect's arrival fade; search 30 openings, all "slid in with the pill", the field ending at 950 or 951 px,
+one "taller for a moment (1188 px): the pill stayed" after a wallpaper change (D188 working); the keyboard wallpaper
+switched "Liquid wallpaper 2" then "1" (both themes added).
+
+| # | Point | State | What |
+|---|---|---|---|
+| 1 | Unlock reveal: not like the wallpaper change, slow | Done; on the phone, to see | D192: the wallpaper change's pipeline with a sleeping picture of the home screen, at once, 380 ms, no arrival fade on top. |
+| 2 | Theme lab (and other places) not in the new look | Done | D193: the kit in core/designsystem; the Theme lab rebuilt from it; the glass panel and the last stock chips and sliders. |
+| 3 | 0.15.2's search glide fix | Released with it | See the 0.15.1 addendum. |
+
+**Questions for Med:** is 380 ms right for the unlock (Settings › Wallpaper › Behaviour › Unlock animation length)?
+Does the picture asleep look right (darker and paler), or should it be darker still / blurred?
+
+**Exact next step:** his next log: "unlock: the screen wakes (ripple, 380 ms) from …" without "(no picture of it asleep
+yet…)" most of the time.
+
+### Addendum: run 137's failed check (14g), a test swipe too short
+
+Run 137 (the glide fix, [smoke]) failed one check, study's 14g "search finds an option of Settings": its swipe down
+reached the launcher as "released at 0.40, 710 px/s", under both what opens search (more than 0.40 of the way, or
+800 px/s), so search stayed shut and "liquid stretch" was typed into nothing. Not a regression: the glide fix showed
+as wanted in the same run (the first search's field ended at 919 px, no "stayed taller"), and run 136 passed 14g with
+a swipe that only just opened it ("released at 0.33, 869 px/s"). The emulator's `input swipe` of 250 ms arrives as
+a few points and the lift's own move is dropped, as the drawer's swipe did in 0.5.0. So: each release now says what it
+does ("…px/s: opens" / ": closes", drawer and search), and the smoke test's search swipes go through `open_search`,
+which swipes again, slower (450 ms), when the log says the first left search shut.
+
+### Addendum: run 138 (0.15.2's first release run) failed 14f; D194
+
+All of run 138 passed but study's 14f "the pill shows the card still due": its home screen was search's page, still
+open. In 14e the test opens search and presses Back two seconds later to put the keyboard away; this time the launcher
+still held the keyboard then (ready at 23:19:27.152, not yet handed back at 29.048: the emulator's frames are slow, the
+hand-over waits for the glide to end and two still frames), so the Back made the keyboard hide itself and cancelled the
+launcher's control ("the system took the keyboard back while the launcher moved it, 2553 ms after asking"), and the
+fallback asked for the keyboard again the usual way: up again at 30.452 ("it started 3656 ms after search opened, the
+field then at 870 px", on its way down). The Back closing search at the end of 14e then only hid the keyboard. On the
+phone the same happens to a Back pressed in the half second the keyboard rises. D194: a keyboard taken back as it rises,
+search open, is left to the system (away: the field comes down, search stays open; up: it stays), logged "search: as
+it rose, …"; the rise's glide ends within half a pixel, so the hand-over comes about 170 ms sooner. Version labels of
+this release's comments said 0.15.3; they say 0.15.2 (it never got out: run 137 was a smoke run, run 138 failed).
+
+**Exact next step:** run 139 ([release], Med said "try again"): 14e should pass with either "as it rose … put away" or
+no such line, 14f and 14g pass, and 0.15.2 is published. Then Med's log: the unlock lines, and no "as it rose" lines
+unless he pressed Back during an opening.
+
+Run 139 published 0.15.2 (LiquidLauncher-0.15.2-build139.apk): all three parts passed; study's first search "the field
+ended at 920 px" with no "stayed taller"; every release logged ": opens"; no "as it rose" line (the Back came after the
+hand-over this time) and no second swipe needed.
+
+## Same session, 2026-11-23: 0.15.3, Med on 0.15.2 (the unlock, several board photos)
+
+Med: the unlock animation "a complete failure: I see my phone open, then after a bit the animation is done; remove it
+if you want"; "I want to be able to take multiple pictures when I study from the workspace: I take a photo, it saves
+to its right place, then I'm back on the home screen"; recommendations and questions welcome; his diagnostics
+(0.15.2 build 139, 09:48 to 17:49). Asked: how to take several photos (he chose the launcher's own camera) and which of
+four ideas to build (searching the boards' text, flashcards from a photo, a lecture PDF, study time per class): "none
+of the ones you mentioned is good".
+
+His log: no "unlock:" line all day (the reveal never got its moment in front, or it came after the home screen
+showed, as he saw); board photos at 10:59 to 11:00 three in 33 s, one tap each, ~1 s between saving and the next
+camera; search 60 openings all "slid in with the pill", the field ending at 950/951 px, no "as it rose"; frames: the
+speed check's study hub 61-76 % late (sync 34-48 ms, 12 ms with a flat tint), the drawer's letter scrubbing 46-69 %
+late (input and composing 8-13 ms, sync 18-19 ms); the clock caught minutes behind after the launcher was frozen in
+the background (it corrects itself as it starts).
+
+| # | Point | State | What |
+|---|---|---|---|
+| 1 | Unlock animation: a failure, remove | Done | D195: removed, settings gone, the shaders as in 0.14. |
+| 2 | Several board photos at once | Done; on the phone, to see | D196: the launcher's own camera. |
+| 3 | Jank: study hub, drawer letters | Looked into, not changed | Below: no safe fix without a measurement on the phone. |
+
+Jank, read from the code: the frame meter's "sync" is SYNC + COMMAND_ISSUE, the render thread's own work, off-screen
+layers included. The hub costs 34-48 ms there with any glass (with or without blur, bending, shadows or the theme's
+material) and 12 ms with a flat tint; the drawer's and search's glass cost 12-15 ms. What the hub's glass has and theirs
+has not: it grows out of the pill (its size and corners change every frame), it exports its glass as a layer for the
+controls on it (`sheetSurface(..., exported = layer)`), and the board picture's blurred layer is recorded again whenever
+the size changes, so on every frame of the growth (0.13.1 stopped it on scroll only). The letter area's 8-13 ms of
+input and composing is the list jumping to a letter (a screen of new app cells composed per jump). Neither was changed
+blind: the next step is a measurement (the hub's growth with the exported layer and the board picture turned off one at
+a time, from the speed check), not a guess.
+
+**Exact next step:** CI's smoke run of 0.15.3 (14h: the board camera opens on the camera-less emulator, says so and
+closes); then Med's first series in class: "board camera: ready N ms after opening", "photo N saved … ms after the
+shutter", "closed, N photos".
+
+### Addendum: runs 141 and 142
+
+Run 141 (0.15.3, [smoke]) caught a crash in 14h: the board camera died as it opened (`Window.getInsetsController()` in
+`onCreate` before the decor view existed: a null pointer inside PhoneWindow on Android 14). On the phone it would have
+crashed at the first tap of Board. Fixed by asking for the decor view first (run 142: all three parts pass; 14h
+"board camera: opened for "Smoke"", then "The camera could not start (… Device reporting less cameras than
+anticipated …)" after CameraX's 6 s of retries on the camera-less emulator, the message shown, Back closes it). The
+check now waits for the camera to be gone rather than for the home screen (started from the shell, it lands on 14g's
+Settings task).
+
+### Addendum: two skills (Med: "make me a skill with all the liquid design, settings, animations, smoothness and concepts, and one for GitHub saving time")
+
+`.claude/skills/liquid-android/` (SKILL.md + references: design, motion, smoothness, settings, concepts,
+project-setup; `assets/kit/`: Setting/SettingsStore/AppSettings, SettingsKit, Glass + LiquidShader, Motion/Presence,
+PressFeel, Stagger, DebugLog, Notices, FrameMeter, Changelog, shims and icons, as one `liquid.kit` library module that
+compiles on its own against the type-check harness) and `.claude/skills/github-fast-ci/` (SKILL.md + references:
+android, other-stacks, releases, triage; assets: Android/Node/Python workflows, release_notes.py, test_failures.py,
+settle.sh, smoke-lib.sh, find_text.py, describe_ui.py, ascii_shot.py). Both validated and packaged as `.skill`
+files for claude.ai. `tools/typecheck/tc.sh` leaves `.claude/` out. When a session learns something general, add
+it to the matching skill reference too.
+
+## Session 2026-11-23 (0.16.0): the wallpaper system, Folders and Island, video wallpapers, the liquid calendar
+
+Med asked for five parts in this order, one release at the end and a pushed checkpoint after each part: (1) fix the
+wallpaper library ("tap a wallpaper: its heart disappears; Place, position, Done: the preview disappears and the library
+scrolls back to the top") and improve it (Favourites, sort and filter, a full-screen peek on long press, multi-select,
+Undo for 10 s after Apply); (2) per-layout wallpapers, recents and collections, look per layout, automatic changes,
+a transition when the layout switches, the lock screen; (3) first "the island" (it turned out to mean the Island app),
+now Folders and Island: Insular's files through File Shuttle, folders linked per layout, saved copies; (4) live (video)
+wallpapers; (5) a liquid calendar out of the clock's date, with the ESSAI 2026-27 dates.
+
+**Step 0, the conflict check (before any code).** Fifteen points went to Med; he took the recommendation for all but
+two. "The island" was not part of the launcher: he meant Island (he uses Insular, com.oasisfeng.island.fdroid), so the
+island bar, its swipe and long press were dropped, the dock and pill stay as they are, and Part 3 became "Folders and
+Island". The settings page is "Folders and Island". A second check (linked folders, "+ Photos", the library against
+Insular): "+ Files" next to "+ Photos" (the photo picker cannot see Island); automatic changes keep "saved copies"
+apart from the library; folders are linked once and ticked per layout; whether the folder picker shows Insular's tab and
+keeps access after a restart is to be seen on his phone; Insular may have no File Shuttle at all, so everything must
+also work with ordinary folders (or a folder synced from Insular with Syncthing).
+
+### Part 1: the library (checkpoint)
+
+Why it broke: not a separate destination (Place was already a mode of the same screen and its state already had one
+owner). The lists' scroll position lived inside the sheet, which leaves while a picture is placed, so it came back at the
+top; the preview vanishing at Done was D158 (0.11.1, "change on Apply"); the heart was drawn white in the corner the
+picked picture shrinks away from, on the thick ring. D197 to D201.
+
+| Point | State | What |
+|---|---|---|
+| Scroll kept across Place | Done | `StudioState.grid(key)`: one `LazyGridState` per list, outside the sheet. |
+| Preview stays after Done | Done | `PickerFlow` (core/data, tested): Done keeps the placed picture on screen (finished, blur and dim) until Apply, Cancel or another pick; those fade it back. |
+| Heart above the ring | Done | A dark badge inside the picture, drawn last. |
+| Favourites tab | Done | It existed; the first row is now Recent, Favourites, All. |
+| Sort and filter | Done | Newest, most used (counted from 0.16.0), colour; nine colour families and three shapes (`describeMissing` from thumbnails). |
+| Peek on long press | Done | Full screen with the home screen over it; Pick or Back. |
+| Multi-select | Done | Select: Favourite, Collection, Recent, Delete (Undo 10 s; asks first when wallpaper notices are off). |
+| Collections | Done | One way of grouping (no tags); Favourites counts as one. |
+| Undo after Apply | Done | Glass notice with an Undo button, 10 s; the hand-over to MagicOS waits for it. |
+| Flow test | Done | `PickerFlowTest` (6) and `WallpaperLibraryTest` (+7); emulator 11b: 16 pictures shared in, Select, peek, pick, Place, Done, Apply, Undo. |
+| Share target | Done early | Needed by 11b; Part 3 adds the Insular side. |
+
+### Part 2: per layout (checkpoint)
+
+| Point | State | What |
+|---|---|---|
+| Own wallpaper per layout (switch, on) | Done | Apply, strip, Shuffle and automatic changes give the current layout its own copy and placement; migration: layouts without one get the wallpaper on screen. |
+| Own recents (switch, on), how many | Done | `layoutRecents`, kept to "Recent wallpapers to show" (reused, 4 to 40). |
+| Own collection (switch, on) | Done | Made per layout, named after it; the library opens on it when it has pictures; a collection can be given to the layout. |
+| Look per layout | Done | Blur and dim (already per layout), colour and tint (new); a picture's own look first; placement per layout. |
+| Automatic changes | Done | Per layout; every few minutes and at set times; source "this layout's collection"; only at screen off or while away (D204). |
+| Transition on layout switch | Done | Its own setting (default the wallpaper's) and the new Liquid wipe out of the pill. |
+| Lock screen | Done | Left alone / same / its own picture (FLAG_LOCK); the old switch read once. |
+| Migration | Done | Once, logged as "0.16.0: N layout(s): …". |
+
+Run 144 (checkpoint 1): build, unit tests, the redirect and study parts green; the drawer part caught a crash in 11b.
+The test shared media-store pictures with `am start --grant-read-uri-permission`; the launcher got no read permission it
+could pass on, and `LiquidEntryActivity` crashed handing them to the home screen (`SecurityException: UID 10192 does not
+have permission to content://media/…`), the whole process with it (the redirect too). On the phone any app sharing a
+picture without a grant it may pass on would have done the same. Fixed: the entry catches it, logs it and lets the home
+screen try without the grant ("Could not read that picture" when it cannot); the test now shares pictures from the
+launcher's own file provider.
+
+### Part 3: Folders and Island (checkpoint)
+
+| Point | State | What |
+|---|---|---|
+| Island's storage through File Shuttle | Done, to test on the phone | "+ Files" and "+ Folder" use Android's picker; its Work tab is the way in when File Shuttle exists. Whether the folder picker shows the tab and keeps the access after a restart is logged ("folder linked: … (work profile, Island; access kept / until the phone restarts)"). |
+| Detect Insular, don't assume File Shuttle | Done | By package (Insular first, then Island); the how-to says what to do when the tab never shows (an ordinary folder, or Syncthing). |
+| Folders per layout | Done | Hold a folder's chip; none chosen = all; the automatic changes follow. |
+| Always copy what is applied | Done | Hand picks join the library (as before); automatic ones are saved copies (D206). |
+| Island paused | Done | "Island is paused, showing saved copies"; read again on the profile broadcasts. |
+| File Shuttle off and Android refuses | Done | The folder says what happened in plain words; the how-to has the ways in. |
+| Share from apps inside Island | Built, to see on the phone | "Set as Liquid wallpaper" is declared for pictures; whether it shows in Insular's apps depends on what Insular lets cross profiles. |
+| Strip: folders' newest | Done | From the remembered list, read again in the background. |
+
+Run 145 (checkpoints 1 and 2, with the share fix): all green, the three emulator parts too. 11b passed all eight checks:
+16 pictures shared in, Select, the peek, a picked favourite keeps its heart, "after Place and Done the library is where it
+was, the picture still picked" (Med's bug), Done keeps the placed picture on the screen, Apply offers Undo, Undo works.
+
+### Part 4: video wallpapers (checkpoint)
+
+| Point | State | What |
+|---|---|---|
+| In the launcher, the glass bending it | Done; to measure on the phone | ExoPlayer on a TextureView inside what the glass bends (D207). |
+| System live wallpaper | Built; to see on the phone | Its own process; Android's screen confirms; the launcher keeps it and counts it as its own. Whether MagicOS's lock screen shows another app's live wallpaper is not known until tried. |
+| Trim, loop, once, speed, cross-fade, fill/fit/pan, dim, parallax | Done | Dim, tint, colour and parallax are the wallpaper's own (they apply to the video too). |
+| Blur | Done (at re-encode) | Never live: made once in the frames (smoothness rule). |
+| Boomerang | Built, measured | Steps back by exact seeks; under 15 frames a second it becomes a loop with a cross-fade and the log says so. Not for GIF and WebP (Android's animated image only plays forward). |
+| When it plays; battery rules | Done | `VideoRules`, tested. |
+| Frame-rate and resolution caps | Done (at re-encode) | `FrameDropEffect`, `Presentation`. Without a re-encode the video plays as it is. |
+| Poster frame | Done | Chosen in the Video tab; the colours and the phone's wallpaper follow it. |
+| Re-encode offer on import | Done | Asked by default (H.264, no sound). |
+| GIF, animated WebP | Done | Forward only, at their own pace (no speed). |
+| Pause off home and with the screen off | Done | Window focus, screen broadcasts. |
+| Measure; still frame when too costly | Done; numbers from the phone | D208: "Frames: video wallpaper, the glass …" lines in Med's log. |
+
+Run 147 (checkpoint 4) stopped at compiling: the library thumbnail's description smart-cast another module's property
+(`item.video`), which the one-pass local check accepts and Gradle does not. Fixed in run 148 (green), and the local
+module lint now flags the pattern (D214). Run 148 changed no `ci/` file, so its emulator parts did not run: the video
+check 11c runs with checkpoint 5.
+
+### Part 5: the liquid calendar (checkpoint)
+
+| Point | State | What |
+|---|---|---|
+| Tap the clock's date | Done | Every design that shows the date (above, below, Minimal, Tall, Stacked's line); a quick tap opens it at once, the long press and the rest of the clock's gestures unchanged (D209). The date is off by default: on in Settings › Home › Clock or a clock's Customise. |
+| Grows out of the date, spring, interruptible | Done; to measure on the phone | Shared bounds from the date text; width first, then height; bounce setting; a tap mid-close reopens from where it is. |
+| Closes into the date on Back or a pull down, following the finger | Done | Also from the top of a list (nested scrolling), and a tap outside. |
+| Other openers later | Ready | `CalendarOpener` (sealed); only `ClockDate` today. |
+| Views: month, week strip, agenda, year heatmap | Done | Tabs at the top; month and week swipe sideways; the year's day opens in the month. |
+| Liquid blob on the day picked | Done; to measure on the phone | Two springs and a waist, one path, redrawn without recomposing (D211). |
+| Events, READ_CALENDAR asked once | Done | Read-only request the first time it opens; "Show my events" asks again; never from the settings preview. |
+| Dots or colour bars; calendars and colours | Done | Settings › Calendar › Calendar (Look; More: Calendars and colours). |
+| A day's agenda | Done | Holidays, school dates (with their actions), events (open in the calendar app). |
+| Quick add | Done | `ACTION_INSERT` on the day picked (next hour today, else 9:00); the calendar stays open across it. |
+| ESSAI 2026-27, editable, deletable, indicative | Done | 14 built-in dates in the settings store (D212); in the calendar: pin, a day earlier or later, delete with Undo; in Settings: edit, add, delete, bring back. |
+| Countdowns, pinned under the clock | Done | Merged with the exam of the same day; shown even with the study line off; never an exam. |
+| Options | Done | Monday first (on, both), week numbers, size (compact, half sheet, full), glass tier, corners, density, today's highlight, dim, bounce. |
+| Holidays (Tunisia) | Done | Decree 2021-223 plus the Islamic ones from the Umm al-Qura tables, ≈, movable and hideable, all movable together (D210). |
+| Hijri date line | Done | Off by default; follows the shift. |
+| One component with the widget; share switch | Done | `MonthDays`; the widget keeps its look and its tap to the calendar app unless it shares (off by default, D211). |
+| Calendar settings entry | Done | Eighth entry, three pages, live preview (D213). |
+| Tests | Done | `SchoolYearTest` (4), `HolidaysTest` (3), `DayLineTest` (+1), `SettingsMapTest` (+1, eight entries), `CalendarLookTest` (3, home module, CI only); emulator 18: the date opens it on the month with 14b's event in today's agenda, idle frames, the agenda's "DS P2 in …", the year heatmap read from the calendar (its time in the log), the week strip, Back closes it. |
+
+Run 149 (checkpoint 5): build and every unit test green, the redirect part green. The calendar's check 18 passed but
+one item: the date opens it on the month, today's agenda shows the test calendar's block, it sits still (0 frames in
+3 s), the agenda counts down to the school dates, the week strip shows, Back shrinks it into the date; the year view read
+its events ("year 2026: 4 events read in 68 ms") but its legend was below the fold of the half sheet, where the check
+looked for it. The legend now sits under the year (better there anyway). The video check 11c ran for the first time:
+the shared video was added with its poster and the re-encode question came, but the check's dump was taken while the
+question was still closing, so "Apply" was never tapped (the log has no apply at all). It now waits for the button and
+prints the screen when it is missing; the wallpaper screen logs what was shared and picked, and an Apply without a new
+picture. Same commit: the frame meter's labels for the calendar (D215), the Hijri check, smaller days on the compact
+size, a summary for every calendar option.
+
+Run 150: everything green but the video check, and the calendar's check 18 fully green (the Hijri tables are there on
+Android: "Hijri today: 14 Jumada al-Akhira 1448"). The video check's new diagnostics showed a real bug: a shared video
+was picked ("picked what was shared: video") and Apply then found nothing to apply ("apply: no new picture, only the
+looks"). The wallpaper screen cleared the share before picking it; that restarts its effect, and while the re-encode
+question showed, the list's scroll waited long enough for the restart to cancel the pick (pictures, without the
+question, won the race). It now picks first. Sharing a video would have done nothing on the phone.
+
+Run 151: the video check is green now (the shared video plays, its glass is measured: "the glass bending it: 76 % of
+49 frames late (worst 266 ms)" on the emulator, which draws in software and says nothing about the phone, and it rests
+when the home screen is away), the calendar and redirect parts too. The library check 11b, green in runs 145 to 150,
+lost one tap: the emulator drew the home screen at 284 ms a frame and the tap on "Library and more" landed where the
+button was while the strip was still rising (the strip was still there afterwards; nothing else was logged). The check
+now lets the strip settle and taps again from a fresh dump when the wallpaper screen does not come.
+
+Run 152: green everywhere (build, every unit test, the redirect, drawer and study parts: the library 11b, the video 11c and the calendar 18 among them).
+
+### End of the session: 0.16.0 released
+
+| Part | State | To see or measure on the phone |
+|---|---|---|
+| 1. The library bug and the library | Done | Nothing left; emulator 11b covers Med's bug. |
+| 2. Wallpaper per layout | Done | The migration's line in the log ("0.16.0: N layout(s): …"). |
+| 3. Folders and Island | Done, partly to see on the phone | Whether Insular's File Shuttle exists and shows a Work tab in the picker; whether a work-profile folder keeps its access after a restart; whether "Set as Liquid wallpaper" shows in apps inside Insular. |
+| 4. Video wallpapers | Done, to measure on the phone (the emulator caught a real bug: a shared video was not picked; fixed in run 151) | The glass over a video (its "Frames: video wallpaper, the glass …" lines); Boomerang's frame rate; whether MagicOS's lock screen shows the launcher's live wallpaper. |
+| 5. The liquid calendar | Done, to measure on the phone | Its frame-meter lines (below); the Islamic holidays against Tunisia's announcements. |
+| Settings placement | Done | Wallpaper and layouts: Library, Per layout, Folders and Island, Video next to Wallpaper; Calendar: its own (eighth) entry with three pages. The changelog says where things moved. |
+| Docs | Done | CHANGELOG 0.16.0, D197 to D215, this log, the README's status. |
+| Release | Done | 0.16.0, tag `v0.16.0`, from the commit marked for release; its run number is the build number in the APK's name. |
+
+**Frame-meter numbers: not measured yet.** This session ran in the cloud, without the phone, and the emulator's numbers
+say nothing about the HONOR 90 Lite (Med's rule). The launcher measures itself on the phone and writes the numbers to
+the debug log (Settings › System › Debug log). What exists for each:
+
+- Video wallpapers: the first 6 s a video plays with the glass bending it, then every still the glass bends instead:
+  "Frames: video wallpaper, the glass bending it: N % of M frames late (worst W ms)" (D208).
+- The calendar: the frame meter counts its motion apart, with a line once 30 frames have been drawn: "the calendar
+  growing or shrinking" (its spring), "the calendar following the finger" (a pull down) and "the calendar's blob
+  flowing" (taps on days), each after "calendar" in the line's label; the calendar sitting still is counted as "calendar".
+- Emulator only, not phone numbers: the calendar open and still drew 0 frames in 3 s (runs 149 to 151: nothing keeps
+  drawing); the video under the glass measured "76 % of 49 frames late (worst 266 ms)" on an emulator that draws in
+  software at 260 to 750 ms a frame everywhere, so it only shows the measurement works.
+
+To get the numbers: install 0.16.0, turn on the clock's date (Settings › Home › Clock › Show the date), then open and
+close the calendar ten times (tap the date; close with a pull down and with Back), tap about twenty days in a row, go
+through the four views, and send the debug log. For the video, add a short video in the wallpaper screen ("+ Files"),
+Apply, stay on the home screen 30 s, and send the log too.
+
+**Known limits**
+- The Islamic holidays come from the Umm al-Qura tables (`java.time`'s Hijri calendar; the emulator check says Android
+  has it). Tunisia sights the moon, so a date can be a day off: it shows with ≈ until you move it; a third day of an Aïd
+  added by the government is not added by itself (hide or move only).
+- One pinned countdown shows under the clock at a time: the soonest pinned date not over yet.
+- Only the clock's date opens the calendar (as asked). The Date widget and the pill's date do not.
+- The calendar reads events, it never writes; Quick add and editing an event happen in the calendar app.
+- The Calendar widget keeps its own look until "uses the calendar's settings" is on (off as it comes), so nothing changed
+  on it but Monday first.
+- From Part 3 and 4 (unchanged): Insular may have no File Shuttle; work-profile folders may lose access after a restart
+  (the folder then says so and shows its saved copies); GIF and WebP play forward only; Boomerang under 15 frames a
+  second becomes a loop with a cross-fade (logged).
+
+**Questions for Med**
+1. Should the Date widget open the calendar too? (Today only the clock's date does; the pill's date opens your calendar
+   app, as you chose.)
+2. Should the Calendar widget share the calendar's settings from the start? (Off now, so it did not change.)
+3. The half sheet is 62 % of the screen so the month and a few agenda rows fit. Exactly half instead?
+4. When the government adds a third day to an Aïd, do you want an "add a day" action next to earlier, later and hide?
+5. Several pinned countdowns under the clock at once (say the two soonest), or one?
+6. From the earlier parts: what the phone shows for Insular's Work tab, and whether MagicOS's lock screen takes the
+   video wallpaper.
+
+**Exact next step**
+Install 0.16.0 from the release, turn on the clock's date, and use the calendar and a video wallpaper for a day with the
+debug log on. Then send the log (the "Frames:" lines and "Calendar:" lines), a screenshot of the calendar on each size
+(compact, half sheet, full), and your answers to the questions above.

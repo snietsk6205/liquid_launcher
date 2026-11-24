@@ -15,36 +15,121 @@ class KeyboardLineTest {
     }
 
     @Test
-    fun aTallerKeyboardPushesTheFieldUpAndItNeverComesDown() {
-        val guess = 933f
-        val target = 1041f
-        var last = 0f
-        // The keyboard rises from the bottom to 1041 px: the field waits at 933 px, then rides on the keyboard.
+    fun theFieldRidesOnTheKeyboardAndIsNeverAboveIt() {
+        // Med's log: the keyboard opened at 933 px; before it came the field waited there, above an empty gap.
+        assertEquals(nav, KeyboardLine.ride(nav, 0f))
         for (step in 0..40) {
-            val ime = target * step / 40f
-            val line = KeyboardLine.line(nav, ime, target, guess)
-            assertTrue("never below the guess", line >= guess)
-            assertTrue("never above the keyboard once it is higher than the guess", ime < guess || line == ime)
-            assertTrue("never moves down", line >= last)
-            last = line
+            val ime = 933f * step / 40f
+            assertEquals(maxOf(nav, ime), KeyboardLine.ride(nav, ime))
         }
-        assertEquals(target, last)
     }
 
     @Test
-    fun beforeTheKeyboardComesTheFieldWaitsAtTheGuess() {
-        assertEquals(933f, KeyboardLine.line(nav, 0f, 0f, 933f))
-        assertEquals(933f, KeyboardLine.line(nav, 0f, nav, 933f))
+    fun theResultsArePlannedWhereTheFieldWillEnd() {
+        // Not known yet: the lowest recent opening.
+        assertEquals(933f, KeyboardLine.planned(nav, 0f, 0f, 0f, 933f))
+        // The keyboard's own animation says where it goes.
+        assertEquals(1041f, KeyboardLine.planned(nav, 300f, 1041f, 0f, 933f))
+        // The launcher drives it: the height the system gave for it fully up wins.
+        assertEquals(980f, KeyboardLine.planned(nav, 200f, 0f, 980f, 933f))
+        // Never below where it is now.
+        assertEquals(1100f, KeyboardLine.planned(nav, 1100f, 1041f, 0f, 933f))
     }
 
     @Test
-    fun aKeyboardLowerThanEverSeenTakesTheFieldDownInStep() {
-        val guess = 1041f
-        val target = 933f
-        assertEquals(guess, KeyboardLine.line(nav, 0f, target, guess))
-        assertEquals(target, KeyboardLine.line(nav, target, target, guess))
-        val half = KeyboardLine.line(nav, (nav + target) / 2f, target, guess)
-        assertTrue(half < guess && half > target)
+    fun thePillNeverPassesTheKeyboardAndLandsWithASquash() {
+        // Med's log (Bounce 40 %, a flick): search reached 1.13 and 1.15; the pill and the keyboard stop at the top.
+        assertEquals(1f, KeyboardDrive.landed(1.15f), 1e-6f)
+        assertEquals(0.4f, KeyboardDrive.landed(0.4f), 1e-6f)
+        assertEquals(0f, KeyboardDrive.landed(-0.05f), 1e-6f)
+        // The overshoot goes into a squash, deeper with more overshoot, capped.
+        assertEquals(0f, KeyboardDrive.squash(1f), 1e-6f)
+        assertEquals(0f, KeyboardDrive.squash(0.7f), 1e-6f)
+        assertTrue(KeyboardDrive.squash(1.05f) > 0f)
+        assertTrue(KeyboardDrive.squash(1.13f) > KeyboardDrive.squash(1.05f))
+        assertEquals(KeyboardDrive.SQUASH_MAX, KeyboardDrive.squash(1.6f), 1e-6f)
+        // Its line follows the drive in step with the keyboard's top, never above the keyboard plus the gap.
+        val rise = 933f
+        val gap = 18f
+        val rest = 48f + 348f
+        for (p in listOf(0f, 0.3f, 0.7f, 1f, 1.08f, 1.15f)) {
+            val q = KeyboardDrive.landed(p)
+            val pill = rest + (rise + gap - rest) * q
+            assertTrue("the pill is never above the keyboard plus its gap at $p", pill <= rise + gap + 0.01f)
+            assertTrue("the pill is never under the keyboard's top at $p", pill >= rise * q + gap - 0.01f)
+        }
+    }
+
+    @Test
+    fun theKeyboardIsHandedOverOnceFullyUpWithoutWaitingForTheBounce() {
+        assertTrue(KeyboardDrive.handOver(open = true, dragging = false, fullyUp = true, frames = 2))
+        assertTrue(!KeyboardDrive.handOver(open = true, dragging = false, fullyUp = true, frames = 1))
+        assertTrue(!KeyboardDrive.handOver(open = true, dragging = true, fullyUp = true, frames = 5))
+        assertTrue(!KeyboardDrive.handOver(open = false, dragging = false, fullyUp = true, frames = 5))
+        assertTrue(!KeyboardDrive.handOver(open = true, dragging = false, fullyUp = false, frames = 5))
+    }
+
+    @Test
+    fun aKeyboardGrowingForAMomentLeavesThePillWhereItIs() {
+        // Settled at 933 px; WM Keyboard says 1188 px for a moment: the open pill keeps to 933.
+        assertEquals(933f, KeyboardDrive.steadyLine(1188f, 933f, steady = true), 1e-6f)
+        // Lower is always followed.
+        assertEquals(900f, KeyboardDrive.steadyLine(900f, 933f, steady = true), 1e-6f)
+        // Opening or closing (not steady): the keyboard as it is.
+        assertEquals(1188f, KeyboardDrive.steadyLine(1188f, 933f, steady = false), 1e-6f)
+        assertEquals(1188f, KeyboardDrive.steadyLine(1188f, 0f, steady = true), 1e-6f)
+    }
+
+    @Test
+    fun theKeyboardSlidesInStepAndALateOneCatchesUp() {
+        // Ready from the start: exactly in step with search.
+        for (p in listOf(0f, 0.2f, 0.36f, 0.8f, 1f)) assertEquals(p, KeyboardDrive.fraction(p, 10_000), 1e-6f)
+        // A spring passing 1 keeps the keyboard fully up, never further.
+        assertEquals(1f, KeyboardDrive.fraction(1.08f, 10_000), 1e-6f)
+        // Ready when search was at 0.9: it rises over the catch-up time without jumping, then follows.
+        assertEquals(0f, KeyboardDrive.fraction(0.9f, 0), 1e-6f)
+        var last = 0f
+        for (ms in 0..KeyboardDrive.CATCH_UP_MS step 15) {
+            val f = KeyboardDrive.fraction(0.9f, ms)
+            assertTrue("never goes down while catching up", f >= last)
+            assertTrue("never ahead of search", f <= 0.9f)
+            last = f
+        }
+        assertEquals(0.9f, KeyboardDrive.fraction(0.9f, KeyboardDrive.CATCH_UP_MS), 1e-6f)
+        // Search closing again: the keyboard goes down with it.
+        assertEquals(0.3f, KeyboardDrive.fraction(0.3f, 10_000), 1e-6f)
+    }
+
+    @Test
+    fun theDriveEndsOnlyWhenSearchIsOpenStillAndCaughtUp() {
+        assertTrue(KeyboardDrive.done(1f, open = true, moving = false, sinceReadyMs = 400))
+        assertTrue(!KeyboardDrive.done(1f, open = true, moving = true, sinceReadyMs = 400))
+        assertTrue(!KeyboardDrive.done(1f, open = false, moving = false, sinceReadyMs = 400))
+        assertTrue(!KeyboardDrive.done(0.97f, open = true, moving = false, sinceReadyMs = 400))
+        assertTrue(!KeyboardDrive.done(1f, open = true, moving = false, sinceReadyMs = 60))
+    }
+
+    @Test
+    fun aKeyboardThatSaysItIsMuchTallerThanItOpensAtIsDoubted() {
+        val tolerance = KeyboardDrive.TALLER_DP * 3f // density 3, Med's phone
+        // Med's log, first opening after a wallpaper change: 1188 px said, 933 px real.
+        assertTrue(!KeyboardDrive.believes(1188f, 933f, tolerance))
+        // A few px either way, a shorter keyboard, or nothing expected yet: believed.
+        assertTrue(KeyboardDrive.believes(950f, 933f, tolerance))
+        assertTrue(KeyboardDrive.believes(800f, 933f, tolerance))
+        assertTrue(KeyboardDrive.believes(1188f, 0f, tolerance))
+    }
+
+    @Test
+    fun theKeyboardsTopStaysOnThePillsLine() {
+        // Same height: fully up at full progress, half at half.
+        assertEquals(1f, KeyboardDrive.share(933f, 1f, 933f), 1e-6f)
+        assertEquals(0.5f, KeyboardDrive.share(933f, 0.5f, 933f), 1e-6f)
+        // Doubted height: its top stays at the expected line (933 of 1188), never fully up while the launcher holds it.
+        assertEquals(933f / 1188f, KeyboardDrive.share(933f, 1f, 1188f), 1e-6f)
+        // A bounce past 1 never pushes it past fully up; no height known: nothing shown.
+        assertEquals(1f, KeyboardDrive.share(933f, 1.2f, 933f), 1e-6f)
+        assertEquals(0f, KeyboardDrive.share(933f, 1f, 0f), 1e-6f)
     }
 
     @Test

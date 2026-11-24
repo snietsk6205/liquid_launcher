@@ -1,18 +1,19 @@
 package dev.liquid.launcher.core.settings
 
 /*
- * W4 (0.10.1): where every option lives. Settings has seven entries; each holds pages, one per surface of the
+ * W4 (0.10.1): where every option lives. Settings has seven entries (eight since 0.16.0: Calendar); each holds pages, one per surface of the
  * launcher (the pill, the dock, the drawer…), and a page shows its options in up to four tabs (Layout, Look,
  * Behaviour, More) under its live preview. The storage keys of 0.9 are unchanged, so nothing is reset; the
  * sections of 0.9 still open the page that took their options ([forSection]), so links and gestures that open a
  * section keep working.
  */
 
-/** The seven entries of the first settings screen. */
+/** The entries of the first settings screen (0.16.0: Calendar is the eighth). */
 enum class SettingsEntry(val title: String, val summary: String) {
     HOME("Home", "Grid, pill, dock, folders, clock, menus and gestures"),
     DRAWER("Drawer and search", "The app drawer, its tabs and tags, the letter index and search"),
     STUDY("Study", "Blocks and tasks from your calendar, the hub, quiet, arrival home and Claude"),
+    CALENDAR("Calendar", "The calendar from the clock's date: views, look, your calendars, holidays and the school year"),
     LOOK("Look", "The Theme lab, colours and fonts, icons, liquid glass and buttons"),
     WALLPAPER("Wallpaper and layouts", "Your wallpapers, blur and dim, changing by themselves; layouts and backup"),
     MOTION("Motion and feel", "Animations, haptics, press and touch effects, the moving wallpaper, notices"),
@@ -59,7 +60,7 @@ data class SettingInfo(
     val values: String,
     /** "layout" (saved with each home layout), "phone" (this phone's facts) or "launcher". */
     val scope: String,
-    /** "key" (on) or "key=a|b": what must hold for this option to matter. */
+    /** "key" (on), "!key" (off) or "key=a|b": what must hold for this option to matter. */
     val dependsOn: String?,
     /** "basic" or "advanced". */
     val level: String,
@@ -88,7 +89,7 @@ object SettingsMap {
         SettingsSurface(
             "pill", "Pill", "Its items, size, position, the study item and its gestures", SettingsEntry.HOME, listOf("pill"),
             mapOf(
-                L to listOf("pill.enabled", "pill.position", "pill.offset", "pill.width", "pill.height", "pill.iconSize"),
+                L to listOf("pill.enabled", "pill.position", "pill.offset", "pill.width", "pill.height", "pill.iconSize", "pill.live.*"),
                 K to listOf("pill.corner", "pill.hint", "pill.study.*"),
                 B to listOf("pill.tap", "pill.longPress", "pill.swipeUp", "pill.swipeDown"),
             ),
@@ -152,10 +153,20 @@ object SettingsMap {
         SettingsSurface(
             "search", "Search", "Its cards, its field, how it opens, the keyboard, web search and Ask Claude", SettingsEntry.DRAWER, listOf("search"),
             mapOf(
-                L to listOf("search.field", "search.homeScale"),
+                L to listOf("search.field", "search.fieldHeight", "search.fieldWidth", "search.fieldGap", "search.homeScale"),
                 K to listOf("search.blur", "search.dim"),
                 B to listOf("motion.search", "search.bounce", "search.speed", "search.stretch", "search.keyboard", "search.clipboard"),
-                M to listOf("search.engine", "search.claude", "search.claudeTarget"),
+                M to listOf("search.find.*", "search.engine", "search.claude", "search.claudeTarget"),
+            ),
+        ),
+        // 0.12.0 (D171, D172): Med's keyboard, WM Keyboard, and the launcher.
+        SettingsSurface(
+            "keyboard", "Keyboard", "WM Keyboard: your wallpaper behind the keys, a theme that follows it, a mode for search, Liquid from any app",
+            SettingsEntry.DRAWER, listOf("keyboard"),
+            mapOf(
+                // 0.13.1 (D180): the wallpaper behind the keys, above the theme it goes with.
+                K to listOf("keyboard.wallpaper", "keyboard.wallpaperLook"),
+                B to listOf("search.selectionEntry"),
             ),
         ),
         // ---- Study ----
@@ -166,8 +177,9 @@ object SettingsMap {
                 // 0.10.2: what Med looked for first sits on the first tab: the line under the clock and its colour, how the
                 // hub opens and how its blocks show.
                 L to listOf(
-                    "study.enabled", "study.clockLine", "study.lineInk", "study.lineShadow", "study.clockAction", "study.hubOpen", "study.blockCards",
-                    "study.buttonSide", "study.tomorrow", "study.hubSize",
+                    // 0.14.0 (D186): Today is one simple screen; its blocks, sides, tomorrow and collapsed state are gone.
+                    "study.enabled", "study.clockLine", "study.lineAfter", "study.lineInk", "study.lineShadow", "study.clockAction",
+                    "study.hubSize",
                 ),
                 K to listOf("study.glassTint", "study.hubDim", "study.hubBlur", "study.hubInk"),
                 B to listOf(
@@ -180,6 +192,25 @@ object SettingsMap {
                     "study.linkOpener", "study.header", "study.checkin", "study.templates",
                 ),
             ),
+        ),
+        // ---- Calendar (0.16.0, D209–D212) ----
+        SettingsSurface(
+            "calendar", "Calendar", "What grows out of the clock's date: its size, views, the week, the days and the glass", SettingsEntry.CALENDAR,
+            listOf("calendar"),
+            mapOf(
+                L to listOf("calendar.size", "calendar.view", "calendar.mondayFirst", "calendar.weekNumbers", "calendar.density"),
+                K to listOf("calendar.glass", "calendar.corner", "calendar.today", "calendar.marks", "calendar.hijri", "calendar.dim"),
+                B to listOf("calendar.bounce"),
+            ),
+        ),
+        SettingsSurface(
+            "calendarDays", "Holidays and school year", "Tunisia's holidays, the Islamic dates, your school year and its countdowns",
+            SettingsEntry.CALENDAR, listOf("calendarDays"),
+            mapOf(L to listOf("calendar.holidays", "calendar.school"), B to listOf("calendar.hijriShift")),
+        ),
+        SettingsSurface(
+            "calendarWidget", "Calendar widget", "The same settings as the calendar, or its own", SettingsEntry.CALENDAR, listOf("calendarWidget"),
+            mapOf(L to listOf("calendar.shareWidget"), K to listOf("calendar.widget.*")),
         ),
         // ---- Look ----
         SettingsSurface(
@@ -213,12 +244,42 @@ object SettingsMap {
         ),
         // ---- Wallpaper and layouts ----
         SettingsSurface(
-            "wallpaper", "Wallpaper", "Blur and dim, parallax, transitions, changing by itself", SettingsEntry.WALLPAPER, listOf("wallpaper"),
+            "wallpaper", "Wallpaper", "Blur and dim, parallax, transitions, changing by itself, the lock screen", SettingsEntry.WALLPAPER, listOf("wallpaper"),
             mapOf(
                 L to listOf("wallpaper.parallax"),
                 K to listOf("wallpaper.homeBlur", "wallpaper.homeDim"),
-                B to listOf("wallpaper.transition", "wallpaper.transitionMs", "wallpaper.rotation", "wallpaper.rotationPool", "wallpaper.rotationShuffle"),
-                M to listOf("wallpaper.lockToo", "wallpaper.systemWrite", "wallpaper.history"),
+                B to listOf(
+                    "wallpaper.transition", "wallpaper.transitionMs", "wallpaper.rotation", "wallpaper.rotationPool", "wallpaper.rotationShuffle",
+                    "wallpaper.rotationMinutes", "wallpaper.rotationTimes",
+                ),
+                M to listOf("wallpaper.lockMode", "wallpaper.systemWrite"),
+            ),
+        ),
+        // 0.16.0: the library's own options, and what each layout keeps of the wallpaper (D202).
+        SettingsSurface(
+            "wallpaperLibrary", "Library", "The order of the pictures and how many recent ones", SettingsEntry.WALLPAPER, listOf("wallpaperLibrary"),
+            mapOf(L to listOf("wallpaper.librarySort"), B to listOf("wallpaper.history")),
+        ),
+        SettingsSurface(
+            "wallpaperLayout", "Per layout", "Each layout's own wallpaper, recents, collection and look; the switch between them", SettingsEntry.WALLPAPER,
+            listOf("wallpaperLayout"),
+            mapOf(
+                K to listOf("wallpaper.homeSaturation", "wallpaper.homeTint", "wallpaper.homeTintAmount"),
+                B to listOf("layouts.ownWallpaper", "layouts.ownRecents", "layouts.ownCollection", "layouts.transition"),
+            ),
+        ),
+        SettingsSurface(
+            "wallpaperFolders", "Folders and Island", "Linked folders, Island's and Insular's pictures, and what the wallpaper strip shows of them",
+            SettingsEntry.WALLPAPER, listOf("wallpaperFolders"),
+            mapOf(B to listOf("wallpaper.stripFolders", "wallpaper.stripFolderCount")),
+        ),
+        SettingsSurface(
+            "wallpaperVideo", "Video", "Video, GIF and animated wallpapers: the glass over them, the battery, re-encoding", SettingsEntry.WALLPAPER,
+            listOf("wallpaperVideo"),
+            mapOf(
+                K to listOf("video.glass", "video.stillSeconds"),
+                B to listOf("video.pauseSaver", "video.pauseBelow", "video.onlyCharging"),
+                M to listOf("video.reencode", "video.maxSize", "video.maxFps"),
             ),
         ),
         SettingsSurface(
@@ -292,10 +353,10 @@ object SettingsMap {
     val editors: List<Editor> = listOf(
         Editor("Search page cards", "Which cards the search page shows and in what order: the Today line (calendar and exams), the study card, Ask Claude, your apps, and every other card",
             "search page cards order today line calendar month exam countdown timeline widgets claude prompts commands next block apps calm", "search", SettingsTab.LAYOUT),
-        Editor("Pill items", "What the pill holds and in what order", "pill items slots icons order search apps claude study", "pill", SettingsTab.LAYOUT),
+        Editor("Pill items", "What the pill holds and in what order", "pill items slots icons order search apps claude study live focus music", "pill", SettingsTab.LAYOUT),
         Editor(
-            "Camera for board photos", "The camera app that takes the board photos, and a test photo",
-            "camera photo board picture app essai class test", "study", SettingsTab.MORE,
+            "Camera for board photos", "The launcher's camera (several photos in a row) or a camera app for board photos, and a test photo",
+            "camera photo board picture app essai class test several series multiple burst launcher", "study", SettingsTab.MORE,
         ),
         Editor("Pill study item", "How the pill's study item looks: icon, circle, picture, block name", "pill study item circle pebble ring look", "pill", SettingsTab.LOOK),
         Editor("Home menu items", "The glass pills of the home menu (long press on empty space)", "home menu items pills long press order", "menus", SettingsTab.LAYOUT),
@@ -304,6 +365,22 @@ object SettingsMap {
         Editor(
             "Letter areas", "Circles over the apps where a swipe starts the letters: add as many as you want, each with its edge, place and size",
             "letter areas circle zone add position place size left right edge swipe letters", "index", SettingsTab.LAYOUT,
+        ),
+        Editor(
+            "Island and Insular", "Pictures from Island's or Insular's work profile: what the launcher sees, and how to reach them (File Shuttle, or a folder synced with Syncthing)",
+            "island insular work profile file shuttle syncthing folder pictures paused", "wallpaperFolders", SettingsTab.MORE,
+        ),
+        Editor(
+            "Calendars and colours", "Which of the phone's calendars the calendar shows, and the colour of each",
+            "calendar calendars accounts hide show colour color events", "calendar", SettingsTab.MORE,
+        ),
+        Editor(
+            "School year", "Your school's dates (ESSAI 2026–27 built in, indicative): edit, move, delete, add, pin a countdown under the clock",
+            "school year essai dates exams ds revision period retakes deliberation countdown pin clock edit delete add indicative", "calendarDays", SettingsTab.MORE,
+        ),
+        Editor(
+            "Holidays set by hand", "Islamic holidays moved to the announced date, and holidays hidden; put them back",
+            "holidays moved hidden aid eid mouled islamic reset tunisia", "calendarDays", SettingsTab.MORE,
         ),
         Editor("Theme lab", "Every option of your WM Keyboard theme on every button, chip, pill, sheet and menu, with presets (Before 0.10.2)",
             "theme lab keyboard wm colours colors pills search bar tint material accent blueberry preset before", "buttons", SettingsTab.LOOK),
@@ -390,6 +467,7 @@ object SettingsMap {
                 else -> "launcher"
             },
             dependsOn = SettingDependencies.parents[setting.key]?.key
+                ?: SettingDependencies.offParents[setting.key]?.let { "!" + it.key }
                 ?: SettingDependencies.choiceParents[setting.key]?.let { (choice, values) -> "${choice.key}=${values.joinToString("|")}" },
             level = if (LauncherSettings.isAdvanced(setting)) "advanced" else "basic",
             keywords = setting.keywords,

@@ -471,7 +471,9 @@ internal fun WidgetContent(item: HomeItem, env: PageEnv, controller: HomeControl
         val style = draft ?: saved
         // The study block running now (or next) as a line under the clock, when the companion is on (0.6.3, D92).
         val showStudy by controller.data.settings.derive { get(LauncherSettings.StudyClockLine) != "off" }
-        val glance = if (showStudy) rememberStudyGlance(controller) else null
+        // 0.13.1 (D181): the line reimagined: what needs you now or next (never the pill's countdown), then the rest of the day.
+        // 0.16.0 (D209): a countdown pinned from the school year shows here too, even with the study line off.
+        val line = rememberClockLine(controller, withStudy = showStudy, withPinned = true)
         // 0.10.2: by default the line, its ring and its ✓ are in the clock design's own colour (from the wallpaper when
         // the clock takes it from there) with the clock's own shadow; or, as chosen, dark over a light wallpaper and light
         // over a dark one, white, or black, with a soft halo in the opposite tone.
@@ -500,14 +502,25 @@ internal fun WidgetContent(item: HomeItem, env: PageEnv, controller: HomeControl
         // 0.10.2: the Stacked design reads at a glance: the date and the study line above the digits.
         val atAGlance = style.design == "glance"
         val studyLine: @Composable () -> Unit = {
-            if (glance != null) {
-                StudyLine(
-                    glance, controller, lineColor, lineShadow, env.interactive && !env.editMode,
+            if (line != null) {
+                ClockLine(
+                    line, controller, lineColor, lineShadow, env.interactive && !env.editMode,
                     Modifier.padding(horizontal = if (style.plate == "none") 0.dp else 10.dp).padding(bottom = 2.dp),
                     ownColours = followsClock,
+                    align = when (style.align) {
+                        "start" -> Alignment.Start
+                        "end" -> Alignment.End
+                        else -> Alignment.CenterHorizontally
+                    },
                 )
             }
         }
+        // 0.16.0 (D209): on the live home screen (not while editing), a tap on the clock's date opens the calendar, grown out
+        // of the date; the rest of the clock keeps its double tap (the quick note).
+        val dateTap: ((androidx.compose.ui.geometry.Rect) -> Unit)? = if (env.interactive && !env.editMode && controller.clockStudio == null) {
+            { bounds -> controller.openCalendar(CalendarOpener.ClockDate(item.id, bounds)) }
+        } else null
+        androidx.compose.runtime.CompositionLocalProvider(LocalClockDateTap provides dateTap) {
         Column(
             Modifier.fillMaxSize(),
             horizontalAlignment = when (style.align) {
@@ -519,6 +532,7 @@ internal fun WidgetContent(item: HomeItem, env: PageEnv, controller: HomeControl
             if (atAGlance) {
                 if (style.date != "off") {
                     rememberMinuteTick()
+                    val target = rememberClockDateTarget()
                     androidx.compose.material3.Text(
                         clockDateText(style),
                         style = androidx.compose.ui.text.TextStyle(
@@ -526,13 +540,15 @@ internal fun WidgetContent(item: HomeItem, env: PageEnv, controller: HomeControl
                             fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, shadow = clock.shadow,
                         ),
                         maxLines = 1,
-                        modifier = Modifier.padding(horizontal = if (style.plate == "none") 6.dp else 16.dp).padding(top = 2.dp),
+                        modifier = Modifier.clockDateArea(target).padding(horizontal = if (style.plate == "none") 6.dp else 16.dp).padding(top = 2.dp)
+                            .clockDateText(target),
                     )
                 }
                 studyLine()
             }
             ClockFace(style, env.contentColor, env.shadow, env.glass, env.lightBackground, env.wallpaperBackdrop, Modifier.weight(1f))
             if (!atAGlance) studyLine()
+        }
         }
     }
     when (item.widget) {

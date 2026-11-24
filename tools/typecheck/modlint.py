@@ -36,4 +36,33 @@ for mod, (own, compose) in mods.items():
                         print(f"MODULE {path.replace(REPO + '/', '')}:{n} imports {imp} ({mod} lacks that Compose part)"); bad += 1
                     if imp.startswith("com.kyant") and mod not in ("core/designsystem", "feature/home", "feature/settings", "app"):
                         print(f"MODULE {path.replace(REPO + '/', '')}:{n} imports {imp} (no backdrop in {mod})"); bad += 1
+# A smart cast of another module's property ("if (item.video != null) item.video.kind") compiles in the one-pass
+# check but not in Gradle (run 147). Flags "a.b != null" followed by "a.b." in the same line or the block it opens,
+# where b is a nullable val declared in a core module.
+nullable = set()
+for core in ("core/common", "core/settings", "core/data", "core/designsystem"):
+    for d, _, files in os.walk(os.path.join(REPO, core, "src", "main", "kotlin")):
+        for f in files:
+            if f.endswith(".kt"):
+                for line in open(os.path.join(d, f), encoding="utf-8"):
+                    for m in re.finditer(r"\bva[lr]\s+(\w+)\s*:\s*[\w.<>, ]+\?", line):
+                        nullable.add(m.group(1))
+cond = re.compile(r"(\b[a-z]\w*(?:\.[a-z]\w*)*)\.(\w+) != null")
+for mod in ("feature/home", "feature/settings", "feature/redirect", "app"):
+    for d, _, files in os.walk(os.path.join(REPO, mod, "src", "main", "kotlin")):
+        for f in files:
+            if not f.endswith(".kt"):
+                continue
+            path = os.path.join(d, f)
+            lines = open(path, encoding="utf-8").read().split("\n")
+            for n, line in enumerate(lines):
+                for m in cond.finditer(line):
+                    owner, prop = m.group(1), m.group(2)
+                    if prop not in nullable:
+                        continue
+                    rest = line[m.end():]
+                    if line.rstrip().endswith("{"):
+                        rest += "\n" + "\n".join(lines[n + 1:n + 4])
+                    if re.search(re.escape(owner + "." + prop) + r"\.(?!let\b|also\b|takeIf\b|run\b)\w", rest):
+                        print(f"SMARTCAST {path.replace(REPO + '/', '')}:{n + 1} {owner}.{prop} is another module's property: use ?.let"); bad += 1
 print(f"module lint: {bad} problem(s)")

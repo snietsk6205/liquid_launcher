@@ -37,6 +37,7 @@ object LauncherIcons {
     val AddCircle = R.drawable.ic_add_circle
     val Work = R.drawable.ic_work
     val Calendar = R.drawable.ic_calendar
+    val Pin = R.drawable.ic_pin
     val Schedule = R.drawable.ic_schedule
     val Tune = R.drawable.ic_tune
     val Recents = R.drawable.ic_recents

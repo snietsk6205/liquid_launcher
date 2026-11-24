@@ -20,17 +20,18 @@ import androidx.compose.ui.unit.dp
  */
 internal object WallpaperTransitions {
     /** Every style, in the order the setting lists them. */
-    val styles = listOf("liquid", "ripple", "ink", "shine", "melt", "zoom", "depth", "slide", "fade", "none")
+    val styles = listOf("liquid", "ripple", "pill", "ink", "shine", "melt", "zoom", "depth", "slide", "fade", "none")
 
     /** The curve progress follows: shader styles sweep at a steady pace, the others decelerate softly. */
     fun easing(style: String): Easing = when (style) {
-        "ripple", "ink", "shine", "melt" -> CubicBezierEasing(0.35f, 0f, 0.25f, 1f)
+        "ripple", "pill", "ink", "shine", "melt" -> CubicBezierEasing(0.35f, 0f, 0.25f, 1f)
         else -> CubicBezierEasing(0.2f, 0f, 0f, 1f)
     }
 
     /** How long a style takes relative to the "Transition length" setting: the shader sweeps need a little more. */
     fun lengthFactor(style: String): Float = when (style) {
         "ripple", "ink", "melt" -> 1.35f
+        "pill" -> 1.25f
         "shine" -> 1.2f
         else -> 1f
     }
@@ -71,6 +72,33 @@ internal object WallpaperTransitions {
             c.rgb += half(crest * 0.12) * c.a;
             float a = smoothstep(-0.7, 0.7, k);
             return c * half(a);
+        }
+    """
+
+    /**
+     * 0.16.0 (D202): a liquid wipe out of the pill. The new screen grows from [origin] (the pill) as a drop with a slowly
+     * wobbling rim; just outside the rim the old picture bends outward, as glass does at the edge of a drop.
+     */
+    private const val PILL = """
+        uniform shader image;
+        uniform float2 size;
+        uniform float progress;
+        uniform float2 origin;
+        uniform float density;
+        half4 main(float2 p) {
+            float2 far = max(origin, size - origin);
+            float r = progress * length(far) * 1.1;
+            float2 d = p - origin;
+            float dist = length(d);
+            float ang = atan(d.y, d.x);
+            float wob = (sin(ang * 5.0 + progress * 6.0) * 0.55 + sin(ang * 9.0 - progress * 4.0) * 0.3) * 16.0 * density * (0.35 + progress);
+            float k = (dist - (r + wob)) / (36.0 * density);
+            float rim = exp(-k * k * 2.2) * step(-0.6, k);
+            float2 dir = d / max(dist, 0.001);
+            float2 q = p + dir * rim * 28.0 * density * (1.0 - progress * 0.5);
+            half4 c = image.eval(q);
+            c.rgb += half(rim * 0.1) * c.a;
+            return c * half(smoothstep(-0.5, 0.5, k));
         }
     """
 
@@ -129,7 +157,7 @@ internal object WallpaperTransitions {
         }
     """
 
-    private val sources = mapOf("ripple" to RIPPLE, "ink" to INK, "shine" to SHINE, "melt" to MELT)
+    private val sources = mapOf("ripple" to RIPPLE, "pill" to PILL, "ink" to INK, "shine" to SHINE, "melt" to MELT)
     private val compiled = HashMap<String, RuntimeShader?>()
 
     /** The shader of [style], compiled once; null when it does not compile here (that style then falls back to liquid). */
@@ -178,6 +206,15 @@ internal object WallpaperTransitions {
                     setFloatUniform("size", size.width, size.height)
                     setFloatUniform("progress", pc)
                     val o = origin ?: Offset(size.width / 2f, size.height * 0.8f)
+                    setFloatUniform("origin", o.x, o.y)
+                    setFloatUniform("density", density)
+                }
+            }
+            "pill" -> shaderStyle {
+                run {
+                    setFloatUniform("size", size.width, size.height)
+                    setFloatUniform("progress", pc)
+                    val o = origin ?: Offset(size.width / 2f, size.height * 0.93f)
                     setFloatUniform("origin", o.x, o.y)
                     setFloatUniform("density", density)
                 }
@@ -247,7 +284,7 @@ internal object WallpaperTransitions {
         val rest = 1f - p.coerceIn(0f, 1f)
         if (rest <= 0f) return
         when (style) {
-            "liquid", "ripple" -> {
+            "liquid", "ripple", "pill" -> {
                 val scale = 1f + 0.025f * rest
                 scaleX *= scale
                 scaleY *= scale
@@ -275,7 +312,7 @@ internal object WallpaperTransitions {
         val rest = 1f - p.coerceIn(0f, 1f)
         if (rest <= 0f) return
         val grow = when (style) {
-            "liquid", "ripple" -> 0.03f
+            "liquid", "ripple", "pill" -> 0.03f
             "depth" -> 0.06f
             "ink" -> 0.02f
             else -> 0f

@@ -8,6 +8,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import dev.liquid.launcher.core.common.CropSpec
 import dev.liquid.launcher.core.common.DebugLog
@@ -41,9 +42,101 @@ data class WallpaperItem(
     val parallax: Float = -1f,
     /** W8 (P8): this picture's own look on the home screen, or null for the one set for all. */
     val look: WallpaperLook? = null,
+    /** 0.16.0: how many times it was made the wallpaper, for "Most used". Counted from 0.16.0 on. */
+    val uses: Int = 0,
+    /** 0.16.0: its main colour (ARGB, worked out from its thumbnail), for sorting and filtering by colour; null until known. */
+    val colour: Int? = null,
+    /** 0.16.0: its upright width and height (from its thumbnail; only the ratio matters), for the shape filter; 0 until known. */
+    val w: Int = 0,
+    val h: Int = 0,
+    /** 0.16.0 (D198): ids of the collections it is in. Favourites stay [favourite] (shown as the first collection). */
+    val collections: List<String> = emptyList(),
+    /**
+     * 0.16.0 (D206): a saved copy: a folder's picture an automatic change applied, kept (outside the library's folder, out
+     * of backups, not in All) so recents, the layouts and Undo work while its folder cannot be read (Island paused). Picked
+     * by hand, made a favourite or put in a collection, it joins the library.
+     */
+    val saved: Boolean = false,
+    /**
+     * 0.16.0 (D207): a video (or a GIF or animated WebP) wallpaper: how it plays. [file] is then its poster frame, the
+     * still picture everything else uses (thumbnails, colours, the glass when it does not bend the video, the phone's
+     * own wallpaper, layouts); the moving file is [VideoSpec.file].
+     */
+    val video: VideoSpec? = null,
 ) {
     val crop: CropSpec get() = CropSpec(cx, cy, zoom)
+
+    /** Its colour and shape are known (see [WallpaperLibrary.describeMissing]). */
+    val described: Boolean get() = colour != null && w > 0 && h > 0
 }
+
+/** 0.16.0 (D207): how a video (or GIF, animated WebP) wallpaper plays. Plain data; [VideoRules] decides with it. */
+@Serializable
+data class VideoSpec(
+    /** The moving file, next to the poster in the library's folder. */
+    val file: String,
+    /** "video", or "animated" (a GIF or an animated WebP, played by Android's animated image). */
+    val kind: String = "video",
+    /** "launcher": the launcher plays it (the glass can bend it); "system": the phone's live wallpaper too (lock screen, recents). */
+    val mode: String = "launcher",
+    /** The part played (ms); [endMs] 0: to the end. */
+    val startMs: Long = 0,
+    val endMs: Long = 0,
+    /** "loop", "boomerang" (forward then back) or "once" (stops on its last frame). */
+    val loop: String = "loop",
+    /** 0.25 to 2. */
+    val speed: Float = 1f,
+    /** A cross-fade where the loop starts again, in ms (0: none). */
+    val crossfadeMs: Int = 0,
+    /** "fill" (covers the screen; [panX], [panY] say which part shows) or "fit" (all of it, the poster's colours around). */
+    val fit: String = "fill",
+    val panX: Float = 0.5f,
+    val panY: Float = 0.5f,
+    /** "always" (while the home screen shows), "unlock" (once after each unlock), "seconds" ([seconds], then it rests). */
+    val plays: String = "always",
+    val seconds: Int = 8,
+    /** Where the poster (the still frame) is taken from, in ms. */
+    val posterMs: Long = 0,
+    val durationMs: Long = 0,
+    val width: Int = 0,
+    val height: Int = 0,
+    /** What a re-encode at import did ("" none), e.g. "H.264 1080p 30 fps". */
+    val encoded: String = "",
+    /** Every frame a key frame (made for Boomerang, which steps back frame by frame). */
+    val allKeyFrames: Boolean = false,
+)
+
+/** 0.16.0 (D198): a named group of library pictures (a picture can be in several). */
+@Serializable
+data class WallpaperCollection(val id: String, val name: String, val created: Long = 0)
+
+/** 0.16.0: how the library's pictures are ordered. */
+enum class LibrarySort(val id: String, val label: String) {
+    /** Recent: last used first; elsewhere: last added first. */
+    NEWEST("newest", "Newest"),
+    USED("used", "Most used"),
+    COLOUR("colour", "Colour");
+
+    companion object {
+        fun of(id: String): LibrarySort = entries.firstOrNull { it.id == id } ?: NEWEST
+    }
+}
+
+/** 0.16.0: the colour a picture is filtered by: eight hues and the greys (black, white and washed-out pictures). */
+enum class ColourFamily(val label: String, val swatch: Int) {
+    RED("Red", 0xFFE53935.toInt()),
+    ORANGE("Orange", 0xFFFB8C00.toInt()),
+    YELLOW("Yellow", 0xFFFDD835.toInt()),
+    GREEN("Green", 0xFF43A047.toInt()),
+    TEAL("Teal", 0xFF00ACC1.toInt()),
+    BLUE("Blue", 0xFF1E88E5.toInt()),
+    PURPLE("Purple", 0xFF8E24AA.toInt()),
+    PINK("Pink", 0xFFD81B60.toInt()),
+    GREY("Grey", 0xFF9E9E9E.toInt()),
+}
+
+/** 0.16.0: the shape filter. */
+enum class PictureShape(val label: String) { PORTRAIT("Portrait"), LANDSCAPE("Landscape"), SQUARE("Square") }
 
 /**
  * W8 (P8): how one picture sits on the home screen: its blur and dim (-1: as set for all), its saturation (100 is the
@@ -59,7 +152,20 @@ data class LinkedFolder(
     val name: String,
     /** Also show the pictures in its sub-folders. */
     val deep: Boolean = false,
+    /** 0.16.0 (D205): the folder is in the work profile (Island, Insular), reached through the system picker's Work tab. */
+    val island: Boolean = false,
+    /** 0.16.0 (D205): Android keeps the access across restarts (false: only until the phone restarts; link it again then). */
+    val kept: Boolean = true,
+    /** 0.16.0 (D205): its newest pictures as last read, for the wallpaper strip and while the folder cannot be read. */
+    val newest: List<RememberedImage> = emptyList(),
 )
+
+/** 0.16.0 (D205): a picture of a linked folder as last seen there. */
+@Serializable
+data class RememberedImage(val uri: String, val name: String = "", val modified: Long = 0)
+
+/** 0.16.0 (D205): what reading a linked folder gave: its pictures, or why it could not be read (Island paused, access gone). */
+data class FolderRead(val images: List<FolderImage>, val unreachable: Boolean = false, val reason: String? = null)
 
 @Serializable
 data class WallpaperLibraryState(
@@ -70,6 +176,10 @@ data class WallpaperLibraryState(
     /** Automatic changes: where in the pool the last one was, and when (ms). */
     val rotationIndex: Int = -1,
     val lastRotation: Long = 0,
+    /** 0.16.0 (D198): the user's collections, in the order they were made. */
+    val collections: List<WallpaperCollection> = emptyList(),
+    /** 0.16.0 (D202): each layout's recent pictures (layout id to library ids, newest first). */
+    val layoutRecents: Map<String, List<String>> = emptyMap(),
 )
 
 /** A picture inside a linked folder, not copied into the library yet. */
@@ -86,15 +196,16 @@ object WallpaperLibraryOps {
         state.items.filter { it.lastUsed > 0 }.sortedByDescending { it.lastUsed }
 
     fun favourites(state: WallpaperLibraryState): List<WallpaperItem> =
-        state.items.filter { it.favourite }.sortedByDescending { maxOf(it.lastUsed, it.added) }
+        state.items.filter { it.favourite && !it.saved }.sortedByDescending { maxOf(it.lastUsed, it.added) }
 
-    /** Everything, newest addition first. */
-    fun all(state: WallpaperLibraryState): List<WallpaperItem> = state.items.sortedByDescending { it.added }
+    /** Everything, newest addition first (0.16.0: saved copies of automatic changes are not part of it, D206). */
+    fun all(state: WallpaperLibraryState): List<WallpaperItem> = state.items.filter { !it.saved }.sortedByDescending { it.added }
 
     fun markUsed(state: WallpaperLibraryState, id: String, now: Long, crop: CropSpec?, parallax: Float? = null): WallpaperLibraryState = state.copy(
         items = state.items.map { item ->
             if (item.id != id) item else item.copy(
                 lastUsed = now,
+                uses = item.uses + 1,
                 cx = crop?.cx ?: item.cx,
                 cy = crop?.cy ?: item.cy,
                 zoom = crop?.zoom ?: item.zoom,
@@ -117,6 +228,175 @@ object WallpaperLibraryOps {
 
     fun remove(state: WallpaperLibraryState, id: String): WallpaperLibraryState =
         state.copy(items = state.items.filter { it.id != id }, current = state.current.takeIf { it != id })
+
+    // ---- 0.16.0 (D202): recents per layout ----
+
+    /** [id] becomes the newest of layout [layout]'s recent pictures, which keep at most [keep]. */
+    fun pushRecent(state: WallpaperLibraryState, layout: String, id: String, keep: Int): WallpaperLibraryState {
+        val list = (listOf(id) + state.layoutRecents[layout].orEmpty().filter { it != id }).take(keep.coerceAtLeast(1))
+        return state.copy(layoutRecents = state.layoutRecents + (layout to list))
+    }
+
+    /** Layout [layout]'s recent pictures, newest first; pictures no longer in the library are left out. */
+    fun recentFor(state: WallpaperLibraryState, layout: String): List<WallpaperItem> {
+        val byId = state.items.associateBy { it.id }
+        return state.layoutRecents[layout].orEmpty().mapNotNull { byId[it] }
+    }
+
+    fun forgetFor(state: WallpaperLibraryState, layout: String, ids: Set<String>): WallpaperLibraryState {
+        val list = state.layoutRecents[layout] ?: return state
+        return state.copy(layoutRecents = state.layoutRecents + (layout to list.filter { it !in ids }))
+    }
+
+    /** Layout [layout]'s recents become [ids] (a layout just saved starts with the recents of the moment). */
+    fun setRecents(state: WallpaperLibraryState, layout: String, ids: List<String>): WallpaperLibraryState =
+        state.copy(layoutRecents = state.layoutRecents + (layout to ids))
+
+    /** Every layout of [layouts] without recents of its own starts with today's ([recent], the [keep] newest). */
+    fun seedRecents(state: WallpaperLibraryState, layouts: List<String>, keep: Int): WallpaperLibraryState {
+        val start = recent(state).take(keep).map { it.id }
+        val missing = layouts.filter { it !in state.layoutRecents }
+        if (missing.isEmpty()) return state
+        return state.copy(layoutRecents = state.layoutRecents + missing.associateWith { start })
+    }
+
+    // ---- 0.16.0: several at once, collections, sorting and filtering ----
+
+    fun setFavourite(state: WallpaperLibraryState, ids: Set<String>, on: Boolean): WallpaperLibraryState =
+        state.copy(items = state.items.map { if (it.id in ids) it.copy(favourite = on) else it })
+
+    fun forget(state: WallpaperLibraryState, ids: Set<String>): WallpaperLibraryState =
+        state.copy(items = state.items.map { if (it.id in ids) it.copy(lastUsed = 0) else it })
+
+    fun removeAll(state: WallpaperLibraryState, ids: Set<String>): WallpaperLibraryState =
+        state.copy(items = state.items.filter { it.id !in ids }, current = state.current.takeIf { it !in ids })
+
+    /** Puts back pictures [removeAll] took out (Undo), where they were, and the current one if it was among them. */
+    fun restore(state: WallpaperLibraryState, items: List<WallpaperItem>, current: String?): WallpaperLibraryState {
+        val known = state.items.map { it.id }.toSet()
+        val back = items.filter { it.id !in known }
+        return state.copy(
+            items = state.items + back,
+            current = if (state.current == null && current != null && items.any { it.id == current }) current else state.current,
+        )
+    }
+
+    /** Puts one picture's record back as it was before an Apply (its placement, use count and look), for Undo. */
+    fun restoreItem(state: WallpaperLibraryState, before: WallpaperItem): WallpaperLibraryState =
+        state.copy(items = state.items.map { if (it.id == before.id) before.copy(favourite = it.favourite, collections = it.collections) else it })
+
+    fun addCollection(state: WallpaperLibraryState, collection: WallpaperCollection): WallpaperLibraryState =
+        if (state.collections.any { it.id == collection.id }) state else state.copy(collections = state.collections + collection)
+
+    fun renameCollection(state: WallpaperLibraryState, id: String, name: String): WallpaperLibraryState =
+        state.copy(collections = state.collections.map { if (it.id == id) it.copy(name = name) else it })
+
+    /** Removes a collection; its pictures stay in the library. */
+    fun removeCollection(state: WallpaperLibraryState, id: String): WallpaperLibraryState = state.copy(
+        collections = state.collections.filter { it.id != id },
+        items = state.items.map { if (id in it.collections) it.copy(collections = it.collections - id) else it },
+    )
+
+    fun addToCollection(state: WallpaperLibraryState, ids: Set<String>, collection: String): WallpaperLibraryState =
+        if (state.collections.none { it.id == collection }) state
+        else state.copy(items = state.items.map { if (it.id in ids && collection !in it.collections) it.copy(collections = it.collections + collection) else it })
+
+    fun removeFromCollection(state: WallpaperLibraryState, ids: Set<String>, collection: String): WallpaperLibraryState =
+        state.copy(items = state.items.map { if (it.id in ids && collection in it.collections) it.copy(collections = it.collections - collection) else it })
+
+    /** The pictures of a collection, last added to the library first. */
+    fun inCollection(state: WallpaperLibraryState, collection: String): List<WallpaperItem> =
+        state.items.filter { collection in it.collections && !it.saved }.sortedByDescending { it.added }
+
+    /**
+     * 0.16.0 (D206): the saved copies no one needs any more: not in a layout's recents, not among the [keepRecent] newest
+     * recents, not the current picture and not in [keep] (layouts' own pictures).
+     */
+    fun savedToDrop(state: WallpaperLibraryState, keepRecent: Int, keep: Set<String>): Set<String> {
+        val needed = HashSet<String>(keep)
+        state.current?.let { needed += it }
+        state.layoutRecents.values.forEach { needed += it }
+        recent(state).take(keepRecent).forEach { needed += it.id }
+        return state.items.filter { it.saved && it.id !in needed }.map { it.id }.toSet()
+    }
+
+    /** A saved copy picked by hand, made a favourite or put in a collection joins the library (D206). */
+    fun promote(state: WallpaperLibraryState, id: String): WallpaperLibraryState =
+        state.copy(items = state.items.map { if (it.id == id && it.saved) it.copy(saved = false) else it })
+
+    /** Records what [WallpaperLibrary.describeMissing] worked out for one picture. */
+    fun describe(state: WallpaperLibraryState, id: String, colour: Int, w: Int, h: Int): WallpaperLibraryState =
+        state.copy(items = state.items.map { if (it.id == id) it.copy(colour = colour, w = w, h = h) else it })
+
+    /**
+     * [items] in the order [sort] asks for. [recentList]: the list is "Recent", whose newest is the last used. Colour goes
+     * round the hues from red, the greys after them, pictures not described yet last.
+     */
+    fun sorted(items: List<WallpaperItem>, sort: LibrarySort, recentList: Boolean = false): List<WallpaperItem> = when (sort) {
+        LibrarySort.NEWEST -> if (recentList) items.sortedByDescending { it.lastUsed } else items.sortedByDescending { it.added }
+        LibrarySort.USED -> items.sortedWith(compareByDescending<WallpaperItem> { it.uses }.thenByDescending { it.lastUsed }.thenByDescending { it.added })
+        LibrarySort.COLOUR -> items.sortedWith(compareBy<WallpaperItem> { item -> item.colour?.let { colourKey(it) } ?: Float.MAX_VALUE }.thenByDescending { it.added })
+    }
+
+    /** Keeps the pictures of [family] and [shape] (null: any). Pictures not described yet only pass when both are null. */
+    fun filtered(items: List<WallpaperItem>, family: ColourFamily?, shape: PictureShape?): List<WallpaperItem> {
+        if (family == null && shape == null) return items
+        return items.filter { item ->
+            (family == null || item.colour?.let { familyOf(it) } == family) &&
+                (shape == null || shapeOf(item.w, item.h) == shape)
+        }
+    }
+
+    /** The colour family of [argb]: a grey when it is washed out or very dark, else the hue's. */
+    fun familyOf(argb: Int): ColourFamily {
+        val (hue, saturation, value) = hsv(argb)
+        if (saturation < 0.2f || value < 0.16f) return ColourFamily.GREY
+        return when {
+            hue < 15f || hue >= 345f -> ColourFamily.RED
+            hue < 45f -> ColourFamily.ORANGE
+            hue < 70f -> ColourFamily.YELLOW
+            hue < 160f -> ColourFamily.GREEN
+            hue < 200f -> ColourFamily.TEAL
+            hue < 255f -> ColourFamily.BLUE
+            hue < 290f -> ColourFamily.PURPLE
+            else -> ColourFamily.PINK
+        }
+    }
+
+    fun shapeOf(w: Int, h: Int): PictureShape? {
+        if (w <= 0 || h <= 0) return null
+        val ratio = w.toFloat() / h
+        return when {
+            ratio > 1.05f -> PictureShape.LANDSCAPE
+            ratio < 0.95f -> PictureShape.PORTRAIT
+            else -> PictureShape.SQUARE
+        }
+    }
+
+    /** Where a colour goes when sorting by colour: hues from red (0..360, starting 15° before red), greys after (by lightness). */
+    private fun colourKey(argb: Int): Float {
+        val (hue, _, value) = hsv(argb)
+        if (familyOf(argb) == ColourFamily.GREY) return 1000f + (1f - value)
+        return (hue + 15f) % 360f
+    }
+
+    /** Hue (0..360), saturation and value (0..1) of an ARGB colour. */
+    private fun hsv(argb: Int): Triple<Float, Float, Float> {
+        val r = ((argb shr 16) and 0xFF) / 255f
+        val g = ((argb shr 8) and 0xFF) / 255f
+        val b = (argb and 0xFF) / 255f
+        val max = maxOf(r, g, b)
+        val min = minOf(r, g, b)
+        val d = max - min
+        val hue = when {
+            d == 0f -> 0f
+            max == r -> 60f * (((g - b) / d) % 6f)
+            max == g -> 60f * (((b - r) / d) + 2f)
+            else -> 60f * (((r - g) / d) + 4f)
+        }.let { if (it < 0f) it + 360f else it }
+        val saturation = if (max == 0f) 0f else d / max
+        return Triple(hue, saturation, max)
+    }
 
     /**
      * The next picture of [pool] for an automatic change: in order, or at random without
@@ -156,17 +436,107 @@ class WallpaperLibrary(
 
     fun find(id: String): WallpaperItem? = store.get().items.firstOrNull { it.id == id }
 
-    fun fileOf(item: WallpaperItem): File = File(dir, item.file)
+    /** 0.16.0 (D206): where saved copies live: next to the library's folder, not in it (so backups leave them out). */
+    private val savedDir: File = File(dir.parentFile?.parentFile ?: dir, "wallpaper-saved")
 
-    /** Copies the picture at [uri] into the library (once: the same picture is found again by its bytes). */
-    suspend fun importUri(uri: Uri, folder: String? = null): WallpaperItem? = withContext(Dispatchers.IO) {
+    fun fileOf(item: WallpaperItem): File = File(if (item.saved) savedDir else dir, item.file)
+
+    /**
+     * Copies the picture at [uri] into the library (once: the same picture is found again by its bytes). 0.16.0 (D206):
+     * with [saved], as a saved copy (an automatic change from a folder) unless the library has it already.
+     */
+    suspend fun importUri(uri: Uri, folder: String? = null, saved: Boolean = false): WallpaperItem? = withContext(Dispatchers.IO) {
         try {
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@withContext null
-            importBytes(bytes, extensionOf(context.contentResolver.getType(uri)), folder)
+            importBytes(bytes, extensionOf(context.contentResolver.getType(uri)), folder, saved)
         } catch (e: Throwable) {
             DebugLog.error("Wallpaper", "import failed: $e")
             null
         }
+    }
+
+    /**
+     * 0.16.0 (D207): a video (or animated picture) joins the library: [moving], a file in the cache, is moved in next to
+     * [poster], its still frame (a JPEG, the item's [WallpaperItem.file]); the id comes from the moving file's bytes, so the
+     * same video is kept once.
+     */
+    suspend fun addVideo(moving: File, extension: String, poster: Bitmap, spec: VideoSpec, folder: String? = null): WallpaperItem? = withContext(Dispatchers.IO) {
+        try {
+            val digest = MessageDigest.getInstance("SHA-256")
+            moving.inputStream().use { input ->
+                val buffer = ByteArray(256 * 1024)
+                while (true) {
+                    val n = input.read(buffer)
+                    if (n <= 0) break
+                    digest.update(buffer, 0, n)
+                }
+            }
+            val id = "v" + digest.digest().take(10).joinToString("") { "%02x".format(it) }
+            find(id)?.let { existing ->
+                moving.delete()
+                return@withContext existing
+            }
+            dir.mkdirs()
+            val videoName = "$id.$extension"
+            val target = File(dir, videoName)
+            if (!moving.renameTo(target)) {
+                moving.copyTo(target, overwrite = true)
+                moving.delete()
+            }
+            val posterName = "$id.jpg"
+            File(dir, posterName).outputStream().use { poster.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+            val item = WallpaperItem(
+                id = id, file = posterName, added = System.currentTimeMillis(), folder = folder,
+                w = poster.width, h = poster.height, video = spec.copy(file = videoName),
+            )
+            store.update { WallpaperLibraryOps.add(it, item) }
+            DebugLog.event("Wallpaper", "video added to the library: $videoName (${target.length() / 1024} KB, ${spec.durationMs} ms, ${spec.width} × ${spec.height})")
+            item
+        } catch (e: Throwable) {
+            DebugLog.error("Wallpaper", "adding a video failed: $e")
+            moving.delete()
+            null
+        }
+    }
+
+    /** 0.16.0 (D207): the moving file of a video wallpaper. */
+    fun videoFileOf(item: WallpaperItem): File? = item.video?.let { File(if (item.saved) savedDir else dir, it.file) }
+
+    /** 0.16.0 (D207): a video wallpaper's settings changed (how it plays, its still frame, its re-encoded file). */
+    fun setVideo(id: String, spec: VideoSpec) =
+        store.update { s -> s.copy(items = s.items.map { if (it.id == id && it.video != null) it.copy(video = spec) else it }) }
+
+    /** 0.16.0 (D207): a new still frame for a video wallpaper (its poster file is written again; the thumbnail too). */
+    suspend fun setPoster(id: String, poster: Bitmap) = withContext(Dispatchers.IO) {
+        val item = find(id) ?: return@withContext
+        fileOf(item).outputStream().use { poster.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+        File(thumbDir, "$id.jpg").delete()
+        thumbs.remove(id)
+        store.update { s -> s.copy(items = s.items.map { if (it.id == id) it.copy(colour = null) else it }) }
+    }
+
+    /** 0.16.0 (D206): a saved copy joins the library (picked by hand, a favourite, a collection): its file moves in. */
+    fun promote(id: String) {
+        val item = find(id)?.takeIf { it.saved } ?: return
+        val from = File(savedDir, item.file)
+        dir.mkdirs()
+        val to = File(dir, item.file)
+        if (from.exists() && !from.renameTo(to)) runCatching { from.copyTo(to, overwrite = true); from.delete() }
+        store.update { WallpaperLibraryOps.promote(it, id) }
+        DebugLog.event("Wallpaper", "a saved copy joined the library")
+    }
+
+    /** 0.16.0 (D206): deletes the saved copies no one needs any more ([WallpaperLibraryOps.savedToDrop]). */
+    fun pruneSaved(keepRecent: Int, keep: Set<String>) {
+        val drop = WallpaperLibraryOps.savedToDrop(store.get(), keepRecent, keep)
+        if (drop.isEmpty()) return
+        for (id in drop) {
+            find(id)?.let { fileOf(it).delete() }
+            File(thumbDir, "$id.jpg").delete()
+            thumbs.remove(id)
+        }
+        store.update { WallpaperLibraryOps.removeAll(it, drop) }
+        DebugLog.event("Wallpaper", "${drop.size} saved cop${if (drop.size == 1) "y" else "ies"} no longer needed, deleted")
     }
 
     /** Copies a picture file (an older wallpaper, a layout's) into the library. */
@@ -183,22 +553,36 @@ class WallpaperLibrary(
         }
     }
 
-    private fun importBytes(bytes: ByteArray, extension: String, folder: String?): WallpaperItem? {
+    private fun importBytes(bytes: ByteArray, extension: String, folder: String?, saved: Boolean = false): WallpaperItem? {
         val id = WallpaperLibraryOps.idOf(bytes)
-        find(id)?.let { return it }
-        dir.mkdirs()
+        find(id)?.let { existing ->
+            // Imported by hand while only a saved copy was kept: it joins the library.
+            if (existing.saved && !saved) promote(id)
+            return find(id)
+        }
+        val target = if (saved) savedDir else dir
+        target.mkdirs()
         val name = "$id.$extension"
-        File(dir, name).writeBytes(bytes)
-        val item = WallpaperItem(id = id, file = name, added = System.currentTimeMillis(), folder = folder)
+        // Written whole, then renamed into place.
+        val temp = File(target, "$name.tmp")
+        temp.writeBytes(bytes)
+        if (!temp.renameTo(File(target, name))) {
+            File(target, name).delete()
+            temp.renameTo(File(target, name))
+        }
+        val item = WallpaperItem(id = id, file = name, added = System.currentTimeMillis(), folder = folder, saved = saved)
         store.update { WallpaperLibraryOps.add(it, item) }
-        DebugLog.event("Wallpaper", "added to the library: $name (${bytes.size / 1024} KB)")
+        DebugLog.event("Wallpaper", (if (saved) "saved copy kept: " else "added to the library: ") + "$name (${bytes.size / 1024} KB)")
         return item
     }
 
     fun markUsed(id: String, crop: CropSpec?, parallax: Float? = null) =
         store.update { WallpaperLibraryOps.markUsed(it, id, System.currentTimeMillis(), crop, parallax) }
 
-    fun setFavourite(id: String, on: Boolean) = store.update { WallpaperLibraryOps.setFavourite(it, id, on) }
+    fun setFavourite(id: String, on: Boolean) {
+        if (on) promote(id)
+        store.update { WallpaperLibraryOps.setFavourite(it, id, on) }
+    }
 
     fun setLook(id: String, look: WallpaperLook?) = store.update { WallpaperLibraryOps.setLook(it, id, look) }
 
@@ -206,11 +590,139 @@ class WallpaperLibrary(
 
     fun remove(id: String) {
         val item = find(id) ?: return
+        videoFileOf(item)?.delete()
         fileOf(item).delete()
         File(thumbDir, "$id.jpg").delete()
         thumbs.remove(id)
         store.update { WallpaperLibraryOps.remove(it, id) }
     }
+
+    // ---- 0.16.0 (D202): recents per layout ----
+
+    fun pushRecent(layout: String, id: String, keep: Int) = store.update { WallpaperLibraryOps.pushRecent(it, layout, id, keep) }
+
+    fun forgetFor(layout: String, ids: Set<String>) = store.update { WallpaperLibraryOps.forgetFor(it, layout, ids) }
+
+    fun seedRecents(layouts: List<String>, keep: Int) = store.update { WallpaperLibraryOps.seedRecents(it, layouts, keep) }
+
+    fun setRecents(layout: String, ids: List<String>) = store.update { WallpaperLibraryOps.setRecents(it, layout, ids) }
+
+    // ---- 0.16.0: several at once, collections, a delete that can be undone ----
+
+    fun setFavourite(ids: Set<String>, on: Boolean) {
+        // 0.16.0 (D206): a saved copy made a favourite joins the library.
+        if (on) ids.forEach { promote(it) }
+        store.update { WallpaperLibraryOps.setFavourite(it, ids, on) }
+    }
+
+    fun forget(ids: Set<String>) = store.update { WallpaperLibraryOps.forget(it, ids) }
+
+    /** Makes a new collection and returns it. */
+    fun addCollection(name: String): WallpaperCollection {
+        val now = System.currentTimeMillis()
+        val collection = WallpaperCollection("c" + now.toString(36) + (0..999).random().toString(36), name.trim().ifEmpty { "Collection" }, now)
+        store.update { WallpaperLibraryOps.addCollection(it, collection) }
+        DebugLog.event("Wallpaper", "collection made: \"${collection.name}\"")
+        return collection
+    }
+
+    fun renameCollection(id: String, name: String) = store.update { WallpaperLibraryOps.renameCollection(it, id, name.trim().ifEmpty { "Collection" }) }
+
+    fun removeCollection(id: String) = store.update { WallpaperLibraryOps.removeCollection(it, id) }
+
+    fun addToCollection(ids: Set<String>, collection: String) {
+        ids.forEach { promote(it) }
+        store.update { WallpaperLibraryOps.addToCollection(it, ids, collection) }
+    }
+
+    fun removeFromCollection(ids: Set<String>, collection: String) = store.update { WallpaperLibraryOps.removeFromCollection(it, ids, collection) }
+
+    /** Pictures taken out of the library and kept aside until their Undo has gone ([delete], [restore], [purge]). */
+    class Deleted internal constructor(val items: List<WallpaperItem>, internal val current: String?, internal val at: Long)
+
+    /**
+     * Takes [ids] out of the library. Their files wait in the cache (not in backups) until [purge], so [restore] can put
+     * everything back; the current wallpaper on screen is not touched.
+     */
+    fun delete(ids: Set<String>): Deleted? {
+        val state = store.get()
+        val items = state.items.filter { it.id in ids }
+        if (items.isEmpty()) return null
+        trashDir.mkdirs()
+        val now = System.currentTimeMillis()
+        for (item in items) {
+            // 0.16.0 (D207): a video's moving file waits with its poster.
+            videoFileOf(item)?.let { video -> if (video.exists()) video.renameTo(File(trashDir, video.name)) }
+            val file = fileOf(item)
+            val kept = File(trashDir, item.file)
+            if (file.exists() && !file.renameTo(kept)) {
+                runCatching { file.copyTo(kept, overwrite = true); file.delete() }
+            }
+            // Dated now: [purge] counts from the delete, not from when the picture was added.
+            kept.setLastModified(now)
+        }
+        store.update { WallpaperLibraryOps.removeAll(it, ids) }
+        DebugLog.event("Wallpaper", "${items.size} picture(s) taken out of the library (Undo for a while)")
+        return Deleted(items, state.current, System.currentTimeMillis())
+    }
+
+    /** Undo of [delete]: the files and records come back as they were. */
+    fun restore(deleted: Deleted) {
+        dir.mkdirs()
+        for (item in deleted.items) {
+            item.video?.let { spec -> File(trashDir, spec.file).takeIf { it.exists() }?.renameTo(File(dir, spec.file)) }
+            val kept = File(trashDir, item.file)
+            if (kept.exists() && !kept.renameTo(fileOf(item))) runCatching { kept.copyTo(fileOf(item), overwrite = true); kept.delete() }
+        }
+        val back = deleted.items.filter { fileOf(it).exists() }
+        store.update { WallpaperLibraryOps.restore(it, back, deleted.current) }
+        DebugLog.event("Wallpaper", "${back.size} picture(s) put back in the library")
+    }
+
+    /** Deletes for good the pictures [delete] kept aside more than [olderThanMs] ago (all of them with 0). */
+    fun purge(olderThanMs: Long = 0) {
+        val limit = System.currentTimeMillis() - olderThanMs
+        trashDir.listFiles()?.filter { it.lastModified() <= limit || olderThanMs == 0L }?.forEach { file ->
+            File(thumbDir, file.nameWithoutExtension + ".jpg").delete()
+            thumbs.remove(file.nameWithoutExtension)
+            file.delete()
+        }
+    }
+
+    /** The record of a picture as it is now, before an Apply changes it (for its Undo). */
+    fun snapshot(id: String?): WallpaperItem? = id?.let { find(it) }
+
+    /** Undo of an Apply: [current] is the current picture again and [before] gets back its placement and use count. */
+    fun undoApply(current: String?, before: WallpaperItem?) = store.update { state ->
+        val restored = before?.let { WallpaperLibraryOps.restoreItem(state, it) } ?: state
+        restored.copy(current = current?.takeIf { id -> restored.items.any { it.id == id } })
+    }
+
+    /**
+     * Works out the colour and shape of pictures that do not have them yet (from their thumbnails, off the main thread),
+     * for sorting and filtering. Pictures added before 0.16.0 get them the first time the library opens.
+     */
+    suspend fun describeMissing(limit: Int = 400) = withContext(Dispatchers.Default) {
+        val missing = store.get().items.filter { !it.described }.take(limit)
+        if (missing.isEmpty()) return@withContext
+        val found = HashMap<String, Triple<Int, Int, Int>>()
+        for (item in missing) {
+            val thumb = thumbnail(item)?.asAndroidBitmap() ?: continue
+            val colour = try {
+                android.app.WallpaperColors.fromBitmap(thumb).primaryColor.toArgb()
+            } catch (e: Throwable) {
+                null
+            } ?: continue
+            found[item.id] = Triple(colour, thumb.width, thumb.height)
+        }
+        if (found.isEmpty()) return@withContext
+        store.update { state ->
+            found.entries.fold(state) { s, (id, d) -> WallpaperLibraryOps.describe(s, id, d.first, d.second, d.third) }
+        }
+        DebugLog.event("Wallpaper", "colour and shape worked out for ${found.size} picture(s)")
+    }
+
+    private val trashDir: File get() = File(thumbDir.parentFile, "wallpaper-trash")
 
     fun setRotation(index: Int, at: Long) = store.update { it.copy(rotationIndex = index, lastRotation = at) }
 
@@ -218,16 +730,31 @@ class WallpaperLibrary(
 
     // ---- linked folders ----
 
-    /** Links a folder picked with the system's folder picker; keeps read access across restarts. */
-    fun addFolder(uri: Uri): LinkedFolder? = try {
-        context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        val name = DocumentsContract.getTreeDocumentId(uri).substringAfterLast(':').substringAfterLast('/').ifBlank { "Folder" }
-        val folder = LinkedFolder(uri.toString(), name)
-        store.update { s -> if (s.folders.any { it.uri == folder.uri }) s else s.copy(folders = s.folders + folder) }
-        folder
-    } catch (e: Throwable) {
-        DebugLog.error("Wallpaper", "linking a folder failed: $e")
-        null
+    /**
+     * Links a folder picked with the system's folder picker and keeps read access across restarts. 0.16.0 (D205): a
+     * folder of the work profile (Island, Insular: the picker's Work tab) is marked so; when Android will not keep the
+     * access across restarts it is still linked while it can be read ([LinkedFolder.kept] false). Everything is logged:
+     * whether Android lets another profile's folder be kept is learned on the phone.
+     */
+    fun addFolder(uri: Uri): LinkedFolder? {
+        val island = ProfileUris.isOtherProfile(uri.authority)
+        val kept = try {
+            context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            true
+        } catch (e: Throwable) {
+            DebugLog.error("Wallpaper", "folder access not kept by Android (${if (island) "work profile" else "this phone"}): $e")
+            false
+        }
+        return try {
+            val name = DocumentsContract.getTreeDocumentId(uri).substringAfterLast(':').substringAfterLast('/').ifBlank { "Folder" }
+            val folder = LinkedFolder(uri.toString(), name, island = island, kept = kept)
+            store.update { s -> if (s.folders.any { it.uri == folder.uri }) s else s.copy(folders = s.folders + folder) }
+            DebugLog.event("Wallpaper", "folder linked: \"$name\" (${if (island) "work profile, Island" else "this phone"}; access ${if (kept) "kept" else "until the phone restarts"})")
+            folder
+        } catch (e: Throwable) {
+            DebugLog.error("Wallpaper", "linking a folder failed: $e")
+            null
+        }
     }
 
     fun removeFolder(uri: String) {
@@ -243,11 +770,31 @@ class WallpaperLibrary(
     fun setFolderDeep(uri: String, deep: Boolean) =
         store.update { s -> s.copy(folders = s.folders.map { if (it.uri == uri) it.copy(deep = deep) else it }) }
 
+    /** The pictures in a linked folder, newest first (an empty list when it cannot be read; see [readFolder]). */
+    suspend fun folderImages(folder: LinkedFolder): List<FolderImage> = readFolder(folder).images
+
+    /**
+     * 0.16.0 (D205): reads a linked folder: its pictures, newest first, or why it cannot be read (Island paused, access
+     * gone). A good read is remembered ([LinkedFolder.newest]) for the wallpaper strip and for when it cannot be read.
+     */
+    suspend fun readFolder(folder: LinkedFolder): FolderRead {
+        val result = readFolderNow(folder)
+        if (result.unreachable) {
+            DebugLog.event("Wallpaper", "folder \"${folder.name}\" cannot be read (${if (folder.island) "work profile" else "this phone"}): ${result.reason}")
+            return FolderRead(emptyList(), unreachable = true, reason = result.reason)
+        }
+        val newest = result.images.take(REMEMBERED).map { RememberedImage(it.uri.toString(), it.name, it.modified) }
+        if (newest != folder.newest) {
+            store.update { s -> s.copy(folders = s.folders.map { if (it.uri == folder.uri) it.copy(newest = newest) else it }) }
+        }
+        return FolderRead(result.images)
+    }
+
     /**
      * The pictures in a linked folder, newest first; with [LinkedFolder.deep] also those in its
      * sub-folders (at most [MAX_FOLDER_DEPTH] levels down and [MAX_FOLDER_IMAGES] pictures).
      */
-    suspend fun folderImages(folder: LinkedFolder): List<FolderImage> = withContext(Dispatchers.IO) {
+    private suspend fun readFolderNow(folder: LinkedFolder): FolderRead = withContext(Dispatchers.IO) {
         try {
             val tree = Uri.parse(folder.uri)
             val columns = arrayOf(
@@ -260,10 +807,15 @@ class WallpaperLibrary(
             // Folders still to read, with how deep they are.
             val queue = ArrayDeque<Pair<String, Int>>()
             queue.addLast(DocumentsContract.getTreeDocumentId(tree) to 0)
+            var first = true
             while (queue.isNotEmpty() && result.size < MAX_FOLDER_IMAGES) {
                 val (documentId, depth) = queue.removeFirst()
                 val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, documentId)
-                context.contentResolver.query(children, columns, null, null, null)?.use { c ->
+                val cursor = context.contentResolver.query(children, columns, null, null, null)
+                // The folder itself gave nothing back: its provider is not there (Island paused, the profile stopped).
+                if (cursor == null && first) return@withContext FolderRead(emptyList(), unreachable = true, reason = "no answer from the folder's storage")
+                first = false
+                cursor?.use { c ->
                     while (c.moveToNext() && result.size < MAX_FOLDER_IMAGES) {
                         val mime = c.getString(2) ?: continue
                         if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
@@ -275,10 +827,9 @@ class WallpaperLibrary(
                     }
                 }
             }
-            result.sortedByDescending { it.modified }
+            FolderRead(result.sortedByDescending { it.modified })
         } catch (e: Throwable) {
-            DebugLog.error("Wallpaper", "reading folder ${folder.name} failed: $e")
-            emptyList()
+            FolderRead(emptyList(), unreachable = true, reason = e.javaClass.simpleName + ": " + (e.message ?: ""))
         }
     }
 
@@ -300,7 +851,13 @@ class WallpaperLibrary(
         val key = uri.toString()
         thumbs.get(key)?.let { return it }
         return withContext(Dispatchers.IO) {
-            decodeSmall(ImageDecoder.createSource(context.contentResolver, uri))?.asImageBitmap()?.also { thumbs.put(key, it) }
+            // 0.16.0 (D205): kept on disk, so a folder's pictures still show while it cannot be read (Island paused).
+            val cached = File(thumbDir, "u_" + WallpaperLibraryOps.idOf(key.toByteArray()) + ".jpg")
+            val bitmap = if (cached.exists()) BitmapFactory.decodeFile(cached.path) else decodeSmall(ImageDecoder.createSource(context.contentResolver, uri))?.also { small ->
+                thumbDir.mkdirs()
+                runCatching { cached.outputStream().use { small.compress(Bitmap.CompressFormat.JPEG, 85, it) } }
+            }
+            bitmap?.asImageBitmap()?.also { thumbs.put(key, it) }
         }
     }
 
@@ -344,5 +901,8 @@ class WallpaperLibrary(
         const val THUMB_PX = 280
         const val MAX_FOLDER_DEPTH = 6
         const val MAX_FOLDER_IMAGES = 3000
+
+        /** 0.16.0 (D205): how many of a folder's newest pictures are remembered. */
+        const val REMEMBERED = 12
     }
 }

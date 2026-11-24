@@ -18,7 +18,10 @@ import dev.liquid.launcher.core.designsystem.WallpaperStore
 
 /** Settings sections that show a live preview, and what the preview shows. */
 object HomePreviews {
-    val sections = setOf("home", "icons", "clock", "pill", "glass", "drawer", "tags", "drawerMotion", "drawerIndex", "menu", "homeMenu", "wallpaper", "theme", "folders", "dock", "buttons", "study", "search", "effects")
+    val sections = setOf(
+        "home", "icons", "clock", "pill", "glass", "drawer", "tags", "drawerMotion", "drawerIndex", "menu", "homeMenu", "wallpaper", "theme", "folders",
+        "dock", "buttons", "study", "search", "effects", "calendar", "calendarDays", "calendarWidget",
+    )
 
     fun modeFor(sectionId: String): HomeMode = when (sectionId) {
         "drawer", "tags" -> HomeMode.PreviewDrawer
@@ -29,6 +32,8 @@ object HomePreviews {
         "buttons", "study" -> HomeMode.PreviewToday
         "search" -> HomeMode.PreviewSearch
         "effects" -> HomeMode.PreviewEffects
+        // 0.16.0 (D209): the calendar open over the home screen (the widget's page shows the home screen with it).
+        "calendar", "calendarDays" -> HomeMode.PreviewCalendar
         else -> HomeMode.Preview
     }
 }

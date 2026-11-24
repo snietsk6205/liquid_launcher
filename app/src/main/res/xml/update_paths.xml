@@ -3,4 +3,6 @@
     <cache-path name="updates" path="updates/" />
     <!-- 0.11.2: board photos, written by the camera app before the launcher saves them in Pictures/ESSAI. -->
     <cache-path name="photos" path="photos/" />
+    <!-- 0.12.0: a keyboard theme or the Liquid plugin, handed to WM Keyboard or shared. -->
+    <cache-path name="share" path="share/" />
 </paths>
