@@ -1797,3 +1797,64 @@ when the home screen is away), the calendar and redirect parts too. The library 
 lost one tap: the emulator drew the home screen at 284 ms a frame and the tap on "Library and more" landed where the
 button was while the strip was still rising (the strip was still there afterwards; nothing else was logged). The check
 now lets the strip settle and taps again from a fresh dump when the wallpaper screen does not come.
+
+Run 152: green everywhere (build, every unit test, the redirect, drawer and study parts: the library 11b, the video 11c and the calendar 18 among them).
+
+### End of the session: 0.16.0 released
+
+| Part | State | To see or measure on the phone |
+|---|---|---|
+| 1. The library bug and the library | Done | Nothing left; emulator 11b covers Med's bug. |
+| 2. Wallpaper per layout | Done | The migration's line in the log ("0.16.0: N layout(s): …"). |
+| 3. Folders and Island | Done, partly to see on the phone | Whether Insular's File Shuttle exists and shows a Work tab in the picker; whether a work-profile folder keeps its access after a restart; whether "Set as Liquid wallpaper" shows in apps inside Insular. |
+| 4. Video wallpapers | Done, to measure on the phone (the emulator caught a real bug: a shared video was not picked; fixed in run 151) | The glass over a video (its "Frames: video wallpaper, the glass …" lines); Boomerang's frame rate; whether MagicOS's lock screen shows the launcher's live wallpaper. |
+| 5. The liquid calendar | Done, to measure on the phone | Its frame-meter lines (below); the Islamic holidays against Tunisia's announcements. |
+| Settings placement | Done | Wallpaper and layouts: Library, Per layout, Folders and Island, Video next to Wallpaper; Calendar: its own (eighth) entry with three pages. The changelog says where things moved. |
+| Docs | Done | CHANGELOG 0.16.0, D197 to D215, this log, the README's status. |
+| Release | Done | 0.16.0, tag `v0.16.0`, from the commit marked for release; its run number is the build number in the APK's name. |
+
+**Frame-meter numbers: not measured yet.** This session ran in the cloud, without the phone, and the emulator's numbers
+say nothing about the HONOR 90 Lite (Med's rule). The launcher measures itself on the phone and writes the numbers to
+the debug log (Settings › System › Debug log). What exists for each:
+
+- Video wallpapers: the first 6 s a video plays with the glass bending it, then every still the glass bends instead:
+  "Frames: video wallpaper, the glass bending it: N % of M frames late (worst W ms)" (D208).
+- The calendar: the frame meter counts its motion apart, with a line once 30 frames have been drawn: "the calendar
+  growing or shrinking" (its spring), "the calendar following the finger" (a pull down) and "the calendar's blob
+  flowing" (taps on days), each after "calendar" in the line's label; the calendar sitting still is counted as "calendar".
+- Emulator only, not phone numbers: the calendar open and still drew 0 frames in 3 s (runs 149 to 151: nothing keeps
+  drawing); the video under the glass measured "76 % of 49 frames late (worst 266 ms)" on an emulator that draws in
+  software at 260 to 750 ms a frame everywhere, so it only shows the measurement works.
+
+To get the numbers: install 0.16.0, turn on the clock's date (Settings › Home › Clock › Show the date), then open and
+close the calendar ten times (tap the date; close with a pull down and with Back), tap about twenty days in a row, go
+through the four views, and send the debug log. For the video, add a short video in the wallpaper screen ("+ Files"),
+Apply, stay on the home screen 30 s, and send the log too.
+
+**Known limits**
+- The Islamic holidays come from the Umm al-Qura tables (`java.time`'s Hijri calendar; the emulator check says Android
+  has it). Tunisia sights the moon, so a date can be a day off: it shows with ≈ until you move it; a third day of an Aïd
+  added by the government is not added by itself (hide or move only).
+- One pinned countdown shows under the clock at a time: the soonest pinned date not over yet.
+- Only the clock's date opens the calendar (as asked). The Date widget and the pill's date do not.
+- The calendar reads events, it never writes; Quick add and editing an event happen in the calendar app.
+- The Calendar widget keeps its own look until "uses the calendar's settings" is on (off as it comes), so nothing changed
+  on it but Monday first.
+- From Part 3 and 4 (unchanged): Insular may have no File Shuttle; work-profile folders may lose access after a restart
+  (the folder then says so and shows its saved copies); GIF and WebP play forward only; Boomerang under 15 frames a
+  second becomes a loop with a cross-fade (logged).
+
+**Questions for Med**
+1. Should the Date widget open the calendar too? (Today only the clock's date does; the pill's date opens your calendar
+   app, as you chose.)
+2. Should the Calendar widget share the calendar's settings from the start? (Off now, so it did not change.)
+3. The half sheet is 62 % of the screen so the month and a few agenda rows fit. Exactly half instead?
+4. When the government adds a third day to an Aïd, do you want an "add a day" action next to earlier, later and hide?
+5. Several pinned countdowns under the clock at once (say the two soonest), or one?
+6. From the earlier parts: what the phone shows for Insular's Work tab, and whether MagicOS's lock screen takes the
+   video wallpaper.
+
+**Exact next step**
+Install 0.16.0 from the release, turn on the clock's date, and use the calendar and a video wallpaper for a day with the
+debug log on. Then send the log (the "Frames:" lines and "Calendar:" lines), a screenshot of the calendar on each size
+(compact, half sheet, full), and your answers to the questions above.
